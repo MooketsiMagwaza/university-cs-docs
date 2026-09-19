@@ -8,7 +8,7 @@ Security fixes are applied to the current `main` branch and the production deplo
 
 Do not open a public issue for a suspected vulnerability.
 
-Use [GitHub's private vulnerability reporting form](https://github.com/MVMC4/university-cs-docs/security/advisories/new). Include:
+Use [GitHub's private vulnerability reporting form](https://github.com/MooketsiMagwaza/university-cs-docs/security/advisories/new). Include:
 
 - the affected route, component, dependency, or commit;
 - a clear description of the impact;

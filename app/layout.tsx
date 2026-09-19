@@ -36,8 +36,8 @@ export const metadata: Metadata = {
   description: siteConfig.description,
   metadataBase: new URL(siteConfig.url),
   applicationName: siteConfig.name,
-  authors: [{ name: 'MVMC4', url: 'https://github.com/MVMC4' }],
-  creator: 'MVMC4',
+  authors: [{ name: 'Mooketsi Vincent Magwaza', url: 'https://github.com/MooketsiMagwaza' }],
+  creator: 'Mooketsi Vincent Magwaza',
   publisher: siteConfig.name,
   category: 'education',
   keywords: [

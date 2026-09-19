@@ -1,7 +1,7 @@
 # University CS Docs
 
-[![CI](https://github.com/MVMC4/university-cs-docs/actions/workflows/ci.yml/badge.svg)](https://github.com/MVMC4/university-cs-docs/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/MVMC4/university-cs-docs/actions/workflows/codeql.yml/badge.svg)](https://github.com/MVMC4/university-cs-docs/actions/workflows/codeql.yml)
+[![CI](https://github.com/MooketsiMagwaza/university-cs-docs/actions/workflows/ci.yml/badge.svg)](https://github.com/MooketsiMagwaza/university-cs-docs/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/MooketsiMagwaza/university-cs-docs/actions/workflows/codeql.yml/badge.svg)](https://github.com/MooketsiMagwaza/university-cs-docs/actions/workflows/codeql.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -14,11 +14,11 @@ An open, interactive documentation platform for Computer Science courses at the 
 
 Contributions are welcome—from a one-line correction to a complete course topic. Start with the [contribution guide](CONTRIBUTING.md), follow the [Code of Conduct](CODE_OF_CONDUCT.md), and review the [educational content and resource policy](CONTENT_POLICY.md).
 
-- [Report a bug](https://github.com/MVMC4/university-cs-docs/issues/new?template=bug.yml)
-- [Report a content correction](https://github.com/MVMC4/university-cs-docs/issues/new?template=content.yml)
-- [Propose a feature or course topic](https://github.com/MVMC4/university-cs-docs/issues/new?template=feature.yml)
-- [Ask a question or discuss an idea](https://github.com/MVMC4/university-cs-docs/discussions)
-- [Report a vulnerability privately](https://github.com/MVMC4/university-cs-docs/security/advisories/new)
+- [Report a bug](https://github.com/MooketsiMagwaza/university-cs-docs/issues/new?template=bug.yml)
+- [Report a content correction](https://github.com/MooketsiMagwaza/university-cs-docs/issues/new?template=content.yml)
+- [Propose a feature or course topic](https://github.com/MooketsiMagwaza/university-cs-docs/issues/new?template=feature.yml)
+- [Ask a question or discuss an idea](https://github.com/MooketsiMagwaza/university-cs-docs/discussions)
+- [Report a vulnerability privately](https://github.com/MooketsiMagwaza/university-cs-docs/security/advisories/new)
 
 Project decisions and roles are documented in [GOVERNANCE.md](GOVERNANCE.md). General help routes are listed in [SUPPORT.md](SUPPORT.md).
 
@@ -44,7 +44,7 @@ NODE_OPTIONS="--max-old-space-size=12288" npm run build
 ### Setup Steps
 1. Clone the repository:
    ```bash
-   git clone https://github.com/MVMC4/university-cs-docs.git
+   git clone https://github.com/MooketsiMagwaza/university-cs-docs.git
    cd university-cs-docs
    ```
 2. Install Node.js dependencies:
@@ -246,4 +246,4 @@ Distributed under the MIT License. See the `LICENSE` file for full text.
 
 The MIT License applies to original repository code and content. Third-party educational resources retain their respective rights and must comply with [CONTENT_POLICY.md](CONTENT_POLICY.md).
 
-Copyright (c) 2026 MVMC4
+Copyright (c) 2026 Mooketsi Vincent Magwaza
