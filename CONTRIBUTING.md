@@ -29,7 +29,7 @@ Requirements:
 - npm
 
 ```bash
-git clone https://github.com/MVMC4/university-cs-docs.git
+git clone https://github.com/MooketsiMagwaza/university-cs-docs.git
 cd university-cs-docs
 npm ci
 npm run dev
@@ -67,7 +67,7 @@ Do not prefix branches with an author, tool, or agent name. For example, use `fe
    ```bash
    git clone https://github.com/YOUR-USERNAME/university-cs-docs.git
    cd university-cs-docs
-   git remote add upstream https://github.com/MVMC4/university-cs-docs.git
+   git remote add upstream https://github.com/MooketsiMagwaza/university-cs-docs.git
    ```
 
 3. Create a focused branch from the latest `main`:

@@ -36,7 +36,7 @@ This Code of Conduct applies within all community spaces and when an individual 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported privately to the project maintainer through the contact method listed on the [MVMC4 GitHub profile](https://github.com/MVMC4). GitHub-hosted abuse may also be reported through [GitHub's private abuse-reporting process](https://support.github.com/contact/report-abuse).
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported privately to the project maintainer through the contact method listed on [Mooketsi Magwaza's GitHub profile](https://github.com/MooketsiMagwaza). GitHub-hosted abuse may also be reported through [GitHub's private abuse-reporting process](https://support.github.com/contact/report-abuse).
 
 All complaints will be reviewed and investigated promptly and fairly. Community leaders will respect the privacy and security of reporters.
 
