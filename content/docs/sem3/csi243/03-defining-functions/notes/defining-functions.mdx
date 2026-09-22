@@ -18,6 +18,16 @@ Use this process for every beginner laboratory function:
 
 The older five-part framework is preserved inside this version, but examples and domain analysis are made explicit because they prevent many incorrect solutions.
 
+<Mermaid chart={`flowchart TD
+  A[1. Purpose] --> B[2. Examples]
+  B --> C[3. Domain and edge cases]
+  C --> D[4. Signature]
+  D --> E[5. Implementation and dry run]
+  E --> F[6. Verification]
+  F -. wrong answer or missed case .-> A`} caption="Each stage feeds the next. A verification failure sends you back to re-examine the purpose or the examples, not straight into the code." />
+
+Why this order, specifically? Examples come *before* implementation because a specification you cannot illustrate with concrete numbers is not yet precise enough to code. Domain and edge cases come before the signature because they often reveal that the signature you had in mind is wrong — for example, that an input cannot be `Int` because negative values would be meaningless. Skipping straight to implementation is the single most common source of a function that compiles but does the wrong thing.
+
 ## Worked example: digit recognition
 
 ### 1. Purpose
@@ -76,11 +86,53 @@ False
 
 The tests immediately outside the boundaries are valuable because a mistaken strict comparison can pass ordinary examples while rejecting `'0'` or `'9'`.
 
+<Quiz title="Check: the six-part process" questions={[
+  {
+    question: "Why does the process ask for examples before the signature and implementation?",
+    options: [
+      "Because GHC requires examples to appear above a function in the source file",
+      "Because writing concrete input-output pairs forces the specification to be precise before any code is written, and implementation and verification then rely on that precision",
+      "Examples are optional style and only affect documentation, not correctness",
+      "Because examples double as the test suite, so writing them later would mean editing the file twice"
+    ],
+    correctIndex: 1,
+    explanation: "Examples are a precision check on the specification itself. If you cannot state what isDigitChar '0' should return, you do not yet know what the function does — no amount of implementation care fixes an unclear specification.",
+    optionFeedback: [
+      "GHC has no such requirement; source order does not matter for compilation. The real reason is about specification precision, not compiler mechanics.",
+      "",
+      "Examples are load-bearing: they are exactly what step 6 (verification) checks the implementation against. A wrong implementation that still compiles is only caught because examples exist to compare it to.",
+      "That is a real side benefit, but not the main reason the process places examples second — the main reason is forcing precision in the specification before code is written."
+    ]
+  },
+  {
+    question: "isDigitChar '/' and isDigitChar ':' are tested even though neither is a digit. What is the specific value of these two tests?",
+    options: [
+      "They are redundant with isDigitChar 'A' and could be removed",
+      "They check the characters immediately outside the boundary, which catches an off-by-one mistake (such as using > instead of >=) that a test like isDigitChar '5' could never reveal",
+      "They test whether the function handles punctuation characters as a general category",
+      "They confirm that the function's type signature is Char -> Bool"
+    ],
+    correctIndex: 1,
+    explanation: "'/' is the character immediately before '0', and ':' is immediately after '9'. A boundary mistake — for example writing character > '0' instead of character >= '0' — would still pass isDigitChar '5' but would misclassify one of these two neighbours.",
+    optionFeedback: [
+      "They are not redundant: 'A' sits far from the boundary and cannot detect an off-by-one comparison error the way '/' and ':' can.",
+      "",
+      "Punctuation in general is not the point — these two specific characters were chosen because of their position immediately adjacent to '0' and '9'.",
+      "The type signature is checked once by the compiler at load time; running these particular values tests the logic, not the type."
+    ]
+  }
+]} />
+
 ## Anatomy of a definition
 
 ```haskell
 rectangleArea :: Double -> Double -> Double
 rectangleArea lengthValue widthValue = lengthValue * widthValue
+```
+
+```text
+ghci> rectangleArea 5.0 3.0
+15.0
 ```
 
 | Part | Meaning |
@@ -110,6 +162,13 @@ rectangleAreaPair :: (Double, Double) -> Double
 rectangleAreaPair (lengthValue, widthValue) = lengthValue * widthValue
 ```
 
+```text
+ghci> rectangleAreaPair (5.0, 3.0)
+15.0
+```
+
+Both functions compute the same area for the same numbers; only the shape of the argument differs — two separate values versus one paired value.
+
 ## Curried input versus tuple input
 
 | Form | Signature | Call | Use case |
@@ -117,7 +176,88 @@ rectangleAreaPair (lengthValue, widthValue) = lengthValue * widthValue
 | Curried | `Double -> Double -> Double` | `rectangleArea 5 3` | Normal Haskell style; supports partial application |
 | Tupled | `(Double, Double) -> Double` | `rectangleAreaPair (5, 3)` | Input naturally arrives as one paired record |
 
-These are not the same type. Choose the representation that matches the problem.
+These are not the same type, and GHCi rejects mixing them up. The exact wording can vary by GHC version, but it always names the type mismatch:
+
+```text
+ghci> rectangleArea (5.0, 3.0)
+<interactive>:1:1: error: ... Couldn't match expected type ‘Double’ with actual type ‘(Double, Double)’ ...
+ghci> rectangleAreaPair 5.0 3.0
+<interactive>:1:1: error: ... Couldn't match expected type ‘(Double, Double)’ with actual type ‘Double’ ...
+```
+
+The first fails because `rectangleArea` expects two separate `Double` arguments, not one tuple. The second fails because `rectangleAreaPair` expects exactly one argument — a whole pair — so handing it `5.0` on its own is already the wrong type.
+
+### A second worked variation: greeting a person
+
+The same choice appears whenever a function takes more than one input.
+
+```haskell
+-- Curried: two separate arguments.
+greet :: String -> String -> String
+greet greeting name = greeting ++ ", " ++ name ++ "!"
+
+-- Tupled: one paired argument.
+greetPair :: (String, String) -> String
+greetPair (greeting, name) = greeting ++ ", " ++ name ++ "!"
+```
+
+```text
+ghci> greet "Hello" "Ada"
+"Hello, Ada!"
+ghci> greetPair ("Hello", "Ada")
+"Hello, Ada!"
+```
+
+### Why curried is the normal Haskell style
+
+Because `greet` is curried, giving it only the first argument is still valid — it produces a new, one-argument function rather than an error:
+
+```text
+ghci> let sayHello = greet "Hello"
+ghci> sayHello "Ada"
+"Hello, Ada!"
+ghci> sayHello "Grace"
+"Hello, Grace!"
+```
+
+`greetPair` cannot do this: `("Hello", "Ada")` is one argument, a complete pair, so there is nothing left to supply partially. This ability to fix some arguments and leave others open is called **partial application**, and the related shorthand for partially applying an operator — writing `(+ 3)` instead of `\x -> x + 3` — is called an **operator section**. Both are developed properly in Chapter 7; for now, recognise curried functions as the form that makes them possible at all.
+
+<Quiz title="Check: curried vs. tupled" questions={[
+  {
+    question: "rectangleArea :: Double -> Double -> Double is called as rectangleArea (5.0, 3.0) — one tuple argument. What happens?",
+    options: [
+      "It runs and returns 15.0, since Haskell treats a tuple the same as two arguments",
+      "A type error, because rectangleArea expects two separate Double arguments and (5.0, 3.0) is a single (Double, Double) value",
+      "It runs but returns a function instead of a Double",
+      "A runtime exception, not a type error, once the program is run"
+    ],
+    correctIndex: 1,
+    explanation: "rectangleArea's signature Double -> Double -> Double declares two curried arguments. Supplying one tuple gives it one argument of the wrong type, (Double, Double), which GHC rejects before the program ever runs.",
+    optionFeedback: [
+      "Haskell never auto-converts a tuple into two curried arguments — that conflation is exactly the mistake this section warns about.",
+      "",
+      "It would return a function only if too few arguments of the right type were supplied. Here the single argument given is of the wrong type entirely, so type-checking fails immediately.",
+      "This is caught at compile time by the type checker, before the program runs — it is a type error, not a runtime exception."
+    ]
+  },
+  {
+    question: "What specifically makes `greet \"Hello\"` valid on its own, while `greetPair (\"Hello\", \"Ada\")` cannot be split the same way?",
+    options: [
+      "greet is defined earlier in the file, so GHCi allows partial calls to it",
+      "greet is curried, so each argument is supplied one at a time and giving just the first yields a new function; greetPair takes one pair as its single argument, so there is no second argument left to withhold",
+      "String arguments can always be supplied partially, unlike Double arguments",
+      "greetPair has a mistake in its definition that breaks partial application"
+    ],
+    correctIndex: 1,
+    explanation: "Currying means a multi-argument function is really a chain of one-argument functions: greet :: String -> String -> String is really String -> (String -> String), so giving one String yields a String -> String function. greetPair :: (String, String) -> String takes exactly one argument — the whole pair — so nothing can be withheld.",
+    optionFeedback: [
+      "Definition order in the file has no effect on whether partial application is possible; it depends entirely on the function's type shape (curried vs. tupled).",
+      "",
+      "The argument type (String vs. Double) is irrelevant here; what matters is whether the function's type is curried or takes one combined argument like a tuple.",
+      "greetPair as shown is a perfectly correct definition — the limitation is inherent to taking a tuple as one argument, not a bug in this code."
+    ]
+  }
+]} />
 
 ## Purpose comments and useful comments
 
@@ -127,6 +267,15 @@ Good comments explain the contract, a non-obvious decision, or an important cons
 -- Convert Celsius to Fahrenheit using the linear conversion formula.
 celsiusToFahrenheit :: Double -> Double
 celsiusToFahrenheit celsius = celsius * 9 / 5 + 32
+```
+
+```text
+ghci> celsiusToFahrenheit 0
+32.0
+ghci> celsiusToFahrenheit 100
+212.0
+ghci> celsiusToFahrenheit 37
+98.6
 ```
 
 A comment such as `-- multiply celsius by 9` merely repeats the code and adds little value.
@@ -189,7 +338,36 @@ absoluteValue number =
     else number
 ```
 
+```text
+ghci> absoluteValue (-5)
+5
+```
+
 Both branches return `Integer`, matching the declared result type. Without `else`, the expression would have no result when the condition is false.
+
+<Callout type="info" title="Looking ahead: more ways to choose">
+`if … then … else` is only the first of four ways this course expresses a decision. **Chapter 4** introduces **guards**, which read like a table of conditions instead of a chain of nested `if`s, and **`case` expressions**, which pattern-match on a computed value from *inside* an expression rather than only on a function's arguments. Chapter 4 also formalises `where` and `let … in`, which let you name a sub-expression instead of repeating it:
+
+```haskell
+-- where: names a sub-expression, visible to every branch of this equation.
+circleArea :: Double -> Double
+circleArea r = pi * squared
+  where squared = r * r
+
+-- let ... in: names a sub-expression for one expression only.
+circleArea' :: Double -> Double
+circleArea' r = let squared = r * r in pi * squared
+```
+
+```text
+ghci> circleArea 2
+12.566370614359172
+ghci> circleArea' 2
+12.566370614359172
+```
+
+You do not need `where` or `let … in` yet — `if … then … else` is enough for every function in this chapter. Recognise the names now so Chapter 4 is not the first time you see them.
+</Callout>
 
 ## Testing strategy
 
@@ -210,13 +388,50 @@ Use three categories:
 - **Boundary:** zero, an empty structure, the minimum accepted mark, or another decision edge.
 - **Invalid or exceptional:** input outside the mathematical domain, when the signature permits it.
 
+<Quiz title="Check: else and testing" questions={[
+  {
+    question: "Why must every if in Haskell have an else, even when the then branch looks like it \"obviously\" covers the interesting case?",
+    options: [
+      "It is a style convention recommended by the course but not enforced by GHC",
+      "if is an expression with a type and must always produce a value; when the condition is False there would be nothing to produce if else were missing",
+      "else is required only for functions with an Integer result type",
+      "Without else, the program would run but silently return 0"
+    ],
+    correctIndex: 1,
+    explanation: "Because if...then...else is an expression — it has a value and a type — Haskell must be able to determine a result for both the True and False cases before the program runs. Omitting else leaves the False case undefined, which GHC rejects as a parse error rather than allowing at compile time.",
+    optionFeedback: [
+      "It is enforced by the parser, not a stylistic suggestion — omitting else is a compile error, not a lint warning.",
+      "",
+      "The requirement applies to if expressions of every result type — String, Bool, or anything else — not only Integer.",
+      "The program does not compile at all without else, so it never reaches a point where it could silently return anything."
+    ]
+  },
+  {
+    question: "absoluteValue 0 is included as a boundary test. What makes 0 a meaningful boundary for this specific function, rather than an arbitrary extra test?",
+    options: [
+      "0 is the value where the condition number < 0 switches from False to True, so it is the input closest to the branch decision",
+      "0 is required because every test suite in this course must include zero",
+      "0 tests whether the function's type signature accepts Integer",
+      "0 is chosen at random to pad out the test suite to three cases"
+    ],
+    correctIndex: 0,
+    explanation: "0 sits exactly on the boundary of the condition number < 0: it is the smallest input for which the condition is False. A mistaken condition such as number <= 0 would behave identically to number < 0 for every other integer but disagree exactly at 0 — making 0 the specific input that would expose that mistake.",
+    optionFeedback: [
+      "",
+      "There is no blanket rule requiring zero in every test suite; zero matters here specifically because it sits on the condition's boundary.",
+      "The type signature is checked once at compile time; running a specific value like 0 tests the logic, not the type.",
+      "0 is chosen deliberately, not at random — it is exactly the point where the comparison number < 0 changes truth value."
+    ]
+  }
+]} />
+
 ## Diagnosing failures
 
-### “Variable not in scope”
+### "Variable not in scope"
 
 Check spelling and case. `score`, `Score`, and `scores` are different names.
 
-### “Couldn't match expected type”
+### "Couldn't match expected type"
 
 Compare the expected type with the actual type. Find the smallest subexpression producing the wrong kind of value.
 
@@ -240,12 +455,12 @@ Develop each function using all six parts:
 
 For every function, include at least three tests and explain why each test was selected.
 
-## Mastery check
-
-You are ready for choices and pattern matching when you can:
-
-- turn a prose problem into purpose, examples, domain, signature, implementation, dry run, and tests;
-- read multi-argument signatures from left to right;
-- distinguish curried and tuple inputs;
-- explain why compilation is necessary but not sufficient evidence;
-- diagnose a type error by isolating the smallest conflicting expression.
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can turn a prose problem into purpose, examples, domain, signature, implementation, dry run, and tests.' },
+  { type: 'must', text: 'I can read multi-argument signatures from left to right.' },
+  { type: 'must', text: 'I can distinguish curried and tuple inputs, and call each one correctly in GHCi.' },
+  { type: 'must', text: 'I can explain what partial application means for a curried function.' },
+  { type: 'must', text: 'I can explain why compilation is necessary but not sufficient evidence that a function is correct.' },
+  { type: 'must', text: 'I can diagnose a type error by isolating the smallest conflicting expression.' },
+  { type: 'note', text: 'Chapter 4 introduces guards, case, where, and let in full — this chapter only needs if...then...else.' }
+]} />

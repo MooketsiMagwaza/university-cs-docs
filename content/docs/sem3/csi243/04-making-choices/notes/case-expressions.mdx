@@ -3,8 +3,6 @@ title: "4. Case Expressions"
 description: "Match patterns inside an expression with case-of, combine cases with guards, and choose deliberately between conditionals, patterns, guards, and cases."
 ---
 
-
-
 Pattern matching selects between **equations**. But sometimes the decision belongs *inside* an expression — part-way through a definition, or on a value that is not one of the function's arguments. That is what `case` is for.
 
 With guards, checking the value of one variable means rewriting `variable ==` on every line. A `case` expression states the variable once.
@@ -42,6 +40,26 @@ ghci> caseFunction 9
 
 Indentation is important here: the alternatives must be aligned with each other.
 
+<Quiz title="Check: the form of case" questions={[
+  {
+    question: "case alternatives are written with ->, not =. Why does that distinction matter if you accidentally write case x of { 0 = 1; ... }?",
+    options: [
+      "It does not matter; Haskell accepts either symbol in a case alternative",
+      "-> and = mean different things in Haskell's grammar; = defines an equation's right-hand side, while -> is specifically the arrow used inside case (and later, lambdas), so using = there is a parse error, not just a style mistake",
+      "= is required only for the first alternative, and -> for the rest",
+      "case alternatives never need any arrow or equals sign at all"
+    ],
+    correctIndex: 1,
+    explanation: "-> and = belong to different syntactic constructs in Haskell. A case alternative's shape is always pattern -> result. Writing 0 = 1 instead of 0 -> 1 is not a valid case alternative at all, and GHC reports a parse error rather than silently accepting it.",
+    optionFeedback: [
+      "They are not interchangeable — see the Common errors table later in this lesson, which lists this exact mistake as a parse error.",
+      "",
+      "Every alternative uses the same arrow -> consistently; there is no special first-alternative rule.",
+      "Each alternative needs its own -> connecting the pattern to its result; without it, the alternative is not valid syntax."
+    ]
+  }
+]} />
+
 ## 2. What can be scrutinised
 
 The expression after `case` is not restricted to a bare argument. It can be:
@@ -60,6 +78,13 @@ parity n =
   case n `mod` 2 of
     0 -> "even"
     _ -> "odd"
+```
+
+```text
+ghci> parity 4
+"even"
+ghci> parity 7
+"odd"
 ```
 
 ```haskell
@@ -95,9 +120,33 @@ report n = "The number is " ++ case compare n 0 of
 ```text
 ghci> report (-4)
 "The number is negative"
+ghci> report 0
+"The number is zero"
+ghci> report 9
+"The number is positive"
 ```
 
 This is something equation-level patterns cannot do: they select a whole equation, not a fragment of one.
+
+<Quiz title="Check: case as an expression" questions={[
+  {
+    question: "report embeds a case expression directly inside a ++ concatenation. Why is this possible for case but not for equation-level pattern matching (multiple function equations)?",
+    options: [
+      "It is not actually possible; report as written would not compile",
+      "case is an expression with a value and a type, so it can appear anywhere a value is expected — including as one operand of ++ — whereas equation-level patterns select which whole function equation runs, not a piece of one",
+      "++ is a special operator that only works with case expressions",
+      "report only works because compare n 0 happens to return a String"
+    ],
+    correctIndex: 1,
+    explanation: "case ... of ... is an ordinary expression, just like if ... then ... else — it reduces to one value with one type, so it can sit anywhere a value of that type is expected, including as the right operand of ++. Multiple function equations (like isVowel's ten equations in the previous lesson) work at a completely different level: they choose which entire equation body runs for a call, not a sub-expression within one body.",
+    optionFeedback: [
+      "report as written is valid, working Haskell — the ghci transcript above shows its actual output.",
+      "",
+      "++ works with any two matching-typed lists; here both operands (the literal string and the case expression) evaluate to String, which is all ++ requires.",
+      "compare n 0 returns an Ordering (LT, EQ, or GT), not a String directly — it is the case expression as a whole, matching each Ordering to a String, that produces the String value passed to ++."
+    ]
+  }
+]} />
 
 ## 4. Cases can carry guards
 
@@ -115,7 +164,38 @@ classifyHead xs =
       | otherwise -> "starts positive"
 ```
 
+```text
+ghci> classifyHead []
+"empty list"
+ghci> classifyHead [-3, 1]
+"starts negative"
+ghci> classifyHead [0, 9]
+"starts at zero"
+ghci> classifyHead [7]
+"starts positive"
+```
+
 If every guard under an alternative fails, matching continues with the next alternative.
+
+<Quiz title="Check: guards inside case" questions={[
+  {
+    question: "In classifyHead, why is (y:_) written as one pattern with three attached guards, instead of writing three separate case alternatives like (y:_) | y < 0 -> ..., (y:_) | y == 0 -> ..., (y:_) | otherwise -> ... on three lines each starting with the pattern again?",
+    options: [
+      "Both forms are invalid; only a single un-guarded pattern is allowed per case",
+      "Guards attach to one pattern once, and the pattern match happens a single time; the three guard conditions then choose among results without needing to repeat and re-test the structural pattern (y:_) three separate times",
+      "case expressions cannot use guards at all, so this code would not compile",
+      "Repeating (y:_) three times would actually run faster"
+    ],
+    correctIndex: 1,
+    explanation: "Guards attached to one pattern are checked in order after that one pattern has already matched. This avoids restating and rematching the structural pattern (y:_) for each condition — the list is destructured into y and the tail once, and then the three Boolean conditions choose among results, exactly mirroring how guards work at the equation level.",
+    optionFeedback: [
+      "A pattern with attached guards is exactly what classifyHead uses, and it is valid, working Haskell as the transcript shows.",
+      "",
+      "case expressions do support guards on their alternatives — that is precisely the feature this section introduces.",
+      "This is not a performance consideration covered by the course; the real reason is avoiding needless repetition of the same structural pattern."
+    ]
+  }
+]} />
 
 ## 5. Layout, and the explicit alternative
 
@@ -130,6 +210,16 @@ This is valid but makes the code unreadable, and it is not used in this course. 
 ## 6. Choosing between the four forms
 
 You now have four ways to express a choice. They overlap, but each has a shape it fits best.
+
+<Mermaid chart={`flowchart TD
+  Start["What shape is the decision?"] --> Q1{"Exactly two outcomes\nfrom one Boolean test?"}
+  Q1 -- Yes --> IfExpr["if ... then ... else"]
+  Q1 -- No --> Q2{"Distinct literals or\nstructures, one per case?"}
+  Q2 -- Yes --> Pattern["Pattern matching\n(separate equations)"]
+  Q2 -- No --> Q3{"Ranges or compound\nconditions on one argument?"}
+  Q3 -- Yes --> Guards["Guards"]
+  Q3 -- No --> Q4{"Matching a computed value,\nor needed mid-expression?"}
+  Q4 -- Yes --> CaseExpr["case ... of"]`} caption="A decision procedure for the table below. Work top to bottom and stop at the first question that fits." />
 
 <ComparisonTable
   columns={[
@@ -179,11 +269,59 @@ facCase n =
     _ -> n * facCase (n - 1)
 ```
 
+```text
+ghci> facIf 5
+120
+ghci> facPat 5
+120
+ghci> facGuard 5
+120
+ghci> facCase 5
+120
+```
+
 All four compute the same values. For this specification the pattern-matching version reads best, because the base case is a **literal**, which is exactly what a pattern expresses. Had the base case been `n <= 1`, guards would have read best, because that is a **range**.
 
 <Callout type="info" title="The habit to build">
 Write the specification first, then ask what the cases are made of. Literals and structures point to patterns. Ranges and compound tests point to guards. A computed value points to `case`. Two outcomes point to `if`.
 </Callout>
+
+<Quiz title="Check: choosing the right form" questions={[
+  {
+    question: "All four facIf, facPat, facGuard, and facCase above compute exactly the same results. Given that, why does the lesson still recommend facPat (pattern matching) specifically for this factorial specification?",
+    options: [
+      "Because pattern matching is always the fastest of the four forms",
+      "Because the base case in the specification is the literal value n = 0, and pattern matching is the form whose syntax most directly expresses \"this literal value gets this result\" — matching the shape of the specification, not just its correctness",
+      "Because facIf, facGuard, and facCase are all actually incorrect",
+      "Because case and guards cannot express recursion"
+    ],
+    correctIndex: 1,
+    explanation: "Correctness alone (all four compute 120 for facX 5) does not decide which form is best — the lesson's whole point is that the four forms should be chosen by matching the shape of the decision to the shape of the tool. Since the base case here is exactly one literal number, 0, pattern matching's literal-pattern syntax (facPat 0 = 1) states that fact more directly than a Boolean test (n == 0) does.",
+    optionFeedback: [
+      "The lesson does not claim any performance difference between the four forms; the recommendation is entirely about readability and fit to the specification's shape.",
+      "",
+      "All four versions are correct, as the identical ghci output for facIf 5 through facCase 5 demonstrates.",
+      "case and guards both support recursion perfectly well — facGuard and facCase are themselves recursive, calling themselves in their otherwise/default cases."
+    ]
+  },
+  {
+    question: "Suppose the factorial base case were instead specified as \"n <= 1\", not \"n = 0\". According to the Callout's habit, which form should now read best, and why?",
+    options: [
+      "Pattern matching still reads best, since patterns can match any condition",
+      "Guards, because n <= 1 is a range/inequality test rather than a single literal value, and guards are the form built specifically for range and compound conditions",
+      "if...then...else, because there are still only two outcomes overall",
+      "case, because case is always the most general and therefore always the best choice"
+    ],
+    correctIndex: 1,
+    explanation: "Patterns match literal values or structures — n = 0 fits a pattern exactly, but n <= 1 is a range (it covers both 0 and 1, and technically all values below 1), which patterns cannot express directly. Guards exist precisely for range and compound Boolean tests, which is why the Callout names 'ranges and compound tests' as pointing to guards.",
+    optionFeedback: [
+      "Patterns match literal values or structures, not inequalities — n <= 1 cannot be written as a literal pattern the way n = 0 can.",
+      "",
+      "While the recursive function still has two logical branches (base case and recursive case), the recommendation here is about the shape of the base-case CONDITION specifically (a range) rather than a simple top-level count of outcomes.",
+      "case is not \"always best\" — the whole point of this comparison is that each form fits some decisions better than others; case is best for computed values or matches needed mid-expression, not for a plain range test on an argument."
+    ]
+  }
+]} />
 
 ## 7. Common errors
 

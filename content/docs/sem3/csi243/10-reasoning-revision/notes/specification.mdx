@@ -36,6 +36,15 @@ isDigit :: Char -> Bool
 isDigit c = ('0' <= c) && (c <= '9')
 ```
 
+```text
+ghci> isDigit '5'
+True
+ghci> isDigit 'a'
+False
+```
+
+Trace the second call, because it is the one people get wrong: `'0' <= 'a'` compares character codes, and `'0'` (code 48) really is less than `'a'` (code 97), so that half is `True`. But `'a' <= '9'` is `97 <= 57`, which is `False`. `&&` needs both sides `True`, so the whole expression is `False` — exactly what the postcondition `result = ('0' <= c <= '9')` demands, because `'a'` is not a decimal digit.
+
 Two more from the same source:
 
 ```haskell
@@ -48,9 +57,50 @@ splitAt' :: Int -> [a] -> ([a], [a])
 splitAt' n xs = (take n xs, drop n xs)
 ```
 
+```text
+ghci> isOdd 7
+True
+ghci> isOdd 4
+False
+ghci> splitAt' 2 [10,20,30,40]
+([10,20],[30,40])
+```
+
 <Callout type="info" title="Specification first, always">
 A function's implementation is derived from its specification. Writing code first and then describing what it happens to do reverses the dependency — and means you have no independent standard against which to judge the code correct.
 </Callout>
+
+<Quiz title="Check: specifications" questions={[
+  {
+    question: "Which part of a specification states what must be true of the result after the function has run?",
+    options: ["Purpose", "Precondition", "Postcondition", "The type signature"],
+    correctIndex: 2,
+    explanation: "Purpose is the one-sentence summary, precondition constrains the arguments before the call, and postcondition constrains the result afterwards. The type signature says what shape the answer has, not what value it must be.",
+    optionFeedback: [
+      "Purpose is the one-sentence summary of what the function represents, not a constraint on the result.",
+      "Precondition constrains the arguments before the function runs, not the result afterwards.",
+      "Correct. The postcondition is exactly the assertion that must hold of the result once the function returns.",
+      "A type signature (e.g. Char -> Bool) restricts what shape the result has, but says nothing about which value of that shape is correct — that is the postcondition's job."
+    ]
+  },
+  {
+    question: "isDigit c = ('0' <= c) && (c <= '9'). What does isDigit '/' evaluate to, and why?",
+    options: [
+      "True, because '/' is next to '0' on a keyboard",
+      "False, because '/' has a character code one less than '0', so '0' <= '/' is False",
+      "False, because '&&' always returns False for punctuation",
+      "It is a type error, because '/' is not a digit"
+    ],
+    correctIndex: 1,
+    explanation: "'/' (code 47) comes immediately before '0' (code 48) in character order, so '0' <= '/' is False, the && short-circuits, and the whole expression is False. This is exactly the boundary case Chapter 4's isDigitChar discussion cared about.",
+    optionFeedback: [
+      "Keyboard adjacency is irrelevant — comparison operators on Char compare character codes, not physical key layout.",
+      "Correct — '/' sits one code point below '0', so the first comparison already fails.",
+      "&& is ordinary boolean AND; it does not treat punctuation specially. It returns False here because one operand is False, not because of the character class.",
+      "Char is Char regardless of what it represents — comparing '/' against '0' and '9' type checks fine and simply evaluates to False."
+    ]
+  }
+]} />
 
 ## 2. Partitioning the input and output
 
@@ -68,17 +118,51 @@ The output set **O** comprises a valid subset **Ov** and an erroneous subset **O
 O = Ov ∪ Oe    where   Ov = O \ Oe
 ```
 
-A function `f` acts on arguments from **Iv** (the precondition state) to give output in **Ov** (the postcondition state).
+Read the symbols literally, since the rest of the lesson leans on them: `∪` is set union — "every element that is in either set" — and `\` is set difference — "this set, with that one's elements taken out." So `I = Iv ∪ Ie` says every input falls into one of the two subsets, and `Iv = I \ Ie` says the valid inputs are exactly what remains of `I` once the invalid ones are removed. The output set is split the same way.
 
-```text
-        Iv  ──── f ────►  Ov      the intended behaviour
-        Ie  ──── ? ────►  Oe      what happens outside the precondition
-```
+A function `f` acts on arguments from **Iv** (the precondition state) to give output in **Ov** (the postcondition state):
+
+<Mermaid chart={`flowchart LR
+  Iv["Iv — valid inputs\n(precondition holds)"] -->|"f — intended behaviour"| Ov["Ov — valid outputs\n(postcondition holds)"]
+  Ie["Ie — invalid inputs\n(precondition fails)"] -.->|"? — not specified"| Oe["Oe — erroneous outputs"]
+`} caption="The specification only ever promises the solid arrow, Iv → Ov. Section 3 below is precisely the decision about what the dotted arrow does." />
 
 Two things follow, and both should now be familiar:
 
 - **A type is usually wider than Iv.** `fac :: Integer -> Integer` accepts every integer, but the specification's `Iv` is only the non-negative ones. That gap is where `fac (-1)` looped forever in Chapter 5.
 - **A function may still produce an anomaly on valid input.** `f` may give output in `Oe` even for arguments from `Iv` — through a coding fault, an overflow, or a division that was not guarded.
+
+<Quiz title="Check: Iv, Ie, Ov, Oe" questions={[
+  {
+    question: "For fac :: Integer -> Integer with the mathematical factorial specification, which set does -1 belong to?",
+    options: ["Iv, because -1 is a legal Integer", "Ie, because the precondition restricts the domain to non-negative integers", "Ov, because fac must return something", "Oe, because -1 is negative"],
+    correctIndex: 1,
+    explanation: "Iv and Ie partition the *input* set I. -1 type checks as an Integer (so it is in I), but it fails the precondition n >= 0, so it belongs to Ie, not Iv. Oe is about outputs, and is a separate question from where -1 sits as an input.",
+    optionFeedback: [
+      "Iv is the valid-input subset, defined by the precondition, not by the type. -1 satisfies the type but fails n >= 0.",
+      "Correct. -1 is a legal Integer (so it's in I) but violates the precondition, which is exactly the definition of Ie.",
+      "Ov and Oe classify outputs, not inputs. -1 is an argument, so the question is about Iv vs Ie.",
+      "Being negative is why it lands in Ie — but Oe is the wrong set name, because -1 is an input, not an output."
+    ]
+  },
+  {
+    question: "Why is it useful to say a type is 'usually wider than Iv' rather than just relying on the type signature?",
+    options: [
+      "It isn't useful — the type signature already captures every constraint on the arguments",
+      "Because the type only rules out ill-typed arguments; the precondition rules out further ones that are well-typed but mathematically invalid, and the compiler cannot see that gap",
+      "Because Haskell's type checker is unreliable for Integer arguments",
+      "Because Iv and the type are always identical for total functions"
+    ],
+    correctIndex: 1,
+    explanation: "Integer -> Integer admits every integer, including negative ones. The precondition n >= 0 is a further, semantic restriction that GHC's type checker cannot enforce — it can only check that -1 has the right type, not that it satisfies the intended domain. That gap is exactly where unguarded recursion or partial functions fail.",
+    optionFeedback: [
+      "It is useful precisely because the type signature under-constrains the domain — Integer accepts -1 just as happily as 5.",
+      "Correct — this is the same gap Chapter 5 met when fac (-1) looped: type-valid but precondition-invalid.",
+      "GHC's type checker is completely reliable here; the issue is that a semantic precondition (n >= 0) isn't something a type system this simple can express.",
+      "They coincide only when the precondition is 'accept every value of the type' — which is the exception, not the rule, for a function with any real domain restriction."
+    ]
+  }
+]} />
 
 ## 3. Making the precondition explicit
 
@@ -106,7 +190,79 @@ facMaybe n
   | otherwise = fmap (n *) (facMaybe (n - 1))
 ```
 
+```text
+ghci> fac 5
+120
+ghci> fac 0
+1
+ghci> fac (-1)
+*** Exception: fac: only defined for non-negative integers
+```
+
+The otherwise branch of `facMaybe` uses `fmap`, which has not been introduced yet in this course — so it earns an explanation before moving on. Read `fmap (n *) (facMaybe (n - 1))` left to right: `fmap` takes a function — here the section `(n *)`, "multiply by `n`" — and applies it *inside* whatever `facMaybe (n - 1)` turns out to be, without you having to pattern-match on `Just`/`Nothing` by hand. Concretely, for `Maybe`: `fmap f (Just x) = Just (f x)`, and `fmap f Nothing = Nothing`. So if the recursive call fails, the failure passes straight through — `n` is never multiplied by anything, and no exception is raised. This is Haskell's `Functor` interface applied to `Maybe`; see [A First Glimpse of Functor](/docs/sem3/csi243/09-polymorphism/notes/maybe-and-instances) in Chapter 9 for where `fmap` and `Functor` themselves come from.
+
+Hand-tracing `facMaybe 3` shows the chain building up, one `fmap` per recursive call:
+
+```text
+facMaybe 3
+= fmap (3 *) (facMaybe 2)
+= fmap (3 *) (fmap (2 *) (facMaybe 1))
+= fmap (3 *) (fmap (2 *) (Just 1))       -- facMaybe 1 = Just 1, base case
+= fmap (3 *) (Just 2)                    -- fmap (2*) (Just 1) = Just (2*1)
+= Just 6                                 -- fmap (3*) (Just 2) = Just (3*2)
+```
+
+```text
+ghci> facMaybe 5
+Just 120
+ghci> facMaybe (-1)
+Nothing
+```
+
+<CommonMistake title="Choosing a mechanism without recording it">
+Writing `facMaybe` and leaving the specification untouched hides the decision. `facMaybe`'s precondition is actually **none** — every `Integer` is acceptable, because failure is now reported in the type instead of rejected. State which of the three mechanisms was chosen, in the specification text itself, not only in the code.
+</CommonMistake>
+
 Whichever you choose, **state it in the specification**. An unstated precondition is a defect waiting to surface.
+
+<Quiz title="Check: handling the precondition" questions={[
+  {
+    question: "Which mechanism converts an out-of-precondition argument into a value that is visible in the type, forcing the caller to handle it?",
+    options: ["error \"...\"", "Extending the base case", "Returning Maybe", "Adding a type annotation"],
+    correctIndex: 2,
+    explanation: "Returning Maybe reports failure as data (Nothing), which appears in the function's type and which the caller must pattern-match on or otherwise handle. error stops the program; extending the base case gives the out-of-range value a documented answer instead of treating it as invalid at all.",
+    optionFeedback: [
+      "error \"...\" rejects the argument by crashing — the failure is not visible in the type, and there is nothing for the caller to handle except a runtime exception.",
+      "Extending the base case redefines what 'valid' means (it defines the value), rather than reporting a failure the caller has to deal with.",
+      "Correct. Maybe puts the possibility of failure directly into the return type, which the type checker then forces every caller to handle.",
+      "A type annotation only pins down which type GHC should infer for an ambiguous expression — it does not change how a precondition violation is handled."
+    ]
+  },
+  {
+    question: "In facMaybe, what does fmap (n *) (facMaybe (n - 1)) evaluate to when facMaybe (n - 1) is Nothing?",
+    options: ["Nothing", "Just (n * 0)", "It throws a runtime exception", "Just n"],
+    correctIndex: 0,
+    explanation: "fmap f Nothing = Nothing, by definition of fmap for Maybe. There is no value inside Nothing for (n *) to be applied to, so the failure simply propagates unchanged — n is never multiplied by anything.",
+    optionFeedback: [
+      "Correct. fmap's second equation, fmap f Nothing = Nothing, means the failure passes through untouched.",
+      "This would require treating the missing value as 0, but fmap never invents a value to apply f to — it leaves Nothing exactly as Nothing.",
+      "facMaybe never calls error or an unguarded partial function on this path, so there is nothing to throw — the whole point of using Maybe here is to avoid a runtime exception.",
+      "Just n would mean (n *) was never applied at all while still wrapping in Just — but fmap on Nothing produces Nothing, not a Just of anything."
+    ]
+  },
+  {
+    question: "What is Iv for facMaybe :: Integer -> Maybe Integer, given that it reports failure via Nothing rather than rejecting it?",
+    options: ["The non-negative integers only", "The empty set — no input is ever truly valid", "Every Integer, because there is no longer an argument the function refuses to accept", "Only 0 and 1, the base cases"],
+    correctIndex: 2,
+    explanation: "Reporting failure through the return type (Maybe) is precisely what removes the restriction on the input side: facMaybe accepts every Integer and always terminates with some Maybe Integer, valid or not. The 'invalid' case now shows up in Ov/Oe territory (as Nothing) rather than in Iv/Ie.",
+    optionFeedback: [
+      "That was Iv for the error-based fac, which does reject negative arguments. facMaybe's whole design point is to accept them instead and report failure through the type.",
+      "The set is not empty — facMaybe successfully returns Just k for every non-negative input, and Nothing (a defined result) for negative ones.",
+      "Correct. Once failure is reported rather than rejected, every Integer is a valid argument; the distinction between success and failure moves to the output (Just vs Nothing).",
+      "0 and 1 are only the base cases of the recursion, not a restriction on which arguments facMaybe will accept."
+    ]
+  }
+]} />
 
 ## 4. What correctness claims
 
@@ -121,6 +277,43 @@ Three things follow, and all three are examinable:
 <Callout type="warn" title="A compiler proves consistency, not intent">
 GHC verifies that types are used consistently. It cannot know what you meant. The specification is the only record of intent, which is why it is worth writing down.
 </Callout>
+
+<Quiz title="Check: what correctness means" questions={[
+  {
+    question: "fac 0 = 0 type checks without error. Is it correct?",
+    options: [
+      "Yes, because it type checks and GHC accepted it",
+      "No — it is well-typed but violates the postcondition (0! = 1, not 0), so it fails against the specification",
+      "The question is meaningless without running the tests first",
+      "Yes, because fac 0 terminates"
+    ],
+    correctIndex: 1,
+    explanation: "Type checking only confirms that Integer -> Integer is used consistently. It says nothing about whether the value returned is the one the specification promises. The postcondition for fac requires fac 0 = 1 (the base case of factorial), so fac 0 = 0 is well-typed and wrong.",
+    optionFeedback: [
+      "Type checking is a necessary but not sufficient condition for correctness — this is exactly the point the lesson makes with this example.",
+      "Correct. It compiles fine (consistent types) but breaks the postcondition, which is the actual standard for correctness.",
+      "Testing gives evidence either way, but you don't need to run anything here — the postcondition already tells you 0! = 1, so fac 0 = 0 is wrong by inspection.",
+      "Termination is one requirement for correctness, but it is not sufficient on its own — the result must also satisfy the postcondition, and 0 does not."
+    ]
+  },
+  {
+    question: "Why is 'this code is correct' (with no further qualification) an incomplete claim?",
+    options: [
+      "Because Haskell code can never be proven correct under any circumstances",
+      "Because correctness is only ever defined relative to a stated specification — the same code can be correct against one specification and wrong against another",
+      "Because only compiled languages can have correct code",
+      "Because correctness only applies to functions with no arguments"
+    ],
+    correctIndex: 1,
+    explanation: "Section 4 states this directly: there is no such thing as correct code in the abstract. Correctness is always 'correct with respect to' some stated purpose, precondition, and postcondition. Change the specification, and the same unchanged code can become incorrect.",
+    optionFeedback: [
+      "Proof by induction (Lesson 2) does establish correctness for many definitions — the claim in this lesson is narrower: correctness is always relative to something, not that it's unattainable.",
+      "Correct — 'correct' is a two-place relation between code and a specification, not a one-place property of code alone.",
+      "Correctness-relative-to-a-specification applies regardless of whether the language is compiled or interpreted; it's a property of the code/specification pair.",
+      "The claim applies to every function, regardless of arity — a zero-argument function still needs a stated postcondition to be judged against."
+    ]
+  }
+]} />
 
 ## 5. Cohesion: one function, one task
 
@@ -140,6 +333,17 @@ average xs = sum xs / fromIntegral (length xs)
 report :: Double -> String
 report x = "Average: " ++ show x
 ```
+
+```text
+ghci> average [2,4,6]
+4.0
+ghci> report (average [2,4,6])
+"Average: 4.0"
+ghci> reportAverage [2,4,6]
+"Average: 4.0"
+```
+
+Both routes give the same string. The difference is not in what they compute, but in what you can test and reuse: `average` alone can be checked against a numeric postcondition (`result = sum / length`) without ever inspecting a string, and it can be reused anywhere a `Double` is needed — inside a report, a comparison, another calculation. `reportAverage` can only ever be tested by string comparison, and can only ever be reused as a full report.
 
 The second version can be tested without inspecting strings, and `average` is reusable. Each has a postcondition you could actually write down.
 
@@ -162,6 +366,58 @@ report  :: Double -> String     -- Prec: none
 ```
 
 `report . average` is safe because `report` has no precondition. But `average . someFilter` is only safe if that filter can never return an empty list — which is exactly the kind of question a specification lets you ask before the failure happens.
+
+A composition that gets this wrong fails at run time, not compile time, because `head`'s precondition is not visible to the type checker:
+
+```text
+ghci> (head . sort) [3,1,2]
+1
+ghci> (head . sort) []
+*** Exception: Prelude.head: empty list
+```
+
+`sort` accepts `[]` happily — its postcondition never guarantees a non-empty result — so `head . sort` inherits `head`'s precondition unchanged. The type `[a] -> a` type checks either way; only reasoning about the preconditions predicts which call will crash.
+
+<RecognitionStrategy title="Checking whether a composition is safe">
+To check `f . g`, do not look at the types alone — they will always line up if `g`'s result type matches `f`'s argument type. Instead ask: does `g`'s **postcondition** guarantee `f`'s **precondition**? If yes, the composition is safe for every input `g` accepts. If no, find the input to `g` that breaks it.
+</RecognitionStrategy>
+
+<Quiz title="Check: cohesion and composition" questions={[
+  {
+    question: "Why is average :: [Double] -> Double preferred over reportAverage :: [Double] -> String, given they compute related results?",
+    options: [
+      "average runs faster because it skips string formatting",
+      "average can be tested against a numeric postcondition and reused wherever a Double is needed, while reportAverage bundles two tasks into one and can only be tested by string comparison",
+      "reportAverage is invalid Haskell",
+      "There is no real difference — both are equally reusable"
+    ],
+    correctIndex: 1,
+    explanation: "This is the cohesion argument from Section 5: splitting 'compute' from 'format as a report' gives each function a single, testable, reusable job. Performance is not the point being made here.",
+    optionFeedback: [
+      "Performance is not the reason given in the lesson — string formatting is cheap relative to summing a list either way. The reason is testability and reuse.",
+      "Correct. average has a clean numeric postcondition and can be composed into other calculations; reportAverage conflates 'compute' and 'format' so it can only be checked and reused as a whole string.",
+      "reportAverage compiles and runs fine — the criticism is about design (cohesion), not validity.",
+      "They differ exactly in reusability: average can feed any further Double-consuming function, reportAverage's output is locked into a specific string shape."
+    ]
+  },
+  {
+    question: "average has the precondition 'the list is non-empty'. Which of these guarantees average . f is safe, for every list argument to f?",
+    options: [
+      "f's postcondition guarantees f never returns an empty list",
+      "f's precondition matches average's precondition",
+      "f and average have the same argument type, [Double]",
+      "average is total, so the precondition doesn't matter"
+    ],
+    correctIndex: 0,
+    explanation: "Composing g after f (here, average after f) is safe when f's postcondition guarantees g's precondition. average needs a non-empty list, so f must be guaranteed to never hand it an empty one — that is a statement about f's postcondition, not its precondition or its argument type.",
+    optionFeedback: [
+      "Correct. The rule is: the postcondition of the earlier function (f) must guarantee the precondition of the later one (average) — exactly f promising 'never an empty list.'",
+      "f's own precondition is about what f accepts, not about what f hands to average — matching preconditions doesn't say anything about f's output.",
+      "Matching argument types only makes the composition type check; it says nothing about whether average's non-empty precondition is respected.",
+      "average is not total — it fails (NaN, or an exception if you switch to Maybe) on an empty list, which is exactly why the precondition matters."
+    ]
+  }
+]} />
 
 ## 7. Practice
 

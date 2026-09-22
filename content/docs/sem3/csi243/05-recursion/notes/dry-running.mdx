@@ -92,7 +92,7 @@ Show one reduction per line, keep the parentheses so the pending calls are visib
 
 ## 4. Tracing a two-branch recursion: `fib 5`
 
-`fib` calls itself twice per step, so the trace forms a tree rather than a chain:
+`fib` calls itself **twice** per step — once for `n - 1`, once for `n - 2`. The previous lesson drew those calls out as a branching call-tree diagram. A dry run, though, is still written the same way as every other trace in this lesson: one line per step, top to bottom — it does not draw itself as a tree on the page. The branching is still there; it is just carried by the **nested parentheses** instead of by shape. Each pair of parentheses below is one call waiting on both of its children, the same waiting the diagram showed as two branches meeting at a node.
 
 ```haskell
 fib :: Integer -> Integer
@@ -114,9 +114,50 @@ fib 5
 = 5
 ```
 
+<Callout type="info" title="Where the tree is hiding in this trace">
+[How Recursion Works](/docs/sem3/csi243/05-recursion/notes/how-recursion-works) draws this exact computation as a call-tree diagram, with one node per call and the leaves at the base cases `fib 1` and `fib 0`. Put that diagram next to the trace above: every opening parenthesis here is a node splitting into two children in the diagram, and every `fib 1` or `fib 0` in the trace is a leaf being reached. The diagram and this trace describe the identical set of calls — the diagram shows the branching shape at a glance; the trace shows the arithmetic actually being carried out, line by line.
+</Callout>
+
 Checking against the sequence table in the previous lesson: position 5 holds `5`. Correct.
 
 Notice how often `fib 1` and `fib 0` appear. `fib 5` evaluates `fib 2` three separate times. This is why the naive Fibonacci definition becomes unusably slow well before `fib 40` — the work doubles with each step. Chapter 10 returns to the cost of recursive definitions.
+
+<Quiz title="Check Your Understanding: Reading a Branching Trace" questions={[
+  {
+    question: "In the fib 5 trace above, what does each pair of parentheses in a line like `(fib 3 + fib 2) + (fib 2 + fib 1)` correspond to?",
+    options: [
+      "One branching call in the call-tree diagram, waiting on its two children",
+      "A syntax requirement of GHCi with no deeper meaning",
+      "A separate, unrelated dry run running alongside the main one",
+      "A mistake — a correct trace should have no parentheses at all"
+    ],
+    correctIndex: 0,
+    explanation: "Every parenthesised group is one fib call that has split into its two recursive sub-calls and is waiting for both to resolve before it can add them — exactly the node-with-two-children shape drawn in the call-tree diagram in the previous lesson.",
+    optionFeedback: [
+      "Correct — the nesting is meaningful, not decorative.",
+      "The parentheses are not a GHCi requirement; they are how this written trace preserves the branching structure of the actual calls being made.",
+      "There is only one dry run here, of fib 5. The parenthesised groups are all part of that same single computation.",
+      "Parentheses are expected and necessary here. fib branches into two calls per step, unlike fac's single chain, so the trace needs them to show which additions are still pending."
+    ]
+  },
+  {
+    question: "Why does `fib 5` make more total calls than `fac 5`, even though both start from a similarly small input?",
+    options: [
+      "fib branches into two recursive calls per step and recomputes repeated sub-results like fib 2 from scratch each time; fac makes one recursive call per step with no repetition",
+      "fib is defined incorrectly",
+      "fac only works for even numbers, so it needs fewer calls",
+      "GHCi evaluates fib and fac using different rules"
+    ],
+    correctIndex: 0,
+    explanation: "fac n = n * fac (n - 1) makes exactly one recursive call per step, so fac 5 makes 5 calls. fib n = fib (n-1) + fib (n-2) makes two calls per step, and because nothing is cached, identical sub-calls such as fib 2 are redone every time they reappear in the tree — fib 5 alone makes 15 calls.",
+    optionFeedback: [
+      "Correct — branching plus recomputing shared sub-results is exactly what inflates the call count.",
+      "fib 5 = 5 is the right answer, matching the sequence table; the definition is not wrong, just more expensive to evaluate than fac.",
+      "fac works for every non-negative Integer, not just even ones. Domain has nothing to do with this difference.",
+      "Both are evaluated by the same reduction rules — substitute, then simplify. The difference in call count comes from how many recursive calls each definition's recursive step makes, not from different evaluation rules."
+    ]
+  }
+]} />
 
 ## 5. Using a trace to find a fault
 
@@ -172,7 +213,165 @@ fac 3
 
 Every factorial returns `0`. The trace shows exactly where: the base case injected a `0` that then absorbed the whole product. Comparing the trace against the specification's `fac 0 = 1` locates the error in one line.
 
-## 7. Practice
+## 7. Tail recursion vs. naive recursion
+
+Look again at the fully unwound trace of `fac 5` from Section 3, just before rewinding starts:
+
+```text
+= 5 * (4 * (3 * (2 * (1 * fac 0))))
+```
+
+That is a single number, `5`, and four **pending multiplications**, each one waiting on the result of a call that has not returned yet. Nothing can be computed until `fac 0` finally resolves — only then, right at the end, does the rewinding phase perform all four multiplications, innermost first. The deeper the recursion, the longer that chain of pending multiplications grows before any arithmetic happens at all.
+
+There is another way to write factorial that avoids building up that pending chain: carry the running answer along as an extra argument, updating it at every step instead of leaving it for later.
+
+```haskell
+-- Multiply acc by every whole number from n down to 1, then return it.
+-- acc is the answer accumulated so far; it starts at 1, the identity for *.
+facAcc :: Integer -> Integer -> Integer
+facAcc acc 0 = acc
+facAcc acc n = facAcc (acc * n) (n - 1)
+
+-- Compute n! by starting the accumulator at 1 and counting down from n.
+fac' :: Integer -> Integer
+fac' n = facAcc 1 n
+```
+
+Read the equations one at a time:
+
+- `facAcc acc 0 = acc` — the base case: once the countdown argument reaches `0`, there is nothing left to multiply in, so the accumulated answer *is* the final answer. Return it directly.
+- `facAcc acc n = facAcc (acc * n) (n - 1)` — the recursive step: multiply `n` into the accumulator **now**, then recurse with one less left to do and the already-updated accumulator.
+- `fac' n = facAcc 1 n` — the function a caller actually uses. It seeds the accumulator at `1`, the multiplicative identity, and hands the counting off to `facAcc`.
+
+This shape — where the recursive call is the very last thing that happens, and every piece of the answer is folded into an argument before that call, rather than left pending — is called **tail recursion**, and the extra argument that carries the running answer is an **accumulator**.
+
+**Tracing `fac' 4`.** Compare this, line by line, with the naive trace of `fac 4` from the previous lesson:
+
+```text
+fac' 4
+= facAcc 1 4
+= facAcc (1 * 4) 3
+= facAcc 4 3
+= facAcc (4 * 3) 2
+= facAcc 12 2
+= facAcc (12 * 2) 1
+= facAcc 24 1
+= facAcc (24 * 1) 0
+= facAcc 24 0
+= 24                    <- base case reached, and the answer was already sitting in acc
+```
+
+<Mermaid chart={`flowchart LR
+  subgraph Naive["Naive fac: pending multiplications stack up"]
+    direction TB
+    N1["fac 4"] --> N2["4 * fac 3"]
+    N2 --> N3["4 * (3 * fac 2)"]
+    N3 --> N4["4 * (3 * (2 * fac 1))"]
+    N4 --> N5["4 * (3 * (2 * (1 * fac 0)))"]
+    N5 --> N6["fac 0 = 1, base case"]
+    N6 --> N7["rewind all at once: 24"]
+  end
+  subgraph Accum["facAcc: the answer is carried, nothing left pending"]
+    direction TB
+    A1["facAcc 1 4"] --> A2["facAcc 4 3"]
+    A2 --> A3["facAcc 12 2"]
+    A3 --> A4["facAcc 24 1"]
+    A4 --> A5["facAcc 24 0"]
+    A5 --> A6["base case returns 24 directly"]
+  end`} caption="The naive trace grows a deeper pending expression at every step. The accumulator trace stays a single flat number throughout, and the base case hands back the finished answer with no rewinding left to do." />
+
+Every line of the `facAcc` trace is a plain, fully-evaluated number — `4`, `12`, `24` — with nothing left multiplying against a not-yet-returned call. There is no separate rewinding phase at all: by the time the base case fires, the answer is already sitting in `acc`, and `facAcc acc 0 = acc` just hands it back.
+
+<ComparisonTable
+  columns={[
+    { header: 'Property', key: 'property' },
+    { header: 'Naive fac', key: 'naive' },
+    { header: 'Accumulator facAcc', key: 'acc' }
+  ]}
+  rows={[
+    { property: 'What each call does before recursing', naive: 'Nothing yet — records "multiply by n" and waits for the deeper call', acc: 'Multiplies immediately, carries the updated running answer forward' },
+    { property: 'Pending work at the deepest call', naive: 'A stack of n waiting multiplications, e.g. 4 * (3 * (2 * (1 * 1)))', acc: 'None — the accumulator is already a single, fully-computed Integer' },
+    { property: 'When the arithmetic actually happens', naive: 'All at once, during rewinding, innermost pair first', acc: 'One multiplication per call, during unwinding — there is no rewinding phase' },
+    { property: 'Shape of the pending expression while recursing', naive: 'Grows deeper with every call (proportional to n)', acc: 'Stays flat — one number being carried along, never nested' }
+  ]}
+  highlightCol="acc"
+/>
+
+Both compute the same function. A complete program confirms it:
+
+```haskell
+fac :: Integer -> Integer
+fac 0 = 1
+fac n = n * fac (n - 1)
+
+facAcc :: Integer -> Integer -> Integer
+facAcc acc 0 = acc
+facAcc acc n = facAcc (acc * n) (n - 1)
+
+fac' :: Integer -> Integer
+fac' n = facAcc 1 n
+
+main :: IO ()
+main = do
+  print (fac 4)
+  print (fac' 4)
+  print (fac 10)
+  print (fac' 10)
+```
+
+```text
+24
+24
+3628800
+3628800
+```
+
+<CommonMistake title="Seeding the accumulator with the wrong value">
+`fac' n = facAcc 1 n` seeds the accumulator at `1`, not `0`. `1` is the identity for multiplication — the same reasoning behind `sum' [] = 0` and `product' [] = 1` in Chapter 6: the base case must be the value that leaves the result unchanged. Seeding with `facAcc 0 n` would multiply every partial product by `0` at the very first step, and `fac' n` would return `0` for every `n`, no matter how large.
+</CommonMistake>
+
+<Callout type="info" title="Why bother, if the answer is the same?">
+For `fac 4`, the difference is invisible — both versions return `24` instantly. It starts to matter for large `n`, where the naive version's pending chain of multiplications takes real memory to hold before any of it can be evaluated, while the accumulator version never holds more than one number at a time. GHC can sometimes optimise tail-recursive functions like `facAcc` to run in constant space; Chapter 10 returns to this trade-off in more depth.
+</Callout>
+
+<Quiz title="Check Your Understanding: Tail Recursion and Accumulators" questions={[
+  {
+    question: "At the deepest point of unwinding `fac' 4` via facAcc — the line `facAcc 24 1` — what pending arithmetic is still waiting to be performed once the base case is reached?",
+    options: [
+      "None — acc already holds the fully computed running product",
+      "One multiplication: 24 * 1",
+      "Four multiplications, one for each call made so far",
+      "The whole expression 4 * (3 * (2 * (1 * 1)))"
+    ],
+    correctIndex: 0,
+    explanation: "Every call to facAcc performs its multiplication immediately, before recursing, so acc is always a plain, fully-evaluated number. By facAcc 24 1, the value 24 already accounts for 4 * 3 * 2, computed one step at a time. Nothing is left pending for a later rewinding phase.",
+    optionFeedback: [
+      "Correct — the accumulator is always fully evaluated; there is nothing left over to compute later.",
+      "That multiplication was already performed in the step before this one (facAcc (24 * 1) 0 reduces to facAcc 24 0). By the time you reach facAcc 24 1 as a starting point, no multiplication for this step is still pending — it happens as this line is produced, not after.",
+      "That count describes the naive fac trace's pending multiplications, not facAcc's. facAcc never accumulates a backlog of waiting operations.",
+      "That nested expression is what the naive fac trace builds up, not what facAcc produces. facAcc's intermediate values are always flat numbers like 24, never nested pending expressions."
+    ]
+  },
+  {
+    question: "Why is `fac' n = facAcc 1 n` seeded with `1` rather than `0`?",
+    options: [
+      "1 is the multiplicative identity, so starting the running product there leaves it unchanged until real factors are multiplied in",
+      "0 would cause a division-by-zero error inside facAcc",
+      "It doesn't matter — either seed produces the same answer",
+      "1 marks the base case so facAcc knows when to stop recursing"
+    ],
+    correctIndex: 0,
+    explanation: "The accumulator carries a running product. Multiplying by 1 changes nothing, so seeding it there means the first real multiplication (by n) produces the correct partial answer. Seeding with 0 would zero out every product regardless of n, since anything times 0 is 0.",
+    optionFeedback: [
+      "Correct — 1 is the identity for multiplication, exactly like the empty-product convention behind product' [] = 1 in Chapter 6.",
+      "facAcc never divides anything; it only multiplies and subtracts 1 from the countdown argument. Division-by-zero cannot arise here.",
+      "It matters a great deal: seeding with 0 would make every recursive call multiply the running product by 0, so fac' n would incorrectly return 0 for every n.",
+      "The base case is triggered by the second argument reaching 0 (facAcc acc 0 = acc), which is a completely separate parameter from what acc starts at."
+    ]
+  }
+]} />
+
+## 8. Practice
 
 Produce a full dry run for each, one reduction per line, marking the base case.
 
@@ -181,6 +380,7 @@ Produce a full dry run for each, one reduction per line, marking the base case.
 3. `fib 4`
 4. `power 2 3`, using `power x 0 = 1` and `power x n = x * power x (n - 1)`
 5. Trace `fac (-1)` with the standard definition. What do you observe, and what does it tell you about the function's domain?
+6. Trace `facAcc 1 5` using `facAcc acc 0 = acc` and `facAcc acc n = facAcc (acc * n) (n - 1)`. At each line, state whether any multiplication is still pending.
 
 <Accordions>
 <Accordion title="Check question 2">
@@ -212,6 +412,26 @@ fac (-1)
 The argument moves *away* from the base case with every call, so `fac 0` is never matched and the recursion never terminates. This is not a coding slip — it is the function being applied outside its domain. The specification said factorial is defined for non-negative integers, but the type `Integer -> Integer` promises a result for every integer. The next lessons close that gap.
 
 </Accordion>
+<Accordion title="Check question 6">
+
+```text
+facAcc 1 5
+= facAcc (1 * 5) 4      <- no multiplication pending; 1 * 5 computed now
+= facAcc 5 4
+= facAcc (5 * 4) 3      <- no multiplication pending; 5 * 4 computed now
+= facAcc 20 3
+= facAcc (20 * 3) 2     <- no multiplication pending; 20 * 3 computed now
+= facAcc 60 2
+= facAcc (60 * 2) 1     <- no multiplication pending; 60 * 2 computed now
+= facAcc 120 1
+= facAcc (120 * 1) 0    <- no multiplication pending; 120 * 1 computed now
+= facAcc 120 0
+= 120                    <- base case reached; acc already holds the answer
+```
+
+At every single line, the pending arithmetic is exactly one multiplication, and it is resolved before moving to the next line — never left waiting on a deeper call. Compare this with `fac 5`'s naive trace, where by the equivalent depth there are four separate multiplications all still pending at once.
+
+</Accordion>
 </Accordions>
 
 <Checklist title="Mastery check" rules={[
@@ -220,6 +440,7 @@ The argument moves *away* from the base case with every call, so `fac 0` is neve
   { type: 'must', text: 'I can use two or three unwinding steps to diagnose a non-terminating function.' },
   { type: 'must', text: 'I can trace a two-branch recursion such as fib and explain why it repeats work.' },
   { type: 'must', text: 'I can locate a wrong answer by comparing a trace against the specification.' },
+  { type: 'must', text: 'I can trace an accumulator-passing function and explain why it never leaves a multiplication pending, unlike the naive version.' },
   { type: 'avoid', text: 'Do not present a trace that jumps straight to the answer; it shows no reasoning.' }
 ]} />
 

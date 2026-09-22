@@ -31,6 +31,47 @@ The recursion terminates because `xs` is always one element shorter than the lis
 The plural `xs` is read “exes” and means “the rest of the x values”. The course lecture notes recommend ending list argument names with `s` for exactly this reason: `ints`, `lists`, `scores`.
 </Callout>
 
+<CommonMistake title="Forgetting the [] equation">
+Every recursive list function needs a `[]` case, even when the problem statement never mentions an empty list explicitly — it is what stops the recursion. Skip it and GHC compiles the function anyway, because the type checker only confirms types line up, not that every pattern is covered. The very first call on `[]` then crashes with `Non-exhaustive patterns`.
+</CommonMistake>
+
+<Quiz title="Check: The Standard Split" questions={[
+  {
+    question: "Why are [] and (x:xs) an exhaustive pair of patterns for any list?",
+    options: [
+      "Because every Haskell list has either zero or exactly one element",
+      "Because every list is, by construction, either empty or an element consed onto some other list — there is no third case",
+      "Because Haskell forbids lists longer than two elements without recursion",
+      "Because (x:xs) only matches lists of even length"
+    ],
+    correctIndex: 1,
+    explanation: "The previous lesson showed every list is built by consing, all the way down to []. So a list is either [] (zero cons cells) or some x : rest (at least one cons cell) — there is no other shape a list can take.",
+    optionFeedback: [
+      "Lists can have any length — three, ten, a million elements — and (x:xs) still matches all of them, since xs can itself be arbitrarily long.",
+      "Correct — the cons-cell structure guarantees every list is one of exactly these two shapes.",
+      "There's no length restriction of this kind; (x:xs) matches a list of any length ≥ 1, with xs absorbing everything after the head.",
+      "(x:xs) matches any non-empty list regardless of length or parity — it says nothing about how many elements remain in xs."
+    ]
+  },
+  {
+    question: "A function is missing its [] equation. What happens when GHC compiles it?",
+    options: [
+      "GHC refuses to compile, reporting a missing pattern error",
+      "GHC compiles it successfully; the gap surfaces only if [] is passed in at run time",
+      "GHC automatically inserts a default [] case",
+      "The function silently returns [] whenever it is called"
+    ],
+    correctIndex: 1,
+    explanation: "Missing patterns are (at most) a warning, not a compile error. GHC's type checker verifies the equations that exist are well-typed — it doesn't prove every possible input is handled. The gap only becomes visible as a Non-exhaustive patterns crash when [] actually reaches the function.",
+    optionFeedback: [
+      "A missing pattern is not a type error, so it does not block compilation — this is exactly what makes it a dangerous mistake to skip.",
+      "Correct — the program compiles fine; the missing case only bites once an empty list is actually passed in.",
+      "GHC never invents a case on your behalf; an uncovered pattern stays uncovered until you write it.",
+      "Without a [] equation, calling the function on [] crashes — it does not fall back to returning [] automatically."
+    ]
+  }
+]} />
+
 ## 2. Defining the Prelude functions
 
 The best way to understand these is to write them. Each one is two lines.
@@ -76,7 +117,48 @@ length' [4,7,2]
 
 The same unwinding and rewinding as Chapter 5, with the list shrinking instead of a number.
 
+<Quiz title="Check: Defining the Prelude Functions" questions={[
+  {
+    question: "Why is sum' [] = 0 the right base case, rather than, say, sum' [] = 1?",
+    options: [
+      "0 is simply the smallest Integer, so it's the conventional default",
+      "0 is the identity for addition: adding it to any total leaves that total unchanged, matching what summing 'nothing more' should do",
+      "Because the type signature requires the base case to be 0",
+      "It doesn't matter which value is used, as long as it's a constant"
+    ],
+    correctIndex: 1,
+    explanation: "sum' [5] must equal 5 + sum' [] = 5 + 0 = 5. Any base value other than 0 would silently shift every result — sum' [5] with base 1 would wrongly give 6. The base case has to be the identity element for whatever operation combines the elements.",
+    optionFeedback: [
+      "Integer has no smallest value at all (it's unbounded below) — that's not why 0 was chosen here.",
+      "Correct — 0 is addition's identity, so appending it to a running total never changes that total.",
+      "The signature sum' :: [Integer] -> Integer only fixes the type of the result, not its value for the empty case.",
+      "It matters a great deal — a wrong base case silently offsets every single result by a constant amount."
+    ]
+  },
+  {
+    question: "In length' (_:xs) = 1 + length' xs, why is the head matched with _ instead of a name like x?",
+    options: [
+      "Because Haskell requires wildcards in every recursive pattern",
+      "Because the head's value never appears on the right-hand side — length' only needs to know that an element exists, not what it is",
+      "Because _ makes the function run faster",
+      "Because x is a reserved keyword in Haskell"
+    ],
+    correctIndex: 1,
+    explanation: "length' counts elements; it never inspects what any element actually is. Naming it x would be misleading, since x is then unused. _ documents, right in the pattern, that the value is irrelevant here.",
+    optionFeedback: [
+      "Plenty of recursive patterns in this lesson name the head explicitly, e.g. sum' (x:xs) = x + sum' xs — wildcards are used only when the value truly isn't needed.",
+      "Correct — _ signals 'this value doesn't matter', which is exactly length''s situation.",
+      "_ and a named variable compile to the same underlying pattern match; there's no performance difference.",
+      "x is an ordinary identifier in Haskell, not a keyword — it could be used here, it's just unnecessary."
+    ]
+  }
+]} />
+
 ## 3. Returning a list
+
+<RecognitionStrategy title="Scalar result or list result?">
+Check the return type before writing the recursive step. If the signature ends in a non-list type (`Int`, `Bool`, `Integer`…), the recursive step *combines* `x` with the recursive call using an operator (`+`, `&&`, comparison, …). If it ends in `[a]`, the recursive step usually *conses* `x` (or nothing, if `x` is filtered out) onto the recursive call. Mixing the two up — consing where a scalar is expected, or using `+` where a list is expected — is caught immediately as a type error.
+</RecognitionStrategy>
 
 So far the results were numbers. When the result is itself a list, the recursive step **conses** onto the result of the recursive call:
 
@@ -102,6 +184,43 @@ doubleAll [1,2,3]
 ```
 
 The base case returns `[]` because the result of transforming nothing is nothing.
+
+<Quiz title="Check: Returning a List" questions={[
+  {
+    question: "In doubleAll (x:xs) = (x * 2) : doubleAll xs, what would happen if : were replaced with ++?",
+    options: [
+      "Nothing — : and ++ are interchangeable for lists",
+      "A type error, because ++ needs a list on both sides, and (x * 2) is a single Integer, not a list",
+      "It would still work, but run twice as slowly",
+      "It would double every element twice instead of once"
+    ],
+    correctIndex: 1,
+    explanation: "++ :: [a] -> [a] -> [a] requires both operands to already be lists. (x * 2) is a bare Integer. To use ++ here you would need [x * 2] ++ doubleAll xs — wrapping it in a singleton list first.",
+    optionFeedback: [
+      ": takes an element and a list; ++ takes two lists. They require different-shaped arguments and are not drop-in replacements.",
+      "Correct — (x * 2) :: Integer is not a list, so ++ rejects it as a type mismatch.",
+      "The issue isn't speed, it's that the expression wouldn't compile at all as written.",
+      "Swapping the operator doesn't change how many times doubling happens — it changes how the result is joined, if it compiled at all."
+    ]
+  },
+  {
+    question: "What does doubleAll [] evaluate to, and why?",
+    options: [
+      "An error, since there's nothing to double",
+      "[], because doubling every element of an empty list still produces an empty list",
+      "[0], since doubling nothing gives zero",
+      "It never terminates"
+    ],
+    correctIndex: 1,
+    explanation: "The base case doubleAll [] = [] says exactly this: transforming zero elements yields zero elements. There's no arithmetic to perform, so no error and no placeholder value — just the empty list, unchanged.",
+    optionFeedback: [
+      "doubleAll is total: it has a defined answer for every list, including the empty one — no error is thrown.",
+      "Correct — the base case matches [] directly and returns [] with no further work.",
+      "There's no element to double in an empty list, so no 0 is manufactured — the result is simply empty, not a list containing a zero.",
+      "The base case is checked first and matches immediately; there's no recursive call at all for [], so it terminates instantly."
+    ]
+  }
+]} />
 
 ## 4. Filtering: keeping some elements
 
@@ -145,6 +264,43 @@ ghci> positiveNumbers [-1,5,-3,8]
 `largerY` and `positiveNumbers` share a shape: recurse down the list, keep elements passing a test. Chapter 7 introduces `filter`, which captures that shape once so you never write it again. Writing it by hand first is what makes `filter` obvious later.
 </Callout>
 
+<Quiz title="Check: Filtering" questions={[
+  {
+    question: "In largerY, both branches of the guard recurse on xs. Why does the function still terminate?",
+    options: [
+      "It doesn't always terminate — it depends on the input",
+      "Because xs is one element shorter than the original list regardless of which branch runs, so the list still shrinks toward [] every single call",
+      "Because y decreases on every call",
+      "Because largerY has a hidden counter that limits recursion depth"
+    ],
+    correctIndex: 1,
+    explanation: "Whether the head is kept (x : largerY xs y) or dropped (largerY xs y), the recursive call is always on xs — the tail. Every call therefore processes a strictly shorter list than the one before it, guaranteeing the base case [] is eventually reached.",
+    optionFeedback: [
+      "It terminates for every finite input list — the shrinking happens unconditionally in both guard branches.",
+      "Correct — both branches recurse on xs, so the list shrinks by one element every call no matter which branch is taken.",
+      "y is passed through unchanged in both branches — largerY xs y keeps the same y, it's x and xs that shrink.",
+      "There's no counter; termination comes entirely from the list argument getting structurally smaller each call."
+    ]
+  },
+  {
+    question: "What does positiveNumbers [-1,5,-3,8] return, and in what order?",
+    options: [
+      "[8,5], reversed from the input",
+      "[5,8], the positive elements, in their original relative order",
+      "[-1,-3], the elements that were dropped",
+      "[5,-3,8], skipping only the first element"
+    ],
+    correctIndex: 1,
+    explanation: "The recursion walks the list left to right and conses each surviving element onto the front of the (already-processed) rest, which preserves the original order: 5 comes before 8 in the input, and stays before it in the output.",
+    optionFeedback: [
+      "positiveNumbers doesn't reverse anything — consing here preserves order because the recursive call processes the tail first, in the same left-to-right sequence as the input.",
+      "Correct — -1 and -3 fail the x > 0 test and are skipped; 5 and 8 pass, in their original order.",
+      "That would be the complement of what positiveNumbers keeps — this lists the discarded elements, not the kept ones.",
+      "Every failing element is skipped, not just the first — both -1 and -3 are dropped from the result."
+    ]
+  }
+]} />
+
 ## 5. Inspecting more than one element
 
 Some questions need two elements at a time. The pattern `(x:y:rest)` matches a list of **at least two** elements:
@@ -171,6 +327,43 @@ True
 Three cases are needed, and all three come from the specification: an empty list is sorted; a one-element list is sorted; a longer list is sorted when its first two elements are in order **and** the rest is sorted.
 
 Notice the recursive call is `isSorted (y:rest)`, not `isSorted rest` — `y` must be compared against the element after it, so it stays in the list.
+
+<Quiz title="Check: Inspecting Two Elements" questions={[
+  {
+    question: "Why does isSorted need three equations — [], [_], and (x:y:rest) — instead of the usual two?",
+    options: [
+      "Because Haskell requires exactly three equations for every recursive function",
+      "Because a one-element list is trivially sorted but doesn't match (x:y:rest), which needs at least two elements",
+      "Because isSorted is defined for lists of at most three elements",
+      "It's a style choice; two equations would work identically"
+    ],
+    correctIndex: 1,
+    explanation: "(x:y:rest) requires at least two elements to match. A singleton list [5] is sorted by definition (nothing to compare it against) but has no second element, so it needs its own equation, [_] = True, separate from the [] base case.",
+    optionFeedback: [
+      "There's no fixed equation count in Haskell — most functions in this lesson use exactly two. isSorted specifically needs a third because of what (x:y:rest) can and can't match.",
+      "Correct — a singleton doesn't have a 'next element' to compare, so it needs its own True case, distinct from both [] and a genuine two-or-more-element list.",
+      "isSorted handles lists of any length — the recursive call (isSorted (y:rest)) keeps working through longer lists.",
+      "Without the [_] equation, calling isSorted [5] would fall through to (x:y:rest), fail to match (there's no y), and crash with Non-exhaustive patterns — it is not optional."
+    ]
+  },
+  {
+    question: "Why is the recursive call isSorted (y:rest), and not isSorted rest?",
+    options: [
+      "isSorted rest would also work; (y:rest) is just a stylistic preference",
+      "Because y still needs to be compared against the element that follows it, so it must remain in the list passed to the next call",
+      "Because rest alone is not a valid list",
+      "To make the function run in constant time"
+    ],
+    correctIndex: 1,
+    explanation: "Each call only compares the current head against the next element. Dropping y and recursing on rest would skip the comparison between y and whatever comes after it — isSorted [5,1,9] would wrongly ignore whether 1 >= 9.",
+    optionFeedback: [
+      "This isn't stylistic — isSorted rest would silently skip a comparison. Try tracing isSorted [5,1,9] with isSorted rest to see it accept an unsorted list.",
+      "Correct — y is the head of the next comparison, so it has to be carried forward into the next call.",
+      "rest is a perfectly ordinary list on its own — the issue is which comparisons get made, not validity.",
+      "This is about correctness, not performance — both versions do the same amount of work, but only one checks every adjacent pair."
+    ]
+  }
+]} />
 
 ## 6. Recursion with a position counter
 
@@ -199,6 +392,43 @@ atPosition' xs y
 ```
 
 Both are acceptable. The recursive version shows the mechanism; the second shows that recognising an existing Prelude function is also a skill.
+
+<Quiz title="Check: Position Counter" questions={[
+  {
+    question: "In atPosition, two things shrink on the recursive call. What are they, and why does that matter?",
+    options: [
+      "Only y shrinks; the list stays the same size throughout",
+      "The list loses its head (xs is shorter than the original) and y decreases by 1 — both must reach their target together for the function to work",
+      "Only the list shrinks; y is unused",
+      "x and y both shrink, but the list itself never changes"
+    ],
+    correctIndex: 1,
+    explanation: "Each call moves to xs (one element shorter) and y - 1 (one smaller). They are kept in lockstep on purpose: when y reaches 0, the current head of the (now-shrunk) list is exactly the element originally at position y in the full list.",
+    optionFeedback: [
+      "The list argument shrinks too — atPosition (x:xs) y recurses on xs, not on the original list.",
+      "Correct — both xs and y shrink by one each call, and the correctness of the function depends on them staying synchronized.",
+      "y decreases on every call — it's what atPosition xs (y - 1) does, and it's essential: it's how the function knows when it has arrived at the target position.",
+      "The list argument does change — it becomes xs, one element shorter, on every recursive call."
+    ]
+  },
+  {
+    question: "atPosition' uses xs !! y directly instead of recursing by hand. What must it check first, and why?",
+    options: [
+      "Nothing — !! already handles every case safely",
+      "y < 0 and y >= length xs, because !! is itself a partial function that crashes on an out-of-range index",
+      "Only that the list is non-empty",
+      "That y is even"
+    ],
+    correctIndex: 1,
+    explanation: "!! is partial, just like head — it throws Prelude.!!: index too large rather than failing gracefully. atPosition' guards against both a negative index and one at or beyond length xs before ever calling !!, producing a clearer error message instead of an unhandled exception.",
+    optionFeedback: [
+      "!! is one of the partial functions flagged in the previous lesson — it crashes on bad indices rather than handling them.",
+      "Correct — both guards exist specifically because !! itself does not check its index.",
+      "Checking non-emptiness alone isn't enough — a non-empty list can still have y far outside its valid index range.",
+      "There's no parity requirement on valid indices — even and odd positions are both perfectly normal."
+    ]
+  }
+]} />
 
 ## 7. Common errors
 
@@ -232,7 +462,43 @@ myReverse []     = []
 myReverse (x:xs) = myReverse xs ++ [x]
 ```
 
+```text
+ghci> myReverse [1,2,3,4]
+[4,3,2,1]
+```
+
 The head must end up last, so the reversed tail is built first and `[x]` is appended. Note `[x]`, not `x` — `++` joins two *lists*.
+
+<CommonMistake title="This myReverse is O(n²), not O(n)">
+`++` walks its entire *left* operand to find the end before it can attach the right one — appending `[x]` costs time proportional to the length of `myReverse xs`. Since that append happens once per element, over the whole list the total work is `1 + 2 + ... + n`, which is `O(n²)`. The function is correct — every test passes — but it gets noticeably slower as the list grows, the same kind of hidden cost [dry-running](/docs/sem3/csi243/05-recursion/notes/dry-running) flags for naive `fib`: right answer, expensive answer.
+</CommonMistake>
+
+A faster version avoids `++` entirely by carrying the reversed-so-far result as an extra argument (an **accumulator**), so each step is a single `O(1)` cons instead of an `O(n)` append:
+
+```haskell
+-- Faster version: build the result in an accumulator instead of appending.
+myReverseFast :: [a] -> [a]
+myReverseFast xs = go xs []
+  where
+    go []     acc = acc
+    go (y:ys) acc = go ys (y : acc)
+```
+
+```text
+ghci> myReverseFast [1,2,3,4]
+[4,3,2,1]
+```
+
+```text
+go [1,2,3,4] []
+= go [2,3,4] (1 : [])
+= go [3,4]   (2 : (1 : []))
+= go [4]     (3 : (2 : (1 : [])))
+= go []      (4 : (3 : (2 : (1 : []))))
+= [4,3,2,1]              <- base case reached, acc is returned as-is
+```
+
+Every step conses one element onto `acc` — no `++`, no re-walking already-built results — so this version is `O(n)`. `go` is a **local helper function**, defined in a `where` clause, that takes one extra argument the "public" `myReverseFast` doesn't need to expose: this accumulator-passing shape is a genuinely different pattern from the "cons in the recursive step" functions earlier in this lesson, and Chapter 5's [dry-running](/docs/sem3/csi243/05-recursion/notes/dry-running) lesson covers it as a general technique for turning `O(n²)` recursions into `O(n)` ones.
 
 **5.**
 

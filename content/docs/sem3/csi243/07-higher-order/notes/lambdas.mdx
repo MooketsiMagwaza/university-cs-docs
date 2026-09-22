@@ -70,6 +70,55 @@ double   = \x -> x + x
 
 The equation form is shorthand for the lambda form. Every function definition you have written since Chapter 3 has been a lambda underneath.
 
+<Quiz title="Check yourself: lambda basics" questions={[
+  {
+    question: "What does (\\x -> x + 1) 5 evaluate to?",
+    options: ["6", "5", "A type error — lambdas cannot be applied directly", "x + 1"],
+    correctIndex: 0,
+    explanation: "The lambda takes x, substitutes 5 for it, and computes 5 + 1 = 6. The parentheses around the lambda let it be applied immediately, just like a named function.",
+    optionFeedback: [
+      "Correct — substituting 5 for x gives 5 + 1 = 6.",
+      "That would be the value of x alone, but the body adds 1 to it before returning.",
+      "Lambdas can be applied directly as long as the whole lambda is parenthesised before the argument, exactly as written here.",
+      "That's the unevaluated body with x still a placeholder — applying the lambda substitutes the argument in and computes a number."
+    ]
+  },
+  {
+    question: "Why does \\x -> x + 1 5 (no parentheses around the lambda) fail to mean 'apply the lambda to 5'?",
+    options: [
+      "The lambda body extends as far right as possible, so this parses as \\x -> (x + (1 5)), which tries to apply 1 to 5",
+      "Lambdas cannot take numeric arguments",
+      "-> must be followed immediately by a closing parenthesis",
+      "Backslash is reserved and cannot start an expression"
+    ],
+    correctIndex: 0,
+    explanation: "A lambda's body greedily extends to the right, so \\x -> x + 1 5 is read as \\x -> (x + (1 5)), which tries to apply the number 1 as if it were a function — a type error. Wrapping the lambda in parentheses, (\\x -> x + 1) 5, fixes this by closing the body before the 5 arrives.",
+    optionFeedback: [
+      "Correct — without parentheses around the lambda, the whole tail belongs to its body, so 1 5 gets parsed as an application.",
+      "Lambdas take any kind of argument, including numbers — the issue here is purely about where the body ends, not what it accepts.",
+      "Nothing requires a closing parenthesis right after ->; the issue is that there is no parenthesis around the lambda at all.",
+      "Backslash is exactly how a lambda starts, and that part is fine — the problem is what happens after the arrow, not before it."
+    ]
+  },
+  {
+    question: "Which pair of definitions mean exactly the same thing?",
+    options: [
+      "double x = x + x   and   double = \\x -> x + x",
+      "double x = x + x   and   double = \\x -> x",
+      "double = \\x -> x + x   and   double x y = x + y",
+      "double x = x + x   and   double = x + x"
+    ],
+    correctIndex: 0,
+    explanation: "An equation f x = ... is shorthand for binding f to a lambda: f = \\x -> .... Both forms describe exactly the same function value.",
+    optionFeedback: [
+      "Correct — the equation form and the lambda form describe the same function.",
+      "The right-hand side here drops the + x, so this lambda just returns its argument unchanged — not the same function as double.",
+      "The second definition takes two arguments and adds them; that's a different function from one that doubles a single argument.",
+      "double = x + x isn't a function at all — without a \\x ->, x is an undefined free variable, not a parameter."
+    ]
+  }
+]} />
+
 ## 4. Why they exist: avoiding a needless name
 
 A lambda is useful when a function is referenced only once and naming it adds nothing.
@@ -96,6 +145,21 @@ ghci> odds 5
 [1,3,5,7,9]
 ```
 
+The same pattern applies to `filter`. Keeping only the words longer than three characters needs a one-line test, so a lambda is written right where `filter` needs it, instead of naming a `isLongWord` helper that is used nowhere else:
+
+```haskell
+-- Keep only the words with more than three characters.
+longWords :: [String] -> [String]
+longWords ws = filter (\w -> length w > 3) ws
+```
+
+```text
+ghci> longWords ["a", "cat", "house", "of", "cards"]
+["house","cards"]
+```
+
+`"a"` (length 1), `"cat"` (length 3), and `"of"` (length 2) all fail the test `length w > 3`; `"house"` (5) and `"cards"` (5) pass it. The lambda `\w -> length w > 3` is a complete, self-contained rule, so giving it a separate name would only add a layer of indirection between the reader and what the rule actually checks.
+
 <Callout type="info" title="A name is not always worse">
 If the rule is complicated, or is used more than once, or genuinely deserves explanation, a named `where` helper is clearer. Prefer a lambda only when the rule is short and used once. Clarity comes before cleverness.
 </Callout>
@@ -121,6 +185,25 @@ ghci> always5 99
 
 The wildcard in `\_ -> x` says the returned function's argument is deliberately discarded.
 
+`const` is one extreme: the returned function ignores its argument completely. A function that *uses* the argument it is given, while still remembering an earlier one, is just as common:
+
+```haskell
+makeAdder :: Integer -> (Integer -> Integer)
+makeAdder n = \x -> x + n
+```
+
+Read this as: `makeAdder n` produces a function that adds `n` to whatever it is later given. Unlike `const`, the returned lambda's body actually mentions its argument `x`.
+
+```text
+ghci> let addFive = makeAdder 5
+ghci> addFive 10
+15
+ghci> (makeAdder 100) 1
+101
+```
+
+`addFive` **remembers** `n = 5` — that captured value is what makes it different from `always5`, which remembers a value but never looks at what it is given at all.
+
 ## 6. Lambdas make currying precise
 
 A lambda can be used to formalise the meaning of a curried function definition:
@@ -138,6 +221,60 @@ add = \x -> (\y -> x + y)
 This makes precise that `add` is a function taking a number `x` and returning a **function**, which in turn takes a number `y` and returns `x + y`.
 
 That is not a curiosity — it is how every multi-argument Haskell function actually works, and the next lesson builds on it directly.
+
+<Quiz title="Check yourself: functions returning functions" questions={[
+  {
+    question: "Given add = \\x -> (\\y -> x + y), what is add 3 on its own?",
+    options: [
+      "A function that takes one more number and adds 3 to it",
+      "An error, because add needs two arguments",
+      "The number 3",
+      "A function that takes two more numbers"
+    ],
+    correctIndex: 0,
+    explanation: "add 3 substitutes 3 for x in the outer lambda, leaving \\y -> 3 + y — a complete function value waiting for y. It is not an error and not yet a number.",
+    optionFeedback: [
+      "Correct — applying add to 3 returns the inner lambda with x fixed at 3.",
+      "Partial application is legal in Haskell; supplying fewer arguments than the full chain just returns the next function in the chain, not an error.",
+      "add 3 is a function value, not a number — you would need to apply it to a y to get a number back.",
+      "Only one more number is needed: the outer lambda already consumed x = 3, leaving just \\y -> x + y waiting for y."
+    ]
+  },
+  {
+    question: "let always5 = const 5. What does always5 \"anything\" return, and why?",
+    options: [
+      "5, because const's inner lambda \\_ -> x ignores its argument and returns the captured x",
+      "\"anything\", because always5 just echoes its input",
+      "A type error, because const expects two numbers",
+      "5, because const always evaluates its second argument first"
+    ],
+    correctIndex: 0,
+    explanation: "const x = \\_ -> x. The wildcard pattern _ matches (and discards) whatever argument it is given, so the returned function always produces the x that was captured when const was first applied — here, 5.",
+    optionFeedback: [
+      "Correct — the wildcard discards the argument entirely, and the captured x = 5 is returned regardless of what comes in.",
+      "always5 discards whatever it's given — that's the entire point of const: the returned function ignores its argument.",
+      "const's second argument can be any type at all (it's the type variable b in a -> b -> a) — there is no numeric requirement here.",
+      "const doesn't evaluate its second argument at all; the wildcard pattern \\_ never inspects it, so nothing is 'evaluated first'."
+    ]
+  },
+  {
+    question: "Which of these actually uses its argument x, unlike const-style definitions that just discard it?",
+    options: [
+      "makeAdder n = \\x -> x + n",
+      "makeAdder n = \\_ -> n",
+      "makeAdder = \\n x -> n",
+      "makeAdder n x = n"
+    ],
+    correctIndex: 0,
+    explanation: "makeAdder n = \\x -> x + n captures n in a closure and returns a function whose body actually mentions its own argument x, unlike the other three, which all discard x and behave like const.",
+    optionFeedback: [
+      "Correct — the returned lambda uses both n (captured earlier) and x (its own argument).",
+      "This ignores x completely and always returns n — that is const's behaviour, not an adder.",
+      "Same issue: x is bound as a parameter but never used in the body, so this always returns n regardless of x.",
+      "Again x is never referenced on the right-hand side, so every call returns n unchanged — this is const in disguise."
+    ]
+  }
+]} />
 
 ## 7. Patterns in lambdas
 

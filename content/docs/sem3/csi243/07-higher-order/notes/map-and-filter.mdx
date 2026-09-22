@@ -33,7 +33,18 @@ map _ []     = []
 map f (x:xs) = f x : map f xs
 ```
 
-Read the signature carefully. The first argument `(a -> b)` is **itself a function**. That is what makes `map` higher-order.
+Read the signature carefully, argument by argument. `map` takes **a rule for turning one element into a result** — written `(a -> b)` — and **a list of `a`s**, and gives back **a list of `b`s**: the rule applied to every element, in order, one result per input. Plainly: "give me a function that knows what to do with one item, and a list of items, and I will hand back the list of results."
+
+The first argument `(a -> b)` is **itself a function** — that is what makes `map` higher-order. Before watching it get passed to `map`, check that it really is an ordinary value with a type of its own, the same way a number or a string is:
+
+```text
+ghci> :type (*2)
+(*2) :: Num a => a -> a
+ghci> :type show
+show :: Show a => a -> String
+```
+
+Neither line mentions a list anywhere. `(*2)` and `show` are complete functions on their own, fully formed before `map` ever sees them; `map`'s only job is to apply one of them to every element of a list.
 
 ```text
 ghci> map (*2) [1,2,3]
@@ -47,6 +58,88 @@ ghci> map length ["hi", "there"]
 ```
 
 `map` never changes the number of elements, and it may change the element type: `map show` turns `[Integer]` into `[String]`, which is exactly what `(a -> b)` permits.
+
+Three more calls, each filling `map`'s function slot a different way:
+
+```haskell
+square :: Integer -> Integer
+square n = n * n
+```
+
+```text
+ghci> map square [1,2,3,4]
+[1,4,9,16]
+```
+
+`square` is a function defined the ordinary way, with its own name and type signature, somewhere else in the program. `map` does not care where a function came from, only that it has type `a -> b` — a Prelude function like `show`, a section like `(*2)`, and a hand-written function like `square` all fit the same slot.
+
+```text
+ghci> map (\n -> n * n + 1) [1,2,3,4]
+[2,5,10,17]
+```
+
+Here the rule is a lambda written directly inside the call, because "square it and add one" is needed nowhere else and does not deserve a name of its own — the same judgement call from Lesson 1, now applied to a function that is itself an argument.
+
+```text
+ghci> map (`div` 2) [10, 15, 21]
+[5,7,10]
+```
+
+``(`div` 2)`` is a section: `div` turned into an operator with backticks, then given its right-hand side, so it halves each element and rounds down. A named function, a lambda, and a section — three different ways of writing "a rule from one element to a result" — all satisfy exactly the same `(a -> b)` slot in `map`'s type.
+
+<Quiz title="Check yourself: map" questions={[
+  {
+    question: "map :: (a -> b) -> [a] -> [b]. What does this signature guarantee about the length of map (*2) [1,2,3]?",
+    options: [
+      "It has the same length as [1,2,3], i.e. 3",
+      "It always has exactly one element",
+      "Its length depends on the values inside the list, not just the type",
+      "It has twice the length of the input"
+    ],
+    correctIndex: 0,
+    explanation: "map's recursive definition attaches exactly one result to the front of the output for every element consumed from the input (f x : map f xs), so the output always has the same length as the input, regardless of what the function or the values are.",
+    optionFeedback: [
+      "Correct — one result is produced per input element, so the lengths always match.",
+      "map does not collapse the list to one element; every element of the input produces its own result in the output.",
+      "The lengths matching is guaranteed by map's definition itself, not by the particular values inside — it holds for any list and any function.",
+      "map (*2) [1,2,3] is [2,4,6] — three elements, not six; doubling each value does not double how many values there are."
+    ]
+  },
+  {
+    question: "Given square n = n * n, is square a valid first argument to map before it is ever combined with a list?",
+    options: [
+      "Yes — square :: Integer -> Integer (or similar) is a complete function value, just like (*2) or show",
+      "No — square has no type until it is passed to map",
+      "No — map only accepts functions imported from the Prelude, not ones you define yourself",
+      "Yes, but only because square happens to return a number"
+    ],
+    correctIndex: 0,
+    explanation: "Any function with the right shape, a -> b, can be map's first argument, regardless of where it was defined. square is a complete, typed function the moment its equation is written; map simply arranges to call it once per list element.",
+    optionFeedback: [
+      "Correct — square is fully typed and usable on its own, exactly like a Prelude function or a section.",
+      "square has a type the moment it is defined (Integer -> Integer here) — GHCi can report it with :type without ever mentioning map.",
+      "map's first argument can be any function with type a -> b, whether it comes from the Prelude, a library, or your own code.",
+      "The reason square works has nothing to do with what it returns — any a -> b function fits, whatever a and b are."
+    ]
+  },
+  {
+    question: "Which of these is NOT a valid first argument to map :: (a -> b) -> [a] -> [b]?",
+    options: [
+      "5",
+      "even",
+      "(*3)",
+      "\\x -> x + 1"
+    ],
+    correctIndex: 0,
+    explanation: "map's first argument must have a function type a -> b. even, (*3), and the lambda are all functions; 5 is a plain number with no arrow in its type at all, so map 5 xs fails to type-check.",
+    optionFeedback: [
+      "Correct — 5 :: Num a => a has no arrow in its type, so it cannot fill map's (a -> b) slot.",
+      "even :: Integral a => a -> Bool fits the shape a -> b with b = Bool — an unusual choice, perhaps, but a perfectly valid one.",
+      "(*3) :: Num a => a -> a is a section — a complete one-argument function, exactly the shape map needs.",
+      "\\x -> x + 1 has type Num a => a -> a — an ordinary lambda value with a genuine function type."
+    ]
+  }
+]} />
 
 ## 2. `filter`: the other shape
 
@@ -70,7 +163,18 @@ filter p (x:xs)
   | otherwise = filter p xs
 ```
 
-The function argument returns `Bool`, which is why it is called a **predicate**.
+Read the signature the same way as `map`'s: `filter` takes **a test that looks at one element and answers yes or no** — written `(a -> Bool)` — and **a list of `a`s**, and gives back **a list of `a`s**: exactly the elements the test said yes to, in their original order, with everything else discarded. Plainly: "give me a yes/no question about one item, and a list of items, and I will hand back only the items that answered yes."
+
+The function argument returns `Bool`, which is why it is called a **predicate**. As with `map`, check that a predicate is an ordinary, complete value in its own right before it is ever handed to `filter`:
+
+```text
+ghci> :type even
+even :: Integral a => a -> Bool
+ghci> :type (>0)
+(>0) :: (Num a, Ord a) => a -> Bool
+```
+
+Both lines type-check with no list in sight. `even` and `(>0)` are simply functions that happen to return `Bool`; `filter`'s whole job is to run one of them over every element and keep the ones that come back `True`.
 
 ```text
 ghci> filter (>0) [-1,5,-3,8]
@@ -82,6 +186,42 @@ ghci> filter (`elem` "aeiou") "functional"
 ```
 
 `filter` never changes the element type, and the result is never longer than the input.
+
+<CommonMistake title="Giving filter a transformer instead of a test">
+`filter (*2) xs` is a type error for an ordinary numeric list, because `(*2) :: Num a => a -> a` returns a *number*, not a `Bool`. `filter`'s first argument must answer a yes/no question about one element; if the goal is to *change* each element rather than decide whether to keep it, that is `map`'s job, not `filter`'s. Seeing an arithmetic operator where `filter` expects a predicate is the fastest way to spot this mistake before GHC even reports it.
+</CommonMistake>
+
+Three more calls, each filling `filter`'s predicate slot a different way:
+
+```haskell
+isTeenager :: Int -> Bool
+isTeenager age = age >= 13 && age <= 19
+```
+
+```text
+ghci> filter isTeenager [8, 13, 19, 20, 45, 15]
+[13,19,15]
+```
+
+`isTeenager` is a named, top-level predicate. Naming it is worthwhile here — unlike the short tests above — because it combines two comparisons, and the name documents what the combined rule means; that is the same "is it worth naming?" judgement from Lesson 1, and this time the answer is yes.
+
+```text
+ghci> filter (\w -> length w > 4) ["a", "cat", "house", "of", "cards"]
+["house","cards"]
+```
+
+This predicate is a lambda that computes something about each element — its `length` — before comparing it, a shape no section could express: a section only fixes one side of a single operator, and cannot first call another function like `length` on the argument.
+
+```text
+ghci> filter (\n -> n `mod` 3 == 0) [1..20]
+[3,6,9,12,15,18]
+```
+
+Another lambda, needed for the same reason: the test combines two operators (`` `mod` `` and `==`), so it is not a single-operator section either. Whenever a condition needs more than one step, reach for a lambda (or, if it is reused or deserves a name, a top-level function like `isTeenager` above).
+
+<RecognitionStrategy title="How to recognise a predicate">
+A predicate always has a return type of `Bool`. If you can imagine asking the test out loud as a yes/no question about a single element — "is it positive?", "is it a vowel?", "is this word longer than four letters?" — it belongs in `filter`. If the question is really "what should this become?", that is `map`'s job instead.
+</RecognitionStrategy>
 
 <ComparisonTable
   columns={[
@@ -96,6 +236,60 @@ ghci> filter (`elem` "aeiou") "functional"
   ]}
   highlightCol="len"
 />
+
+<Quiz title="Check yourself: filter" questions={[
+  {
+    question: "filter :: (a -> Bool) -> [a] -> [a]. Why must the first argument return Bool specifically?",
+    options: [
+      "Because filter's definition uses guards (p x = ... | otherwise = ...) to decide keep-or-drop, and only Bool has the True/False cases those guards need",
+      "Because Bool is the only type Haskell allows inside a list",
+      "Because filter automatically converts any other return type to Bool",
+      "It doesn't have to — any return type works as long as it's used consistently"
+    ],
+    correctIndex: 0,
+    explanation: "filter p (x:xs) is defined with a guard | p x = ... | otherwise = .... Guards need exactly two cases to choose between, True and False, which is precisely what Bool provides and no other type does automatically.",
+    optionFeedback: [
+      "Correct — filter's own definition pattern-matches the predicate's result as a guard, and guards need Bool's two cases.",
+      "Lists can hold values of any type; Bool is required for the predicate's result specifically, not for list elements in general.",
+      "There is no automatic conversion — a predicate returning, say, an Int would simply fail to type-check against filter's signature.",
+      "filter's type signature fixes the predicate's result type at Bool; nothing else can be substituted, consistently or not."
+    ]
+  },
+  {
+    question: "filter isTeenager [8, 13, 19, 20, 45, 15] with isTeenager age = age >= 13 && age <= 19. What is the result, and why was isTeenager given a name?",
+    options: [
+      "[13,19,15] — named because the rule combines two comparisons, and the name documents what they mean together",
+      "[8,20,45] — named because filter requires all predicates to be named functions",
+      "[13,19,15] — but a lambda would have been just as clear here; naming never matters",
+      "[8,13,19,20,45,15] — isTeenager never actually rejects anything"
+    ],
+    correctIndex: 0,
+    explanation: "8 fails (< 13); 13 and 19 pass (both bounds are inclusive); 20 and 45 fail (> 19); 15 passes — giving [13,19,15]. A two-condition rule is exactly the case where a name earns its keep, unlike the short, one-off tests used elsewhere on this page.",
+    optionFeedback: [
+      "Correct — 8, 20, and 45 all fail one of the two bounds, leaving 13, 19, and 15.",
+      "filter accepts any (a -> Bool) function at all — a section or a lambda works exactly as well as a named one.",
+      "Naming does matter for readability, even though filter itself doesn't require it — a rule combining two conditions benefits from a name explaining what they mean together.",
+      "isTeenager does reject ages outside 13–19 (8, 20, 45 are dropped) — it is an active filter, not a pass-through."
+    ]
+  },
+  {
+    question: "Why does filter (\\w -> length w > 4) ws need a lambda, when filter (>4) ws (a plain section) would not type-check for a list of Strings?",
+    options: [
+      "A section fixes one side of a single operator; it cannot first call another function like length before comparing",
+      "length is not allowed to appear inside filter under any circumstances",
+      "Sections only work on numbers, and length happens to return a number too, so this is unrelated to the real reason",
+      "(length > 4) is valid Haskell and behaves exactly like the lambda"
+    ],
+    correctIndex: 0,
+    explanation: "(>4) alone would compare a String to the number 4, which does not type-check. The actual rule needs two steps — first compute length w, then compare the result to 4 — and a single-operator section cannot express two steps. A lambda can, because its body is an arbitrary expression.",
+    optionFeedback: [
+      "Correct — a section supplies one operand to one operator; it has no way to call length first.",
+      "length is an ordinary function and may appear freely inside a lambda's body.",
+      "Sections work over operators regardless of the types involved; the real obstacle is structural — one operator can't do two jobs.",
+      "(length > 4) is not valid Haskell syntax on its own; length needs an argument before > can compare anything, which a bare section never supplies."
+    ]
+  }
+]} />
 
 ## 3. Rewriting Chapter 6 with them
 
@@ -123,7 +317,16 @@ ghci> map (*2) (filter even [1..10])
 [4,8,12,16,20]
 ```
 
-Filter first, then double what survives. The same result as a comprehension:
+Filter first, then double what survives.
+
+<Mermaid chart={`flowchart LR
+  L0["[1..10]"] --> F["filter even"]
+  F --> L1["[2,4,6,8,10]"]
+  L1 --> M["map (*2)"]
+  M --> L2["[4,8,12,16,20]"]
+`} caption="Data flows left to right through the pipeline itself, even though the code map (*2) (filter even [1..10]) reads inside-out — the innermost call, filter even ..., is the one that actually runs first." />
+
+The same result as a comprehension:
 
 ```text
 ghci> [x * 2 | x <- [1..10], even x]
@@ -143,6 +346,8 @@ takeWhile :: (a -> Bool) -> [a] -> [a]
 dropWhile :: (a -> Bool) -> [a] -> [a]
 ```
 
+In words: `takeWhile` keeps grabbing elements from the front for as long as the predicate says yes, and **stops for good the moment it says no** — even if a later element would also have passed. `dropWhile` is the mirror image: it throws elements away from the front for as long as the predicate says yes, then keeps everything from the first no onward, unexamined.
+
 `takeWhile` returns the longest prefix whose elements all satisfy the predicate, and **stops at the first failure**:
 
 ```text
@@ -161,6 +366,19 @@ ghci> filter (<5) [1,2,3,7,1,2]
 
 `takeWhile` stopped at `7` and never looked further; `filter` kept the trailing `1,2` as well. Confusing them is a common source of wrong answers.
 
+The same stop-early behaviour shows up with a predicate on a different kind of data — here, string length instead of a number:
+
+```text
+ghci> takeWhile (\w -> length w <= 3) ["cat","dog","mouse","ox"]
+["cat","dog"]
+```
+
+`"cat"` and `"dog"` both have length 3, so both pass. `"mouse"` has length 5 and fails, and `takeWhile` **stops there permanently** — it never even looks at `"ox"` (length 2), even though `"ox"` would have passed the test. That is exactly the property `filter (\w -> length w <= 3) [...]` would not have: `filter` would still include `"ox"`.
+
+<RecognitionStrategy title="filter vs. takeWhile/dropWhile — how to tell which one you need">
+Ask: does the task care about a *prefix* of the list, or about *every* element? "Keep going until the first number greater than 100" is a `takeWhile`/`dropWhile` question — the process is expected to stop at the first failure. "Keep every number greater than 100, wherever it occurs" is a `filter` question — the whole list must be scanned regardless of what came before. If elements after the first failure genuinely do not matter, `takeWhile` is enough; if they might still hold something you want, you need `filter`.
+</RecognitionStrategy>
+
 ## 6. Combining two lists with `zipWith`
 
 `zipWith` applies a two-argument function to corresponding elements of two lists:
@@ -168,6 +386,8 @@ ghci> filter (<5) [1,2,3,7,1,2]
 ```haskell
 zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
 ```
+
+In words: `zipWith` takes **a rule for combining one element from the first list with one element from the second list into a single result**, plus the two lists themselves, and walks both lists together, applying the rule pairwise — first with first, second with second, and so on.
 
 ```text
 ghci> zipWith (+) [1,2,3] [10,20,30]
@@ -185,12 +405,75 @@ ghci> zipWith (+) [1,2,3] [10,20]
 [11,22]
 ```
 
+The combining function does not have to keep both inputs' types, or even produce the same type as either of them — a lambda can mix an `Integer` and a `String` into one `String`:
+
+```text
+ghci> zipWith (\n s -> s ++ show n) [1,2,3] ["a","b","c"]
+["a1","b2","c3"]
+```
+
+No operator section could express this: the rule needs to convert the number with `show` and then combine it with `++`, which is two operations on two different types — exactly the shape a lambda (or a small named function) is for.
+
 The related `zip` pairs elements into tuples, and is just `zipWith` with the pairing function:
 
 ```text
 ghci> zip [1,2,3] "abc"
 [(1,'a'),(2,'b'),(3,'c')]
 ```
+
+<Quiz title="Check yourself: takeWhile, dropWhile, and zipWith" questions={[
+  {
+    question: "takeWhile (<5) [1,2,3,7,1,2] and filter (<5) [1,2,3,7,1,2] start out looking the same. What are the two results?",
+    options: [
+      "takeWhile gives [1,2,3]; filter gives [1,2,3,1,2]",
+      "Both give [1,2,3]",
+      "Both give [1,2,3,1,2]",
+      "takeWhile gives [1,2,3,1,2]; filter gives [1,2,3]"
+    ],
+    correctIndex: 0,
+    explanation: "takeWhile stops permanently at the first element that fails the test — 7 fails <5 — and never looks further, giving [1,2,3]. filter examines every element regardless of earlier failures, so it also keeps the later 1 and 2, giving [1,2,3,1,2].",
+    optionFeedback: [
+      "Correct — takeWhile stops at 7 for good; filter keeps scanning past it and picks up the trailing 1, 2 as well.",
+      "That's takeWhile's answer for both — but filter has no 'stop early' behaviour; it must examine every element, including the 1 and 2 after the 7.",
+      "That's filter's whole-list answer for both — but takeWhile stops permanently the moment 7 fails, so it never reaches the trailing 1, 2.",
+      "The two are swapped here — takeWhile is the one that stops early and gives the shorter [1,2,3]."
+    ]
+  },
+  {
+    question: "zipWith (+) [1,2,3] [10,20]. What happens, and why?",
+    options: [
+      "[11,22] — zipWith stops as soon as the shorter list runs out",
+      "A runtime error, because the lists have different lengths",
+      "[11,22,3] — the leftover element from the longer list passes through unchanged",
+      "[11,22,33] — zipWith pads the shorter list with 0"
+    ],
+    correctIndex: 0,
+    explanation: "zipWith walks both lists together, applying its function pairwise. Once the second list runs out after two elements, there is nothing left to pair the first list's third element with, so zipWith simply stops there.",
+    optionFeedback: [
+      "Correct — zipWith produces a result exactly as long as the shorter list, with no error and no complaint.",
+      "Unequal lengths are not an error for zipWith; it silently stops instead of raising an exception.",
+      "zipWith never carries an unpaired element through unchanged — an element with nothing to pair against is simply left out of the result.",
+      "zipWith never invents a padding value such as 0; it strictly needs a genuine element from each list at every position it produces."
+    ]
+  },
+  {
+    question: "zipWith (\\n s -> s ++ show n) [1,2,3] [\"a\",\"b\",\"c\"] mixes an Integer and a String into one String. Could this combining function have been written as a plain operator section instead?",
+    options: [
+      "No — it needs two operations (show, then ++) on two different types, which a single-operator section cannot express",
+      "Yes — (++ show) would do exactly the same thing",
+      "Yes — zipWith always requires a section, never a lambda",
+      "No — zipWith cannot accept lambdas at all, only named functions"
+    ],
+    correctIndex: 0,
+    explanation: "A section fixes one operand of a single operator. This rule first converts n to a String with show, then combines it with s using ++ — two different operations across two different types, exactly the situation that calls for a lambda instead of a section.",
+    optionFeedback: [
+      "Correct — show has to run before ++ can combine the results, and a section cannot sequence two operations like that.",
+      "(++ show) does not even type-check as written: show still needs to be applied to n before ++ can combine the two Strings.",
+      "zipWith has no such requirement — it accepts any two-argument function, whether that's a named function, a lambda, or (where the shape allows) a section.",
+      "zipWith accepts lambdas freely, exactly as shown in this example — there is no restriction against them."
+    ]
+  }
+]} />
 
 ## 7. Functions as values
 

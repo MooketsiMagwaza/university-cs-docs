@@ -1,6 +1,6 @@
 ---
 title: "4. Custom Data Types"
-description: "Define genuinely new types with the data declaration, carry values in constructors, pattern match on them, derive standard behaviour, and build recursive types."
+description: "Define genuinely new types with the data declaration, carry values in constructors, pattern match on them, derive standard behaviour, write real record syntax, use newtype for zero-cost safety, and build recursive types."
 ---
 
 
@@ -38,6 +38,67 @@ describe Fail = "Please resubmit"
 ```
 
 Two patterns, and the set is exhaustive — a `Result` has no other possible value.
+
+A second enumeration makes the same point with three constructors instead of two:
+
+```haskell
+data TLights = Red | Green | Yellow
+  deriving (Show, Eq)
+
+-- Cycle to the next light in sequence.
+nextLight :: TLights -> TLights
+nextLight Red    = Green
+nextLight Green  = Yellow
+nextLight Yellow = Red
+```
+
+```text
+ghci> nextLight Red
+Green
+ghci> nextLight (nextLight Red)
+Yellow
+ghci> nextLight Yellow
+Red
+```
+
+Three constructors, three equations, and the match is still exhaustive — every possible `TLights` value is covered, so there is no case left for GHC to warn about.
+
+<Quiz title="Enumerations" questions={[
+  {
+    question: "In `data Result = Pass | Fail`, what is `Pass`?",
+    options: [
+      "A type",
+      "A data constructor — a value of type Result",
+      "A type class",
+      "A module"
+    ],
+    correctIndex: 1,
+    explanation: "Pass and Fail are data constructors: the actual values a Result can take. Result is the type; Pass and Fail are values of that type, which is why they are capitalised like every other constructor.",
+    optionFeedback: [
+      "Result is the type. Pass is one of the values that type can hold — a constructor, not a type itself.",
+      "Correct — Pass and Fail are data constructors, the values of the Result type, exactly like True and False are the values of Bool.",
+      "A type class is a set of operations a type may support (Chapter 9). Pass carries no operations; it is a value.",
+      "Modules group definitions together (next chapter); Pass is a value, not a unit of code organisation."
+    ]
+  },
+  {
+    question: "`describe` pattern matches `Pass` and `Fail` and nothing else. Why does GHC accept this as complete?",
+    options: [
+      "GHC does not check completeness for custom types",
+      "Because a wildcard pattern is implied",
+      "Because Result has exactly two constructors, and both are covered",
+      "Because Pass and Fail derive Bounded"
+    ],
+    correctIndex: 2,
+    explanation: "An enumeration's constructors are the only possible values of the type. Matching every constructor — here, both Pass and Fail — covers every case, so the match is exhaustive with no wildcard needed.",
+    optionFeedback: [
+      "GHC does check, and with -Wincomplete-patterns will warn about a missing constructor case — it just has nothing to warn about here.",
+      "No wildcard is present or needed; the two explicit patterns already account for every constructor.",
+      "Correct — Result has exactly two constructors, Pass and Fail, and the function has one equation for each, so nothing is left uncovered.",
+      "Bounded is unrelated to pattern-match exhaustiveness; it is about minBound/maxBound, covered in Chapter 9."
+    ]
+  }
+]} />
 
 ## 2. Deriving standard behaviour
 
@@ -77,6 +138,63 @@ True
 <Callout type="info" title="Add deriving (Show, Eq) by habit">
 Almost every custom type in this course benefits from both. Without `Show` you cannot inspect a value at the prompt, which makes testing painful.
 </Callout>
+
+`Enum` and `Bounded` follow the same declared order:
+
+```haskell
+data Result = Pass | Fail
+  deriving (Show, Eq, Ord, Enum, Bounded)
+```
+
+```text
+ghci> [Pass ..]
+[Pass,Fail]
+ghci> minBound :: Result
+Pass
+ghci> maxBound :: Result
+Fail
+ghci> succ Pass
+Fail
+```
+
+`[Pass ..]` needs `Enum`; `minBound`/`maxBound` need `Bounded`. Both read the constructors in declaration order — the same order `Ord` uses — so `Pass`, being declared first, is the "smallest", "first", and lower-bound value all at once.
+
+<Quiz title="Deriving standard behaviour" questions={[
+  {
+    question: "`print (classify 64)` fails with `No instance for (Show Result)`. What is missing?",
+    options: [
+      "A type annotation on classify",
+      "deriving (Show) on the Result declaration",
+      "An import of Prelude",
+      "A pattern match for every constructor"
+    ],
+    correctIndex: 1,
+    explanation: "print needs Show a => a -> IO (), and GHC does not invent a Show instance on its own for a type you declared. Adding deriving (Show) asks it to generate one.",
+    optionFeedback: [
+      "classify already has a correct signature; the problem is that Result has no Show instance, not that its type is unannotated.",
+      "Correct — GHC will not print a value unless its type derives (or defines) Show. Add deriving (Show) to the data declaration.",
+      "Prelude is imported automatically into every module (covered next chapter); the missing piece is an instance, not an import.",
+      "classify already pattern matches exhaustively; that is unrelated to whether Result can be printed."
+    ]
+  },
+  {
+    question: "Given `data Result = Pass | Fail deriving (Ord)`, why is `Pass < Fail` True rather than False?",
+    options: [
+      "Pass is alphabetically before Fail",
+      "Derived Ord orders constructors by their declaration order, and Pass is declared first",
+      "Ord always orders True-like values first",
+      "It is arbitrary and could change between compilations"
+    ],
+    correctIndex: 1,
+    explanation: "A derived Ord instance ranks constructors purely by the order they appear in the data declaration — first declared is smallest. Pass appears before Fail, so Pass < Fail.",
+    optionFeedback: [
+      "Alphabetical order is a coincidence here — P does not come before F alphabetically, so that cannot be the rule. The real rule is declaration order.",
+      "Correct — deriving Ord ranks constructors by declaration order: Pass was written first, so it compares as smaller.",
+      "Ord has no notion of 'True-like'; that is not how the derivation works for an arbitrary enumeration.",
+      "It is fixed by the order written in the source file, not arbitrary — recompiling without changing the declaration gives the same result every time."
+    ]
+  }
+]} />
 
 ## 3. Constructors that carry values
 
@@ -120,6 +238,67 @@ The pattern `(Circle r)` matches any circle and binds `r` to the radius it carri
 `data Shape = Circle Float` declares the *type* `Shape` and the *constructor* `Circle`. They live in separate namespaces, so it is legal — and common — for a single-constructor type to use the same name for both.
 </Callout>
 
+A second example makes the same shape with different data — a point carrying two coordinates instead of one shape carrying its own dimensions:
+
+```haskell
+data Point = Point Float Float
+  deriving (Show)
+
+-- Distance from the origin.
+distanceFromOrigin :: Point -> Float
+distanceFromOrigin (Point x y) = sqrt (x * x + y * y)
+```
+
+```text
+ghci> :type Point
+Point :: Float -> Float -> Point
+ghci> distanceFromOrigin (Point 3.0 4.0)
+5.0
+```
+
+`Point` takes two `Float`s, so its constructor has type `Float -> Float -> Point` — a curried function, exactly like any other two-argument function from Chapter 7. `Point 3.0 4.0` applies it fully; `Point 3.0` alone would be a partially applied function still waiting for the second coordinate.
+
+<CommonMistake title="Forgetting that a constructor is a function">
+`Circle` and `Point` are ordinary (curried) functions that happen to build values instead of computing them. `:type Circle` shows `Float -> Shape` for the same reason `:type (+)` shows `Num a => a -> a -> a` — apply either to too few arguments and you get back another function, not a finished value.
+</CommonMistake>
+
+<Quiz title="Constructors that carry values" questions={[
+  {
+    question: "What is the type of the Rectangle constructor, given `data Shape = Circle Float | Rectangle Float Float`?",
+    options: [
+      "Shape",
+      "Float -> Shape",
+      "Float -> Float -> Shape",
+      "(Float, Float) -> Shape"
+    ],
+    correctIndex: 2,
+    explanation: "Rectangle takes two Floats before it produces a Shape, so like any two-argument curried function its type is Float -> Float -> Shape.",
+    optionFeedback: [
+      "Shape is the type of a fully applied Rectangle value, e.g. Rectangle 3.0 4.0 — but the constructor itself is a function, not a finished value.",
+      "That is Circle's type. Rectangle takes two Floats, not one, so it needs a second arrow.",
+      "Correct — Rectangle is curried, exactly like any other two-argument function: Float -> Float -> Shape.",
+      "That would be the type if Rectangle took one tupled argument. It takes two separate curried Float arguments, not a pair."
+    ]
+  },
+  {
+    question: "Why does `area (Circle r) = pi * r * r` need parentheses around `Circle r`?",
+    options: [
+      "Parentheses are only a style preference here",
+      "Because function application binds tighter than a constructor pattern, so `area Circle r` would parse as area given two separate arguments",
+      "Because Circle is a type, not a constructor",
+      "Because pi requires parentheses"
+    ],
+    correctIndex: 1,
+    explanation: "Without parentheses, area Circle r would be read as area applied to two separate arguments, Circle and r, the same left-associative rule that makes ordinary application group tightly. Parentheses group Circle r into a single pattern that area's one argument matches against.",
+    optionFeedback: [
+      "It is required, not stylistic — omitting it changes how the equation parses, giving area the wrong number of arguments.",
+      "Correct — application is left-associative and binds tightly, so area Circle r would parse as area given two arguments; (Circle r) groups the constructor and its field into one pattern.",
+      "Circle is the constructor here; Shape is the type. Either way this is not why parentheses are needed.",
+      "pi is a plain numeric constant used inside the function body; it has nothing to do with the parentheses around the pattern."
+    ]
+  }
+]} />
+
 ## 4. This is where the type safety comes from
 
 Compare the synonym problem from the previous lesson:
@@ -145,28 +324,241 @@ ghci> Metres 100 + Feet 30
 
 The compiler now enforces what the synonym could only suggest. That is the reason to prefer `data` whenever mixing two things would be a real bug.
 
-## 5. Records of related fields
+## 4.1 `newtype`: safety without the overhead
 
-A single constructor with several arguments models a record:
+`data Metres = Metres Double` solves the mixing problem, but it brings more machinery than a single field needs: a `data` type could grow extra constructors, carry several fields, or be recursive. None of that applies to `Metres` — it only ever wraps one `Double`.
+
+`newtype` is Haskell's middle ground between `type` and `data`. Syntactically it looks like `data` restricted to **exactly one constructor with exactly one field**. Semantically, GHC treats the wrapper as existing only while it checks your program — at run time, a `newtype` value has the identical representation as the thing it wraps, so there is no boxing, no extra pointer, no cost. You get `data`'s type safety at `type`'s run-time price.
 
 ```haskell
-data Student = Student String Int Bool
-  deriving (Show, Eq)
-
-kago :: Student
-kago = Student "Kago" 72 True
-
--- Extract the mark.
-studentMark :: Student -> Int
-studentMark (Student _ mark _) = mark
+newtype Metres = Metres Double deriving (Show, Eq, Ord)
+newtype Feet   = Feet Double   deriving (Show, Eq, Ord)
 ```
 
 ```text
-ghci> studentMark kago
-72
+ghci> Metres 100 + Feet 30
+<interactive>: error:
+    * Couldn't match expected type 'Metres' with actual type 'Feet'
+ghci> :type Metres
+Metres :: Double -> Metres
+ghci> Metres 100
+Metres 100.0
+ghci> Metres 100 == Metres 100
+True
+ghci> Metres 100 == Feet 100
+<interactive>: error:
+    * Couldn't match expected type 'Metres' with actual type 'Feet'
 ```
 
-This is clearer than the `(String, Int, Bool)` tuple of Chapter 6, because the constructor name says what the group represents and the type cannot be confused with any other triple.
+Exactly the rejection `type Metres = Double` could not produce back in the previous lesson — but now compare the shape of the declaration, not just its effect: `newtype` still writes `Metres Double` with a real constructor, still needs `deriving` for `Show`/`Eq`/`Ord` the way `data` does, and is used identically at every call site. The only difference from `data Metres = Metres Double` is the keyword itself and what GHC guarantees about run-time cost.
+
+<CommonMistake title="newtype allows only one constructor, one field">
+`newtype Shape = Circle Float | Rectangle Float Float` is rejected — a `newtype` cannot have alternatives, because GHC relies on there being exactly one way to build (and unwrap) the value to erase it safely. The moment a type needs more than one constructor, or a constructor needs more than one field, reach for `data` instead.
+</CommonMistake>
+
+The decision in practice is a short chain of questions:
+
+<Mermaid chart={`flowchart TD
+  A["Need a name for a value"] --> B{"Should mixing it with a similar value be a type error?"}
+  B -->|"No, just readability"| C["type\nsame representation, no safety"]
+  B -->|"Yes"| D{"Exactly one constructor, exactly one field, not recursive?"}
+  D -->|"Yes"| E["newtype\ndistinct type, zero run-time cost"]
+  D -->|"No: several fields, several constructors, or recursive"| F["data\ndistinct type, real run-time structure"]
+`} caption="type vs newtype vs data, as one decision" />
+
+<Quiz title="type, newtype, and data" questions={[
+  {
+    question: "Why does `Metres 100 + Feet 30` fail under newtype, just as it did under data?",
+    options: [
+      "newtype secretly compiles down to data with extra checks",
+      "newtype still creates a genuinely distinct type at compile time, even though the wrapper vanishes at run time",
+      "Metres and Feet do not derive Num",
+      "newtype forbids arithmetic entirely"
+    ],
+    correctIndex: 1,
+    explanation: "The compile-time type checker sees Metres and Feet as fully distinct types under newtype, exactly as under data — that is what rejects the mismatched addition. What newtype changes is only what happens after type checking succeeds: no wrapper survives into the compiled program.",
+    optionFeedback: [
+      "It is not a shortcut for data with extra checks; it is its own mechanism that is erased after type checking, unlike data which keeps a real runtime structure.",
+      "Correct — type separation is a compile-time property. newtype keeps that separation exactly like data, and only removes the run-time representation.",
+      "True, but beside the point — the error reported is a type mismatch between Metres and Feet, which would be reported before Num was ever checked, exactly as the data version showed.",
+      "newtype does not forbid arithmetic; it forbids nothing that data would not also forbid. Mixing two distinct types is what fails, not arithmetic itself."
+    ]
+  },
+  {
+    question: "Which of these is a valid reason to choose newtype over data for `Metres`?",
+    options: [
+      "Metres needs several fields",
+      "Metres needs to be recursive",
+      "Metres wraps exactly one Double and needs no extra structure — only type-level separation",
+      "Metres needs more than one constructor"
+    ],
+    correctIndex: 2,
+    explanation: "newtype is for the specific case of one constructor wrapping one field, used purely to keep two otherwise-identical types apart. Anything beyond that — more fields, more constructors, recursion — needs data.",
+    optionFeedback: [
+      "Several fields would need data; newtype allows exactly one field.",
+      "Recursion would need data; newtype's single-field, single-constructor shape cannot express it.",
+      "Correct — this is exactly the case newtype is for: one value, wrapped only to get type-level separation, at no run-time cost.",
+      "More than one constructor would need data; newtype allows exactly one."
+    ]
+  }
+]} />
+
+## 5. Grouping related fields
+
+A single constructor with several arguments groups values together:
+
+```haskell
+data StudentP = StudentP String Int Bool
+  deriving (Show, Eq)
+
+kagoP :: StudentP
+kagoP = StudentP "Kago" 72 True
+
+-- Extract the mark: position 2 of 3 — nothing in the code says so.
+studentMarkP :: StudentP -> Int
+studentMarkP (StudentP _ mark _) = mark
+```
+
+```text
+ghci> studentMarkP kagoP
+72
+ghci> kagoP
+StudentP "Kago" 72 True
+```
+
+This is already clearer than the `(String, Int, Bool)` tuple of Chapter 6, because the constructor name says what the group represents and the type cannot be confused with any other triple. But look at what `studentMarkP` had to do to read one field back out: pattern match all three positions and throw two away. Nothing about `StudentP _ mark _` documents that position 2 is the mark rather than, say, an ID — you would need to check the `data` declaration every time. This positional style is sometimes loosely *called* a "record", but it is not Haskell's record syntax. Real records name their fields.
+
+<CommonMistake title="Positional fields are not a Haskell record">
+`data Student = Student String Int Bool` groups values, but Haskell's actual *record syntax* — `data Student = Student { field :: Type, ... }` — is a distinct piece of syntax that also generates accessor functions for you automatically. If a `data` declaration has no curly braces `{ }`, it is not a record, whatever it is informally called.
+</CommonMistake>
+
+## 5.1 Record syntax
+
+Braces after the constructor name turn each argument into a **named field**:
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , studentMark :: Int
+  , isActive    :: Bool
+  } deriving (Show, Eq)
+
+kago :: Student
+kago = Student { studentName = "Kago", studentMark = 72, isActive = True }
+```
+
+Two things happen that the positional version never gave you.
+
+**First, GHC generates one accessor function per field, for free:**
+
+```text
+ghci> :type studentName
+studentName :: Student -> String
+ghci> :type studentMark
+studentMark :: Student -> Int
+ghci> studentName kago
+"Kago"
+ghci> studentMark kago
+72
+ghci> isActive kago
+True
+```
+
+No pattern match was written for any of these. `studentName`, `studentMark`, and `isActive` are ordinary functions that GHC derived directly from the field names in the declaration.
+
+**Second, values print with their field names attached**, which documents itself:
+
+```text
+ghci> kago
+Student {studentName = "Kago", studentMark = 72, isActive = True}
+```
+
+Compare that to `StudentP "Kago" 72 True` above — the record's `Show` output states what each value means without anyone consulting the declaration.
+
+## 5.2 Record update syntax
+
+A record value can still be built positionally — `Student "Kago" 72 True` works exactly as before, the field names do not remove that option — but a record's distinctive feature is **update syntax**: producing a modified copy by naming only the fields that change.
+
+```haskell
+-- Kago's mark is corrected after a remark.
+remarked :: Student
+remarked = kago { studentMark = 75 }
+```
+
+```text
+ghci> remarked
+Student {studentName = "Kago", studentMark = 75, isActive = True}
+ghci> kago
+Student {studentName = "Kago", studentMark = 72, isActive = True}
+```
+
+`kago` is completely unchanged — Haskell values are immutable, so `kago { studentMark = 75 }` builds a **new** `Student` that copies every field from `kago` except the one named, and `remarked` is bound to that new value. Several fields may be updated in the same expression:
+
+```text
+ghci> naledi = Student { studentName = "Naledi", studentMark = 68, isActive = False }
+ghci> naledi { isActive = True, studentMark = 70 }
+Student {studentName = "Naledi", studentMark = 70, isActive = True}
+```
+
+<RecognitionStrategy title="Positional constructor vs record syntax, at a glance">
+Look for curly braces immediately after the constructor name in the `data` declaration. `Student String Int Bool` is positional. `Student { studentName :: String, ... }` is a record — and only the second form gives you generated accessor functions and `{ field = value }` update syntax.
+</RecognitionStrategy>
+
+<ComparisonTable
+  columns={[
+    { header: 'Question', key: 'q' },
+    { header: 'Positional (StudentP)', key: 'pos' },
+    { header: 'Record (Student)', key: 'rec' }
+  ]}
+  rows={[
+    { q: 'Reading one field', pos: 'Pattern match all positions: (StudentP _ mark _)', rec: 'Call the generated accessor: studentMark kago' },
+    { q: 'Field names visible in Show output?', pos: 'No, just the bare values', rec: 'Yes: Student {studentName = ..., ...}' },
+    { q: 'Producing a changed copy', pos: 'Reconstruct every position: StudentP n m True', rec: 'Name only what changes: kago { isActive = True }' },
+    { q: 'What "record" means in Haskell', pos: 'This is not it, despite the shape', rec: 'This: named fields with { }' }
+  ]}
+  highlightCol="rec"
+/>
+
+<Callout type="warn" title="Update syntax is not assignment">
+`kago { studentMark = 75 }` does not mutate `kago` in place — there is no mutation in pure Haskell. It builds and returns a fresh value. To keep the result you must bind it to a name, as `remarked` does above; otherwise it is computed and discarded, and `kago` is untouched.
+</Callout>
+
+<Quiz title="Record syntax" questions={[
+  {
+    question: "Given `data Student = Student { studentName :: String, studentMark :: Int, isActive :: Bool }`, what does GHC generate automatically?",
+    options: [
+      "Nothing extra; you must still write pattern matches to read fields",
+      "A function per field, e.g. studentName :: Student -> String, studentMark :: Student -> Int",
+      "A JSON serialiser for Student",
+      "A default value for every unset field"
+    ],
+    correctIndex: 1,
+    explanation: "Record syntax's main practical benefit is that GHC generates one accessor function per named field, with the type Student -> FieldType. That is what makes studentName kago valid without a hand-written pattern match.",
+    optionFeedback: [
+      "This is exactly what record syntax avoids — that manual work is what positional constructors like StudentP require.",
+      "Correct — one accessor function is generated per field, letting you call studentMark kago directly instead of pattern matching.",
+      "Haskell's derived Show produces a readable String representation, not JSON, and record syntax has nothing to do with serialisation formats.",
+      "Every field must still be supplied when a Student is constructed; record syntax does not introduce defaults."
+    ]
+  },
+  {
+    question: "What does `kago { studentMark = 75 }` actually do?",
+    options: [
+      "Changes kago's mark field in place",
+      "Builds and returns a new Student, copying every other field from kago",
+      "Fails to compile, because Student already has a value for studentMark",
+      "Deletes kago and replaces it globally"
+    ],
+    correctIndex: 1,
+    explanation: "Record update syntax constructs a fresh value that copies every field from the original except the ones named, which take the new values instead. kago itself is never modified — there is no mutation in pure Haskell.",
+    optionFeedback: [
+      "There is no in-place mutation in Haskell; kago keeps its original studentMark unless you reassign the name to a new value.",
+      "Correct — this expression evaluates to a brand-new Student value with studentMark replaced and everything else copied from kago.",
+      "This compiles and is the normal, idiomatic way to produce a modified copy of a record value.",
+      "Nothing is deleted or replaced globally; kago still exists with its original fields unless you rebind the name yourself."
+    ]
+  }
+]} />
 
 ## 6. Recursive types
 
@@ -207,22 +599,85 @@ ghci> sumTree exampleTree
 
 The `Leaf` case is the base case and the `Branch` case is the recursive step. Every recursion technique from Chapter 5 transfers directly.
 
-## 7. `data` or `type`?
+A second recursive type makes the same shape with a structure closer to the built-in list — worth building once so the parallel to `[]` and `(:)` is completely explicit:
+
+```haskell
+data IntList = Empty | Cons Int IntList
+  deriving (Show)
+
+-- The built-in [1,2,3] written with IntList instead.
+exampleList :: IntList
+exampleList = Cons 1 (Cons 2 (Cons 3 Empty))
+
+sumIntList :: IntList -> Int
+sumIntList Empty       = 0
+sumIntList (Cons x xs) = x + sumIntList xs
+```
+
+```text
+ghci> exampleList
+Cons 1 (Cons 2 (Cons 3 Empty))
+ghci> sumIntList exampleList
+6
+```
+
+Line up the two equations against the built-in list functions from Chapter 5: `Empty` plays the role of `[]`, and `Cons x xs` plays the role of `(x:xs)`. `IntList` **is**, structurally, what `[Int]` already was — Haskell's list type is not special magic, just a recursive `data` declaration with friendlier syntax (`[]` and `:` instead of `Empty` and `Cons`) and built-in support for `[1,2,3]` notation.
+
+<Quiz title="Recursive types" questions={[
+  {
+    question: "Why can a data declaration be recursive when a type synonym cannot?",
+    options: [
+      "data declarations are compiled, type synonyms are not",
+      "A constructor like Branch or Cons stops the expansion; a synonym has nothing to stop it expanding forever",
+      "Recursive types are a special case handled outside the type system",
+      "type synonyms can be recursive too, but only with two type parameters"
+    ],
+    correctIndex: 1,
+    explanation: "type Chain = [Chain] would need to be expanded forever to know what Chain is, with no base case. A data declaration's constructors are themselves complete, finite descriptions: Branch (Tree a) (Tree a) just holds two Trees without needing to expand Tree any further to type-check.",
+    optionFeedback: [
+      "Both data declarations and type synonyms are compiled; that is not the distinguishing factor.",
+      "Correct — a constructor is a stopping point. GHC does not need to expand Tree further to know Branch (Tree a) (Tree a) is well formed; a synonym has no such stopping point and would expand without end.",
+      "There is nothing special-cased here — it follows directly from what a constructor is, the same mechanism used throughout this section.",
+      "Recursive type synonyms are rejected regardless of how many parameters they take; parameter count is not the issue."
+    ]
+  },
+  {
+    question: "In `countLeaves (Branch l r) = countLeaves l + countLeaves r`, what stops the recursion from running forever?",
+    options: [
+      "The + operator has a built-in limit",
+      "GHC detects infinite recursion at compile time and rejects it",
+      "Every Branch eventually leads to Leaf values, which match the base-case equation instead of recursing further",
+      "countLeaves is memoised automatically"
+    ],
+    correctIndex: 2,
+    explanation: "A Tree built with finitely many Branch and Leaf constructors is finite by construction. Each recursive call moves to a strictly smaller subtree, and every path through a finite tree eventually reaches a Leaf, which countLeaves handles without calling itself again — the same base-case discipline as Chapter 5's recursion on lists.",
+    optionFeedback: [
+      "+ is ordinary arithmetic with no awareness of recursion or termination; it just adds the two results once they exist.",
+      "GHC does not perform general termination checking; recursion terminates here because of the data's finite structure, not a compiler guarantee.",
+      "Correct — a finite tree has finitely many Branch levels before reaching a Leaf, and the Leaf equation is a base case with no recursive call.",
+      "Nothing here is memoised; countLeaves recomputes from scratch on each call, exactly as written."
+    ]
+  }
+]} />
+
+## 7. `type`, `newtype`, or `data`?
 
 <ComparisonTable
   columns={[
     { header: 'Question', key: 'q' },
     { header: 'type', key: 'type' },
+    { header: 'newtype', key: 'newtype' },
     { header: 'data', key: 'data' }
   ]}
   rows={[
-    { q: 'Creates a new type?', type: 'No, just a name', data: 'Yes, distinct from all others' },
-    { q: 'Interchangeable with the original?', type: 'Yes', data: 'No' },
-    { q: 'Can be recursive?', type: 'No', data: 'Yes' },
-    { q: 'Needs constructors?', type: 'No', data: 'Yes, at least one' },
-    { q: 'Good for', type: 'Readability of an existing type', data: 'A genuinely new concept, or enforced separation' }
+    { q: 'Creates a new type?', type: 'No, just a name', newtype: 'Yes, distinct from all others', data: 'Yes, distinct from all others' },
+    { q: 'Interchangeable with the original?', type: 'Yes', newtype: 'No', data: 'No' },
+    { q: 'Can be recursive?', type: 'No', newtype: 'No', data: 'Yes' },
+    { q: 'Needs constructors?', type: 'No', newtype: 'Yes, exactly one, with exactly one field', data: 'Yes, at least one, any number of fields' },
+    { q: 'Cost of the wrapper at run time', type: 'None, it never existed', newtype: 'None, erased during compilation', data: 'A real boxed value' },
+    { q: 'Good for', type: 'Readability of an existing type', newtype: 'One value that needs type-level separation, nothing more', data: 'A genuinely new concept, several fields, multiple constructors, or recursion' }
   ]}
-  highlightCol="data"
+  highlightCol="newtype"
 />
 
 ## 8. Common errors
@@ -236,15 +691,20 @@ The `Leaf` case is the base case and the `Branch` case is the recursive step. Ev
 | `Circle 2 == Circle 2` fails | No `Eq` instance | Add `Eq` to the deriving clause |
 | Missing a constructor in a function | Non-exhaustive patterns at run time | One equation per constructor |
 | `type Tree = Branch Tree Tree` | Synonyms cannot be recursive or carry constructors | Use `data` |
+| `kago.studentMark` | Haskell records have no dot-access syntax | `studentMark kago` |
+| `kago { mark = 75 }` | `mark` is not a field declared on `Student` | Use the exact field name: `kago { studentMark = 75 }` |
+| `newtype Shape = Circle Float \| Rectangle Float Float` | `newtype` allows exactly one constructor with exactly one field | Use `data`, or split into separate `newtype`s |
 
 ## 9. Practice
 
 1. Declare `data Result = Pass | Fail deriving (Show, Eq)` and write `classify :: Int -> Result`.
 2. Declare `TLights` and write `nextLight :: TLights -> TLights` cycling red, green, yellow.
 3. Declare `Shape` with `Circle` and `Rectangle`, write `area`, and add a `Square` constructor. Which existing functions must change?
-4. Declare a `Student` type with a name, a mark, and a registered flag, then write `passedStudents :: [Student] -> [String]`.
+4. Declare a `Student` **record** with named fields for a name, a mark, and a registered flag, then write `passedStudents :: [Student] -> [String]`.
 5. Declare `Tree a` and write `depth :: Tree a -> Int` returning the longest path from the root.
 6. Explain, with `Metres` and `Feet`, why `data` gives type safety that `type` cannot.
+7. Take your record `Student` from question 4 and use update syntax to return a copy with `isActive` set to `False`, without writing a new function.
+8. Explain, in your own words, what `newtype` keeps from `data` and what it gives up in return — and why that trade-off is worth it for a type with one field.
 
 <Accordions>
 <Accordion title="Check questions 3 and 5">
@@ -274,6 +734,13 @@ depth (Branch l r) = 1 + max (depth l) (depth r)
 One equation per constructor. The `Leaf` case is the base case; the `Branch` case adds one to the deeper of the two subtrees.
 
 </Accordion>
+<Accordion title="Check questions 7 and 8">
+
+**7.** Given `remarked :: Student; remarked = kago { isActive = False }` — no separate function is needed, because update syntax is an expression, not a declaration. It can be written inline wherever a modified `Student` is needed.
+
+**8.** `newtype` keeps everything `data` gives for type safety: `Metres` and `Feet` remain genuinely distinct types that cannot be mixed, and GHC still reports a "couldn't match" error at the same points it would for `data`. What it gives up is generality — exactly one constructor, exactly one field, no recursion — and in exchange it gives up nothing at run time: the wrapper is erased entirely during compilation, so a `newtype` value costs no more than the `Double` inside it. For a type that only ever needs to keep one kind of value from being confused with another, that is a better trade than `data`'s extra flexibility, which goes unused.
+
+</Accordion>
 </Accordions>
 
 <Checklist title="Mastery check" rules={[
@@ -282,8 +749,11 @@ One equation per constructor. The `Leaf` case is the base case; the `Branch` cas
   { type: 'must', text: 'I can use deriving (Show, Eq, Ord) and say what each provides.' },
   { type: 'must', text: 'I can write constructors that carry values and pattern match to extract them.' },
   { type: 'must', text: 'I can explain why data gives type safety that type does not.' },
+  { type: 'must', text: 'I can write genuine record syntax with named fields, and use both the generated accessor functions and { field = value } update syntax.' },
+  { type: 'must', text: 'I can explain what newtype adds over type and what it gives up compared to data, using Metres and Feet.' },
   { type: 'must', text: 'I can define a recursive type and write a function with one equation per constructor.' },
-  { type: 'avoid', text: 'Do not omit a constructor case; it fails at run time, not compile time.' }
+  { type: 'avoid', text: 'Do not omit a constructor case; it fails at run time, not compile time.' },
+  { type: 'avoid', text: 'Do not call a plain positional constructor a "record" — that name is reserved for the { field :: Type } syntax.' }
 ]} />
 
 Continue to [Practice Questions](/docs/sem3/csi243/08-modules-types/questions), then [Review](/docs/sem3/csi243/08-modules-types/review).

@@ -32,6 +32,118 @@ ghci> square 6
 
 The signature is a contract. GHC checks whether the implementation obeys it.
 
+## Reading `->` in a function's type, from scratch
+
+Every signature so far has had exactly one `->`. Before signatures get any bigger, it is worth being completely explicit about what that arrow means, because it is the single most-used piece of notation in this course.
+
+**The plain-English gloss:** read `A -> B` as *"takes a(n) `A`, and gives back a(n) `B`."*
+
+```haskell
+square :: Integer -> Integer
+```
+
+Read strictly left to right, one arrow at a time: "`square` takes an `Integer`, and gives back an `Integer`." That is the entire signature — nothing is hidden, nothing is implied beyond what is written.
+
+<Mermaid chart={`flowchart LR
+  A[Integer] -->|square| B[Integer]`} caption="One arrow, one input, one output: square consumes an Integer and produces an Integer. The arrow names the function that connects them." />
+
+A signature with only one `->` is as simple as this notation gets. Real functions often need more than one input, which means more than one arrow — and the reading rule does not change, it just gets applied more than once.
+
+<StepByStep>
+  <StepByStepTitle>Reading a two-arrow signature, one arrow at a time</StepByStepTitle>
+
+  <Step number={1}>
+  Start with the full signature: `rectangleArea :: Integer -> Integer -> Integer`.
+  </Step>
+
+  <Step number={2}>
+  Apply the gloss to the **first** arrow only, treating everything after it as one block: "`rectangleArea` takes an `Integer`, and gives back `[an Integer -> Integer]`."
+  </Step>
+
+  <Step number={3}>
+  Look at that bracketed block on its own: `Integer -> Integer` is itself a function type — one input, one output. Apply the same gloss to it: "which takes an `Integer`, and gives back an `Integer`."
+  </Step>
+
+  <Step number={4}>
+  Put the two readings together: `rectangleArea` takes an `Integer`, and gives back something that itself takes an `Integer` and gives back an `Integer`. For everyday use, that chains into: "give `rectangleArea` an `Integer` and an `Integer`, and it gives back an `Integer`."
+  </Step>
+</StepByStep>
+
+```haskell
+rectangleArea :: Integer -> Integer -> Integer
+rectangleArea width height = width * height
+```
+
+```text
+ghci> :type rectangleArea
+rectangleArea :: Integer -> Integer -> Integer
+ghci> rectangleArea 5 3
+15
+```
+
+A third signature, with one more arrow again, reads exactly the same way — left to right, one arrow consumed at a time:
+
+```haskell
+volume :: Integer -> Integer -> Integer -> Integer
+volume length width height = length * width * height
+```
+
+Read `Integer -> Integer -> Integer -> Integer` as: "`volume` takes an `Integer`, and gives back [something that takes an `Integer`, and gives back [something that takes an `Integer`, and gives back an `Integer`]]." Chained into an everyday reading: "give `volume` three `Integer`s, and it gives back an `Integer`."
+
+```text
+ghci> :type volume
+volume :: Integer -> Integer -> Integer -> Integer
+ghci> volume 2 3 4
+24
+```
+
+| Signature | Arrow count | Everyday reading |
+|---|---|---|
+| `square :: Integer -> Integer` | 1 | Takes an `Integer`, gives back an `Integer` |
+| `rectangleArea :: Integer -> Integer -> Integer` | 2 | Takes two `Integer`s, gives back an `Integer` |
+| `volume :: Integer -> Integer -> Integer -> Integer` | 3 | Takes three `Integer`s, gives back an `Integer` |
+
+<Callout type="info" title="The full story is Chapter 7's currying lesson">
+Reading each arrow left to right, one input at a time, is enough to use any signature in this course right now. What is *really* happening when there is more than one arrow — that `Integer -> Integer -> Integer` is secretly `Integer -> (Integer -> Integer)`, a function that takes one `Integer` and returns *another function* rather than taking two `Integer`s at once — is the subject of Chapter 7's lesson on currying. Nothing on this page is wrong; it simply is not yet the complete picture. Bracket-by-bracket reading like Step 3 above is already a preview of exactly that idea.
+</Callout>
+
+<Quiz title="Check: reading -> in a type signature" questions={[
+  {
+    question: "isVowel :: Char -> Bool. Read strictly left to right, what does this say?",
+    options: [
+      "isVowel takes a Bool and gives back a Char",
+      "isVowel takes a Char and gives back a Bool",
+      "isVowel takes nothing and gives back a Char and a Bool",
+      "isVowel is a Bool that happens to be named Char"
+    ],
+    correctIndex: 1,
+    explanation: "Applying the gloss 'takes a(n) A, and gives back a(n) B' to Char -> Bool gives exactly this: isVowel takes a Char, and gives back a Bool.",
+    optionFeedback: [
+      "This reverses the arrow. The type to the left of -> is what is taken in; the type to the right is what comes back.",
+      "Correct. Left of the arrow is the input type, right of the arrow is the output type — read strictly in that order.",
+      "A single -> always separates exactly one input description from one output description at that stage; it is not a list of two unrelated types.",
+      "-> is not part of either type here; it is the separator between the input type and the output type."
+    ]
+  },
+  {
+    question: "describe :: Int -> Int -> String -> String has three arrows. Reading one arrow at a time, what does describe take and give back overall?",
+    options: [
+      "It takes one String and gives back three values",
+      "It takes an Int, an Int, and a String, and gives back a String",
+      "It takes a String and gives back an Int",
+      "It cannot be determined without knowing describe's implementation"
+    ],
+    correctIndex: 1,
+    explanation: "Reading left to right, one arrow at a time: takes an Int, gives back [takes an Int, gives back [takes a String, gives back a String]]. Chained into an everyday reading, that is exactly: takes an Int, an Int, and a String, and gives back a String.",
+    optionFeedback: [
+      "This has the direction backwards — String only appears as an input in the third position and as the final output, not as the sole input.",
+      "Correct. Three arrows, three inputs consumed in order (Int, Int, String), with a String coming back at the end.",
+      "This reads the signature back to front; the first two positions are Int, not the last one.",
+      "A type signature alone is exactly what determines this reading — no implementation is needed, only the arrows and the types between them."
+    ]
+  }
+]} />
+
 ## Basic types
 
 | Type | Meaning | Examples | Important distinction |
@@ -55,6 +167,21 @@ factorialResult = product [1..50]
 
 The same annotation as `Int` can overflow because `Int` has a maximum and minimum value.
 
+<Quiz title="Check: basic types" questions={[
+  {
+    question: "A lab asks you to compute 30 factorial. Which type is the safer choice, and why?",
+    options: ["Int, because it is the default numeric type", "Integer, because it grows as needed and will not silently overflow a bounded maximum", "Double, because factorials are always large numbers", "Bool, because the result is either correct or incorrect"],
+    correctIndex: 1,
+    explanation: "30 factorial is a huge whole number, far beyond what a fixed-width Int can represent safely on many systems. Integer has no upper bound (beyond available memory), which is exactly the property factorialResult relies on in this lesson's example.",
+    optionFeedback: [
+      "Int is bounded — it has a maximum and minimum value — which is precisely the risk this section warns about for large whole-number results.",
+      "Correct. Integer is arbitrary-precision, so it keeps growing as needed instead of wrapping around or overflowing.",
+      "A factorial is a whole number, not a value with a fractional part; using Double would introduce needless approximation for a calculation that should be exact.",
+      "The factorial itself is a number, not a true/false answer — Bool has no meaningful role here."
+    ]
+  }
+]} />
+
 ## Whole-number division versus fractional division
 
 ```text
@@ -74,6 +201,25 @@ ghci> :type (/)
 ```
 
 The text before `=>` is a typeclass constraint. For now, read `Integral a =>` as “for any whole-number type `a`” and `Fractional a =>` as “for any fractional type `a`.”
+
+### A first taste of operator sections
+
+Sometimes what you want is not "divide 9 by 2" but "the function that divides *some* number by 2" — for instance, to use later or pass elsewhere. Wrapping an operator in parentheses with only one side filled in makes exactly that function. This is called a **section**, and Chapter 7 gives it a full treatment; for now, just recognise the shape.
+
+```text
+ghci> (+1) 5
+6
+ghci> (`div` 2) 9
+4
+ghci> (*3) 4
+12
+```
+
+Read each one as "the operator, with one side already supplied": `(+1)` is "add 1"; `` (`div` 2) `` is "divide by 2" (the backticks turn `div` into an operator first, exactly as seen above); `(*3)` is "multiply by 3." Each is a complete, one-argument function — nothing here is evaluated yet until it is applied to an argument, exactly like any other function.
+
+<Callout type="info" title="Not the whole story yet">
+Sections can be built from either side of an operator, and one operator — `(-)` — does not section the way you would expect. Chapter 7's lesson on currying and sections covers both in full, including that trap. For now, recognise `(op value)` and `(value op)` as functions, not as errors.
+</Callout>
 
 ## Boolean expressions
 
@@ -170,6 +316,38 @@ The tuple type records the type of each position. `(String, Integer)` and `(Inte
 | Typical use | A collection of similar items | One record-like group or multiple return values |
 | Delimiters | Square brackets | Parentheses |
 
+<Quiz title="Check: lists and tuples" questions={[
+  {
+    question: "Which of these is rejected by Haskell's type checker, and why?",
+    options: ["[1, 2, 3]", "(1, 'a', True)", "[1, 'a', True]", "['a', 'b', 'c']"],
+    correctIndex: 2,
+    explanation: "A list requires every element to share one type. [1, 'a', True] mixes a number, a Char, and a Bool — three different types — inside square brackets, which a list cannot represent.",
+    optionFeedback: [
+      "[1, 2, 3] is a perfectly ordinary list of numbers — every element shares one type.",
+      "A tuple's whole design is to hold different types at different fixed positions, so (1, 'a', True) is exactly what tuples are for.",
+      "Correct. Lists require one shared element type; mixing Integer, Char, and Bool inside [ ] is exactly the invalid case this section describes.",
+      "['a', 'b', 'c'] is a list of three Char values — one shared type throughout, so it is valid."
+    ]
+  },
+  {
+    question: "(String, Integer) and (Integer, String) are described as different types. Why does position matter for tuples but not for lists?",
+    options: [
+      "It does not actually matter; the two tuple types are secretly identical",
+      "A tuple's type records the type at each fixed position, so swapping positions changes which type appears where; a list only records one shared element type, so element order does not affect the type itself",
+      "Lists cannot have more than one element, so order is meaningless for them",
+      "Tuples are always sorted automatically by type"
+    ],
+    correctIndex: 1,
+    explanation: "A tuple type is literally a sequence of per-position types. (String, Integer) means 'a String first, then an Integer'; reversing the positions describes a different shape entirely. A list's type is just [ElementType] regardless of how many elements it holds or their order.",
+    optionFeedback: [
+      "The lesson states this directly: '(String, Integer) and (Integer, String) are different types' — they are genuinely distinct, not merely differently written.",
+      "Correct. This is exactly the structural difference between the two: fixed per-position types versus one shared element type.",
+      "Lists can hold any number of elements, including many; order among those elements has no bearing on this point.",
+      "Nothing about tuples involves automatic sorting; a tuple's positions are fixed by where each value was written, not reordered by type."
+    ]
+  }
+]} />
+
 ## Function application and precedence
 
 Function application uses spaces and binds more tightly than ordinary operators.
@@ -231,6 +409,75 @@ add :: Num a => a -> a -> a
 
 For course work, write explicit signatures. They document intent and expose mistakes near their cause.
 
+### Why `2 + 3` shows `5` with no signature in sight
+
+Type this at the prompt with nothing defined beforehand:
+
+```text
+ghci> :type 2 + 3
+2 + 3 :: Num a => a
+ghci> 2 + 3
+5
+ghci> :type it
+it :: Integer
+```
+
+`:type` alone reports the *general* inferred type, `Num a => a` — "some numeric type, not yet pinned down." Nothing so far forces a specific choice. But the moment you actually **evaluate** `2 + 3` at the prompt, GHCi has to show you a concrete value, and showing a value requires a concrete type. Haskell resolves this with its **defaulting rule**: when an ambiguous numeric type is otherwise unconstrained, GHC tries `Integer` first. `Integer` satisfies `Num`, so that is what `2 + 3` becomes — which is why `:type it` reports `it :: Integer` right after.
+
+Decimals tell a different story, because a literal containing a `.` needs `Fractional`, not just `Num`:
+
+```text
+ghci> :type 2.5
+2.5 :: Fractional a => a
+ghci> 2.5
+2.5
+ghci> :type it
+it :: Double
+```
+
+`Integer` is a whole-number type — it does **not** satisfy `Fractional` — so the defaulting rule moves on to the next candidate, `Double`, which does. That is the entire reason `2 + 3` defaults to `Integer` while `2.5` defaults to `Double`: the constraint left over after inference determines which candidate type the rule is allowed to pick.
+
+<Callout type="info" title="Why this matters in practice">
+Defaulting is a convenience for the GHCi prompt, not a design tool. In a saved program, an explicit type signature (as this course requires) removes the ambiguity before defaulting is ever needed, and the concrete type comes from your signature instead of from a fallback rule.
+</Callout>
+
+<Quiz title="Check: numeric type defaulting" questions={[
+  {
+    question: ":type (7 + 1) reports 7 + 1 :: Num a => a, yet typing 7 + 1 at the ghci> prompt shows 8 with no ambiguity error. Why the difference?",
+    options: [
+      ":type and direct evaluation always disagree; this is a known inconsistency",
+      ":type reports the general, not-yet-defaulted type; evaluating the expression forces GHCi to display a concrete value, which triggers the defaulting rule and picks Integer",
+      "7 + 1 is secretly a different expression from (7 + 1)",
+      "GHCi always assumes Int, never Integer, for any bare numeric literal"
+    ],
+    correctIndex: 1,
+    explanation: "Asking for a type with :type does not require producing a concrete value, so GHC leaves the constraint general. Actually evaluating the expression requires showing a result, which forces a concrete choice — Haskell's defaulting rule supplies Integer for an unconstrained Num.",
+    optionFeedback: [
+      "They are not inconsistent — they are answering two different questions: 'what is the general type' versus 'what concrete value comes out when I actually run this'.",
+      "Correct. :type reports the general type before defaulting is needed; evaluating forces a concrete type via the defaulting rule, landing on Integer.",
+      "Parentheses around an already-complete expression change nothing about its meaning or its type here.",
+      "The lesson's own transcript shows it :: Integer after evaluating an ambiguous Num expression, not Int."
+    ]
+  },
+  {
+    question: "Why does 2.5 default to Double instead of Integer?",
+    options: [
+      "Double is simply GHC's default type for every expression",
+      "2.5 requires the Fractional class because of its decimal point, and Integer does not belong to Fractional, so the defaulting rule moves on to Double, which does",
+      "GHC picks randomly between Integer and Double whenever a decimal point is present",
+      "2.5 is not actually a valid Haskell expression"
+    ],
+    correctIndex: 1,
+    explanation: "A literal with a decimal point needs Fractional, a class Integer does not belong to (Integer is whole numbers only). Since Integer cannot satisfy the constraint, the defaulting rule tries the next candidate, Double, which is Fractional.",
+    optionFeedback: [
+      "Integer, not Double, is the rule's first choice generally — Double is only reached because Integer fails to satisfy Fractional in this specific case.",
+      "Correct. This is exactly the reasoning that separates 2 + 3 (defaults to Integer) from 2.5 (defaults to Double): which typeclass is actually required.",
+      "The choice is not random; it follows the same deterministic defaulting rule every time, based on which typeclass constraint remains.",
+      "2.5 is an ordinary, valid floating-point literal — it evaluates and displays without any error."
+    ]
+  }
+]} />
+
 ## Common errors
 
 | Error pattern | Likely cause | Repair question |
@@ -239,6 +486,45 @@ For course work, write explicit signatures. They document intent and expose mist
 | “No instance for `Num Char`” | Arithmetic was attempted on a character | Should the input be parsed or compared instead? |
 | “Ambiguous type variable” | GHC lacks enough context to choose a concrete type | Would a signature or annotation express the intended type? |
 | Parse error near `-` | A negative literal follows an operator without grouping | Should the negative value be parenthesized? |
+
+### A real error, in full
+
+The table above summarises error *patterns*. Here is what GHC actually prints for the first row, verbatim, so the shape stops being a mystery the first time you meet it for real. Given this file:
+
+```haskell
+-- Score.hs
+addBonus :: Integer -> Integer
+addBonus n = n + "5"
+```
+
+Loading it produces:
+
+```text
+ghci> :load Score.hs
+[1 of 1] Compiling Main             ( Score.hs, interpreted )
+
+Score.hs:3:19: error: [GHC-83865]
+    • Couldn't match expected type: Integer
+                  with actual type: [Char]
+    • In the second argument of ‘(+)’, namely ‘"5"’
+      In the expression: n + "5"
+      In an equation for ‘addBonus’: addBonus n = n + "5"
+  |
+3 | addBonus n = n + "5"
+  |                   ^^^
+Failed, no modules loaded.
+```
+
+Read it from the top down, the way GHC intends:
+
+1. **`Score.hs:3:19`** — the file, line, and column where the problem starts. Column 19 is exactly where `"5"` begins.
+2. **`Couldn't match expected type: Integer with actual type: [Char]`** — the two-line heart of the error. `n + "5"` needs its second argument to be `Integer` (because `n :: Integer` and `(+)` needs both sides to agree), but `"5"` is text — `[Char]`, Haskell's internal name for `String`.
+3. **`In the second argument of ‘(+)’, namely ‘"5"’`** — names the exact subexpression that is wrong: not the whole line, specifically `"5"`, and specifically its position as the second argument to `+`.
+4. **`In the expression: n + "5"`** — zooms out one level, to the smallest surrounding expression.
+5. **`In an equation for ‘addBonus’`** — zooms out again, to the whole definition the error occurred inside.
+6. **The `|` gutter** — echoes the actual source line, with `^^^` pointing at the exact span GHC is blaming.
+
+Nothing here says what to do about it — GHC diagnoses, it does not repair. The fix, using the "repair question" column above, is to ask what `"5"` should have been: almost certainly the number `5`, not the text `"5"`.
 
 ## Practice
 
@@ -264,13 +550,51 @@ not "False"
 [1, 2, '3']
 ```
 
-## Mastery check
+<Accordions>
+<Accordion title="Check the first block of predictions">
 
-Continue when you can explain:
+```text
+ghci> 3 + 4 * 2
+11
+ghci> (3 + 4) * 2
+14
+ghci> 10 `div` 3
+3
+ghci> 10 / 4
+2.5
+ghci> not (7 == 7)
+False
+ghci> "CSI" ++ "243"
+"CSI243"
+ghci> head [10, 20, 30]
+10
+ghci> ("CSI243", 3, True)
+("CSI243",3,True)
+```
 
-- why Haskell checks types before evaluation;
-- `Int` versus `Integer` and `/` versus `div`;
-- `Char` versus `String`;
-- list homogeneity and tuple position types;
-- how function application groups;
-- how to derive the type and result of a small expression step by step.
+`3 + 4 * 2` and `10 / 4` are the two worth double-checking: multiplication binds tighter than addition (giving `11`, not `14`), and `/` produces a fractional result (`2.5`) even though both operands look like whole numbers.
+
+</Accordion>
+<Accordion title="Check the rejected expressions">
+
+- `True + 1` — the conflicting piece is `True`: `(+)` needs a `Num` instance, and `Bool` is not numeric.
+- `'4' == 4` — the conflict is between `'4'` and `4`: one is `Char`, the other is a numeric literal, and `==` requires both sides to share a type.
+- `not "False"` — the conflict is `"False"`: `not` requires `Bool`, and `"False"` is text (a `String`), not the Boolean value `False`.
+- `[1, 2, '3']` — the conflict is `'3'`: the list already committed to a numeric element type from `1` and `2`, and `'3'` is a `Char`, not a number.
+
+Each rejection traces back to one smallest subexpression whose type disagrees with what its context requires — exactly the mechanical method demonstrated earlier in this lesson.
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can explain why Haskell checks types before evaluation, not after.' },
+  { type: 'must', text: 'I can read any -> in a type signature left to right: "takes a(n) A, gives back a(n) B" — and chain that reading across multiple arrows.' },
+  { type: 'must', text: 'I can say what Chapter 7 adds to that reading (currying) without needing it to use signatures correctly today.' },
+  { type: 'must', text: 'I can distinguish Int from Integer, and / from div.' },
+  { type: 'must', text: 'I can distinguish Char from String, and explain why lists need one shared element type while tuples do not.' },
+  { type: 'must', text: 'I can explain why 2 + 3 defaults to Integer while 2.5 defaults to Double.' },
+  { type: 'must', text: 'I can recognise a section such as (+1) or (`div` 2) as a one-argument function, not an error.' },
+  { type: 'must', text: 'I can read a real multi-line GHC type error and identify which subexpression it blames.' },
+  { type: 'avoid', text: 'Do not guess an expression\'s result before checking whether it is well typed — a type error prevents evaluation entirely.' }
+]} />
