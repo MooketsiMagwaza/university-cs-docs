@@ -8,6 +8,9 @@ type Question = {
   options: string[];
   correctIndex: number;
   explanation?: string;
+  /** Optional per-option feedback, same length/order as `options`. Shown for
+   *  whichever option the student picked instead of the shared `explanation`. */
+  optionFeedback?: string[];
 };
 
 type QuizProps = {
@@ -94,11 +97,23 @@ export function Quiz({ title = "Knowledge Check", questions }: QuizProps) {
                 );
               })}
             </div>
-            {isSubmitted && q.explanation && (
-              <div className="mt-3 p-4 rounded-lg bg-fd-muted border border-fd-border text-sm text-fd-muted-foreground">
-                <span className="font-semibold text-fd-foreground">Explanation:</span> <MathText text={q.explanation} />
-              </div>
-            )}
+            {isSubmitted && (() => {
+              const selected = answers[qIndex];
+              const isCorrect = selected === q.correctIndex;
+              if (isCorrect) {
+                return q.explanation ? (
+                  <div className="mt-3 p-4 rounded-lg bg-fd-muted border border-fd-border text-sm text-fd-muted-foreground">
+                    <span className="font-semibold text-fd-foreground">Why:</span> <MathText text={q.explanation} />
+                  </div>
+                ) : null;
+              }
+              const feedback = q.optionFeedback?.[selected] || q.explanation;
+              return feedback ? (
+                <div className="mt-3 p-4 rounded-lg bg-fd-muted border border-fd-border text-sm text-fd-muted-foreground">
+                  <span className="font-semibold text-fd-foreground">What went wrong:</span> <MathText text={feedback} />
+                </div>
+              ) : null;
+            })()}
           </div>
         ))}
       </div>
