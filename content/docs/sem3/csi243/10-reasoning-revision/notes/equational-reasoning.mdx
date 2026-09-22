@@ -18,7 +18,14 @@ square :: Integer -> Integer
 square n = n * n
 ```
 
-Any occurrence of `square 6` may be replaced by `36`, and any occurrence of `36` by `square 6`. This holds because `square` is pure: its result depends only on its argument, and evaluating it causes no effect.
+```text
+ghci> square 6
+36
+ghci> square (-4)
+16
+```
+
+Any occurrence of `square 6` may be replaced by `36`, and any occurrence of `36` by `square 6`. This holds because `square` is pure: its result depends only on its argument, and evaluating it causes no effect. It works just as well for `square (-4)`: replace it by `16` anywhere it occurs, or replace `16` by `square (-4)` — both directions are licensed, and both give the same running program.
 
 Contrast the imperative assignment:
 
@@ -31,6 +38,43 @@ This changes the value assigned to `x`, so the expression is **not** referential
 <Callout type="info" title="Why this matters here">
 Referential transparency is what licenses the whole technique. Every step below replaces a subexpression with something equal to it, and purity guarantees that nothing else changes as a result.
 </Callout>
+
+<Quiz title="Check: referential transparency" questions={[
+  {
+    question: "Why can square 6 always be replaced by 36 anywhere it appears in a Haskell program?",
+    options: [
+      "Because GHC caches every function call automatically",
+      "Because square is pure — its result depends only on its argument and it has no side effect, so the two are interchangeable in every context",
+      "Because 36 is a small number and easy to compute",
+      "It can't always be replaced — it depends on which module the call appears in"
+    ],
+    correctIndex: 1,
+    explanation: "Referential transparency means an expression can be swapped for its value without changing observable behaviour, anywhere in the program. That property comes from purity: no hidden state, no side effects, same input always gives the same output.",
+    optionFeedback: [
+      "Caching (memoisation) is an implementation detail some systems add; it is not what licenses the substitution. Purity is what licenses it, whether or not caching happens.",
+      "Correct. Purity is exactly the guarantee that lets you swap an expression for its value with no change in behaviour, in any context.",
+      "The size of the number is irrelevant — the same substitution argument would hold for square 60000.",
+      "It holds everywhere in a pure program, regardless of module — that is the whole point of referential transparency, as opposed to imperative state that varies by context."
+    ]
+  },
+  {
+    question: "Why is x = x + 1 not referentially transparent?",
+    options: [
+      "Because addition is not a pure operation",
+      "Because the same text 'x' denotes different values before and after the statement runs, so 'x' cannot be replaced by a single fixed value",
+      "Because it produces a type error",
+      "Because it only fails to be referentially transparent inside loops"
+    ],
+    correctIndex: 1,
+    explanation: "This is an imperative assignment/update, not a mathematical equation. Before it runs, x means the old value; after, it means the old value plus one. There is no single value you could substitute for every occurrence of x, which breaks the substitution principle referential transparency relies on.",
+    optionFeedback: [
+      "Addition itself is pure (it's a function of its arguments); the problem is that x is being reassigned, changing what the name 'x' refers to over time.",
+      "Correct — this is precisely why Haskell has no assignment statements: a name always denotes the same value once defined, so this kind of 'equation' cannot exist as a definition.",
+      "It is not a type error in imperative languages; the issue is semantic (what the name means over time), not a static typing failure.",
+      "The problem is inherent to reassignment itself, not specific to loops — a single such statement outside any loop already breaks referential transparency."
+    ]
+  }
+]} />
 
 ## 2. Definitions are equations
 
@@ -52,7 +96,51 @@ double (double 2)
 = 8                   -- arithmetic
 ```
 
+```text
+ghci> double (double 2)
+8
+```
+
 Every line names the rule used. That justification is what makes it reasoning rather than guessing, and it is what earns marks.
+
+The same chain reads backwards too, because `=` is symmetric: `8 = 4 + 4 = double 4 = double (2 + 2) = double (double 2)`. Nothing about the direction matters — only that each step is a legal substitution of equals for equals.
+
+<Quiz title="Check: definitions as equations" questions={[
+  {
+    question: "In the chain for double (double 2), what justifies the first step, double (double 2) = double (2 + 2)?",
+    options: [
+      "Arithmetic — 2 + 2 was computed to give the next line",
+      "The definition of double, applied to the inner call: double x = x + x with x = 2",
+      "The inductive hypothesis",
+      "Referential transparency alone, with no definition involved"
+    ],
+    correctIndex: 1,
+    explanation: "The inner double 2 is rewritten using the equation double x = x + x with x instantiated to 2, giving 2 + 2. Arithmetic only happens in the next step, when 2 + 2 is evaluated to 4.",
+    optionFeedback: [
+      "Arithmetic simplifies 2 + 2 to 4 in the next line — this line only rewrites double 2 using its definition, without doing any arithmetic yet.",
+      "Correct. This step replaces double 2 by its defining right-hand side, x + x with x = 2, i.e. 2 + 2.",
+      "There is no induction anywhere in this reduction — it is a single concrete calculation, not a proof about all inputs.",
+      "Referential transparency is what licenses substituting in general, but the specific rule used here is the definition of double — that's what tells you what to substitute."
+    ]
+  },
+  {
+    question: "Why can the chain double (double 2) = ... = 8 legally be read from right to left as well as left to right?",
+    options: [
+      "It can't — reasoning chains are only valid left to right",
+      "Because = is symmetric: a definition is a genuine equation usable in either direction, not a one-way assignment",
+      "Because GHC evaluates expressions in both directions automatically",
+      "Only the last step (arithmetic) can be reversed; the definition steps cannot"
+    ],
+    correctIndex: 1,
+    explanation: "Section 2 makes this the central point: a Haskell definition is an equation, and equations are symmetric. double x = x + x means double x and x + x denote the same thing, so you may rewrite in whichever direction is useful — forwards to evaluate, backwards to recognise a pattern.",
+    optionFeedback: [
+      "They are valid in both directions precisely because each step is an equation, not a one-way rule — this is the whole point of calling it 'equational' reasoning.",
+      "Correct — every step, definition or arithmetic, is licensed by referential transparency and the fact that = is symmetric.",
+      "GHC's evaluator does pick one direction (left-hand side to right-hand side) when it runs your program, but the mathematical justification for the chain works in either direction regardless of what the evaluator does.",
+      "Arithmetic equalities (2 + 2 = 4) and definitional equalities (double x = x + x) are both ordinary equations, and both are reversible for the same reason."
+    ]
+  }
+]} />
 
 ## 3. Proving a property for all inputs
 
@@ -120,6 +208,49 @@ Testing a few examples gives evidence. Proving it needs **induction over the str
 
 Notice the shape: **the proof follows the same two cases as the function definition.** If you can write the recursion, you can structure the proof.
 
+<Mermaid chart={`flowchart TD
+  A["Base case: xs = []\nShow the claim holds directly"] --> B["Inductive hypothesis\nAssume the claim holds for some xs"]
+  B --> C["Inductive step: (x:xs)\nUse the hypothesis to show it then holds for x:xs"]
+  C --> D["Conclusion\nHolds for every finite list —\neach one is built from [] by a finite number of conses"]
+`} caption="Structural induction over a list: the same [] / (x:xs) split used to write the recursive function is reused to structure the proof." />
+
+<Quiz title="Check: structural induction" questions={[
+  {
+    question: "In the proof that length (xs ++ ys) = length xs + length ys, where exactly is the inductive hypothesis used?",
+    options: [
+      "In the base case, to simplify length [] + length ys",
+      "In the inductive step, to replace length (xs ++ ys) with length xs + length ys inside the calculation for (x:xs)",
+      "It isn't used anywhere — the proof only needs the definitions of length and ++",
+      "In the conclusion, to state that the claim holds for every list"
+    ],
+    correctIndex: 1,
+    explanation: "The inductive step reduces length ((x:xs) ++ ys) down to 1 + length (xs ++ ys), and it is exactly at that point that the inductive hypothesis licenses replacing length (xs ++ ys) with length xs + length ys — that's the one step definitions alone cannot justify.",
+    optionFeedback: [
+      "The base case only uses (L1) and ordinary arithmetic (0 + length ys = length ys); the hypothesis has nothing to assume yet at xs = [].",
+      "Correct — this is the one line in the inductive step, '= 1 + (length xs + length ys) -- inductive hypothesis', that isn't justified by a definition alone.",
+      "Definitions alone reduce length ((x:xs) ++ ys) to 1 + length (xs ++ ys); getting from there to 1 + length xs + length ys needs the assumption about the shorter list xs, which is exactly the inductive hypothesis.",
+      "The conclusion states the result of the induction; the hypothesis is used inside the inductive step's calculation, one line before the conclusion is reached."
+    ]
+  },
+  {
+    question: "Why is it valid to conclude the claim holds for every finite list, once the base case and inductive step are both proved?",
+    options: [
+      "Because GHC will type-check the claim if it's true",
+      "Because every finite list is built up from [] by a finite number of applications of (:), so the base case plus 'each cons preserves the property' covers every one of them",
+      "Because testing a few example lists already confirmed it",
+      "It isn't fully valid — induction only covers lists up to some fixed length"
+    ],
+    correctIndex: 1,
+    explanation: "This is the structural content of induction over lists: [] is the only base constructor, (:) is the only way to build a longer list, and the inductive step shows the property is preserved by (:). Together, base case + preservation covers every finite list, however long, by a chain of finitely many cons applications.",
+    optionFeedback: [
+      "Type checking has nothing to do with why the mathematical argument is valid — GHC doesn't check mathematical claims about function behaviour at all.",
+      "Correct — this is exactly why induction proves a universal claim rather than a handful of examples: it argues about the two ways any finite list can be built.",
+      "Testing gives evidence for specific lists only; the completed induction is what licenses the claim for every list, tested or not.",
+      "Induction over lists genuinely covers every finite list, of any length — there is no length cutoff, because the inductive step is proved once and applies at every stage of construction."
+    ]
+  }
+]} />
+
 ## 4. A second example
 
 **Claim:** `sum (map (*2) xs) = 2 * sum xs`.
@@ -157,6 +288,52 @@ sum (map (*2) (x:xs))
 
 The claim holds for every finite list.
 
+```text
+ghci> sum (map (*2) [1,2,3])
+12
+ghci> 2 * sum [1,2,3]
+12
+```
+
+Both sides agree on a concrete list, exactly as the proof said they must for every list.
+
+<Quiz title="Check: the second induction" questions={[
+  {
+    question: "In the inductive step for sum (map (*2) xs) = 2 * sum xs, which line uses ordinary algebra rather than a definition or the hypothesis?",
+    options: [
+      "= sum ((x*2) : map (*2) xs) -- (M2)",
+      "= (x*2) + 2 * sum xs -- inductive hypothesis",
+      "= 2 * (x + sum xs) -- distributivity",
+      "= sum (map (*2) (x:xs)), the starting expression"
+    ],
+    correctIndex: 2,
+    explanation: "The step '(x*2) + 2 * sum xs = 2 * (x + sum xs)' is a fact about multiplication and addition (a*2 + 2*b = 2*(a+b)), not about the definitions of sum or map, and not the inductive hypothesis (which was already used one line above). It is exactly analogous to the 'associativity of +' step in the length proof.",
+    optionFeedback: [
+      "This line is justified by (M2), the definition of map on a non-empty list — it's a definitional rewrite, not algebra.",
+      "This line is exactly where the inductive hypothesis is used — it's not the algebraic step being asked about.",
+      "Correct. Factoring 2 out of (x*2) + 2*sum xs to get 2*(x + sum xs) is a fact of ordinary arithmetic (distributivity), used the same way 'associativity of +' was used in the first proof.",
+      "This is the starting expression of the inductive step, not a justified rewrite step at all."
+    ]
+  },
+  {
+    question: "How does the structure of this proof compare to the length (xs ++ ys) proof from Section 3?",
+    options: [
+      "They are unrelated techniques",
+      "Both use structural induction over the list with a base case at [] and an inductive step at (x:xs), applying the hypothesis once inside the step and then an algebraic fact to match the target shape",
+      "This proof does not need a base case because sum and map are both total functions",
+      "This proof uses induction on the second argument, ys, instead of the first"
+    ],
+    correctIndex: 1,
+    explanation: "Both proofs follow the same template shown in the Mermaid diagram in Section 3: base case at [], assume for xs, prove for (x:xs) using the hypothesis, then a small algebraic or definitional rewrite ('backwards' use of a definition, or distributivity/associativity) to land exactly on the target shape.",
+    optionFeedback: [
+      "They use exactly the same technique — structural induction over the list — just applied to a different claim.",
+      "Correct — same shape: base case, hypothesis, inductive step using the hypothesis plus one algebraic fact, then match the target form.",
+      "Totality of the functions involved guarantees termination, but it does not remove the need for a base case in the induction — every structural induction over a list needs one, to anchor the argument.",
+      "The induction is over xs, the first (list) argument to sum . map (*2), exactly as in Section 3 — there is no second list argument here to induct over."
+    ]
+  }
+]} />
+
 ## 5. Using reasoning to find a fault
 
 Reasoning also exposes errors. Suppose someone claims `reverse (reverse xs) = xs` for their definition:
@@ -165,6 +342,15 @@ Reasoning also exposes errors. Suppose someone claims `reverse (reverse xs) = xs
 myReverse []     = []
 myReverse (x:xs) = myReverse xs      -- fault: [x] is missing
 ```
+
+```text
+ghci> myReverse [1,2,3]
+[]
+ghci> myReverse [7]
+[]
+```
+
+That single test is already damning — `myReverse` never returns anything but `[]`, for any argument. But a test only shows *that* it is wrong; the inductive proof below shows *why*, line by line.
 
 Check the base case — it holds. Check the inductive step:
 
@@ -176,9 +362,50 @@ myReverse (myReverse (x:xs))
 
 But the claim required `(x:xs)`, and we obtained `xs`. The step fails, and the line where it fails names the faulty equation. The missing `++ [x]` is exactly what the proof could not supply.
 
+<CommonMistake title="Stopping at 'the proof failed' instead of reading where">
+A failed inductive step is not a dead end — it is a diagnostic. Here, the step produced `xs` where the claim needed `(x:xs)`: the difference is exactly one missing element, at exactly the position `myReverse` recurses. That is what points straight at the fix, `myReverse (x:xs) = myReverse xs ++ [x]`, without any further guessing.
+</CommonMistake>
+
 <Callout type="warn" title="Reasoning assumes termination">
 These arguments hold for finite lists and terminating definitions. A definition that loops forever satisfies its equations vacuously while being useless, so termination must be argued separately — as in Chapter 5.
 </Callout>
+
+<Quiz title="Check: using reasoning to find a fault" questions={[
+  {
+    question: "In the faulty myReverse proof, the inductive step derives myReverse (myReverse (x:xs)) = xs, but the claim needed it to equal (x:xs). What does this mismatch tell you?",
+    options: [
+      "The proof technique itself is invalid for this function",
+      "The definition of myReverse is faulty — specifically, it is missing the operation that would append x back on, and the mismatch (xs vs x:xs) is a one-element gap at exactly that spot",
+      "The base case must be wrong instead",
+      "Nothing — a failed step just means you should pick a different claim to prove"
+    ],
+    correctIndex: 1,
+    explanation: "The technique is sound; it correctly detects that this definition does not satisfy the claim. The gap between xs and (x:xs) is precisely one cons of x, which is exactly the missing ++ [x] in myReverse's recursive case.",
+    optionFeedback: [
+      "Structural induction is a valid proof technique regardless of outcome — here it correctly reports that the claim fails for this definition, which is the technique working as intended.",
+      "Correct. The one-element gap between the derived xs and the required (x:xs) points exactly at the missing ++ [x] — the proof doesn't just say 'wrong', it says where.",
+      "The text states the base case was checked and holds; the failure is specifically in the inductive step, not the base case.",
+      "The claim (reverse (reverse xs) = xs) is a true, reasonable property to want — the fault is in the code, not in choosing to prove this particular claim."
+    ]
+  },
+  {
+    question: "Why is running myReverse [1,2,3] and seeing [] not, by itself, a proof that myReverse is wrong for every input?",
+    options: [
+      "It is a proof — one failing test is logically equivalent to a completed induction",
+      "A single test (or even several) only shows the function is wrong for the inputs actually tried; it doesn't identify the general pattern the way inspecting the inductive step's algebra does",
+      "The test result [] is actually correct, so there's nothing to explain",
+      "GHC would have refused to compile a wrong definition, so the test is irrelevant"
+    ],
+    correctIndex: 1,
+    explanation: "This is the running theme of the chapter: testing gives evidence for the inputs tried, not a general argument. It takes inspecting the equations themselves — as the induction does — to see the general shape of the fault (a whole ++ [x] missing) rather than just 'it returned the wrong list for [1,2,3]'.",
+    optionFeedback: [
+      "One test is evidence for one input; it is not equivalent to an argument covering every possible list, however suggestive the failure is.",
+      "Correct — the test shows *that* something is wrong for a couple of inputs; the induction shows *why*, in general, for every input.",
+      "[] is wrong — myReverse [1,2,3] should be [3,2,1] once reversed correctly, so [] is a visible symptom of the fault, not a correct answer.",
+      "myReverse [1,2,3] compiles and runs fine; the fault is semantic (it computes the wrong value), which is exactly the kind of error GHC's type checker cannot catch."
+    ]
+  }
+]} />
 
 ## 6. Practice
 

@@ -25,7 +25,16 @@ foldr _ acc []     = acc
 foldr f acc (x:xs) = f x (foldr f acc xs)
 ```
 
-Three arguments: a combining function, a starting value, and the list.
+Three arguments: a combining function, a starting value, and the list. In words: `foldr` takes **a rule for combining one element with an already-folded result** — written `(a -> b -> b)` — **a starting value** to use once the list runs out, and **a list**, and collapses the whole list to one value by combining from the right-hand end inward.
+
+Before it is handed to `foldr`, the combining function is an ordinary two-argument value, exactly like any other:
+
+```text
+ghci> :type (+)
+(+) :: Num a => a -> a -> a
+```
+
+`(+) :: Num a => a -> a -> a` matches the shape `(a -> b -> b)` once both type variables are instantiated to the same numeric type — which is also why the starting value and the list elements have to agree in type.
 
 ```text
 ghci> foldr (+) 0 [1,2,3,4]
@@ -35,6 +44,15 @@ ghci> foldr (*) 1 [1,2,3,4]
 ghci> foldr max 0 [3,9,2]
 9
 ```
+
+A combining function does not have to be an arithmetic operator. Supplying `(:)` itself — the list constructor — with `[]` as the starting value reconstructs the original list unchanged:
+
+```text
+ghci> foldr (:) [] [1,2,3]
+[1,2,3]
+```
+
+This is not a curiosity — it is exactly what the substitution picture below says `foldr` always does: replace every `:` with the combining function and the final `[]` with the starting value. Choosing `(:)` and `[]` makes that substitution a no-op, which is why the list reappears unchanged. This identity also matters later in this lesson, when `foldr` on an infinite list is compared with `foldl`.
 
 The `r` means **right**: the combining starts from the right-hand end. `foldr f acc` replaces every `:` with `f` and the final `[]` with `acc`:
 
@@ -64,6 +82,60 @@ That substitution picture is the fastest way to predict what a `foldr` does.
   The additions are performed innermost first: `1 + (2 + 3)`, then `1 + 5`, then `6`.
   </Step>
 </StepByStep>
+
+<Quiz title="Check yourself: foldr" questions={[
+  {
+    question: "foldr :: (a -> b -> b) -> b -> [a] -> b. What are the three arguments, in order?",
+    options: [
+      "A combining function, a starting value, and the list to fold",
+      "The list, a starting value, and a combining function",
+      "Two lists and a combining function",
+      "A starting value, the list, and a combining function"
+    ],
+    correctIndex: 0,
+    explanation: "Reading the type left to right: the first argument is (a -> b -> b), a function combining one element with an already-folded result; the second, plain b, is the starting value used once the list runs out; the third, [a], is the list being folded.",
+    optionFeedback: [
+      "Correct — combining function first, then the base value, then the list, matching the order the type lists them in.",
+      "The list is always foldr's last argument, not its first — this order would not match the type (a -> b -> b) -> b -> [a] -> b.",
+      "foldr folds one list, not two — its inputs are a function, a base value, and a single list.",
+      "The combining function comes first in the type, not last — swapping it to the end does not match (a -> b -> b) -> b -> [a] -> b."
+    ]
+  },
+  {
+    question: "Why does foldr (:) [] [1,2,3] return [1,2,3] unchanged?",
+    options: [
+      "Because foldr's substitution rule replaces every : with the combining function and [] with the starting value — and here both are already (:) and [], so nothing changes",
+      "Because foldr always returns its list argument unchanged, regardless of the combining function",
+      "Because (:) is a special case foldr recognises and short-circuits on",
+      "Because [] as a starting value always means 'return the input list as-is'"
+    ],
+    correctIndex: 0,
+    explanation: "foldr f acc [1,2,3] is the substitution picture 1 `f` (2 `f` (3 `f` acc)). With f = (:) and acc = [], that becomes 1 : (2 : (3 : [])) — which is just [1,2,3] written out in full, so the 'substitution' happens to reconstruct exactly what was there.",
+    optionFeedback: [
+      "Correct — replacing : with (:) and [] with [] is a substitution that changes nothing, since those are already the list's own constructors.",
+      "foldr can absolutely change its input — foldr (+) 0 [1,2,3] returns 6, not [1,2,3]; the identity here is specific to choosing (:) and [] as the arguments.",
+      "foldr treats (:) as an ordinary two-argument function, exactly like (+) or max — there is no special-casing.",
+      "The starting value only matters once the list is exhausted; [] here is simply what [] gets replaced with by the substitution, not a general 'return input unchanged' signal."
+    ]
+  },
+  {
+    question: "Trace foldr max 0 [3,9,2] using the substitution picture. What does it produce?",
+    options: [
+      "max 3 (max 9 (max 2 0)) = 9",
+      "max 0 (max 2 (max 9 3)) = 9",
+      "max(3,9,2) treated as a three-argument call = error",
+      "max 3 (max 9 (max 2 0)) = 3"
+    ],
+    correctIndex: 0,
+    explanation: "Substituting : with max and [] with 0 on 3 : (9 : (2 : [])) gives max 3 (max 9 (max 2 0)). Innermost first: max 2 0 = 2, then max 9 2 = 9, then max 3 9 = 9.",
+    optionFeedback: [
+      "Correct — working from the innermost combination outward: max 2 0 = 2, max 9 2 = 9, max 3 9 = 9.",
+      "This reverses the nesting direction — foldr nests toward the right starting from the first element, giving max 3 (max 9 (max 2 0)), not this order.",
+      "max is a two-argument curried function throughout; foldr always applies it to exactly two arguments at a time, never three at once.",
+      "The nesting and nearly the whole computation are right, but the outermost combination is max 3 9, which is 9, not 3."
+    ]
+  }
+]} />
 
 ## 2. Defining Prelude functions as folds
 
@@ -117,6 +189,36 @@ Because `foldr` gives `1 - (2 - (3 - 0))` = `1 - (2 - 3)` = `1 - (-1)` = `2`, wh
 For `+`, `*`, `max`, `&&`, and `||` the two folds agree. For `-`, `/`, `++`, and anything order-sensitive they do not. When in doubt, write out the substitution picture.
 </Callout>
 
+### Beyond associativity: why `foldr` can handle an infinite list and `foldl` cannot
+
+Associativity is not the only difference between the two folds. They also differ in **when** they do their work, and that difference has a consequence associativity alone does not explain.
+
+`foldl` must walk all the way to the end of the list before it can produce anything at all: at each step it builds a larger, still-unevaluated combination — `((0 + 1) + 2) + 3` is a chain of deferred computations (the same *thunks* introduced in [Currying and Sections](/docs/sem3/csi243/07-higher-order/notes/currying-and-sections)) that only starts to reduce once the entire list has been consumed and the final thunk is forced. `foldr`, by contrast, can hand back part of its result as soon as it has looked at the very first element, because `f x (foldr f acc xs)` only needs `foldr f acc xs` to be evaluated as far as `f` actually demands it — and for a combining function like `(:)`, that is "not very far at all."
+
+This lets `foldr` do something `foldl` fundamentally cannot: work on an infinite list, provided the combining function does not insist on seeing the whole thing.
+
+```text
+ghci> take 3 (foldr (:) [] [1..])
+[1,2,3]
+```
+
+`foldr (:) [] [1..]` is the identity fold from earlier, now run on the infinite list `[1..]`. `(:)` can produce its first result — `1 : (foldr (:) [] [2..])` — without forcing the rest of that expression, so `take 3` only ever forces exactly the three cons cells it needs, and the computation finishes. The equivalent `foldl` has no such option:
+
+```haskell
+take 3 (foldl (\acc x -> x : acc) [] [1..])
+-- never finishes: foldl must walk the entire (infinite) list to build its
+-- final accumulator before it can return anything at all, so take 3 never
+-- even gets a first element to inspect.
+```
+
+Because `foldl` cannot produce even its first piece of output until the whole list has been consumed, handing it an infinite list simply means it never returns — no error, no partial answer, just a computation that runs forever.
+
+<RecognitionStrategy title="foldr or foldl — how to choose">
+Default to `foldr`: it agrees with `foldl` whenever the combining operator is associative, and it is the only one of the two that can short-circuit or work on an infinite list. Reach for `foldl` only when the combination is naturally left-to-right and the list is known to be finite — and even then, real code typically prefers `foldl`'s stricter cousin `foldl'` from `Data.List` for performance, a detail covered where the course discusses evaluation cost.
+</RecognitionStrategy>
+
+This is a direct consequence of the same evaluation model previewed in [Currying and Sections](/docs/sem3/csi243/07-higher-order/notes/currying-and-sections) and covered in full in [The Cost of a Definition](/docs/sem3/csi243/10-reasoning-revision/notes/complexity) in Chapter 10 — this section is only the specific payoff for choosing between `foldr` and `foldl`; the general theory of laziness lives there.
+
 There is also `foldr1` and `foldl1`, which use the list's first element as the starting value and therefore fail on an empty list:
 
 ```text
@@ -138,6 +240,43 @@ ghci> foldl (+) 0 [1,2,3,4]
 ```
 
 The final element of a `scanl` is exactly what the corresponding `foldl` returns. Scans are useful for running totals.
+
+<Quiz title="Check yourself: foldl and laziness" questions={[
+  {
+    question: "foldr (-) 0 [1,2,3] is 2, but foldl (-) 0 [1,2,3] is -6. What causes the difference?",
+    options: [
+      "- is not associative, so grouping from the right ((1 - (2 - 3)) vs. grouping from the left (((0-1)-2)-3) gives different answers",
+      "foldl has a bug and should be avoided entirely",
+      "foldr and foldl use different starting values even when given the same 0",
+      "The list [1,2,3] is processed in a different order of elements by each fold, not just a different grouping"
+    ],
+    correctIndex: 0,
+    explanation: "Both folds visit the elements 1, 2, 3 in the same order — the difference is purely how the combining calls are nested. foldr gives 1 - (2 - (3 - 0)) = 2; foldl gives ((0 - 1) - 2) - 3 = -6. Because subtraction is not associative, these two groupings produce different results.",
+    optionFeedback: [
+      "Correct — same elements, same operator, different grouping, and subtraction is sensitive to grouping.",
+      "Both folds are correctly implemented; the difference is an inherent property of using a non-associative operator, not a defect.",
+      "Both start from the same 0 — the starting value is not where the two folds diverge.",
+      "Both process 1, then 2, then 3 in the same left-to-right order over the list; what differs is which combination happens innermost first."
+    ]
+  },
+  {
+    question: "take 3 (foldr (:) [] [1..]) returns [1,2,3], but the foldl equivalent never returns. Why?",
+    options: [
+      "foldl must consume the entire list to build its final accumulator before returning anything, and [1..] never ends; foldr can produce its first result immediately",
+      "foldl is simply slower than foldr on every list, finite or not",
+      "[1..] is not a valid Haskell list, so only foldr can process it",
+      "take 3 only works correctly with foldr, never with foldl, regardless of the list"
+    ],
+    correctIndex: 0,
+    explanation: "foldr (:) [] [1..] can hand back 1 : (foldr (:) [] [2..]) without evaluating the rest, so take 3 only forces the three cons cells it needs. foldl has no partial result to offer until it has walked the whole list — which, for [1..], is a walk that never ends.",
+    optionFeedback: [
+      "Correct — the issue is not raw speed but whether a fold can produce a usable partial result before reaching the end of the list.",
+      "On a finite list both folds terminate; foldl is not inherently 'slower', it simply cannot start producing output before finishing the whole traversal.",
+      "[1..] is a perfectly ordinary (infinite) Haskell list — plenty of Prelude functions, including foldr with a lazy combining function, can work with it.",
+      "take 3 works fine with foldl too, as long as the list is finite — the problem here is specific to combining take with foldl on an infinite list."
+    ]
+  }
+]} />
 
 ## 5. Function composition
 
@@ -207,6 +346,60 @@ ghci> sum $ map (^2) $ filter odd [1..10]
 ```
 
 Both are correct. Use whichever your reader will find clearer.
+
+<Quiz title="Check yourself: composition and $" questions={[
+  {
+    question: "((*2) . (+1)) 5 — which computation runs first, and what is the final result?",
+    options: [
+      "(+1) runs first (5 + 1 = 6), then (*2) doubles it to 12",
+      "(*2) runs first (5 * 2 = 10), then (+1) adds one to get 11",
+      "Both run simultaneously and the results are added: 6 + 10 = 16",
+      "Composition is left to right here, so (*2) applies to 5 first"
+    ],
+    correctIndex: 0,
+    explanation: "(f . g) x = f (g x), so f . g applies g first, then f. Here f = (*2) and g = (+1), so (+1) runs on 5 first, giving 6, and then (*2) doubles it to 12.",
+    optionFeedback: [
+      "Correct — the right-hand function in a composition runs first, matching (f . g) x = f (g x).",
+      "This is the order for g . f, not f . g — here (*2) is the left-hand (outer) function, so it runs last, not first.",
+      "Composition is sequential, not simultaneous — one function's result feeds directly into the other as its argument, not added together.",
+      "Composition is read right to left: (.) always applies its right-hand argument first, regardless of which function is written where."
+    ]
+  },
+  {
+    question: "sumOddSquares = sum . map (^2) . filter odd. Reading right to left, what is the second stage?",
+    options: [
+      "map (^2), squaring the odd numbers that survived filter odd",
+      "filter odd, since composition still evaluates left to right in practice",
+      "sum, because it is applied to the whole pipeline's final result",
+      "There is no meaningful order — all three run at once"
+    ],
+    correctIndex: 0,
+    explanation: "Reading right to left: filter odd runs first, keeping only odd elements; map (^2) runs second, squaring what survived; sum runs last, adding everything up. So the second stage is map (^2).",
+    optionFeedback: [
+      "Correct — filter odd is first (rightmost), map (^2) is second, and sum is last (leftmost).",
+      "Composition genuinely evaluates right to left, both in the substitution rule (f . g) x = f (g x) and in what actually happens when the pipeline runs.",
+      "sum is applied last, to whatever map (^2) . filter odd produced — it is the third and final stage, not the second.",
+      "Each stage's output is the next stage's input, so they cannot run at once — the pipeline is inherently sequential."
+    ]
+  },
+  {
+    question: "sum $ map (^2) $ filter odd [1..10] and sum (map (^2) (filter odd [1..10])) — how do these two expressions relate?",
+    options: [
+      "They compute the same thing; $ just applies a function to an argument with the lowest possible precedence, removing the need for nested parentheses",
+      "$ changes the order of evaluation compared to ordinary parentheses",
+      "$ is only valid with sum, not with arbitrary functions",
+      "The version using $ is evaluated lazily while the parenthesised version is evaluated strictly"
+    ],
+    correctIndex: 0,
+    explanation: "($) :: (a -> b) -> a -> b with f $ x = f x. Because $ has the lowest possible precedence, everything to its right is grouped together before the function on its left is applied — which is exactly what nested parentheses achieve, just without writing them out.",
+    optionFeedback: [
+      "Correct — $ is ordinary function application spelled with lower precedence; it does not change what gets computed or when.",
+      "$ does not reorder evaluation; it only changes how the parentheses would otherwise have to be written, thanks to its very low precedence.",
+      "$ works with any function value on its left — sum is not special here.",
+      "Both expressions have identical evaluation behaviour under Haskell's laziness; $ is purely a parsing convenience, not an evaluation-strategy change."
+    ]
+  }
+]} />
 
 ## 7. Common errors
 

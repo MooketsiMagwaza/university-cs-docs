@@ -3,8 +3,6 @@ title: "2. Pattern Matching"
 description: "Select an equation by the shape of an argument using literal, variable, wildcard, tuple, and list patterns, and keep the set of cases exhaustive and correctly ordered."
 ---
 
-
-
 Conditional expressions choose on a **Boolean test**. Pattern matching chooses on the **shape of the argument itself** — its literal value, or the structure it was built from.
 
 The result is code that is neater, more readable, and simpler than the equivalent nest of conditionals.
@@ -55,6 +53,14 @@ ghci> square 5
 25
 ```
 
+<Mermaid chart={`flowchart TD
+  Start["Call f with an argument"] --> E1{"Matches equation 1's pattern?"}
+  E1 -- Yes --> R1["Run equation 1's right-hand side"]
+  E1 -- No --> E2{"Matches equation 2's pattern?"}
+  E2 -- Yes --> R2["Run equation 2's right-hand side"]
+  E2 -- No --> E3{"...more equations..."}
+  E3 -- "No pattern matches at all" --> Crash["Non-exhaustive patterns: runtime crash"]`} caption="This is the mechanism behind every equation-based function: try patterns top to bottom, stop at the first match, crash only if none match." />
+
 Reverse those two lines and the function breaks:
 
 ```haskell
@@ -64,6 +70,43 @@ square 0 = 1     -- unreachable
 ```
 
 `square 0` would now return `0`, and GHC warns that the second equation is redundant. **A variable pattern matches anything, so nothing below it is ever reached.**
+
+<Quiz title="Check: sequential matching" questions={[
+  {
+    question: "Why does reversing the two equations of square make square 0 return 0 instead of 1?",
+    options: [
+      "Because Haskell always uses the last matching equation, not the first",
+      "Because the first equation, square y = y * y, has a variable pattern that matches every possible argument including 0, so it is used before GHC ever reaches the literal-0 equation below it",
+      "Because 0 * 0 and 1 happen to be mathematically equivalent in this context",
+      "Because GHC refuses to compile the reversed version, so the old behaviour persists"
+    ],
+    correctIndex: 1,
+    explanation: "Pattern matching tries equations strictly top to bottom and commits to the first one that matches. A bare variable pattern like y matches literally any value, 0 included. Once it is first, it intercepts every call — including square 0 — before the more specific square 0 = 1 equation is ever consulted.",
+    optionFeedback: [
+      "Haskell uses the first matching equation, not the last — that is precisely why ordering (most specific first) matters so much.",
+      "",
+      "0 * 0 is 0, and 1 is 1 — they are not equal; the function genuinely computes the wrong answer once the general pattern shadows the specific one.",
+      "The reversed version compiles successfully (with a redundancy warning); it is not rejected, which is exactly why this mistake is dangerous — it fails silently rather than loudly."
+    ]
+  },
+  {
+    question: "What general rule does the square example establish for ordering pattern-matching equations?",
+    options: [
+      "Equations should be ordered alphabetically by pattern",
+      "The most specific patterns (literals, particular structures) should come before more general patterns (bare variables, wildcards), because a general pattern placed earlier will always intercept the cases meant for the specific ones",
+      "It does not matter what order equations are written in, as long as all cases are covered somewhere",
+      "Variable patterns should always come first because they are the simplest to read"
+    ],
+    correctIndex: 1,
+    explanation: "Because Haskell commits to the first matching equation, any pattern that matches a strict superset of another pattern's cases must be placed after the more specific one, or it will always win first. This is the same most-specific-first discipline used for guards and conditionals elsewhere in this chapter.",
+    optionFeedback: [
+      "Pattern ordering has nothing to do with alphabetical sorting of the pattern text.",
+      "",
+      "Order matters a great deal, as the square example demonstrates directly — coverage of all cases is necessary but not sufficient if the order is wrong.",
+      "Placing the most general pattern first is exactly the mistake this section warns against — it silently shadows every specific case below it."
+    ]
+  }
+]} />
 
 ## 3. The kinds of pattern
 
@@ -84,6 +127,13 @@ square 0 = 1     -- unreachable
 isZero :: Int -> Bool
 isZero 0 = True
 isZero _ = False   -- anything else
+```
+
+```text
+ghci> isZero 0
+True
+ghci> isZero 7
+False
 ```
 
 Writing `isZero n = False` would work identically, but `_` documents that the value is deliberately ignored, and avoids an unused-name warning.
@@ -118,9 +168,61 @@ dayName 7 = "Sunday"
 dayName _ = "Not a day number"
 ```
 
-<Callout type="info" title="Ask the compiler to warn you">
-Start GHCi with `ghci -Wincomplete-patterns`, or enter `:set -Wincomplete-patterns`, and GHC reports non-exhaustive patterns at compile time instead of letting them crash later. Turn this on for laboratory work.
+```text
+ghci> dayName 3
+"Wednesday"
+ghci> dayName 9
+"Not a day number"
+```
+
+<Callout type="warn" title="-Wincomplete-patterns is a warning, not a rejection">
+Start GHCi with `ghci -Wincomplete-patterns`, or enter `:set -Wincomplete-patterns`, and GHC will print a **compile-time warning** that names exactly which patterns are missing — for the two-equation `dayName` above, something like:
+
+```text
+dayName.hs:2:1: warning: [-Wincomplete-patterns]
+    Pattern match(es) are non-exhaustive
+    In an equation for `dayName': Patterns not matched: ...
+```
+
+(the precise wording varies by GHC version). This is a **warning, not a rejection**: the module still compiles, and `dayName` is still callable. Crucially, it still **crashes at run time** if the missing case is actually reached — the warning only helps you *notice* the gap while reading the compiler's output, before a user's input finds it for you. Turn it on for laboratory work so gaps are visible while you are still writing the function, not as a substitute for adding the catch-all case.
 </Callout>
+
+<Quiz title="Check: exhaustiveness and -Wincomplete-patterns" questions={[
+  {
+    question: "A lab file compiles cleanly with -Wincomplete-patterns turned on, printing a warning about dayName's missing cases. The student runs dayName 3 anyway. What happens?",
+    options: [
+      "GHC already rejected the file, so it never runs",
+      "The program still throws Non-exhaustive patterns in function dayName at run time — the flag only printed a warning at compile time, it did not add a missing case or prevent the crash",
+      "GHC automatically inserts a default case using the warning's information",
+      "dayName 3 returns an empty string instead of crashing, because the warning suppresses the exception"
+    ],
+    correctIndex: 1,
+    explanation: "-Wincomplete-patterns is purely diagnostic: it prints a warning at compile time so a human can see the gap and fix it. It changes nothing about how the compiled function behaves. If the programmer ignores the warning and the missing case is actually reached at run time, the exact same Non-exhaustive patterns crash still happens.",
+    optionFeedback: [
+      "A warning does not stop compilation — the module compiles successfully and dayName remains fully callable; only errors block compilation.",
+      "",
+      "GHC never writes code on your behalf; the warning only reports the gap in the source text you already wrote. Adding the missing case is still the programmer's job.",
+      "Nothing about the warning changes dayName's run-time behaviour — the crash is identical whether or not the flag was enabled."
+    ]
+  },
+  {
+    question: "What is the actual purpose of turning on -Wincomplete-patterns, given that it cannot prevent a run-time crash on its own?",
+    options: [
+      "It has no real purpose; it is only there for cosmetic compiler output",
+      "It surfaces missing cases early, while you are reading compiler output during development, so you can add the catch-all case yourself before a user's input ever reaches the gap",
+      "It automatically fixes non-exhaustive pattern matches",
+      "It replaces the need for writing test cases with invalid inputs"
+    ],
+    correctIndex: 1,
+    explanation: "The value of the warning is entirely about timing and visibility: it turns a silent gap in your equations into a message you see immediately after loading the file, rather than a surprise crash discovered later (possibly by an end user). It is a detection tool, not a repair tool or a substitute for exhaustiveness testing.",
+    optionFeedback: [
+      "It has real diagnostic value — it is exactly how you would discover dayName's gap in this example without manually re-reading every equation.",
+      "",
+      "It never edits your source code; you still have to write the catch-all equation yourself.",
+      "Testing invalid or boundary inputs (as this course's six-part process recommends) is still necessary — the warning only helps you catch omissions in the source text, not confirm correctness."
+    ]
+  }
+]} />
 
 ## 5. Tuple patterns
 
@@ -158,6 +260,17 @@ stW ['b', _, _] = True
 stW _           = False
 ```
 
+```text
+ghci> stW "bat"
+True
+ghci> stW "cat"
+False
+ghci> stW "boat"
+False
+```
+
+`stW "boat"` is `False` because `"boat"` has four characters — the list pattern `['b', _, _]` only matches lists of exactly three elements.
+
 ### The cons pattern
 
 A list is built one element at a time from the empty list `[]` using the `:` operator, called **cons**:
@@ -185,11 +298,59 @@ tail :: [a] -> [a]
 tail (_:xs) = xs
 ```
 
+```text
+ghci> null []
+True
+ghci> null [1,2,3]
+False
+ghci> head [5,9,2]
+5
+ghci> tail [5,9,2]
+[9,2]
+```
+
 `[]` and `(x:xs)` between them cover every possible list, which makes that pair the standard exhaustive split.
 
 <Callout type="warn" title="Cons patterns must be parenthesised">
 Function application binds more tightly than any operator, so `tail _:xs = xs` is read as `(tail _):xs = xs` — a different and invalid meaning. Always write `tail (_:xs) = xs`.
 </Callout>
+
+<Quiz title="Check: list and cons patterns" questions={[
+  {
+    question: "stW is called as stW \"boat\" (four characters). Why does it return False rather than True?",
+    options: [
+      "Because 'b' is not the first character of \"boat\"",
+      "Because the pattern ['b', _, _] only matches lists of exactly three elements, and \"boat\" has four, so the first equation's pattern fails to match regardless of what the characters are",
+      "Because stW only works on words, not on arbitrary character lists",
+      "Because uppercase and lowercase b are treated differently"
+    ],
+    correctIndex: 1,
+    explanation: "A list pattern like ['b', _, _] encodes both a length requirement (exactly 3) and per-position requirements (first element is 'b', the rest are anything). \"boat\" has 4 characters, so its length alone fails to match a 3-element pattern — the second equation, stW _, catches it and returns False.",
+    optionFeedback: [
+      "'b' is in fact the first character of \"boat\" — the mismatch is about length, not the first character.",
+      "",
+      "stW works on any [Char] (any character list); nothing about it is specific to English words.",
+      "The literal pattern used is 'b' (lowercase); case sensitivity is not what causes this particular result — length is."
+    ]
+  },
+  {
+    question: "Why must tail (_:xs) = xs be written with parentheses around _:xs, rather than tail _:xs = xs?",
+    options: [
+      "Parentheses are purely a style preference recommended by this course",
+      "Function application binds more tightly than the : operator, so tail _:xs = xs would parse as (tail _):xs = xs — a completely different, invalid pattern",
+      "Without parentheses, GHC would interpret _:xs as a tuple",
+      "Parentheses are required around every pattern in Haskell, with no exceptions"
+    ],
+    correctIndex: 1,
+    explanation: "Haskell parses tail _:xs = xs by applying the usual precedence rules: function application (tail _) binds tighter than the infix : operator. So without parentheses the whole left-hand side is read as (tail _) : xs — nonsensical as a function definition. Parenthesising the cons pattern forces _:xs to be read as one single pattern argument to tail.",
+    optionFeedback: [
+      "This is not a stylistic recommendation — omitting the parentheses changes what the line means and typically produces a compile error, not just an ugly one.",
+      "",
+      ": builds a list (cons), not a tuple; tuples use commas inside parentheses instead.",
+      "Plenty of patterns in this lesson are unparenthesised, such as literal patterns like 0 or variable patterns like n — parentheses are specifically needed here because of the : operator's interaction with function-application precedence."
+    ]
+  }
+]} />
 
 ## 7. Worked example: recognising a vowel
 
@@ -265,8 +426,9 @@ The pattern `(_:x:_)` requires at least two elements: a head that is ignored, th
   { type: 'must', text: 'I can explain why a variable pattern must come last.' },
   { type: 'must', text: 'I can split any list with the exhaustive pair [] and (x:xs).' },
   { type: 'must', text: 'I can say why cons patterns need parentheses.' },
+  { type: 'must', text: 'I can explain precisely what -Wincomplete-patterns does and does not do.' },
   { type: 'avoid', text: 'Do not leave a pattern set non-exhaustive; it crashes at run time, not compile time.' },
-  { type: 'note', text: 'Turn on -Wincomplete-patterns so GHC finds the gaps for you.' }
+  { type: 'note', text: '-Wincomplete-patterns only warns at compile time; it does not stop the run-time crash if the gap is reached.' }
 ]} />
 
 Continue with [Guarded Equations](/docs/sem3/csi243/04-making-choices/notes/guards).

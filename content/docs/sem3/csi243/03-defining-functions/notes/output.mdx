@@ -3,8 +3,6 @@ title: "2. Terminal Output: putStrLn, print, and show"
 description: "Learn exactly how Haskell represents text, applies functions, and prints values—without assuming that putStrLn, print, show, or IO already make sense."
 ---
 
-
-
 This lesson assumes that you have never printed anything in Haskell. We will introduce each word and symbol before combining them into a complete program.
 
 The lesson progresses through **text → names → function application → output functions → types → actions**.
@@ -50,6 +48,26 @@ Exact GHCi results, in the same order:
 ```
 
 `String` and `Char` are different types. This lesson prints strings first; a later lesson will explore individual characters.
+
+<Quiz title="Check: String vs. string literal" questions={[
+  {
+    question: "GHCi is given the expression \"Hello World\" directly (no putStrLn). Why does it echo back \"Hello World\" WITH the quotation marks, rather than printing the bare words?",
+    options: [
+      "GHCi always adds quotation marks around any output as decoration",
+      "GHCi is showing the Haskell-readable representation of the String value you entered, and that representation includes the quotes that mark it as a String",
+      "Because the string is exactly two words long",
+      "putStrLn was called implicitly and it always shows quotes"
+    ],
+    correctIndex: 1,
+    explanation: "Entering a bare expression at the GHCi prompt evaluates it and shows the result using its readable (Show) representation. For a String, the readable representation is the quoted form — the same text you would write in source code to produce that value.",
+    optionFeedback: [
+      "Quotation marks are not decoration added to everything — try `ghci> 42`, which prints as `42` with no quotes at all.",
+      "",
+      "Length is irrelevant; a one-word or ten-word string is shown with quotes the same way.",
+      "putStrLn was not called here at all — GHCi's default echo-back behaviour is what adds the quotes, and putStrLn actually removes them, as later sections show."
+    ]
+  }
+]} />
 
 ## 2. Unquoted words are program names
 
@@ -179,6 +197,56 @@ Why are quotation marks visible in the third result? Because `print` displays a 
   highlightCol="use"
 />
 
+<Mermaid chart={`flowchart TD
+  A[What do you want to display?] --> B{Is the value already a String?}
+  B -- Yes --> C{Need a trailing newline?}
+  C -- Yes --> D[putStrLn]
+  C -- No --> E[putStr]
+  B -- "No — a number, Bool, etc." --> F{Do you want it on the terminal right now?}
+  F -- Yes --> G[print]
+  F -- "No — need it as text to build a bigger message" --> H["show, then putStr / putStrLn"]`} caption="show never touches the terminal by itself; it only produces text. print is really show followed by putStrLn." />
+
+<RecognitionStrategy title="How to pick the right output tool">
+Ask two questions in order. First: **is the value already a `String`?** If yes, `putStr`/`putStrLn` accept it directly — no conversion needed. If no (it is a number, `Bool`, list, and so on), it must go through `show` before any `put*` function can touch it, or you can skip that step entirely with `print`, which does the `show` for you. Second, for strings: **does the next thing printed need to start on a new line?** That question alone decides between `putStr` and `putStrLn`.
+</RecognitionStrategy>
+
+<Quiz title="Check: putStr, putStrLn, and print" questions={[
+  {
+    question: "putStr \"CSI\" is run, immediately followed by putStr \"243\". What appears on the terminal?",
+    options: [
+      "CSI\\n243\\n (each on its own line)",
+      "CSI243 (both on the same line, since putStr never adds a newline)",
+      "A type error, because putStr can only be called once per program",
+      "243CSI, because the second call overwrites the first"
+    ],
+    correctIndex: 1,
+    explanation: "putStr writes exactly the characters it is given and adds no newline. Two putStr calls in sequence leave the cursor exactly where the first one finished, so the second call's characters continue directly on the same line.",
+    optionFeedback: [
+      "A newline only appears if something explicitly adds one, such as putStrLn — putStr never does.",
+      "",
+      "putStr can be called as many times as you like within a do block; there is no such restriction.",
+      "Terminal output is not overwritten by later prints — each call appends its characters after whatever was already written."
+    ]
+  },
+  {
+    question: "print \"Hello World\" and putStrLn \"Hello World\" both eventually reach the terminal. Why do they NOT display the same thing?",
+    options: [
+      "They actually do display exactly the same thing",
+      "print applies show first, and show's representation of a String includes its surrounding quotation marks, which putStrLn's direct String output never adds",
+      "print is slower, so extra characters appear from lag",
+      "putStrLn only works on String literals, while print works on the same value but converts it to a number first"
+    ],
+    correctIndex: 1,
+    explanation: "print n is equivalent to putStrLn (show n). show \"Hello World\" produces the String \"\\\"Hello World\\\"\" (quotes included, since that's the readable representation of a String), and putStrLn then displays those quote characters as part of the line. putStrLn \"Hello World\" skips show entirely and writes the characters as-is, with no added quotes.",
+    optionFeedback: [
+      "They differ specifically in the presence of quotation marks around the text — compare the exact output blocks shown above.",
+      "",
+      "This is not a timing or performance effect; it is a difference in what text is actually produced.",
+      "putStrLn accepts any String value, not just literals, and print does not convert text to a number — it shows the value in its Haskell-readable form, which for a String includes quotes."
+    ]
+  }
+]} />
+
 ## 5. `show` converts; it does not print
 
 `show` takes a displayable value and produces a `String`. Producing a string value is a calculation. It does not perform terminal output.
@@ -210,6 +278,30 @@ Exact output:
 ```
 
 Parentheses make `show 42` happen first. Its resulting string becomes the input to `putStrLn`.
+
+<CommonMistake title="Confusing show with printing">
+`show 42` and `print 42` are easy to conflate because both eventually make `42` visible somewhere. They are not the same kind of thing: `show 42` is a **pure calculation** that produces the String `"42"` and performs no terminal output by itself — GHCi only displays it because GHCi echoes every expression's value. `print 42` is an **IO action**; running it is what actually writes characters to the terminal. Typing `show 42` inside a real program (not at the GHCi prompt) computes a string that vanishes unless something — `putStrLn`, for instance — goes on to display it.
+</CommonMistake>
+
+<Quiz title="Check: show vs. print" questions={[
+  {
+    question: "Inside a real program's do block (not the GHCi prompt), the line `show 42` appears on its own, with its result unused. What happens?",
+    options: [
+      "42 is printed to the terminal, just as it would be at the GHCi prompt",
+      "The String \"42\" is computed and then discarded; nothing is printed, because show performs no IO by itself and GHCi's auto-echo behaviour does not apply inside a compiled do block",
+      "It is a compile-time error, because show cannot appear inside a do block",
+      "It prints \"42\" including the quotation marks"
+    ],
+    correctIndex: 1,
+    explanation: "GHCi's habit of showing you the value of a typed expression is a feature of the interactive prompt, not a property of show itself. show is a pure function: it returns a String value. Inside an actual do block, an unused pure value is simply thrown away — nothing appears on the terminal unless an IO action like putStrLn actually uses it.",
+    optionFeedback: [
+      "That auto-display only happens at the interactive GHCi prompt; it is not something show does on its own inside a program.",
+      "",
+      "show can appear inside a do block — the issue is not a parse or type error, it is that its result, a pure value, is simply unused and produces no visible effect.",
+      "Nothing is printed at all in this scenario, so no text — quoted or otherwise — appears."
+    ]
+  }
+]} />
 
 ## 6. Reading type signatures from left to right
 
@@ -321,6 +413,10 @@ There is no exact successful output because the expression fails before an outpu
   </Step>
 </StepByStep>
 
+<CommonMistake title="Forgetting the quotation marks">
+`print Hello World` is one of the most common first mistakes in Haskell, and it comes directly from habits formed in languages where bare words can be text. In Haskell, the only way to write a literal piece of text is between double quotation marks. Any bare, unquoted, lowercase-or-uppercase word is always a program name being looked up — never text — regardless of what it looks like to a human reader.
+</CommonMistake>
+
 Correct human-facing output:
 
 ```haskell
@@ -356,3 +452,13 @@ Exact output:
 | `PutStrLn "Hello"` | A different, undefined uppercase name | `putStrLn "Hello"` | Haskell names are case-sensitive |
 | `putStrLn 'H'` | `'H'` is a `Char`, not a `String` | `putStrLn "H"` | Double quotes create the required string |
 | Two `putStr` calls expected on separate lines | Neither call adds a newline | Use `putStrLn` where the line should end | `putStrLn` appends the newline control character |
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can explain why a String literal echoes back with quotation marks in GHCi.' },
+  { type: 'must', text: 'I can choose correctly between putStr, putStrLn, print, and show for a given value and goal.' },
+  { type: 'must', text: 'I can explain why show performs no terminal output by itself.' },
+  { type: 'must', text: 'I can read a signature like print :: Show a => a -> IO () aloud and explain every part.' },
+  { type: 'must', text: 'I can distinguish a pure String value from an IO () action in my own words.' },
+  { type: 'avoid', text: 'Do not write a message as bare unquoted words; only quoted text is a String literal.' },
+  { type: 'note', text: 'print n is equivalent to putStrLn (show n) — it is not a separate mechanism.' }
+]} />
