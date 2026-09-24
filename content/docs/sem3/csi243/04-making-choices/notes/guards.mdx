@@ -52,6 +52,22 @@ ghci> getSign 42
 
 The guarded version reads as a table of cases, which is exactly what the specification was.
 
+As a full program that runs all three branches:
+
+```haskell
+main :: IO ()
+main = do
+  print (getSign (-7))
+  print (getSign 0)
+  print (getSign 42)
+```
+
+```text
+-1
+0
+1
+```
+
 <Quiz title="Check: guard syntax" questions={[
   {
     question: "Why does a guarded equation write functionName parameters with no = sign on that first line, unlike an ordinary equation?",
@@ -95,6 +111,24 @@ ghci> grade 42
 "F"
 ```
 
+Wrapped in a program that exercises every letter, including the one the transcript above skips:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (grade 95)
+  putStrLn (grade 85)
+  putStrLn (grade 72)
+  putStrLn (grade 42)
+```
+
+```text
+A
+B
+C
+F
+```
+
 <Mermaid chart={`flowchart TD
   Call["grade score"] --> G1{"score >= 90?"}
   G1 -- Yes --> A["\"A\""]
@@ -113,6 +147,18 @@ grade score
   | score >= 80 = "B"
   | score >= 90 = "A"
   | otherwise   = "F"
+```
+
+Run as a program, this is exactly what happens — no error, no warning, just the wrong answer:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (grade 95)
+```
+
+```text
+C
 ```
 
 `grade 95` now returns `"C"`, because `95 >= 70` is the first `True` guard. The function compiles and runs; it is simply wrong. **Order the guards from the most restrictive condition to the least.**
@@ -156,6 +202,35 @@ grade score
   }
 ]} />
 
+### A second example, a different domain
+
+The same discipline — most restrictive condition first — applies wherever ranges are compared, not just to exam marks:
+
+```haskell
+-- Classify the physical state of water at standard pressure, by Celsius temperature.
+waterState :: Double -> String
+waterState temp
+  | temp <= 0   = "solid"
+  | temp < 100  = "liquid"
+  | otherwise   = "gas"
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (waterState (-5))
+  putStrLn (waterState 25)
+  putStrLn (waterState 100)
+```
+
+```text
+solid
+liquid
+gas
+```
+
+`waterState 100` falls all the way to `otherwise`: `100 <= 0` is `False`, and `100 < 100` is also `False` (100 is not *less than* 100), so `"gas"` is the only guard left standing.
+
 ## 3. `otherwise`
 
 `otherwise` is not special syntax. It is an ordinary name defined in the Prelude as:
@@ -176,6 +251,22 @@ classify n
   | n > 0 = "positive"
   | n < 0 = "negative"
 ```
+
+On inputs that do match a guard, `classify` behaves like any other function:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (classify 5)
+  putStrLn (classify (-3))
+```
+
+```text
+positive
+negative
+```
+
+But `classify` is a **partial function** — it has no guard for zero. Calling it on an input that no guard covers crashes the whole program, not just that one call, which is why this specific case is best seen at the `ghci` prompt rather than guessed at as compiled output:
 
 ```text
 ghci> classify 0
@@ -227,6 +318,24 @@ ghci> describe [-3, 1]
 "starts with zero or a negative"
 ```
 
+Wrapped in a program that runs all four cases:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (describe [])
+  putStrLn (describe [5])
+  putStrLn (describe [7, 1, 2])
+  putStrLn (describe [-3, 1])
+```
+
+```text
+empty
+one element
+starts positive
+starts with zero or a negative
+```
+
 If every guard in an equation fails, matching **falls through to the next equation** rather than failing immediately.
 
 ## 5. Sharing work with `where`
@@ -252,6 +361,22 @@ ghci> bmiTell 100 1.7
 "obese"
 ```
 
+As a program spanning three of the four bands — underweight, normal, and obese:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (bmiTell 50 1.7)
+  putStrLn (bmiTell 60 1.7)
+  putStrLn (bmiTell 100 1.7)
+```
+
+```text
+underweight
+normal weight
+obese
+```
+
 `bmi` is computed once and is visible to every guard and every result in that equation. It is not visible outside it.
 
 A `where` clause may define several names, and even local functions:
@@ -273,6 +398,20 @@ ghci> rectangleReport 4 4
 "Square with area 16.0"
 ghci> rectangleReport 4 6
 "Rectangle with area 24.0 and perimeter 20.0"
+```
+
+As a program:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (rectangleReport 4 4)
+  putStrLn (rectangleReport 4 6)
+```
+
+```text
+Square with area 16.0
+Rectangle with area 24.0 and perimeter 20.0
 ```
 
 <Callout type="warn" title="Indentation carries meaning">
@@ -358,6 +497,20 @@ ghci> isVowel 'z'
 False
 ```
 
+```haskell
+main :: IO ()
+main = do
+  print (isVowel 'a')
+  print (isVowel 'E')
+  print (isVowel 'z')
+```
+
+```text
+True
+True
+False
+```
+
 Or, staying with guards and no import:
 
 ```haskell
@@ -374,6 +527,20 @@ True
 ghci> isVowel 'A'
 True
 ghci> isVowel 'x'
+False
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (isVowel 'a')
+  print (isVowel 'A')
+  print (isVowel 'x')
+```
+
+```text
+True
+True
 False
 ```
 
@@ -468,6 +635,24 @@ isDiv m n
 ```
 
 The order is forced by the specification. Both `m == n` and `m < n` must be tested *before* the divisibility test, because `mod` would otherwise report a true but unwanted answer for equal values — and would divide by zero if `n` were `0`. Guards let you state those preconditions as ordinary readable lines.
+
+As a program exercising all four branches:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (isDiv 8 4)
+  putStrLn (isDiv 8 3)
+  putStrLn (isDiv 3 8)
+  putStrLn (isDiv 4 4)
+```
+
+```text
+Yes, m is divisible by n
+No, m is not divisible by n
+m should be greater than n
+m and n are equal
+```
 
 </Accordion>
 </Accordions>
