@@ -435,7 +435,123 @@ A type may have only one instance of a class. If you write `instance Show Shape`
   }
 ]} />
 
-## 7. Common errors
+## 7. Naming the bigger pattern: Functor and Monad
+
+Two things you have now met without their real names deserve those names before this chapter ends, because you will meet them again by name the moment you look at any real Haskell code or documentation.
+
+### `fmap`: applying a function inside a box you don't open
+
+Chapter 10's `facMaybe` used `fmap (n *) (facMaybe (n - 1))` to apply a multiplication *inside* a `Maybe`, without ever pattern-matching it by hand. That "apply a function to whatever's inside, without unwrapping it yourself" operation has a name and a class:
+
+```haskell
+class Functor f where
+  fmap :: (a -> b) -> f a -> f b
+```
+
+Read the class header as: "any type constructor `f` that can be made a `Functor` supports `fmap`, which takes an ordinary function `a -> b` and lifts it to work on an `f a` instead, producing an `f b`." `Maybe` is one instance; **lists are another** — and you have been calling list's `fmap` by its other name, `map`, since Chapter 7:
+
+```haskell
+main :: IO ()
+main = do
+  print (fmap (+1) (Just 5))
+  print (fmap (+1) Nothing)
+  print (fmap (*2) [1, 2, 3])
+```
+
+```text
+Just 6
+Nothing
+[2,4,6]
+```
+
+`fmap (+1) (Just 5) = Just 6`; `fmap (+1) Nothing = Nothing` — the fmap for `Maybe` is precisely the "apply if `Just`, pass through unchanged if `Nothing`" idea from Section 3, generalised into one reusable operation instead of a bespoke pattern match every time. `fmap (*2) [1,2,3]` behaves exactly like `map (*2) [1,2,3]` because, for lists, it *is* the same function — `map` is list's `fmap`.
+
+### `>>=` and `do`: the pattern behind Chapter 3's desugaring, now named
+
+Chapter 3's [do-notation section](/docs/sem3/csi243/03-defining-functions/notes/input-processing) showed that `main = do { a <- getLine; ... }` desugars to `getLine >>= \a -> ...`, and promised the real meaning of `>>=` would come later. Here it is:
+
+```haskell
+class Monad m where
+  (>>=) :: m a -> (a -> m b) -> m b
+  return :: a -> m a
+```
+
+`>>=` ("bind") takes an `m a` — a value of type `a` sitting inside some context `m` — and a function that says what to do with the plain `a` *once you have it*, and produces an `m b`. `IO` is one instance of `Monad`: `IO a` is "an action that, when performed, yields an `a`," and `>>=` is exactly "perform this action, then feed its result into what comes next" — the mechanism Chapter 3 traced by hand.
+
+`Maybe` is a **second, completely independent** instance of `Monad` — and because `do`-notation is defined generically for *any* `Monad`, not specially for `IO`, the exact same `do` syntax works for chaining `Maybe`-producing functions, with the exact same short-circuiting Section 3 built by hand with nested `case`s:
+
+```haskell
+chain :: Int -> Int -> Int -> Maybe Int
+chain a b c = do
+  x <- safeDivide a b
+  y <- safeDivide x c
+  return y
+
+main :: IO ()
+main = do
+  print (chain 100 5 2)
+  print (chain 100 0 2)
+  print (chain 100 5 0)
+```
+
+```text
+Just 10
+Nothing
+Nothing
+```
+
+`chain 100 5 2`: `safeDivide 100 5` is `Just 20`, so `x = 20`; `safeDivide 20 2` is `Just 10`, so `y = 10`; `return y` wraps it back up as `Just 10`. `chain 100 0 2` fails at the very first `<-` — `safeDivide 100 0` is `Nothing` — and the whole `do` block short-circuits to `Nothing` without ever reaching the second line, exactly the way an `error` inside `IO`'s `do` block aborted the rest of `main` in Section 1, except recoverably: the caller gets `Nothing` back as an ordinary value, not a crash. `chain 100 5 0` shows the failure can just as easily come from the *second* line instead of the first.
+
+<Mermaid chart={`flowchart TD
+  A["Chapter 3: do-notation desugars to nested >>= / lambdas"] --> B["What IS >>= ?"]
+  B --> C["A method of the Monad class:\nm a -> (a -> m b) -> m b"]
+  C --> D["IO is one instance\n(perform, then continue)"]
+  C --> E["Maybe is another instance\n(continue if Just, short-circuit on Nothing)"]
+  D --> F["do-notation works for IO"]
+  E --> G["The exact same do-notation\nworks for Maybe, unchanged"]`} caption="do-notation was never IO-specific. It is generic syntax for any Monad, and the mechanism Chapter 3 traced for IO is the identical mechanism at work here for Maybe." />
+
+<Callout type="info" title="This is intentionally the edge of this course">
+CSI243 does not require you to write your own `Functor` or `Monad` instance, or to memorise the monad laws. What matters here is recognition: when you see `fmap`, `<$>`, `>>=`, or a `do` block over something that is not `IO`, you now know it is the same small family of ideas you have already used — applying a function inside a context (`Functor`), and sequencing steps that each produce a context-wrapped value (`Monad`) — not a new, unrelated piece of syntax to memorise from scratch.
+</Callout>
+
+<Quiz title="Check: Functor and Monad, named" questions={[
+  {
+    question: "map (*2) [1,2,3] and fmap (*2) [1,2,3] both evaluate to [2,4,6]. Why?",
+    options: [
+      "map and fmap are unrelated functions that happen to agree on lists by coincidence",
+      "For lists, map IS fmap — list's Functor instance defines fmap to behave exactly like map, so the two names refer to the same computation on a list",
+      "fmap secretly converts the list to a Maybe first",
+      "This only works because 2 is an even number"
+    ],
+    correctIndex: 1,
+    explanation: "fmap is the class method; map is list's specific, historical name for its own Functor instance of fmap. They are not two functions that happen to agree — for [a], they are the same function under two names.",
+    optionFeedback: [
+      "It is not a coincidence: list's Functor instance is defined so that fmap = map for lists, specifically.",
+      "Correct — map is exactly list's fmap, which is why they are interchangeable on a list argument.",
+      "Nothing here converts anything to Maybe; the whole expression stays a list throughout.",
+      "The result would be identical for any starting list, of any elements — evenness has nothing to do with why map and fmap agree."
+    ]
+  },
+  {
+    question: "chain a b c uses do-notation over Maybe, not IO. Why does that same do syntax work here at all?",
+    options: [
+      "It doesn't really — GHC secretly converts the Maybe values to IO actions behind the scenes",
+      "do-notation is generic syntax for any type that has a Monad instance; Maybe has one, so the same <- and return syntax Chapter 3 used for IO works unchanged for Maybe",
+      "Maybe is secretly a special case of IO",
+      "This is a coincidence specific to this one function"
+    ],
+    correctIndex: 1,
+    explanation: "do is sugar for >>=, and >>= is a method of the Monad class — it is defined once per instance (once for IO, once for Maybe, and so on), not specially wired to IO. Any type with a Monad instance can be sequenced with do, with the exact same short-circuiting-on-failure behaviour Maybe's instance happens to give it.",
+    optionFeedback: [
+      "No conversion to IO happens anywhere; chain's type is Maybe Int throughout, never IO Int.",
+      "Correct — this is exactly why the same do block, with no special-casing, works over Maybe: Monad is the general mechanism, and IO and Maybe are two of its many instances.",
+      "Maybe and IO are two entirely separate, independent Monad instances; neither is built out of the other.",
+      "The same works for any Maybe-returning chain of functions, not just this one — it is a general property of Maybe's Monad instance, not a one-off."
+    ]
+  }
+]} />
+
+## 8. Common errors
 
 | Attempt | Problem | Repair |
 |---|---|---|
@@ -447,8 +563,9 @@ A type may have only one instance of a class. If you write `instance Show Shape`
 | `lookUp :: k -> Assoc k v -> Maybe v` | `==` needs a constraint | `Eq k =>` |
 | `sort [Circle 1, Rectangle 2 3]` with no `Ord Shape` | `sort` needs `Ord`, and none exists yet | Derive or write `instance Ord Shape` |
 | Expecting `Eq` and `Show` to "agree" | Nothing enforces this for hand-written instances | Decide deliberately, and document the choice |
+| Expecting `fmap` to unwrap the result | `fmap` keeps the same context (`Maybe`, `[]`, ...) | `fmap` returns `f b`, not `b` — pattern match if you need the bare value |
 
-## 8. Practice
+## 9. Practice
 
 1. Give the data declaration for `Maybe` and explain what each constructor means.
 2. Write `maybeHead` and test it on a non-empty and an empty list.
@@ -504,6 +621,8 @@ Areas are `12`, `pi * 2.0 * 2.0 ≈ 12.566`, and `1`, so ascending order is `Rec
   { type: 'must', text: 'I can explain why Maybe in a signature is more honest than a bare result type.' },
   { type: 'must', text: 'I can write an instance declaration for Show, Eq, or Ord on my own type, and say when to derive instead.' },
   { type: 'must', text: 'I can explain a property that a hand-written instance does not automatically guarantee, using the Shape Eq/Show example.' },
+  { type: 'must', text: 'I can say what fmap does in one sentence, and explain why map is just list\'s version of it.' },
+  { type: 'must', text: 'I can explain why the same do-notation and <- syntax Chapter 3 used for IO also works, unchanged, for Maybe.' },
   { type: 'avoid', text: 'Do not both derive and hand-write the same instance.' },
   { type: 'note', text: 'A search-shaped Maybe function (lookUp) and a computation-shaped one (safeDivide) fail for different reasons, even though both return Maybe.' }
 ]} />
