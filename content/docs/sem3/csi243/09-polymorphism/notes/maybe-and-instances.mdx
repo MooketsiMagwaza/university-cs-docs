@@ -325,6 +325,35 @@ Just (-3)
   }
 ]} />
 
+### The template behind both shapes, formalised — plus `Maybe` as an input
+
+**Template:**
+```haskell
+funcName :: InputType -> Maybe ResultType
+funcName param
+  | invalidCondition = Nothing
+  | otherwise         = Just (expression param)
+```
+`lookUp` and `safeDivide` just above are both this template: one equation (or guard) produces `Nothing` for whichever situation counts as "no answer" for that function, and every other situation produces `Just` wrapped around an ordinary, already-computed value. What counts as `invalidCondition` is the only thing that differs between them — a failed search for `lookUp`, an undefined calculation for `safeDivide` — the shape of the signature and the two-constructor result are identical.
+
+**A variation: `Maybe` as an input, not just a result**
+Every example so far *produces* a `Maybe`. Nothing stops a function from *consuming* one (or several) instead, pattern-matching on `Nothing`/`Just` exactly the way `describeHead` and `addDefault` did above — including matching more than one `Maybe` argument at once:
+```haskell
+-- Combine two Maybe values by adding them, only if both are actually present.
+combineBoth :: Maybe Int -> Maybe Int -> Maybe Int
+combineBoth (Just x) (Just y) = Just (x + y)
+combineBoth _        _        = Nothing
+```
+```text
+ghci> combineBoth (Just 3) (Just 4)
+Just 7
+ghci> combineBoth Nothing (Just 4)
+Nothing
+ghci> combineBoth (Just 3) Nothing
+Nothing
+```
+The first equation only fires when *both* arguments are `Just` — pattern matching two constructors at once, the same way `closestPairFirst` in Chapter 4 matched two pieces of one nested pattern. The catch-all second equation, `combineBoth _ _`, covers every other combination — `Nothing` paired with anything, in either position — with a single wildcard-pair equation rather than three separate ones. This is the same "propagate failure automatically" idea `chain` uses via `do`-notation in Section 7 below, written out by hand instead of desugared.
+
 ## 6. Writing your own instances
 
 `deriving` handles the obvious cases: equality by comparing every field, ordering by declaration or field order, display as the constructor name followed by its arguments. When you want genuinely different behaviour, you write the instance by hand.

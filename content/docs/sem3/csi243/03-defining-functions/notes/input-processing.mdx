@@ -224,6 +224,99 @@ let doubled = number * 2
   }
 ]} />
 
+### The `<-` / `let` template, with more shapes than one input
+
+The cheat sheet's two-input variation already shows this scaling past one `<-`/`let` pair. Here is the general template behind it, plus three more shapes worth recognising on sight.
+
+**Template:**
+```haskell
+main :: IO ()
+main = do
+  name1 <- IOAction1        -- perform an effect, bind its result
+  let pureName1 = expression1   -- no effect — just naming a calculation
+  name2 <- IOAction2
+  let pureName2 = expression2
+  IOAction3
+```
+Nothing restricts a `do` block to exactly one `<-` and one `let`. Any number of each may appear, in any order that keeps every name used *after* the point where it was bound — never before.
+
+**Example:**
+```haskell
+main :: IO ()
+main = do
+  putStrLn "Enter the first score:"
+  s1Text <- getLine
+  let s1 = read s1Text :: Integer
+  putStrLn "Enter the second score:"
+  s2Text <- getLine
+  let s2 = read s2Text :: Integer
+  putStrLn "Enter the third score:"
+  s3Text <- getLine
+  let s3 = read s3Text :: Integer
+  let average = fromIntegral (s1 + s2 + s3) / 3.0 :: Double
+  putStrLn ("Average: " ++ show average)
+```
+```text
+Enter the first score:
+60
+Enter the second score:
+70
+Enter the third score:
+80
+Average: 70.0
+```
+Three `<-`/`let` pairs read and parse one score each, then a fourth `let` — with no `<-` beside it at all — combines all three already-known values into `average`. Every `<-` performs a real effect (waiting on the keyboard); every `let` performs no effect and could be deleted and recomputed inline without changing what the program does, only how readable it is. `fromIntegral` converts the `Integer` sum to a type `/` can divide — division needs `Fractional`, which `Integer` does not have (Chapter 2's `Int`/`Integer`/`Double` distinctions again, now inside a real pipeline).
+
+**A variation: several names from one `let`, no repeated keyword**
+```haskell
+main :: IO ()
+main = do
+  putStrLn "Enter the first score:"
+  s1Text <- getLine
+  let s1 = read s1Text :: Integer
+  putStrLn "Enter the second score:"
+  s2Text <- getLine
+  let s2 = read s2Text :: Integer
+  putStrLn "Enter the third score:"
+  s3Text <- getLine
+  let s3 = read s3Text :: Integer
+  let total   = s1 + s2 + s3
+      average = fromIntegral total / 3.0 :: Double
+  putStrLn ("Total: " ++ show total)
+  putStrLn ("Average: " ++ show average)
+```
+```text
+Enter the first score:
+60
+Enter the second score:
+70
+Enter the third score:
+80
+Total: 210
+Average: 70.0
+```
+One `let` keyword, two bindings — `total` and `average` — aligned under each other. This is exactly the same rule as a single-binding `let`, just with more than one equation inside the same block; `average`'s definition can see `total` because `total` was written first, one line up, inside the same `let`.
+
+**A variation: `let` before any `<-` at all**
+```haskell
+main :: IO ()
+main = do
+  let passMark = 50
+  putStrLn "Enter your score:"
+  scoreText <- getLine
+  let score = read scoreText :: Integer
+  putStrLn (if score >= passMark then "Pass" else "Fail")
+```
+```text
+Enter your score:
+42
+Fail
+Enter your score:
+73
+Pass
+```
+Nothing requires the first statement in a `do` block to be an input. `passMark` needs nothing from the user, so it is bound immediately, before the program ever asks for anything. The rule from [the nesting explanation below](#under-the-hood-why-every-later-line-can-see-every-earlier-binding) still applies unchanged: `passMark` is visible to everything nested inside it — which, since it is the very first statement, means everything in the rest of the block, including the final comparison against `score` three lines later.
+
 ## Under the hood: why every later line can see every earlier binding
 
 By now you have written a `do` block with four statements in a row — an output, an input, and two `let` bindings — and each later line was able to use names introduced by earlier ones. `doubled` could see `number`; the final `putStrLn` could see `doubled`. It is worth asking directly: **why does that work, and why in that order and no other?**

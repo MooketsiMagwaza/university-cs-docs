@@ -641,6 +641,70 @@ Function application binds more tightly than any operator, so `tail _:xs = xs` i
   }
 ]} />
 
+### Nested patterns: a pattern can sit inside another pattern
+
+Every pattern in Sections 3–6 above was one level deep — a tuple of variables, or a list of literals. Nothing stops a pattern from nesting a *second* structural pattern inside the first: a tuple inside a cons, a list inside a tuple, and so on, matched all in one go against however many layers the argument actually has.
+
+**Template:**
+```haskell
+funcName :: (OuterType) -> ResultType
+funcName (outerPattern innerPattern) = expression
+funcName fallbackPattern             = fallbackExpression
+```
+Read it exactly the way Section 5's tuple patterns were read, just one layer deeper: line up `outerPattern` against the argument's outer shape, and wherever that outer shape has a "slot," `innerPattern` gets to describe *that slot's own* internal shape, instead of only a bare variable or wildcard.
+
+**Example:**
+```haskell
+-- Sum the two numbers in the first pair of a list of pairs.
+firstPairSum :: [(Int, Int)] -> Int
+firstPairSum ((x, y):_) = x + y
+firstPairSum []         = 0
+```
+```text
+ghci> firstPairSum [(3,4),(1,1)]
+7
+ghci> firstPairSum []
+0
+```
+`((x, y):_)` is two patterns nested together: the outer pattern is the familiar cons `(_:_)` from Section 6, splitting a non-empty list into a head and a tail; but where the head would ordinarily be a bare variable, it is instead the tuple pattern `(x, y)` from Section 5, destructuring that head element too. Both layers are matched at once — the list must be non-empty, *and* its first element must be a pair — before `x` and `y` are bound to anything.
+
+**A variation: the nesting the other way round — a list inside a tuple**
+```haskell
+-- Describe a (list, number) pair by the list's own shape.
+describePair :: ([Int], Int) -> String
+describePair ([], _)    = "empty list paired with a number"
+describePair ((x:_), n) = "list starting with " ++ show x ++ ", paired with " ++ show n
+```
+```text
+ghci> describePair ([], 5)
+"empty list paired with a number"
+ghci> describePair ([9,2,3], 5)
+"list starting with 9, paired with 5"
+```
+Here the outer pattern is the tuple `(_, _)`, and the *first slot* of that tuple is where the nested pattern lives — either the literal empty list `[]`, or a cons `(x:_)`. Nesting has no preferred direction: Section 5's tuples and Section 6's lists can sit inside each other however the data is actually shaped.
+
+**A variation: nested pattern combined with guards**
+```haskell
+-- Compare the two numbers in the first pair of a list of pairs.
+closestPairFirst :: [(Int, Int)] -> String
+closestPairFirst ((x, y):_)
+  | x == y    = "first pair is balanced"
+  | x > y     = "first pair leans left"
+  | otherwise = "first pair leans right"
+closestPairFirst [] = "no pairs"
+```
+```text
+ghci> closestPairFirst [(3,3),(1,9)]
+"first pair is balanced"
+ghci> closestPairFirst [(5,1)]
+"first pair leans left"
+ghci> closestPairFirst [(1,5)]
+"first pair leans right"
+ghci> closestPairFirst []
+"no pairs"
+```
+Exactly the same combination the next lesson calls out in full (Guarded Equations, Section 4): the nested pattern `((x, y):_)` selects the equation and destructures two layers deep in one step, and once inside that equation, the guards decide *which* of several results to give based on a range-style comparison (`==`, `>`) that no pattern, nested or otherwise, could express on its own.
+
 ## 7. Worked example: recognising a vowel
 
 Specify, then implement.

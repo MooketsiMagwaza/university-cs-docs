@@ -518,6 +518,85 @@ Calling `isPassingScore 73` a second time gives exactly the same answer as the f
   }
 ]} />
 
+### The purity test, applied in full, with its edge cases
+
+The cheat sheet gives this test as a quick lookup. Here it is again with the reasoning spelled out, because the two conditions are easy to state and surprisingly easy to misapply on a case you have not seen before.
+
+**Template:**
+```haskell
+funcName :: InputType -> OutputType
+funcName param = expression
+-- Pure only if BOTH hold:
+-- 1. the result depends only on param (and any other arguments) — nothing else
+-- 2. evaluating it causes no outside-world effect — no print, no read, no file, no clock
+```
+
+`InputType` and `OutputType` are placeholders for whatever concrete types the function actually uses — `Integer`, `Double`, `String`, and so on. `param` is a placeholder for however many arguments the function takes; the template shows one, but the number of arguments is not what the test checks. `expression` is a placeholder for the calculation that produces the result — it may be as short as `param * 2` or built from several nested calls, and the test applies to the whole thing, however long it is.
+
+**Example:**
+```haskell
+applyLatePenalty :: Integer -> Integer
+applyLatePenalty mark = if mark - 10 < 0 then 0 else mark - 10
+```
+```text
+ghci> applyLatePenalty 45
+35
+ghci> applyLatePenalty 4
+0
+```
+Both conditions hold: the result comes only from `mark`, the one argument supplied, and evaluating the `if` touches nothing beyond that — no message is printed, no file is opened, no keystroke is read. Call it a thousand times with `45` and it produces `35` every single time, which is the entire practical payoff of purity: you never have to ask "what else has changed since the last time I called this?"
+
+**A variation: a different arity — three arguments instead of one**
+```haskell
+weightedAverage :: Double -> Double -> Double -> Double
+weightedAverage test1 test2 exam = test1 * 0.2 + test2 * 0.2 + exam * 0.6
+```
+```text
+ghci> weightedAverage 60 70 80
+74.0
+```
+Arity — how many arguments a function takes — has nothing to do with whether it passes the test. Condition 1 becomes "the result depends only on `test1`, `test2`, and `exam`, and nothing else"; three named inputs instead of one does not change what "only on the inputs" means, it only changes how many inputs there are to check.
+
+**A variation: zero arguments — a bound constant passes the same test**
+```haskell
+maxLatePenalty :: Integer
+maxLatePenalty = 10
+```
+```text
+ghci> maxLatePenalty
+10
+```
+With no parameters at all, condition 1 is trivially satisfied — there is nothing that could vary, so the result cannot possibly depend on anything except itself — and condition 2 still has to be checked separately: reading `maxLatePenalty` prints nothing and reads nothing, so it passes. A constant is not a special exception to the purity test; it is the test applied to the smallest possible case, arity zero.
+
+**A variation: a function that can crash is still pure**
+```haskell
+safeDivide :: Integer -> Integer -> Integer
+safeDivide x y = if y == 0 then error "safeDivide: division by zero" else div x y
+```
+```text
+ghci> safeDivide 20 4
+5
+ghci> safeDivide 5 0
+*** Exception: safeDivide: division by zero
+```
+This one catches people out: `safeDivide 5 0` does not "return" a value, so it is tempting to call it impure. But re-read the two conditions carefully — neither says the function must produce an ordinary value for every input, only that *whatever* happens must be determined only by the inputs, with no outside interaction along the way. `safeDivide 5 0` crashes with that exact message every single time it is called with `5` and `0`, deterministically, and evaluating it still prints nothing and reads nothing on its own. It is pure and partial at the same time — purity is about *determinism*, not about being *defined everywhere*; whether a function is defined for every input it can be given is a separate property, covered properly as **totality** in [Chapter 10](/docs/sem3/csi243/10-reasoning-revision/notes/errors-and-testing).
+
+**A variation: what actually fails the test**
+```haskell
+-- NOT pure. There is no argument for the result to depend on, and
+-- evaluating it reads a line from the keyboard: an outside-world effect.
+readAndDouble :: IO Integer
+readAndDouble = do
+  line <- getLine
+  return (2 * read line)
+```
+```text
+ghci> readAndDouble
+21
+42
+```
+(Typing `21` at the prompt when `getLine` runs is what produces `42`.) This fails *both* conditions at once, which is worth noticing precisely because the earlier examples only ever failed one condition or passed both. There is no ordinary argument here — `readAndDouble`'s type is `IO Integer`, not `SomeInput -> Integer` — so condition 1 cannot even be checked the same way, and condition 2 fails outright: reading `getLine` is exactly the kind of interaction with the outside world the second half of the test exists to catch. Comparing this against `applyLatePenalty` above is the fastest way to see what the boundary in [Section 10](#10-effects-interaction-with-the-outside-world) is actually protecting: `readAndDouble` is precisely the effectful half of a program that a pure function like `applyLatePenalty` is kept separate from.
+
 ## 9. Immutability and bindings
 
 To **bind** a name means to give a value a name. In beginner Haskell, think of the name as a stable label for a value, not a storage box whose contents are repeatedly replaced.

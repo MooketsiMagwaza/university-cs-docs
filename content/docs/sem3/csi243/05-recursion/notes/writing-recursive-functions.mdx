@@ -577,6 +577,73 @@ A natural extension asks *where* the value is, not just whether it is present, b
   }
 ]} />
 
+### Two templates, side by side: numeric recursion and list recursion, formalised
+
+Every recursive function met so far is one of two shapes. Naming both explicitly, in the exact style [Decoding Exam and Lab Language](/docs/sem3/csi243/decoding-questions) uses for a constraint, makes it easier to recognise on sight which one a new problem needs.
+
+**Numeric template:**
+```haskell
+funcName :: Integer -> ResultType
+funcName basePattern = baseValue
+funcName n            = expression (funcName (n - 1))
+```
+`fac` and `sumNumbers`, worked through above and in [How Recursion Works](/docs/sem3/csi243/05-recursion/notes/how-recursion-works), are this template with one base case. `fib` is the two-base-case variation, needed because its recursive step reaches back two places instead of one. The cheat sheet's `fibAcc` is the accumulator-style variation: it carries the running answer forward as an extra argument instead of leaving arithmetic pending until the base case returns.
+
+**List template:**
+```haskell
+funcName :: [ElementType] -> ResultType
+funcName []     = baseValue
+funcName (x:xs) = expression x (funcName xs)
+```
+
+**Example:**
+```haskell
+-- containsValue, from Section 7 above, is exactly this shape.
+containsValue :: Eq a => a -> [a] -> Bool
+containsValue _ []     = False
+containsValue v (x:xs)
+  | v == x    = True
+  | otherwise = containsValue v xs
+```
+Side by side, the two templates share one idea and differ in exactly one place: what the base case matches. The numeric template's smallest input is a specific *number* (`0`, or `1`, whichever the specification names); the list template's smallest input is a specific *shape* (`[]`, the empty list). Every other case peels off one piece — `n - 1`, or the head `x` — and calls itself on what remains.
+
+**A variation: a second base case, list-style**
+```haskell
+-- Report whether a list has at most one distinct value; True for [] and singletons too.
+allSame :: Eq a => [a] -> Bool
+allSame []       = True         -- base case 1: an empty list is vacuously "all the same"
+allSame [_]      = True         -- base case 2: one element has nothing to disagree with
+allSame (x:y:ys) = x == y && allSame (y:ys)
+```
+```text
+ghci> allSame ([] :: [Int])
+True
+ghci> allSame [5]
+True
+ghci> allSame [5,5,5]
+True
+ghci> allSame [5,5,6]
+False
+```
+This is the list template's version of `fib` needing two base cases instead of one. `allSame` cannot decide anything by looking at a single element in isolation — there is nothing yet to compare it against — so the *shape* `[_]`, a list of exactly one element, needs its own directly-returned answer, alongside `[]`'s. Reaching back two list-cells (`(x:y:ys)`, not just `(x:xs)`) is exactly why one base case is not enough, the same reasoning `fib`'s `(n-1)` **and** `(n-2)` used.
+
+**A variation: accumulator-style list recursion**
+```haskell
+-- Sum a list, carrying the running total forward instead of leaving pending additions.
+sumAcc :: [Integer] -> Integer
+sumAcc xs = go 0 xs
+  where
+    go total []       = total
+    go total (y:rest) = go (total + y) rest
+```
+```text
+ghci> sumAcc [1,2,3,4]
+10
+ghci> sumAcc []
+0
+```
+Compare this against a direct version, `sumDirect (x:xs) = x + sumDirect xs`: the direct version's `+` is *pending* until the recursive call returns — the deepest call must finish before the outermost addition can run. `go`'s `total` argument instead updates *on the way down*, so by the time the base case `[]` is reached, the answer is already complete and is simply handed back unchanged, with nothing left to do on the way back up. This is the `fibAcc` idea from the cheat sheet's accumulator variation, now walking down a list instead of counting down a number — carrying the running answer forward as an extra argument is the same trick regardless of what shape the recursion consumes.
+
 ## 8. Common errors
 
 | Symptom | Cause | Repair |

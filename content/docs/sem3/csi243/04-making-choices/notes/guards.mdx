@@ -405,6 +405,40 @@ If every guard in an equation fails, matching **falls through to the next equati
   }
 ]} />
 
+### A variation: a nested pattern selects the equation, guards do the rest
+
+Section 4's `describe` combined a one-level cons pattern with guards. The same combination works just as well when the pattern nests two layers deep — a tuple inside a tuple — which is worth seeing once here, since [Pattern Matching](/docs/sem3/csi243/04-making-choices/notes/pattern-matching#nested-patterns-a-pattern-can-sit-inside-another-pattern) introduces nested patterns properly but pairs them with a list, not with a run of guards this long.
+
+**Template:**
+```haskell
+funcName (outerPattern innerPattern)
+  | condition1 = expression1
+  | condition2 = expression2
+  | otherwise  = defaultExpression
+```
+
+**Example:**
+```haskell
+-- Classify a rectangle given as two opposite corners.
+rectShape :: ((Int, Int), (Int, Int)) -> String
+rectShape ((x1, y1), (x2, y2))
+  | x1 == x2 && y1 == y2           = "degenerate: both corners the same point"
+  | x1 == x2 || y1 == y2           = "degenerate: a straight line, not a rectangle"
+  | abs (x2 - x1) == abs (y2 - y1) = "square"
+  | otherwise                      = "rectangle"
+```
+```text
+ghci> rectShape ((0,0), (0,0))
+"degenerate: both corners the same point"
+ghci> rectShape ((0,0), (5,0))
+"degenerate: a straight line, not a rectangle"
+ghci> rectShape ((0,0), (4,4))
+"square"
+ghci> rectShape ((0,0), (4,7))
+"rectangle"
+```
+`((x1, y1), (x2, y2))` is one pattern, matched once: a pair of pairs, immediately naming all four coordinates. That single match is what a pattern is *for* — stating the argument's shape. Everything the pattern cannot express — is one corner directly above or beside the other, are the two side lengths equal — is exactly what the four guards below it are for. Notice the same most-restrictive-first discipline as `grade` and `isDiv`: a degenerate rectangle (`x1 == x2 && y1 == y2`) also satisfies the second guard's `||`, so it must be checked first or it would be wrongly reported as merely "a straight line."
+
 ## 5. Sharing work with `where`
 
 Guards often test the same calculated value several times. Recomputing it in each guard is wasteful and repetitive. A `where` clause makes definitions local to the whole equation, including all its guards:

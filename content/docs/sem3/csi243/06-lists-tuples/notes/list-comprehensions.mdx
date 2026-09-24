@@ -22,6 +22,35 @@ ghci> [x * 2 | x <- [1,2,3,4,5]]
 
 Read aloud: “the list of `x * 2`, such that `x` is drawn from `[1,2,3,4,5]`.”
 
+### The template, formalised, with every variation named
+
+Everything in this lesson is one template, used with or without its optional pieces.
+
+**Template:**
+```haskell
+[ expr | x <- xs, condition ]
+```
+`expr` is the output function — what gets built. `x <- xs` is a generator — where the values come from. `condition`, after the comma, is optional and may be repeated, comma-separated, any number of times. Every variation below is this same template with one piece added, removed, or repeated.
+
+**Example:**
+```haskell
+squares :: [Integer] -> [Integer]
+squares xs = [x * x | x <- xs]
+```
+```text
+ghci> squares [1,2,3,4]
+[1,4,9,16]
+```
+This is the template with `condition` left out entirely — a comprehension needs at least one generator, but zero conditions is completely ordinary, not a special case requiring different syntax. Every value the generator produces is kept.
+
+**A variation: one condition** — covered fully in Section 2 below, e.g. `[x | x <- [1..10], mod x 2 == 0]`.
+
+**A variation: several conditions, comma-separated** — also Section 2, e.g. `[x | x <- [1..50], mod x 3 == 0, mod x 5 == 0]`; every listed condition must hold, since a comma inside a comprehension means "and."
+
+**A variation: several generators (nested iteration)** — Section 4 below, e.g. `[x + y | x <- [1,2,3], y <- [-3,0,3]]`, where the rightmost generator varies fastest.
+
+**A variation: a tuple pattern in the generator** — Section 6 below, e.g. `[name | (name, mark) <- marks, mark >= 70]`, which destructures each pair as it is drawn instead of naming the whole tuple and taking it apart separately.
+
 ## 1. The first part: the output function
 
 Everything **before** the pipe is the **output function**. It specifies what to apply to each input element. For every value that satisfies the second part, the output function is evaluated and its result is included in the constructed list.
@@ -259,6 +288,21 @@ ghci> [(x, y) | x <- [1..5], even x, y <- [1..2]]
     ]
   }
 ]} />
+
+### A variation: a generator that draws from a list of lists
+
+The two generators above each drew from an independent, already-flat list. Nothing requires that — a later generator may draw from a list produced by iterating the *elements* of an earlier one, which is exactly how a comprehension flattens a list of lists into one list while filtering it in the same breath.
+
+```haskell
+-- Keep only the positive numbers, out of a list of lists of numbers.
+flattenPositives :: [[Int]] -> [Int]
+flattenPositives xss = [x | xs <- xss, x <- xs, x > 0]
+```
+```text
+ghci> flattenPositives [[1,-2,3],[-4,5],[],[6]]
+[1,3,5,6]
+```
+Read the two generators in order, exactly as Section 4 already teaches: `xs <- xss` draws each *inner list* in turn — `[1,-2,3]`, then `[-4,5]`, then `[]`, then `[6]` — and for each one, `x <- xs` draws every element of *that* inner list before `xs` advances to the next one. The empty inner list `[]` contributes nothing and needs no special case: there is simply nothing for `x` to be drawn from that time. The final `x > 0` test applies to every element produced this way, regardless of which inner list it came from.
 
 ## 5. Comprehensions and recursion are interchangeable
 
