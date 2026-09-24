@@ -185,6 +185,26 @@ ghci> foldl (-) 0 [1,2,3]
 
 Because `foldr` gives `1 - (2 - (3 - 0))` = `1 - (2 - 3)` = `1 - (-1)` = `2`, while `foldl` gives `((0 - 1) - 2) - 3` = `-6`.
 
+Run both, on two genuinely different lists, to see the gap in practice rather than only on paper:
+
+```haskell
+main :: IO ()
+main = do
+  print (foldr (-) 0 [1,2,3])
+  print (foldl (-) 0 [1,2,3])
+  print (foldr (-) 0 [10,2,8,1])
+  print (foldl (-) 0 [10,2,8,1])
+```
+
+```text
+2
+-6
+15
+-21
+```
+
+The third line, traced by the same substitution rule: `10 : (2 : (8 : (1 : [])))` becomes `10 - (2 - (8 - (1 - 0)))`. Working from the innermost pair outward: `1 - 0 = 1`, then `8 - 1 = 7`, then `2 - 7 = -5`, then `10 - (-5) = 15`. The fourth line nests the other way: `((0 - 10) - 2) - 8) - 1` is `-10`, then `-12`, then `-20`, then `-21`. Same four numbers, same operator, two different answers — exactly the associativity gap the previous section named, now shown on data that was not already worked out on paper above.
+
 <Callout type="warn" title="Check associativity before choosing">
 For `+`, `*`, `max`, `&&`, and `||` the two folds agree. For `-`, `/`, `++`, and anything order-sensitive they do not. When in doubt, write out the substitution picture.
 </Callout>
@@ -239,7 +259,27 @@ ghci> foldl (+) 0 [1,2,3,4]
 10
 ```
 
-The final element of a `scanl` is exactly what the corresponding `foldl` returns. Scans are useful for running totals.
+The final element of a `scanl` is exactly what the corresponding `foldl` returns. Scans are useful for running totals — the kind of thing a real program would print one line at a time, not just inspect as a finished list:
+
+```haskell
+dailyExpenses :: [Integer]
+dailyExpenses = [120, 45, 78, 200, 15]
+
+main :: IO ()
+main = do
+  let runningTotal = scanl (+) 0 dailyExpenses
+  putStrLn ("Daily expenses: " ++ show dailyExpenses)
+  putStrLn ("Running total:  " ++ show runningTotal)
+  putStrLn ("Final total:    " ++ show (foldl (+) 0 dailyExpenses))
+```
+
+```text
+Daily expenses: [120,45,78,200,15]
+Running total:  [0,120,165,243,443,458]
+Final total:    458
+```
+
+`runningTotal` has one more element than `dailyExpenses` — the leading `0` is the starting value, present before any expense has been added — and its last element, `458`, is exactly `foldl (+) 0 dailyExpenses`, matching the rule stated above on different numbers than the `[1,2,3,4]` example.
 
 <Quiz title="Check yourself: foldl and laziness" questions={[
   {
@@ -316,6 +356,22 @@ ghci> sumOddSquares [1..10]
 ```
 
 Read right to left: keep the odds, square them, add them up. The list argument is never mentioned, because each stage is already a complete function.
+
+The same pipeline, run as a program on two lists that share no numbers at all, to confirm the pipeline itself — not a coincidence about `[1..10]` — is doing the work:
+
+```haskell
+main :: IO ()
+main = do
+  print (sumOddSquares [1..10])
+  print (sumOddSquares [2, 3, 5, 7, 11, 13])
+```
+
+```text
+165
+373
+```
+
+For `[2,3,5,7,11,13]`: `filter odd` drops the `2`, leaving `[3,5,7,11,13]`; `map (^2)` gives `[9,25,49,121,169]`; `sum` adds them: `9+25=34`, `34+49=83`, `83+121=204`, `204+169=373`. The pipeline's *shape* never changed between the two calls — only the numbers flowing through it did.
 
 The explicit version says the same thing:
 

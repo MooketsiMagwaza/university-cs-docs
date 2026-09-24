@@ -145,6 +145,20 @@ ghci> odds 5
 [1,3,5,7,9]
 ```
 
+As a full program, run on two different sizes rather than just one, to see that it is `n` — not the printed example — that is doing the work:
+
+```haskell
+main :: IO ()
+main = do
+  print (odds 5)
+  print (odds 8)
+```
+
+```text
+[1,3,5,7,9]
+[1,3,5,7,9,11,13,15]
+```
+
 The same pattern applies to `filter`. Keeping only the words longer than three characters needs a one-line test, so a lambda is written right where `filter` needs it, instead of naming a `isLongWord` helper that is used nowhere else:
 
 ```haskell
@@ -159,6 +173,22 @@ ghci> longWords ["a", "cat", "house", "of", "cards"]
 ```
 
 `"a"` (length 1), `"cat"` (length 3), and `"of"` (length 2) all fail the test `length w > 3`; `"house"` (5) and `"cards"` (5) pass it. The lambda `\w -> length w > 3` is a complete, self-contained rule, so giving it a separate name would only add a layer of indirection between the reader and what the rule actually checks.
+
+Run it on a second, unrelated list of words to confirm the rule, not the specific words above, is what decides the result:
+
+```haskell
+main :: IO ()
+main = do
+  print (longWords ["a", "cat", "house", "of", "cards"])
+  print (longWords ["Haskell", "is", "fun", "to", "learn"])
+```
+
+```text
+["house","cards"]
+["Haskell","learn"]
+```
+
+In the second list, `"is"` (2), `"fun"` (3), and `"to"` (2) all fail `length w > 3`; only `"Haskell"` (7) and `"learn"` (5) pass.
 
 <Callout type="info" title="A name is not always worse">
 If the rule is complicated, or is used more than once, or genuinely deserves explanation, a named `where` helper is clearer. Prefer a lambda only when the rule is short and used once. Clarity comes before cleverness.
@@ -203,6 +233,26 @@ ghci> (makeAdder 100) 1
 ```
 
 `addFive` **remembers** `n = 5` — that captured value is what makes it different from `always5`, which remembers a value but never looks at what it is given at all.
+
+**This is the same nesting rule from Chapter 3, spelled with `\` and `->` instead of `let` and `in`.** [Input, Bindings, and Processing](/docs/sem3/csi243/03-defining-functions/notes/input-processing) showed that each `let` inside a `do` block opens a new, deeper level of nesting: a name introduced at one level is visible to code written inside it, and never to code outside or before it. A lambda's parameter follows exactly that rule. In `makeAdder n = \x -> x + n`, the argument `n` is bound once, when `makeAdder` is applied; the lambda `\x -> x + n` is then a new, deeper scope nested *inside* that binding, where `n` is visible to be read but not to be rewritten. And because Haskell bindings are immutable — the rule [Functional Thinking](/docs/sem3/csi243/01-functional-thinking/notes/functional-thinking) established for `taxRate` back in Chapter 1 — `n` cannot change between one call of the returned function and the next. `makeAdder 5` and `makeAdder 100` each capture their own fixed `n`, permanently, inside their own separate lambda:
+
+```haskell
+main :: IO ()
+main = do
+  let addFive    = makeAdder 5
+  let addHundred = makeAdder 100
+  print (addFive 10)
+  print (addHundred 10)
+  print (addFive 10)
+```
+
+```text
+15
+110
+15
+```
+
+The third line proves the point: creating `addHundred` and using it does nothing to `addFive`'s captured `n`. `addFive 10` gives `15` both times, for the same reason `taxRate` kept meaning `0.14` after `discountedRate` was defined from it, and `number` kept meaning `4` after `doubled` was computed from it — a binding is read, never rewritten.
 
 ## 6. Lambdas make currying precise
 

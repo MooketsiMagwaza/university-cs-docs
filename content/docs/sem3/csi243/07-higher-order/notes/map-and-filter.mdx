@@ -141,7 +141,135 @@ ghci> map (`div` 2) [10, 15, 21]
   }
 ]} />
 
-## 2. `filter`: the other shape
+## 2. Tracing `map` by hand, and the laziness it makes possible
+
+`map`'s recursive definition was already given above — repeated here because this section leans on it directly:
+
+```haskell
+map :: (a -> b) -> [a] -> [b]
+map _ []     = []
+map f (x:xs) = f x : map f xs
+```
+
+<StepByStep>
+  <StepByStepTitle>Tracing map (*2) [3,4,5]</StepByStepTitle>
+
+  <Step number={1}>
+  <StepTitle>Unwind</StepTitle>
+  `map (*2) [3,4,5]` matches the second equation: `(3*2) : map (*2) [4,5]`, i.e. `6 : map (*2) [4,5]`.
+  </Step>
+
+  <Step number={2}>
+  <StepTitle>Keep unwinding</StepTitle>
+  `map (*2) [4,5]` becomes `8 : map (*2) [5]`, and `map (*2) [5]` becomes `10 : map (*2) []`.
+  </Step>
+
+  <Step number={3}>
+  <StepTitle>Base case</StepTitle>
+  `map (*2) []` matches the first equation directly and returns `[]`. There is no list left to pattern-match, so the recursion stops here.
+  </Step>
+
+  <Step number={4}>
+  <StepTitle>Rewind</StepTitle>
+  Substituting back inward-out: `10 : []` is `[10]`; `8 : [10]` is `[8,10]`; `6 : [8,10]` is `[6,8,10]`.
+  </Step>
+</StepByStep>
+
+Every step consumes exactly one element from the front of the list and produces exactly one element at the front of the result — which is exactly why `map` never changes a list's length.
+
+### The subtle part: why `map` can work on a list that never ends
+
+Now the genuinely tricky question: can `map` do anything useful with a list that has no end at all, such as `[1..]`? The unwind-then-rewind picture above seems to demand reaching the base case `[]` before anything can be "rewound." An infinite list never reaches `[]`, so on the face of it `map (*2) [1..]` looks like it should never produce anything at all.
+
+It does produce something, and the reason is that Haskell does not actually evaluate by unwinding all the way down and then rewinding. That two-phase picture is a good way to *predict the final value* of a finite computation, but the real evaluation rule is narrower and more patient: **an expression is only evaluated as far as something else actually demands.** This is *laziness*, first previewed as thunks in [Currying and Sections](/docs/sem3/csi243/07-higher-order/notes/currying-and-sections).
+
+Apply that rule to `map f (x:xs) = f x : map f xs`. The right-hand side is a `:` — a cons — whose two parts are `f x` and `map f xs`. Building a cons cell does **not** require either part to be evaluated first; `:` is perfectly happy to exist with both sides still unevaluated. So `map` can hand back the value `f x : map f xs` as soon as it has pattern-matched the *front* of the list into `x` and `xs` — it never needs to look past `xs` to do this, and in particular it never needs `xs` itself to be finite.
+
+`[1..]` is built the same lazy way: it behaves as `1 : [2..]`, where `[2..]` is not pre-computed but sits as an unevaluated placeholder until something asks for more than the first element. Nothing about `[1..]` is infinite *in memory* at any one moment — only the *process* of asking for more of it never runs out.
+
+`take` is written with exactly the same shape, and is the piece that actually decides how much of the infinite list gets forced:
+
+```haskell
+take :: Int -> [a] -> [a]
+take 0 _      = []
+take n (x:xs) = x : take (n - 1) xs
+```
+
+`take n xs` only pattern-matches `xs` far enough to get one `x` and one `xs`, exactly like `map` — and once `n` reaches `0`, it matches the wildcard `_` and stops without touching the list argument at all.
+
+Put the two together and run this as a genuine, terminating program:
+
+```haskell
+main :: IO ()
+main = do
+  let firstFiveDoubled = take 5 (map (*2) [1..])
+  print firstFiveDoubled
+```
+
+```text
+[2,4,6,8,10]
+```
+
+Trace why this terminates, one demand at a time:
+
+1. `print` needs the value of `take 5 (map (*2) [1..])`, so it forces evaluation to begin.
+2. `take 5 (map (*2) [1..])` must pattern-match its second argument to choose between `take 0 _` and `take n (x:xs)`. Since `5` is not `0`, it needs `map (*2) [1..]` to look like `x : xs` for some `x` and `xs`.
+3. To produce that shape, `map (*2) [1..]` needs `[1..]` to look like `x' : xs'`. `[1..]` obliges: `x' = 1`, `xs' = [2..]` (still unevaluated beyond its own front). `map` returns `(1*2) : map (*2) [2..]`, i.e. `2 : map (*2) [2..]`, without forcing `map (*2) [2..]` any further.
+4. `take` now has its `x : xs`: `x = 2`, `xs = map (*2) [2..]`. It returns `2 : take 4 (map (*2) [2..])`.
+5. Steps 2–4 repeat for `take 4`, `take 3`, `take 2`, `take 1`, producing `4`, `6`, `8`, `10` in turn from `[2..]`, `[3..]`, `[4..]`, `[5..]`.
+6. `take 0 (map (*2) [6..])` matches the *first* equation, `take 0 _ = []`, immediately — `_` is a wildcard, so the list is not even inspected. The recursion stops here: the sixth element of `[1..]` is never generated, and `map` never does any work on it.
+
+At no point does anything ask for "the whole list" — every stage only ever asks for one more element than it already has, and `take` is the one piece that eventually stops asking. That is the entire mechanism: `[1..]` never terminates on its own, but nothing in this program ever requires it to.
+
+<Callout type="info" title="Confidence check on this trace">
+This step-by-step account matches Haskell's standard (non-strict) evaluation semantics, which have not changed across GHC versions — `:`, `map`, and `take` are exactly as lazy in GHC 9.10.3 as in any other GHC release. The printed result `[2,4,6,8,10]` for `print (take 5 (map (*2) [1..]))` is exact and was hand-traced above, not guessed.
+</Callout>
+
+<Mermaid chart={`flowchart LR
+  L["[1..] = 1 : (unevaluated [2..])"] --> M["map (*2) forces only the front:\n2 : (unevaluated map (*2) [2..])"]
+  M --> T["take 5 grabs the 2,\nasks map (*2) [2..] for one more"]
+  T --> R["...repeats for 4, 6, 8, 10..."]
+  R --> S["take 0 _ = [] — stops here.\n[6..] onward is never forced."]
+`} caption="Every stage only ever forces the very next element. take is what eventually says 'no more', which is the only reason this pipeline over an infinite list finishes at all." />
+
+<Quiz title="Check yourself: map and laziness" questions={[
+  {
+    question: "Why can map (*2) [1..] return a usable value at all, given that [1..] never reaches its base case []?",
+    options: [
+      "Because map f (x:xs) = f x : map f xs only needs to pattern-match the list into one head and one tail to produce a result; it never needs the tail to be fully evaluated, or finite, to build that cons cell",
+      "Because GHC secretly converts [1..] into a large finite list before map ever runs",
+      "Because map has a special case for infinite lists that skips the recursive definition",
+      "It cannot — map (*2) [1..] on its own never terminates, with or without take"
+    ],
+    correctIndex: 0,
+    explanation: "map's cons f x : map f xs can be constructed the moment x and xs are known, with map f xs left as an unevaluated placeholder. Nothing about building a : requires evaluating what is on its right, so an infinite tail is never a problem for map by itself.",
+    optionFeedback: [
+      "Correct — laziness means : can be built with its second part still unevaluated, so map only ever needs to look one element ahead.",
+      "GHC does not materialise [1..] as a finite list anywhere — it stays exactly as infinite as written; what changes is how much of it ever gets forced.",
+      "map's definition is the same two ordinary equations shown throughout this lesson — there is no separate infinite-list code path.",
+      "map (*2) [1..] alone, with nothing consuming it, indeed never finishes printing — but paired with take 5, the combination does terminate, which is exactly what this section demonstrates."
+    ]
+  },
+  {
+    question: "In take 5 (map (*2) [1..]), what is take 0 _ = [] doing, precisely, that lets the whole program terminate?",
+    options: [
+      "It matches immediately once the count reaches 0, using a wildcard that does not inspect the list argument at all — so the sixth element of [1..] is never generated and map never has to process it",
+      "It forces the rest of [1..] to be evaluated, then discards it",
+      "It is a special-cased error handler for infinite lists",
+      "It converts the remaining infinite list into an empty one by iterating over it"
+    ],
+    correctIndex: 0,
+    explanation: "The wildcard _ in take 0 _ = [] deliberately does not pattern-match the list at all, so nothing about that argument — infinite or not — is ever touched. That is precisely why the recursion can stop clean, without needing to somehow 'finish' the infinite list first.",
+    optionFeedback: [
+      "Correct — a wildcard pattern never forces the value it stands in for; that is exactly why take can stop without touching what is left of [1..].",
+      "The opposite happens: nothing about the remaining list is forced or discarded — it is simply never looked at.",
+      "This is take's ordinary first equation, present for any list, finite or infinite — there is nothing infinite-list-specific about it.",
+      "There is no iteration here at all — pattern matching against _ is a single, immediate step with no traversal."
+    ]
+  }
+]} />
+
+## 3. `filter`: the other shape
 
 The second recursion shape from Chapter 6 kept some elements:
 
@@ -291,7 +419,151 @@ A predicate always has a return type of `Bool`. If you can imagine asking the te
   }
 ]} />
 
-## 3. Rewriting Chapter 6 with them
+## 4. A worked example: grades, using `map` and `filter` as HOFs
+
+Consider a class of eight students and their marks out of 100:
+
+```haskell
+marks :: [Int]
+marks = [42, 88, 35, 67, 50, 91, 48, 73]
+```
+
+Two separate questions can be asked about this list: *who failed?* (a filtering question) and *what does everyone's mark become after a 7% curve?* (a mapping question). Answering both, side by side, makes the difference between `map`'s two arguments and `filter`'s two arguments impossible to blur.
+
+### Filtering: who is below 50?
+
+`filter`'s signature is `(a -> Bool) -> [a] -> [a]`. Its two arguments are not interchangeable, and confusing them is the single most common mistake with `filter`:
+
+- **The first argument is the predicate** — the *rule*, not the data. `(< 50)` is a complete, meaningful yes/no test — "is this number below 50?" — before it has ever been shown a single mark. It gets applied to one mark at a time.
+- **The second argument is the list** — the *data*, not the rule. `marks` supplies the eight numbers the predicate is actually run against, one after another, in order.
+
+```haskell
+failing :: [Int] -> [Int]
+failing = filter (< 50)
+```
+
+Read `filter (< 50) marks` as: "take the rule `(< 50)` and the list `marks`, and hand back exactly the marks the rule said yes to." Nothing is added, changed, or reordered — a mark either survives unchanged, or is dropped entirely.
+
+### Mapping: applying a 7% curve
+
+This is a *separate* question from filtering — it does not chain onto the result above, and it starts again from the full, original `marks` list. `map`'s signature is `(a -> b) -> [a] -> [b]`, and again its two arguments play two distinct roles:
+
+- **The first argument is the transformation** — the rule for turning *one* mark into *one new* mark. Here that rule is named `applyBonus`, rather than written inline, because "add a 7% bonus, as a whole number" is worth a name and might plausibly be reused elsewhere in a real gradebook.
+- **The second argument is the list** — again the data, `marks`, supplied unchanged. Every element gets the rule applied to it; none are dropped, which is the exact opposite guarantee from `filter`.
+
+```haskell
+applyBonus :: Int -> Int
+applyBonus mark = mark + (mark * 7) `div` 100
+
+curved :: [Int] -> [Int]
+curved = map applyBonus
+```
+
+``(mark * 7) `div` 100`` computes 7% of the mark, rounded down to a whole number, and adds it back on. Integer division keeps every result an exact, checkable whole number, with no floating-point rounding to second-guess.
+
+### Running both, on the same data
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn ("Raw marks:       " ++ show marks)
+
+  let failingMarks = failing marks
+  putStrLn ("Below 50 (fail): " ++ show failingMarks)
+
+  let curvedMarks = curved marks
+  putStrLn ("After 7% bonus:  " ++ show curvedMarks)
+```
+
+```text
+Raw marks:       [42,88,35,67,50,91,48,73]
+Below 50 (fail): [42,35,48]
+After 7% bonus:  [44,94,37,71,53,97,51,78]
+```
+
+Trace both by hand against the raw list to see exactly why each result is right:
+
+<ComparisonTable
+  columns={[
+    { header: 'Mark', key: 'mark' },
+    { header: '(< 50)?', key: 'test' },
+    { header: 'Kept by filter?', key: 'kept' },
+    { header: '7% bonus', key: 'bonus' },
+    { header: 'After map applyBonus', key: 'curved' }
+  ]}
+  rows={[
+    { mark: '42', test: 'True',  kept: 'Yes → 42', bonus: '2', curved: '44' },
+    { mark: '88', test: 'False', kept: 'No',        bonus: '6', curved: '94' },
+    { mark: '35', test: 'True',  kept: 'Yes → 35', bonus: '2', curved: '37' },
+    { mark: '67', test: 'False', kept: 'No',        bonus: '4', curved: '71' },
+    { mark: '50', test: 'False', kept: 'No',        bonus: '3', curved: '53' },
+    { mark: '91', test: 'False', kept: 'No',        bonus: '6', curved: '97' },
+    { mark: '48', test: 'True',  kept: 'Yes → 48', bonus: '3', curved: '51' },
+    { mark: '73', test: 'False', kept: 'No',        bonus: '5', curved: '78' }
+  ]}
+/>
+
+Every row of the `filter` column depends only on that one mark and the predicate — never on any other mark, and never on `map`. Every row of the `map` column produces a result for every mark, including the ones `filter` would have dropped. That independence is exactly what the two signatures promise: `filter` may shrink the list; `map` never does.
+
+<Callout type="warn" title="The confusion this section exists to prevent">
+It is tempting to describe both calls as "map/filter takes marks and does something to them," but the *something* is opposite in kind. `filter`'s first argument answers a question about one mark and decides whether that mark survives at all. `map`'s first argument computes a replacement value for one mark, and every mark always survives, changed. Losing track of which argument is the rule and which is the data — or which function drops elements and which never does — is the most common source of wrong answers with both.
+</Callout>
+
+<Quiz title="Check yourself: grades as map and filter" questions={[
+  {
+    question: "In filter (< 50) marks, what exactly is (< 50), and what is marks?",
+    options: [
+      "(< 50) is the predicate — a rule tested against one mark at a time; marks is the data — the list the rule is tested against",
+      "(< 50) is the data being filtered; marks is the rule deciding what to keep",
+      "They are interchangeable — filter marks (< 50) would work identically",
+      "(< 50) transforms each mark into a new mark; marks is unused"
+    ],
+    correctIndex: 0,
+    explanation: "filter :: (a -> Bool) -> [a] -> [a]. The first argument is always the predicate — the yes/no rule — and the second is always the list of data it gets tested against. (< 50) never touches the list directly; filter is what applies it, one mark at a time.",
+    optionFeedback: [
+      "Correct — the predicate is the rule, always the first argument; the list is the data, always the second.",
+      "This swaps the two roles entirely: (< 50) has no marks to filter on its own, and marks is not itself a decision procedure.",
+      "The argument order is fixed by filter's type signature; filter marks (< 50) would try to use the list of Ints as a predicate and fail to type-check.",
+      "(< 50) returns a Bool, not a new mark — that is exactly what makes it filter's predicate rather than map's transformation."
+    ]
+  },
+  {
+    question: "curved = map applyBonus. After curved marks, how many elements does the result have, and why?",
+    options: [
+      "8 — the same as marks, because map always produces exactly one result per input element, regardless of what applyBonus computes",
+      "3 — the same as failing marks, because map and filter always agree on length",
+      "It depends on how many marks pass some threshold inside applyBonus",
+      "0, because applyBonus discards the original values"
+    ],
+    correctIndex: 0,
+    explanation: "map :: (a -> b) -> [a] -> [b] guarantees the output list has exactly the same length as the input list — one result attached per element consumed, unconditionally. applyBonus never decides to drop a mark; it only ever changes one.",
+    optionFeedback: [
+      "Correct — map's definition (f x : map f xs) attaches one result per input element, with no mechanism for dropping any of them.",
+      "map and filter are unrelated in this respect: filter can shrink a list, map never does — the two lengths (8 and 3) are not linked.",
+      "applyBonus :: Int -> Int returns a plain number, not a Bool — there is no threshold decision inside it at all; it always produces a result.",
+      "applyBonus computes a new mark for its input; it does not discard anything, and map never removes elements regardless of what the function returns."
+    ]
+  },
+  {
+    question: "Why are the filter step and the map step in this section described as separate, rather than one feeding into the other?",
+    options: [
+      "Because both start from the same original marks list and ask two independent questions about it — who failed, and what does everyone's curved mark look like — neither result depends on the other",
+      "Because filter and map cannot be combined in the same program",
+      "Because failing marks is actually used as the input to curved marks",
+      "Because Haskell requires filter to run in a separate main from map"
+    ],
+    correctIndex: 0,
+    explanation: "failing marks and curved marks are computed independently from marks itself — the curve is applied to everyone, not just to those who passed the < 50 test, and the failing list is never fed into applyBonus. Section 6 (Combining them) shows what it looks like when a map and a filter genuinely are chained together.",
+    optionFeedback: [
+      "Correct — curved reads directly from marks, not from failingMarks; the two are genuinely independent questions asked of the same original data.",
+      "They combine perfectly well, as section 6 (Combining them) shows directly with map (*2) (filter even [1..10]) — the point here is specifically that this example chooses not to chain them.",
+      "curved is defined as map applyBonus marks, reading directly from the original marks list — failingMarks is never mentioned in that definition.",
+      "Nothing about Haskell or main forces such a separation; both failingMarks and curvedMarks are computed and printed from the very same main block above."
+    ]
+  }
+]} />
+
+## 5. Rewriting Chapter 6 with them
 
 Every filter from Lab 03 collapses to one line:
 
@@ -308,7 +580,7 @@ doubleAll = map (* 2)
 
 Note the last two: with the list argument dropped from both sides, the definition says directly *what the function is* rather than what it does to an argument. That is legitimate precisely because of currying — `filter (> 0)` is already a complete `[Integer] -> [Integer]` function.
 
-## 4. Combining them
+## 6. Combining them
 
 `map` and `filter` compose naturally into a pipeline. Read from the inside out:
 
@@ -337,7 +609,7 @@ ghci> [x * 2 | x <- [1..10], even x]
 They are equally correct. A comprehension often reads better when both a transformation and a filter are involved. A bare `map` or `filter` reads better when there is only one of the two. Choose for the reader.
 </Callout>
 
-## 5. Taking and dropping by a condition
+## 7. Taking and dropping by a condition
 
 `take` and `drop` from Chapter 6 work by count. Their higher-order cousins work by test:
 
@@ -379,7 +651,7 @@ ghci> takeWhile (\w -> length w <= 3) ["cat","dog","mouse","ox"]
 Ask: does the task care about a *prefix* of the list, or about *every* element? "Keep going until the first number greater than 100" is a `takeWhile`/`dropWhile` question — the process is expected to stop at the first failure. "Keep every number greater than 100, wherever it occurs" is a `filter` question — the whole list must be scanned regardless of what came before. If elements after the first failure genuinely do not matter, `takeWhile` is enough; if they might still hold something you want, you need `filter`.
 </RecognitionStrategy>
 
-## 6. Combining two lists with `zipWith`
+## 8. Combining two lists with `zipWith`
 
 `zipWith` applies a two-argument function to corresponding elements of two lists:
 
@@ -420,6 +692,40 @@ The related `zip` pairs elements into tuples, and is just `zipWith` with the pai
 ghci> zip [1,2,3] "abc"
 [(1,'a'),(2,'b'),(3,'c')]
 ```
+
+### Putting `zipWith` to work: turning the curved marks into report lines
+
+The `curved` marks from the grades example earlier in this lesson pair naturally with the students they belong to:
+
+```haskell
+students :: [String]
+students = ["Kago", "Naledi", "Thabo", "Lerato", "Mpho", "Boitumelo", "Sipho", "Refilwe"]
+
+curved :: [Int]
+curved = [44, 94, 37, 71, 53, 97, 51, 78]
+
+report :: String -> Int -> String
+report name mark = name ++ ": " ++ show mark
+
+main :: IO ()
+main = do
+  putStrLn "Student reports:"
+  mapM_ putStrLn (zipWith report students curved)
+```
+
+```text
+Student reports:
+Kago: 44
+Naledi: 94
+Thabo: 37
+Lerato: 71
+Mpho: 53
+Boitumelo: 97
+Sipho: 51
+Refilwe: 78
+```
+
+`zipWith report students curved` walks the two lists together — `report`'s first argument comes from `students`, its second from `curved`, paired up positionally — producing one `String` per pair. `mapM_ putStrLn` then performs the output action for each of those strings in turn. This is the chapter's first use of an `IO` action itself being built by a higher-order function (`mapM_`) rather than by a `do` block listing each `putStrLn` by hand; it is a brief, self-contained preview, and Chapter 9 covers `mapM_` and its relatives properly.
 
 <Quiz title="Check yourself: takeWhile, dropWhile, and zipWith" questions={[
   {
@@ -475,7 +781,7 @@ ghci> zip [1,2,3] "abc"
   }
 ]} />
 
-## 7. Functions as values
+## 9. Functions as values
 
 The idea underneath all of this is that **functions are first-class values**. A first-class value can be passed to a function, returned from a function, or stored in a data structure — with no restriction on its use.
 
@@ -487,7 +793,7 @@ ghci> map (\f -> f 5) operations
 
 A list of functions, each applied to `5`. Nothing special is required to make that work; functions are values like any other.
 
-## 8. Common errors
+## 10. Common errors
 
 | Attempt | Problem | Repair |
 |---|---|---|
@@ -498,7 +804,7 @@ A list of functions, each applied to `5`. Nothing special is required to make th
 | `map` expected to shorten the list | `map` preserves length | Use `filter` to remove elements |
 | `zipWith (+) [1,2,3] [1,2]` giving 3 results | It stops at the shorter list | Check the lengths first |
 
-## 9. Practice
+## 11. Practice
 
 Predict each result before running it.
 
@@ -545,6 +851,9 @@ ghci> [x ^ 2 | x <- [1..10], odd x]
   { type: 'must', text: 'I can define a higher-order function and say why map qualifies.' },
   { type: 'must', text: 'I can write the recursive definitions of map and filter from memory.' },
   { type: 'must', text: 'I can state the signature of each and what it implies about length and element type.' },
+  { type: 'must', text: 'For both map and filter, I can say precisely what the first argument does and what the second argument does, and never mix the two up.' },
+  { type: 'must', text: 'I can trace map by hand on a small finite list, one cons cell at a time.' },
+  { type: 'must', text: 'I can explain why map (*2) [1..], combined with take, terminates despite [1..] being infinite — because : is lazy and each stage only ever forces one more element than it already has.' },
   { type: 'must', text: 'I can explain how takeWhile differs from filter.' },
   { type: 'must', text: 'I can use zipWith and say what happens with lists of unequal length.' },
   { type: 'must', text: 'I can rewrite a hand-written list recursion using map or filter.' },
