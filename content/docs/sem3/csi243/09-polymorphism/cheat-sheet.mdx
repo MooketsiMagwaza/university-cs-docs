@@ -54,14 +54,23 @@ An unconstrained type variable supports **no** operations — a function of type
 
 ## 3. Reading a class constraint before `=>`
 
-**Template:**
+**Every constraint template you'll meet, in one place:**
 ```haskell
+-- One constraint, one type variable.
 funcName :: ClassName a => a -> ResultType
-funcName :: (ClassName1 a, ClassName2 a) => a -> ResultType   -- several constraints
-```
-Read as: "for any type `a` that is a member of `ClassName`, ...". Everything before `=>` is the constraint; everything after it is the ordinary function type.
 
-**Example:**
+-- Several constraints on the SAME type variable — a tuple before =>.
+funcName :: (ClassName1 a, ClassName2 a) => a -> ResultType
+
+-- Different type variables, each with its OWN constraint.
+funcName :: (ClassName1 a, ClassName2 b) => a -> b -> ResultType
+
+-- A constraint that's already implied by another — redundant, not wrong.
+funcName :: (Eq a, Ord a) => [a] -> a        -- same as Ord a => [a] -> a, since Ord already gives you Eq
+```
+Read every one of these the same way, in the same order: the constraint(s) before `=>` first, as their own sentence — "for any type `a` that is a member of `ClassName`" — *then* apply the ordinary arrow-by-arrow rule to everything after `=>`. The constraint is never an argument; only what comes after `=>`, separated by `->`, is.
+
+**Example 1 — one constraint, one variable:**
 ```haskell
 sumList :: Num a => [a] -> a
 sumList []     = 0
@@ -71,7 +80,27 @@ sumList (x:xs) = x + sumList xs
 ghci> sumList [1,2,3]
 6
 ```
-Dropping `Num a =>` here is rejected: `No instance for (Num a) arising from a use of '+'`. `Ord` implies `Eq`, so `(Eq a, Ord a) =>` is redundant — `Ord a =>` alone already gives you `==`.
+Dropping `Num a =>` here is rejected: `No instance for (Num a) arising from a use of '+'`.
+
+**Example 2 — two constraints, two different variables:**
+```haskell
+describePair :: (Show a, Eq b) => a -> b -> b -> String
+describePair label x y = show label ++ ": " ++ if x == y then "same" else "different"
+```
+```text
+ghci> describePair "check" 5 5
+"check: same"
+ghci> describePair "check" 'a' 'b'
+"check: different"
+```
+`a` only ever needs `Show` (it's only ever passed to `show`); `b` only ever needs `Eq` (it's only ever compared with `==`). Each type variable is constrained by exactly what the body actually does with it — no more, no less. This is the same "smallest sufficient constraint" discipline as Section 4 of the [type-classes notes](/docs/sem3/csi243/09-polymorphism/notes/type-classes#4-the-three-levels-of-generality).
+
+**Example 3 — redundant vs. minimal:**
+```haskell
+countMax :: Ord a => [a] -> Int      -- minimal: Ord alone already gives == (via Eq)
+countMax xs = length (filter (== maximum xs) xs)
+```
+Writing `(Eq a, Ord a) => [a] -> Int` here compiles identically — it is not an error — but it says nothing `Ord a =>` didn't already say, since every `Ord` instance is required to already be an `Eq` instance.
 
 ## 4. The standard classes
 

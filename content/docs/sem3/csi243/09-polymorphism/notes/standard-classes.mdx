@@ -219,6 +219,43 @@ True
 Ask whether the surrounding context already pins the result type down elsewhere. `read "42" + (1 :: Integer)` needs no annotation — the `+` forces the type. `print (read "42")` on its own does need one, because nothing else in the expression says which `Read` instance to use. When in doubt, add `:: Type` and let GHC confirm whether it was actually needed.
 </RecognitionStrategy>
 
+<Quiz title="Check: Show and Read" questions={[
+  {
+    question: "For the Student example, why does read (show k) :: Student round-trip back to a value equal to k?",
+    options: [
+      "Because Student derives Eq, which automatically fixes any mismatch between show and read",
+      "Because a derived Show and a derived Read for the same type are genuine inverses — the exact text a derived Show produces is exactly the text a derived Read for that type can parse back",
+      "Because Student has only two fields, and round-tripping only works for small records",
+      "It is a coincidence specific to this one value of Student"
+    ],
+    correctIndex: 1,
+    explanation: "Show and Read are deliberately designed as a matched pair when both are derived: show's textual format is precisely what read for that type expects to parse. Eq only lets you check the round trip afterwards — it does not cause the round trip to succeed.",
+    optionFeedback: [
+      "Eq only supplies == so the round trip can be checked after the fact; it plays no role in making show's output parseable by read in the first place.",
+      "Correct — deriving both gives you an inverse pair by construction, which is exactly why read (show k) reproduces k.",
+      "Nothing about the round trip depends on field count; the same guarantee holds for a record with many more fields.",
+      "The same round trip holds for any value of any type that derives both Show and Read — it is a general property of the derived instances, not a one-off."
+    ]
+  },
+  {
+    question: "print (read \"42\") on its own is rejected as an ambiguous type variable, but read \"42\" + (1 :: Integer) is not. Why?",
+    options: [
+      "read always needs an annotation, with no exceptions",
+      "In the second expression, + forces read's result to be the same type as 1 :: Integer, so the context already pins down which Read instance to use; the first expression has nothing else that fixes the type",
+      "print cannot accept the result of read under any circumstances",
+      "\"42\" is only valid input for read when it appears next to +"
+    ],
+    correctIndex: 1,
+    explanation: "read's ambiguity comes from having no way to tell, from the text alone, which type was intended. Whenever the surrounding expression already pins that type down — here, addition with an Integer — no separate annotation is needed; otherwise, one must be added by hand.",
+    optionFeedback: [
+      "The + example is the counterexample: read needs an annotation only when nothing else in the expression already determines the target type.",
+      "Correct — the addition with (1 :: Integer) supplies exactly the missing type information that print (read \"42\") lacks on its own.",
+      "print works perfectly well on the result of read once that result's type is determined some other way, as the + example shows.",
+      "The text \"42\" is unrelated to why annotation is or isn't needed; the deciding factor is whether the surrounding expression fixes the result type."
+    ]
+  }
+]} />
+
 ## 4. The numeric classes
 
 Numbers form a small hierarchy, which is why `div` and `/` have different constraints.
@@ -255,6 +292,8 @@ Because the classes are separate, you sometimes need an explicit conversion:
 | `floor` | `(RealFrac a, Integral b) => a -> b` | Greatest integer not greater than the value |
 | `ceiling` | `(RealFrac a, Integral b) => a -> b` | Closest integer greater than or equal |
 | `truncate` | `(RealFrac a, Integral b) => a -> b` | Discard the fractional part |
+
+**In plain English:** each of these four signatures names *two* independent type variables, each with its own constraint — read exactly as [decoding a signature](/docs/sem3/csi243/decoding-questions) teaches: constraint(s) first, then the arrows. `round :: (RealFrac a, Integral b) => a -> b` says "for any fractional type `a` and any whole-number type `b`, take one value of the fractional type and give back the nearest value of the whole-number type." `fromIntegral` reads the same way in reverse — whole number in, any numeric type out.
 
 ```haskell
 main :: IO ()
