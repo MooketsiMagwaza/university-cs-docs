@@ -5,13 +5,13 @@ description: "Understand overloading, read a class constraint before the fat arr
 
 
 
-The previous lesson showed that a fully general type variable permits nothing. But `sumTree` needed `+`, and `elem` needs `==`. **Type classes** are how Haskell states what a type variable must support.
+The previous lesson showed that a fully general type variable permits nothing. But `sumTree` needed `+`, and `elem` needs `==`. **Type classes** are how Haskell states what a type variable must support — and how the compiler decides, mechanically, which concrete behaviour a shared symbol like `==` actually runs.
 
 ## 1. Overloading
 
 In Haskell, `Integer`, `Int`, `Bool`, `Char`, and many other types can all be compared for equality using `==`. The symbol is used for equality over **any type for which an equality operation can be defined**.
 
-This is called **overloading**: one name with several implementations, chosen by the type it is used at.
+This is called **overloading**: one name with several implementations, chosen by the type it is used at. It exists because writing `eqInt`, `eqBool`, `eqChar`, ... for every type, and remembering which name to call where, would defeat the purpose of a shared, readable symbol — the *idea* of equality is the same across types even though the *machinery* differs completely (comparing two machine words is nothing like comparing two linked lists of characters).
 
 ```text
 ghci> 3 == 3
@@ -25,6 +25,55 @@ False
 ```
 
 Four different comparisons, four different underlying implementations, one name. Numeric literals are overloaded too — `4` belongs to both `Integer` and `Double`.
+
+### How dispatch actually works
+
+"Chosen by the type it is used at" is not hand-waving — it is a concrete mechanism. When GHC type-checks `3 == 3`, it first works out what type the `3`s have (here, defaulted to `Integer`). It then looks for the `Eq` **instance** declared for that type, and the `==` that runs is the one written in *that* instance's definition. Change the inferred type and you change which piece of code runs, with no change to what you typed.
+
+<Mermaid chart={`flowchart TD
+  E["Expression: x == y"] --> T{"What type does GHC infer for x and y?"}
+  T -->|"Integer"| I["Run the Eq Integer instance's =="]
+  T -->|"Bool"| B["Run the Eq Bool instance's =="]
+  T -->|"Char"| C["Run the Eq Char instance's =="]
+  T -->|"no Eq instance for that type"| X["Rejected at compile time: No instance for (Eq ...)"]`} caption="Overloading is resolved once, at compile time, by the inferred type of the operands — there is no run-time lookup and no way to write == on a type with no matching instance." />
+
+`(+)` is overloaded the same way, but the difference between implementations is starker: `(+)` on `Int` is a single machine instruction, while `(+)` on a user-defined `Complex` number (from a library) does four separate multiplications and two additions under the hood. Same symbol, same *idea* — combine two values of the same type into a new one — completely different machine code, chosen once, at compile time, by the type.
+
+```haskell
+main :: IO ()
+main = do
+  print ((3 :: Int) + 4)
+  print ((3.5 :: Double) + 4.25)
+  print (show (3 :: Int) == show (3 :: Integer))
+```
+
+```text
+7
+7.75
+True
+```
+
+The third line overloads three different symbols at once — `show` twice (once for `Int`, once for `Integer`) and `==` once (on the resulting `String`s) — and every one of them is resolved independently by the type of its own arguments.
+
+<Quiz title="Check: overloading and dispatch" questions={[
+  {
+    question: "When GHC type-checks `'a' == 'b'`, how does it decide which == to run?",
+    options: [
+      "It tries every available Eq instance at run time until one works",
+      "It infers the type of the operands at compile time (here Char) and uses that type's Eq instance",
+      "It always uses the Eq Integer instance and converts everything to a number first",
+      "== has one single global implementation shared by every type"
+    ],
+    correctIndex: 1,
+    explanation: "Dispatch happens once, at compile time, based on the inferred type of the arguments. 'a' and 'b' are Chars, so the Eq Char instance's == is the one compiled into the program — there is no run-time searching.",
+    optionFeedback: [
+      "There is no run-time trial-and-error; the type is known at compile time, and exactly one instance's implementation is selected then.",
+      "Correct — the type Char is inferred first, and the Eq Char instance supplies the specific == that gets compiled in.",
+      "Char values are not converted to Integer for comparison; each type has its own independent Eq instance and its own comparison logic.",
+      "This is precisely what overloading denies — == has a different implementation per instance, selected by type, not one shared implementation."
+    ]
+  }
+]} />
 
 ## 2. What a type class is
 
@@ -43,6 +92,10 @@ You met these in Chapter 8 as things to `derive`. Now you can say what deriving 
 `Eq` is not a type — you cannot have a value of type `Eq`. It is a *constraint on* types: a statement about what a type can do. This is quite different from a class in Java or C++.
 </Callout>
 
+### What membership does and does not guarantee
+
+Being an instance of `Eq` guarantees that `==` and `/=` exist for that type and type-check. It does **not** guarantee that `==` behaves the way you might informally expect equality to behave — that is a discipline the *instance's author* has to uphold, not something the compiler checks. A derived `Eq` instance compares every field of every constructor, which does behave the way you would expect. A hand-written one might not — Lesson 4 of this chapter builds exactly such an instance, deliberately, and shows the trade-off.
+
 ## 3. Reading a constraint
 
 A **class constraint** appears before a fat arrow `=>`:
@@ -54,6 +107,13 @@ sumList :: Num a => [a] -> a
 Read: “for any type `a` **that is a member of** `Num`, `sumList` takes a list of `a` and returns an `a`.”
 
 Everything before `=>` is the constraint. Everything after it is the type.
+
+<InteractiveStepper>
+  <StepperStep title="Find the fat arrow">Locate `=>` in the signature. Everything to its left is the constraint; everything to its right is the ordinary function type.</StepperStep>
+  <StepperStep title="Read the constraint aloud">"For any type `a` that is a member of `<Class>`" — or, for a tuple of constraints, "that is a member of both `<Class1>` and `<Class2>`".</StepperStep>
+  <StepperStep title="Read the remaining type as in Chapter 2">Apply the ordinary arrow-reading rule to the part after `=>`, exactly as if the constraint were not there.</StepperStep>
+  <StepperStep title="Join the two readings">"For any type `a` that is a member of `Num`, `sumList` takes a list of `a` and returns an `a`."</StepperStep>
+</InteractiveStepper>
 
 ```haskell
 elem   :: Eq a => a -> [a] -> Bool
@@ -70,9 +130,24 @@ Several constraints are written as a tuple:
 
 ```haskell
 showAll :: (Show a, Ord a) => [a] -> String
+showAll xs = show (maximum xs) ++ " is the largest of " ++ show xs
 ```
 
 “For any type that is both showable and orderable.”
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (showAll [3, 1, 4, 1, 5])
+  putStrLn (showAll "banana")
+```
+
+```text
+5 is the largest of [3,1,4,1,5]
+'n' is the largest of "banana"
+```
+
+One definition, and both constraints are earned honestly: `maximum` needs `Ord`, and the two `show` calls need `Show`. Change either type argument — try it on `[True, False]`, which has `Ord` and `Show` but nothing else — and it still runs; try it on a bag of unordered records with no `Ord` instance, and GHC rejects the call before running anything.
 
 ## 4. The three levels of generality
 
@@ -92,12 +167,44 @@ This is the idea to take from the chapter.
   highlightCol="may"
 />
 
+<Mermaid chart={`flowchart LR
+  C["[Int] -> Int\nconcrete"] -->|"generalise the type\nkeep the same power"| N["Num a => [a] -> a\nconstrained"]
+  N -->|"drop the constraint too"| G["[a] -> Int\nfully general"]
+  G -.->|"add back only what's needed"| N`} caption="Moving right accepts more types but permits the function to do less with the elements; moving left narrows the accepted types in exchange for more capability. A constrained variable sits exactly between the two extremes." />
+
 There is a trade-off in both directions:
 
 - **More constraints** → works on fewer types, but the function can do more.
 - **Fewer constraints** → works on more types, but the function can do less.
 
 The right signature is the **most general one that still permits what the function needs**. Constraining to `Int` when `Num a` would do makes the function needlessly narrow.
+
+### Worked exercise: choosing the right point on the spectrum
+
+Suppose you are asked to write `countMatches`, which counts how many elements of a list equal a given value. Three candidate signatures:
+
+```haskell
+countMatches1 :: Int -> [Int] -> Int          -- too narrow
+countMatches2 :: Eq a => a -> [a] -> Int      -- candidate
+countMatches3 :: a -> [a] -> Int              -- too general
+```
+
+`countMatches3` cannot be written at all — comparing the target to each element needs `==`, which an unconstrained `a` forbids. `countMatches1` compiles and works, but locks the function to `Int` for no reason: nothing in the logic is specific to numbers. `countMatches2` is the answer — it is the most general signature under which the function's own body (which only ever uses `==`) still type-checks.
+
+```haskell
+countMatches :: Eq a => a -> [a] -> Int
+countMatches v = length . filter (== v)
+
+main :: IO ()
+main = do
+  print (countMatches 3 [3, 1, 3, 4, 3])
+  print (countMatches 'a' "banana")
+```
+
+```text
+3
+3
+```
 
 ## 5. Where constraints come from
 
@@ -113,7 +220,18 @@ ghci> :type addUp
 addUp :: Num a => [a] -> a
 ```
 
-`+` requires `Num`, so `Num a =>` appears. If you had also compared elements, `Eq a` would join it.
+`+` requires `Num`, so `Num a =>` appears. Ask for two different operations and both constraints surface together, in one tuple:
+
+```haskell
+rangeSize xs = maximum xs - minimum xs
+```
+
+```text
+ghci> :type rangeSize
+rangeSize :: (Ord a, Num a) => [a] -> a
+```
+
+`maximum` and `minimum` need `Ord`; `-` needs `Num`. Neither constraint was written by hand — GHC read the body and reported exactly what it required.
 
 This is the practical technique: **write the function, ask GHCi for the type, then write that type into your file.** For course work, always write explicit signatures — they document intent and expose mistakes near their cause.
 
@@ -157,14 +275,85 @@ countOf :: Eq a => a -> [a] -> Int
 “No instance for (Num a) arising from a use of '+'” tells you the class, the operation that needed it, and the fix. These are among the most helpful error messages GHC produces.
 </Callout>
 
+### A different failure: a concrete type with no instance at all
+
+Every error above involved a **type variable** with no constraint. A second, easily confused failure involves a **concrete type that simply has no instance** — not because a signature is missing a constraint, but because nobody ever wrote (or derived) the instance for that specific type.
+
+```haskell
+data Direction = North | South | East | West
+-- No deriving clause at all.
+```
+
+```text
+ghci> North == South
+<interactive>: error:
+    * No instance for (Eq Direction) arising from a use of '=='
+      Possible fix: add an instance declaration for (Eq Direction)
+```
+
+The fix is different in kind from the earlier ones. There is no signature here to add `Eq a =>` to — `Direction` is a fixed, concrete type, and the message says exactly that: add an *instance declaration*, most simply by deriving one.
+
+```haskell
+data Direction = North | South | East | West
+  deriving (Eq, Show)
+```
+
+```text
+ghci> North == South
+False
+ghci> North == North
+True
+```
+
+<CommonMistake title="Two different 'No instance' errors, two different repairs">
+`No instance for (Eq a) arising from a use of '=='` inside a function body means a **type variable** in your own signature is missing a constraint — add `Eq a =>` to that signature. `No instance for (Eq Direction) arising from a use of '=='` means a **specific, concrete type** was never given an `Eq` instance at all — add `deriving (Eq)` to that type's declaration, or write `instance Eq Direction where ...` by hand. Reading which one GHC named — a lowercase variable or an uppercase type — tells you immediately which repair applies.
+</CommonMistake>
+
+<Quiz title="Check: diagnosing 'No instance' errors" questions={[
+  {
+    question: "GHC reports `No instance for (Eq a) arising from a use of '=='` inside the body of a function you wrote. What is the repair?",
+    options: [
+      "Add deriving (Eq) to some data declaration",
+      "Add Eq a => to your function's own type signature",
+      "Rename the type variable from a to something else",
+      "Remove the == from the function body"
+    ],
+    correctIndex: 1,
+    explanation: "The class named in lowercase (a) is a type variable from your own signature, not a fixed type. The repair is to state, in that signature, that a must belong to Eq — exactly the countOf repair shown in this section.",
+    optionFeedback: [
+      "There is no concrete data type named here to add a deriving clause to — the problem is an unconstrained variable in a signature you wrote.",
+      "Correct — a is your function's own type variable; adding Eq a => to its signature states the requirement that == already relies on.",
+      "The variable's name is irrelevant; whatever it is called, it still needs the constraint added.",
+      "The == is exactly what the function is meant to do; removing it would just produce a different, wrong function."
+    ]
+  },
+  {
+    question: "GHC reports `No instance for (Eq Direction) arising from a use of '=='`, where Direction is a data type you declared with no deriving clause. What is the repair?",
+    options: [
+      "Add Eq a => to the signature of the function that used ==",
+      "Add deriving (Eq) to the Direction declaration, or write an Eq Direction instance by hand",
+      "Rename Direction to a lowercase name",
+      "Direction cannot be compared under any circumstances"
+    ],
+    correctIndex: 1,
+    explanation: "Direction is a concrete type, not a variable — there is no signature constraint to add. The instance itself is missing for this specific type, so it must be supplied, most easily by deriving it.",
+    optionFeedback: [
+      "There is no type variable here to constrain; Direction is already a fixed, concrete type named directly in the error.",
+      "Correct — the fix supplies the missing Eq Direction instance directly, either via deriving or a hand-written instance declaration.",
+      "Capitalisation marks Direction as a concrete type, not a variable; renaming it would not create the missing instance and would break every other use of the type.",
+      "It can be compared perfectly well once it has an Eq instance — deriving (Eq) is enough, as the corrected declaration shows."
+    ]
+  }
+]} />
+
 ## 7. Class hierarchies
 
 Classes can require other classes. `Ord` requires `Eq`, because ordering values presupposes being able to tell whether they are equal:
 
-```text
-Eq  ->  Ord
-Num ->  Integral, Fractional
-```
+<Mermaid chart={`flowchart TD
+  Eq --> Ord
+  Num --> Integral
+  Num --> Fractional`} caption="Ord's own definition requires every Ord instance to already be an Eq instance. Num, Integral and Fractional are three separate classes: Integral and Fractional each independently extend Num, but neither extends the other." />
 
 A consequence: writing `Ord a =>` gives you `==` as well, because every `Ord` instance is also an `Eq` instance. You do not need to write `(Eq a, Ord a) =>`.
 
@@ -172,7 +361,60 @@ A consequence: writing `Ord a =>` gives you `==` as well, because every `Ord` in
 -- Ord alone is enough; == comes with it.
 countMax :: Ord a => [a] -> Int
 countMax xs = length (filter (== maximum xs) xs)
+
+main :: IO ()
+main = do
+  print (countMax [3, 1, 4, 1, 5, 9, 2, 6])
+  print (countMax "mississippi")
 ```
+
+```text
+1
+4
+```
+
+`countMax`'s signature only ever wrote `Ord a =>`, yet its body freely uses `==`. That is exactly what the hierarchy diagram promises: `Ord` cannot exist for a type without `Eq` already existing for it, so the compiler lets you use `Eq`'s operations under an `Ord` constraint without asking for both.
+
+<Quiz title="Check: class hierarchies" questions={[
+  {
+    question: "Why does `countMax :: Ord a => [a] -> Int` type-check, even though its body uses ==, which belongs to Eq?",
+    options: [
+      "== is defined inside every class, not just Eq",
+      "Ord requires Eq as a superclass, so every Ord instance is guaranteed to already be an Eq instance",
+      "GHC silently adds Eq a => whenever it sees ==",
+      "countMax does not actually use == at compile time"
+    ],
+    correctIndex: 1,
+    explanation: "Because Ord's own class definition requires Eq, any type with an Ord instance is guaranteed to have an Eq instance too. The Ord a constraint already carries that guarantee, so == is available without writing Eq a separately.",
+    optionFeedback: [
+      "== belongs specifically to Eq; other classes such as Ord add their own new operations (<, compare, ...) on top of it, rather than redefining it.",
+      "Correct — the Eq -> Ord arrow in the hierarchy means Ord a already implies Eq a, so == is available for free.",
+      "Nothing is added silently; the guarantee comes from Ord's fixed definition (it requires Eq), not from any special-casing of ==.",
+      "filter (== maximum xs) xs genuinely calls == at run time on every element; it is a real, executed comparison, not something erased."
+    ]
+  },
+  {
+    question: "Why is writing `(Eq a, Ord a) => ...` considered redundant rather than merely allowed?",
+    options: [
+      "It is a syntax error in Haskell",
+      "Because Ord a already guarantees Eq a, so naming Eq a separately adds no new information",
+      "Because Eq and Ord are actually the same class under different names",
+      "Because a can only ever belong to one class at a time"
+    ],
+    correctIndex: 1,
+    explanation: "It compiles fine — it is just unnecessary. Ord's definition already requires Eq, so any type satisfying Ord a satisfies Eq a automatically; spelling out both says nothing the single Ord a did not already say.",
+    optionFeedback: [
+      "It is valid, if wordy, Haskell — GHC accepts it without complaint. The issue is that it says the same thing twice.",
+      "Correct — since Ord requires Eq as a superclass, Ord a on its own already entails Eq a, making the explicit Eq a superfluous.",
+      "They are distinct classes providing different operations (== and /= for Eq; <, compare, max, min for Ord, on top of Eq's operations).",
+      "A type may satisfy any number of classes simultaneously — Int alone is an instance of Eq, Ord, Num, Show, and more."
+    ]
+  }
+]} />
+
+<RecognitionStrategy title="Spotting => versus ->, at a glance">
+Look at what sits immediately to the left. `Eq a =>` pairs a class name with a type variable and is always followed by more type — never by a value being applied. `Bool ->` or `a ->` names the type of an actual argument. A quick test: delete the segment together with its arrow; if what remains still reads as a complete, sensible function type, you deleted a constraint; if the arrows no longer line up, you deleted an argument type.
+</RecognitionStrategy>
 
 ## 8. Common errors
 
@@ -180,10 +422,12 @@ countMax xs = length (filter (== maximum xs) xs)
 |---|---|---|
 | `No instance for (Num a)` | Arithmetic on an unconstrained variable | Add `Num a =>` |
 | `No instance for (Eq a)` | `==` on an unconstrained variable | Add `Eq a =>` |
-| `No instance for (Show Shape)` | A custom type with no `Show` | Add `deriving (Show)` |
+| `No instance for (Show Shape)` | A custom, concrete type with no `Show` | Add `deriving (Show)` |
+| `No instance for (Eq Direction)` | A custom, concrete type with no `Eq` | Add `deriving (Eq)`, or write the instance by hand |
 | `f :: Num a -> a -> a` | The constraint arrow is `=>`, not `->` | `f :: Num a => a -> a` |
 | `(Eq a, Ord a) =>` | Redundant; `Ord` implies `Eq` | `Ord a =>` |
 | Writing `[Int] -> Int` for a general function | Needlessly narrow | `Num a => [a] -> a` |
+| Confusing a variable-missing-constraint error with a type-missing-instance error | Lowercase name vs uppercase name in the message | Lowercase → fix your signature; uppercase → fix that type's instance |
 
 ## 9. Practice
 
@@ -193,6 +437,8 @@ countMax xs = length (filter (== maximum xs) xs)
 4. Ask GHCi for the type of `\xs -> maximum xs == minimum xs` and explain each constraint.
 5. Explain why `(Eq a, Ord a) =>` is redundant.
 6. For each, give the most general correct signature: a function returning a list's length; one returning its largest element; one adding its elements.
+7. Declare `data Direction = North | South | East | West` with no deriving clause, predict what `North == South` does, then fix it.
+8. Explain the difference between `No instance for (Eq a)` and `No instance for (Eq Direction)`, and how each is repaired.
 
 <Accordions>
 <Accordion title="Check questions 4 and 6">
@@ -202,15 +448,23 @@ countMax xs = length (filter (== maximum xs) xs)
 **6.** Length: `[a] -> Int`, needing no constraint because the elements are never examined. Largest element: `Ord a => [a] -> a`, because comparison is required. Sum: `Num a => [a] -> a`, because addition is required. Each is the most general signature that still permits what the function does.
 
 </Accordion>
+<Accordion title="Check questions 7 and 8">
+
+**7.** With no `deriving` clause, `North == South` fails to compile: `No instance for (Eq Direction) arising from a use of '=='`, with the suggested fix to add an instance declaration. Adding `deriving (Eq)` to the data declaration supplies exactly that, and `North == South` then evaluates to `False`.
+
+**8.** `No instance for (Eq a)` names a lowercase type variable — it means *your own signature* is missing a constraint, and the repair is to add `Eq a =>` to it. `No instance for (Eq Direction)` names an uppercase, concrete type — it means *that type itself* has never been given an `Eq` instance at all, and the repair is to derive or hand-write one for `Direction` specifically, not to edit any signature.
+
+</Accordion>
 </Accordions>
 
 <Checklist title="Mastery check" rules={[
-  { type: 'must', text: 'I can define overloading and give an example with ==.' },
-  { type: 'must', text: 'I can explain that a type class is a set of operations a type may provide, not a type itself.' },
+  { type: 'must', text: 'I can define overloading and give an example with == and one with +.' },
+  { type: 'must', text: 'I can explain, mechanically, how GHC decides which instance\'s implementation runs for an overloaded symbol.' },
+  { type: 'must', text: 'I can explain that a type class is a set of operations a type may provide, not a type itself, and that membership guarantees the operations exist but not that they behave in any particular way.' },
   { type: 'must', text: 'I can read a constraint before => and say what it requires.' },
-  { type: 'must', text: 'I can explain the trade-off between more constraints and more general types.' },
-  { type: 'must', text: 'I can diagnose a "No instance for" error and add the right constraint.' },
-  { type: 'must', text: 'I can use GHCi :type to discover the constraints a function needs.' },
+  { type: 'must', text: 'I can explain the trade-off between more constraints and more general types, and choose the most general correct signature for a new function.' },
+  { type: 'must', text: 'I can diagnose a "No instance for" error and tell apart a missing-constraint error (lowercase) from a missing-instance error (uppercase), applying the right repair to each.' },
+  { type: 'must', text: 'I can use GHCi :type to discover the constraints a function needs, including when two constraints are inferred together.' },
   { type: 'note', text: 'Ord implies Eq, so writing both is redundant.' }
 ]} />
 

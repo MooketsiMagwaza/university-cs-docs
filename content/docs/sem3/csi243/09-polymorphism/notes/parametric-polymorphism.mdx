@@ -5,7 +5,7 @@ description: "Read type variables in a signature, understand what a polymorphic 
 
 
 
-You have been using polymorphic functions since Chapter 6 without naming them. `length` works on a list of anything. `fst` works on a pair of anything. This lesson explains how.
+You have been using polymorphic functions since Chapter 6 without naming them. `length` works on a list of anything. `fst` works on a pair of anything. This lesson explains how, and — just as importantly — what that "anything" costs the function itself.
 
 ## 1. Type variables
 
@@ -22,7 +22,7 @@ Read: “`length` takes a list of `a`, for any type `a`, and returns an `Int`.�
 | **Uppercase** name, e.g. `Int`, `Bool`, `Shape` | A concrete type |
 | **Lowercase** name, e.g. `a`, `b`, `k`, `v` | A type variable — any type |
 
-A function whose type contains a type variable is **polymorphic**, meaning “having many forms”. This particular kind is called **parametric** polymorphism, because the type is parameterised by a variable.
+A function whose type contains a type variable is **polymorphic**, meaning “having many forms”. This particular kind is called **parametric** polymorphism, because the type is parameterised by a variable — the same code, the same single definition, works at every instantiation of that variable. (Chapter 9's second lesson introduces a different kind, where the *implementation itself* changes per type; keep the two apart.)
 
 ```haskell
 head :: [a] -> a
@@ -33,7 +33,54 @@ id   :: a -> a
 
 Different letters mean the types **may** differ, not that they must. `map` may take `Int -> Int`, in which case `a` and `b` are both `Int`.
 
-## 2. What a polymorphic type promises
+### Monomorphic versus polymorphic: the same idea, two signatures
+
+A **monomorphic** signature names one concrete type and accepts only that type. Compare two functions that both return "the first thing":
+
+```haskell
+-- Monomorphic: locked to one concrete type.
+firstChar :: String -> Char
+firstChar (c:_) = c
+
+-- Polymorphic: the same idea, for a list of anything.
+headOf :: [a] -> a
+headOf (x:_) = x
+```
+
+```text
+ghci> firstChar "hello"
+'h'
+ghci> headOf "hello"
+'h'
+ghci> headOf [1,2,3]
+1
+ghci> firstChar [1,2,3]
+<interactive>: error:
+    * No instance for (Num Char) arising from the literal '1'
+```
+
+Both give `'h'` on a string — `String` **is** `[Char]`, so `headOf` covers everything `firstChar` covers. But `firstChar` rejects `[1,2,3]` outright: its signature says the argument must be `[Char]`, full stop, so GHC tries to force the numeral `1` to have type `Char`, which needs `Char` to be a `Num` instance, and it is not. `headOf` has no such restriction; it works on the list of `Integer` just as happily.
+
+<ComparisonTable
+  columns={[
+    { header: 'Signature', key: 'sig' },
+    { header: 'Accepts', key: 'accepts' },
+    { header: 'Rejects', key: 'rejects' }
+  ]}
+  rows={[
+    { sig: 'firstChar :: String -> Char', accepts: 'Only [Char]', rejects: 'Every other list type — [Int], [Bool], [String], ...' },
+    { sig: 'headOf :: [a] -> a', accepts: 'A list of any element type whatsoever', rejects: 'Only non-lists' }
+  ]}
+  highlightCol="accepts"
+/>
+
+A monomorphic function is not "worse" — sometimes locking a type down is exactly right, for instance when a function's *whole job* is to be specific to `String`. But when nothing about the logic depends on which type the elements are, a type variable says so precisely, and buys the function every list type at once.
+
+<Callout type="info" title="Reading a signature as a specification">
+Before writing a function, ask what its signature permits. If you find yourself needing to compare two values of type `a`, the signature `[a] -> a` is not enough — you need a constraint, which the next lesson introduces.
+</Callout>
+
+## 2. What a polymorphic type promises — and forbids
 
 Reading a signature tells you what a function can and cannot do.
 
@@ -41,19 +88,78 @@ Reading a signature tells you what a function can and cannot do.
 mystery :: [a] -> Int
 ```
 
-Whatever `mystery` is, it **cannot look at the elements**. It knows nothing about type `a` — not whether it can be compared, added, or printed. All it can do is count, so it is `length` or something like it.
+Whatever `mystery` is, it **cannot look at the elements**. It knows nothing about type `a` — not whether it can be compared, added, or printed. All it can do is count, or otherwise reorder/select structurally without ever asking "what is this element". So it is `length`, or something equivalent to it.
 
-That is the key insight: **the fewer constraints a type variable carries, the fewer things the function can possibly do.** A very general type is a very strong promise.
+That is the key insight, stated as a rule you can apply to any signature: **a function may only use the operations that its type variables are known to support, and an unconstrained type variable supports none.** The fewer constraints a type variable carries, the fewer things the function can possibly do. A very general type is, paradoxically, a very strong promise about what the function is *not* doing.
 
 ```haskell
 id :: a -> a
 ```
 
-There is exactly one function with this type that always terminates: it must return its argument unchanged. It has nothing else to work with.
+There is exactly one function with this type that always terminates: it must return its argument unchanged. It cannot inspect it, transform it, or replace it with something else — there is nothing else of type `a` for it to produce, since `a` could be anything.
 
-<Callout type="info" title="Reading a signature as a specification">
-Before writing a function, ask what its signature permits. If you find yourself needing to compare two values of type `a`, the signature `[a] -> a` is not enough — you need a constraint, which the next lesson introduces.
-</Callout>
+A second illustration makes the same point with two type variables instead of one:
+
+```haskell
+-- Take two values of possibly different types; keep the first.
+pick :: a -> b -> a
+pick x _ = x
+```
+
+`pick` must return something of type `a`. The only value of type `a` it has ever seen is `x`, so — reasoning exactly as with `id` — `pick x y = x` is the only sensible definition. It is not physically forced to ignore `y` (Haskell will not stop you writing something that never terminates, or that inspects `y` and then discards the result), but no terminating use of `y` can ever contribute to a result of type `a`, because nothing is known about `b`. This is exactly the Prelude's `const`.
+
+```haskell
+main :: IO ()
+main = do
+  print (pick "keep" True)
+  print (pick 5 'z')
+  print (pick True [1,2,3 :: Int])
+```
+
+```text
+"keep"
+5
+True
+```
+
+Three calls, three completely unrelated pairs of types for `a` and `b`, and `pick` never had to know what any of them were.
+
+<Quiz title="Check: what a polymorphic type promises" questions={[
+  {
+    question: "A function has type `[a] -> Bool`. Which of the following behaviours could it actually have?",
+    options: [
+      "Return True exactly when the list is empty",
+      "Return True exactly when every element is equal to the first",
+      "Return True exactly when the largest element is positive",
+      "Return True exactly when the list contains the number 7"
+    ],
+    correctIndex: 0,
+    explanation: "Checking for emptiness only requires pattern matching on [] versus (x:xs) — a purely structural check that needs no operation on the elements at all. The other three all inspect and compare or add the elements, which an unconstrained a forbids.",
+    optionFeedback: [
+      "Correct — this only asks 'is the list []', a structural question the type variable a is never involved in answering.",
+      "Comparing elements to one another requires ==, which needs an Eq constraint the signature does not have.",
+      "Deciding 'largest' needs comparison (Ord), and 'positive' needs a numeric type (Num or Ord); [a] -> Bool has neither.",
+      "Checking for a specific element like 7 requires == against a concrete numeric literal, which again needs Eq and Num — not available for an arbitrary a."
+    ]
+  },
+  {
+    question: "Why must `pick x y = x` (type `a -> b -> a`) return x rather than something built from y?",
+    options: [
+      "Haskell's syntax forbids referring to y in the body",
+      "a and b are required to be the same type, so y already has type a",
+      "Nothing about type b is known, so no terminating computation on y could ever produce a value of type a",
+      "pick is only allowed to use pattern matching, not its arguments directly"
+    ],
+    correctIndex: 2,
+    explanation: "b is a completely independent, unconstrained type variable. Since the result must have type a, and the only value of type a available is x itself, nothing you could terminatingly do with y — of the arbitrary, unrelated type b — could produce that result.",
+    optionFeedback: [
+      "Haskell's syntax is not the limitation here; you could write y in the body (e.g. as an unused binding). The limitation is what a well-typed, terminating result can be built from.",
+      "They are independent variables and may differ — pick 5 'z' above instantiates a to Integer and b to Char, which are not the same type.",
+      "Correct — with no constraint on b, there is no operation available to turn a b-typed value into an a-typed one, so only x itself can be the answer.",
+      "pick uses no pattern matching at all in this definition; the restriction comes from typing, not from which syntactic forms are legal."
+    ]
+  }
+]} />
 
 ## 3. Every argument of the same variable must agree
 
@@ -74,7 +180,24 @@ ghci> pairUp 1 'a'
     * No instance for (Num Char) ...
 ```
 
-Both arguments are typed `a`, so they must be the same type in any given call. To allow them to differ, use two variables:
+Both arguments are typed `a`, so they must be the same type in any given call. The rule scales to any number of arguments sharing one variable, not just two:
+
+```haskell
+tripleUp :: a -> a -> a -> (a, a, a)
+tripleUp x y z = (x, y, z)
+```
+
+```text
+ghci> tripleUp 1 2 3
+(1,2,3)
+ghci> tripleUp 'x' 'y' 'z'
+('x','y','z')
+ghci> tripleUp 1 2 'z'
+<interactive>: error:
+    * No instance for (Num Char) ...
+```
+
+Same failure, same reason: three uses of `a`, and the third call tries to make one of them `Char` while the others are numeric. To allow arguments to differ, use separate variables:
 
 ```haskell
 pairUp2 :: a -> b -> (a, b)
@@ -93,6 +216,12 @@ f :: A -> B      e :: A
 ------------------------
        f e :: B
 ```
+
+<Mermaid chart={`flowchart LR
+  A["f :: A -> B"] --> C{"Does e have type A?"}
+  E["e :: A?"] --> C
+  C -->|"Yes"| D["f e :: B  — valid"]
+  C -->|"No"| R["Type error — rejected before evaluation"]`} caption="Type-checking an application is exactly this one comparison: does the thing being supplied have the type the function demands as input?" />
 
 Apply it to a concrete example. Given:
 
@@ -121,6 +250,19 @@ neg :: Bool -> Bool      3 :: ??
 
 `3` is numeric, not `Bool`. The types do not agree, so the application is invalid and is rejected before evaluation.
 
+The rule composes when applications nest. Given `isEven :: Integer -> Bool` and `headOf :: [a] -> a` from earlier, is `isEven (headOf [2,4,6])` well typed?
+
+```text
+headOf :: [a] -> a applied to [2,4,6] :: [Integer]
+  instantiates a := Integer, so headOf [2,4,6] :: Integer
+
+isEven :: Integer -> Bool      headOf [2,4,6] :: Integer
+----------------------------------------------------------
+              isEven (headOf [2,4,6]) :: Bool
+```
+
+The inner application is checked, and — because it is polymorphic — instantiated first; only then is the outer application checked against the now-concrete result type.
+
 <StepByStep>
   <StepByStepTitle>Checking an application by hand</StepByStepTitle>
 
@@ -147,11 +289,16 @@ neg :: Bool -> Bool      3 :: ??
 
 ## 5. Instantiating a polymorphic type
 
-When a polymorphic function is applied, each type variable is fixed to a concrete type for that call:
+When a polymorphic function is applied, each type variable is fixed to a concrete type for that call — this fixing is called **instantiation**:
 
 ```haskell
 length :: [a] -> Int
 ```
+
+<Mermaid chart={`flowchart TD
+  L["length :: [a] -> Int"] -->|"a := Integer"| C1["length [1,2,3]  =>  3"]
+  L -->|"a := Char"| C2["length \"hello\"  =>  5"]
+  L -->|"a := Bool"| C3["length [True,False]  =>  2"]`} caption="One signature, three unrelated instantiations. a is fixed separately and independently for each call — the calls never interact." />
 
 ```text
 ghci> length [1,2,3]      -- a becomes Integer
@@ -170,6 +317,90 @@ map show :: Show a => [a] -> [String]
 ```
 
 `map :: (a -> b) -> [a] -> [b]` applied to `show :: Show a => a -> String` fixes `b` to `String`, leaving `a` general but now carrying `show`'s own constraint.
+
+### Seeing it work: one signature, many element types
+
+The clearest way to convince yourself "works for any type" is not abstract — it is running the *same, unmodified* function three times on three unrelated element types and reading the outputs back:
+
+```haskell
+main :: IO ()
+main = do
+  print (fst (1, "one"))
+  print (fst ('a', True))
+  print (head [10, 20, 30])
+  print (head "polymorphism")
+  print (head [False, True])
+```
+
+```text
+1
+'a'
+10
+'p'
+False
+```
+
+`fst` never changed. `head` never changed. Only the concrete type filling in for each type variable changed, call by call.
+
+The same point, now with a function written for this course rather than borrowed from the Prelude:
+
+```haskell
+-- Return the first two elements as a pair. Two equations: the
+-- productive case, and the case with too few elements to answer.
+firstTwo :: [a] -> (a, a)
+firstTwo (x:y:_) = (x, y)
+
+main :: IO ()
+main = do
+  print (firstTwo [1, 2, 3 :: Int])
+  print (firstTwo "hello")
+  print (firstTwo [True, False, True])
+```
+
+```text
+(1,2)
+('h','e')
+(True,False)
+```
+
+`firstTwo` is one definition, written once, with no mention anywhere of `Int`, `Char`, or `Bool`. Each call instantiates `a` independently — to `Int`, then to `Char`, then to `Bool` — exactly as the diagram above shows for `length`.
+
+<Quiz title="Check: instantiation" questions={[
+  {
+    question: "In `map show [1,2,3]`, what does GHC instantiate map's two type variables to?",
+    options: [
+      "a := Integer, b := Integer",
+      "a := Integer, b := String",
+      "a := String, b := Integer",
+      "It cannot be determined without a type annotation"
+    ],
+    correctIndex: 1,
+    explanation: "map :: (a -> b) -> [a] -> [b]. The list [1,2,3] fixes a to Integer, and show :: Show a => a -> String fixes b to String — matching :type map show reported as [a] -> [String] with a still Show-constrained.",
+    optionFeedback: [
+      "b cannot be Integer: show's result type is always String, whatever its argument type is.",
+      "Correct — the list argument fixes a to Integer, and show's result type fixes b to String, giving map show :: Show a => [a] -> [String].",
+      "a is fixed by the list [1,2,3], not by show's result; this has the two the wrong way round.",
+      "It is fully determined here: the list supplies a and show's return type supplies b, with no ambiguity."
+    ]
+  },
+  {
+    question: "`headOf [True, False]` and `headOf \"cat\"` both call the same `headOf :: [a] -> a`. What does this demonstrate?",
+    options: [
+      "headOf is secretly two different functions chosen by overloading",
+      "a is instantiated independently to Bool for one call and to Char for the other, with no relationship between them",
+      "a must be the same type in every call to headOf, so one of these calls is actually rejected",
+      "headOf secretly requires an Eq constraint to run"
+    ],
+    correctIndex: 1,
+    explanation: "Instantiation happens per call. Nothing links the a chosen for headOf [True, False] to the a chosen for headOf \"cat\" — they are two entirely separate applications of the same one definition.",
+    optionFeedback: [
+      "There is exactly one headOf, one piece of compiled code; overloading (Chapter 9's next lesson) is a different mechanism from parametric polymorphism.",
+      "Correct — each application of headOf instantiates a on its own; two different calls may pick two entirely different, unrelated types.",
+      "The 'one type per application' rule (Section 3) applies within a single call, where a variable appears more than once — it says nothing about two separate calls needing to agree.",
+      "headOf's definition, (x:_) = x, uses no operation on the element at all, so it needs no constraint whatsoever."
+    ]
+  }
+]} />
 
 ## 6. Polymorphic data types
 
@@ -197,6 +428,87 @@ sumTree (Branch l r) = sumTree l + sumTree r
 
 `countLeaves` ignores the elements, so it needs no constraint. `sumTree` adds them, so it does — again, the next lesson.
 
+A type constructor may take more than one type variable. `Tree` takes one; a type built to hold **two** independent things, of possibly different types, takes two:
+
+```haskell
+data Pair a b = MkPair a b
+  deriving (Show)
+
+firstOf :: Pair a b -> a
+firstOf (MkPair x _) = x
+
+swapPair :: Pair a b -> Pair b a
+swapPair (MkPair x y) = MkPair y x
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (firstOf (MkPair 1 "one"))
+  print (swapPair (MkPair 1 "one"))
+  print (swapPair (MkPair 'z' True))
+```
+
+```text
+1
+MkPair "one" 1
+MkPair True 'z'
+```
+
+`Pair` needs **two** concrete types before it is a type at all — `Pair Int String`, `Pair Char Bool` — exactly as `Tree` needed one. Neither `firstOf` nor `swapPair` cares what `a` and `b` actually are; they only rearrange the box, never open it to inspect what is inside.
+
+<Mermaid chart={`flowchart LR
+  subgraph K["Type constructors — not yet types"]
+    T["Tree"]
+    Li["[]"]
+    P["Pair"]
+  end
+  subgraph App["Applied to concrete types -- now types"]
+    TI["Tree Int"]
+    LI["[Int]"]
+    PI["Pair Int String"]
+  end
+  T -->|"applied to one type"| TI
+  Li -->|"applied to one type"| LI
+  P -->|"applied to two types"| PI`} caption="Tree, [], and Pair are recipes for a type, not types a value can have on their own. A value only ever has a fully applied type." />
+
+<Quiz title="Check: polymorphic data types" questions={[
+  {
+    question: "Why can `countLeaves :: Tree a -> Int` be fully polymorphic while `sumTree` needs `Num a =>`?",
+    options: [
+      "countLeaves is shorter to write",
+      "countLeaves never examines the values stored in the tree, only its Leaf/Branch structure; sumTree applies + to those values, which requires Num",
+      "Tree a only permits numeric elements when summed, never when counted",
+      "sumTree is recursive and countLeaves is not"
+    ],
+    correctIndex: 1,
+    explanation: "countLeaves pattern matches on the constructors alone and adds 1 or recurses — the values inside Leaf are never touched, so a needs no operations. sumTree extracts those values and adds them with +, which exists only for Num instances.",
+    optionFeedback: [
+      "Line count has nothing to do with which constraints a signature needs; it is entirely about which operations the body actually uses on a-typed values.",
+      "Correct — this is exactly the reasoning from Section 2 applied to a recursive data type: no operation on a means no constraint needed.",
+      "Tree a places no restriction on a in the data declaration itself; the restriction, if any, comes only from what a particular function does with the values.",
+      "Both functions recurse, one equation per constructor; recursion is not what distinguishes their constraints."
+    ]
+  },
+  {
+    question: "Why is `Pair` alone, with no type arguments, not a type?",
+    options: [
+      "Pair is a reserved keyword in Haskell",
+      "Pair is a type constructor: like Tree, it needs its type arguments supplied (Pair Int String) before it denotes an actual type",
+      "Pair can only ever hold two values of the same type",
+      "Pair needs a type class instance before it becomes a type"
+    ],
+    correctIndex: 1,
+    explanation: "data Pair a b = MkPair a b declares a two-argument type constructor. Exactly as with Tree (one argument) and [] (one argument), a value can only ever have a fully applied type, such as Pair Int String — never the bare constructor.",
+    optionFeedback: [
+      "Pair is an ordinary name chosen for this lesson, not a language keyword; the reason lies in what a data declaration with type parameters actually creates.",
+      "Correct — MkPair a b makes Pair a two-parameter type constructor. A value's type is always the fully applied form, e.g. Pair Int String, never bare Pair.",
+      "MkPair a b uses two independent type variables, a and b, precisely so the two fields may differ — as swapPair (MkPair 1 \"one\") demonstrates.",
+      "Instances (Chapter 9's next lesson) govern what operations a type supports; they play no role in whether Pair by itself already denotes a type."
+    ]
+  }
+]} />
+
 ## 7. Common errors
 
 | Attempt | Problem | Repair |
@@ -204,8 +516,10 @@ sumTree (Branch l r) = sumTree l + sumTree r
 | `f :: [A] -> Int` | Type variables must be lowercase | `f :: [a] -> Int` |
 | `pairUp 1 'a'` with `a -> a -> (a,a)` | One variable means one type per call | Use `a -> b -> (a, b)` |
 | Writing `sumList :: [a] -> a` with `+` | `a` permits no arithmetic | Add the constraint `Num a =>` |
-| `Tree` used as a type | It is a type constructor | `Tree Int` |
+| `Tree` or `Pair` used with no type arguments | They are type constructors, not types | `Tree Int`, `Pair Int String` |
 | Expecting `a` and `b` to be different | They may coincide | They only *may* differ |
+| `firstTwo [1]` | Only one equation, and it needs two elements | Non-exhaustive at run time: `*** Exception: ...: Non-exhaustive patterns in function firstTwo` |
+| `firstChar [1,2,3]` for `firstChar :: String -> Char` | The signature is monomorphic — locked to `[Char]` | Use a polymorphic signature like `headOf :: [a] -> a` if any list will do |
 
 ## 8. Practice
 
@@ -215,6 +529,8 @@ sumTree (Branch l r) = sumTree l + sumTree r
 4. Explain why `pairUp 1 'a'` fails for `pairUp :: a -> a -> (a, a)`.
 5. State what `a` becomes in `length "hello"` and in `map show [True]`.
 6. Why can `countLeaves :: Tree a -> Int` be fully polymorphic while `sumTree` cannot?
+7. Declare `Pair a b` with constructor `MkPair`, then write `firstOf` and `swapPair`. State how many type arguments `Pair` needs before it is a type.
+8. Explain, precisely, why `firstTwo [1]` crashes for `firstTwo (x:y:_) = (x, y)`, and name the general principle (from Chapter 5/6) that it violates.
 
 <Accordions>
 <Accordion title="Check questions 2 and 6">
@@ -224,15 +540,35 @@ sumTree (Branch l r) = sumTree l + sumTree r
 **6.** `countLeaves` only counts constructors; the values inside the leaves are never examined, so no operation on `a` is needed. `sumTree` applies `+` to those values, and `+` is not available for an arbitrary type. It therefore needs `Num a =>` to state that `a` must be a numeric type.
 
 </Accordion>
+<Accordion title="Check questions 7 and 8">
+
+**7.**
+
+```haskell
+data Pair a b = MkPair a b deriving (Show)
+
+firstOf :: Pair a b -> a
+firstOf (MkPair x _) = x
+
+swapPair :: Pair a b -> Pair b a
+swapPair (MkPair x y) = MkPair y x
+```
+
+`Pair` needs **two** type arguments before it denotes a type — `Pair Int String`, for instance — exactly as `Tree` needs one.
+
+**8.** `firstTwo` has one equation, `firstTwo (x:y:_) = (x, y)`, which only matches a list with at least two elements. `[1]` has one element, so no equation matches it, and the program fails at run time with a non-exhaustive-pattern exception rather than at compile time. This is the same partiality issue raised for `head` and `safeHead` back in Chapters 5 and 6: a function whose patterns do not cover every possible value of its argument type is a **partial function**, and Chapter 9's final lesson returns to fixing this properly with `Maybe`.
+
+</Accordion>
 </Accordions>
 
 <Checklist title="Mastery check" rules={[
   { type: 'must', text: 'I can distinguish a concrete type from a type variable by capitalisation.' },
+  { type: 'must', text: 'I can contrast a monomorphic signature with a polymorphic one and say what each does and does not accept.' },
   { type: 'must', text: 'I can read a polymorphic signature and say what the function cannot do.' },
-  { type: 'must', text: 'I can explain that one type variable means one type per application.' },
-  { type: 'must', text: 'I can apply the type inference rule to check an application by hand.' },
-  { type: 'must', text: 'I can say what a type variable is instantiated to in a given call.' },
-  { type: 'must', text: 'I can explain why Tree is a type constructor rather than a type.' },
+  { type: 'must', text: 'I can explain that one type variable means one type per application, for any number of arguments sharing it.' },
+  { type: 'must', text: 'I can apply the type inference rule to check an application by hand, including a nested application.' },
+  { type: 'must', text: 'I can say what a type variable is instantiated to in a given call, and that separate calls instantiate independently.' },
+  { type: 'must', text: 'I can explain why Tree and Pair are type constructors rather than types, and how many type arguments each needs.' },
   { type: 'note', text: 'Different letters mean types may differ, not that they must.' }
 ]} />
 
