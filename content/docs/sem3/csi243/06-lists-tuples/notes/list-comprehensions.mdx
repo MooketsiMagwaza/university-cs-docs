@@ -223,6 +223,43 @@ ghci> [(x, y) | x <- [1..5], even x, y <- [1..2]]
 [(2,1),(2,2),(4,1),(4,2)]
 ```
 
+<Quiz title="Check: multiple generators" questions={[
+  {
+    question: "[x + y | x <- [1,2,3], y <- [-3,0,3]] produces nine results. Which generator varies fastest, and what does that mean concretely?",
+    options: [
+      "The leftmost generator (x) varies fastest — x runs through all three of its values while y stays fixed at -3",
+      "The rightmost generator (y) varies fastest — x is held at 1 while y runs through all three of its values, then x becomes 2 and y runs through all three again, and so on",
+      "Both generators vary at the same rate, in lockstep",
+      "Neither generator \"varies faster\" than the other — the nine results appear in an arbitrary order"
+    ],
+    correctIndex: 1,
+    explanation: "The lesson states this directly: the rightmost generator varies fastest, exactly like the innermost loop of a nested loop. x is fixed at 1 while y takes -3, 0, then 3 (three results), then x becomes 2 and y cycles through all three again, and so on for x = 3 — nine results total, in a fixed, predictable order.",
+    optionFeedback: [
+      "It's the other way around — the RIGHTMOST generator (y here) is the one that cycles through all its values first, for each fixed value of the leftmost one.",
+      "Correct — y is the rightmost generator and cycles fastest, exactly as a nested loop with y innermost would.",
+      "The two generators do not advance together; one is held fixed while the other cycles through its entire range before the first one advances.",
+      "The order is fixed and predictable, not arbitrary — it is exactly the order a nested loop with y innermost would produce, which is precisely why the rightmost-varies-fastest rule is worth memorising."
+    ]
+  },
+  {
+    question: "In [(x, y) | x <- [1..4], y <- [x..4]], the later generator y <- [x..4] refers to x, the earlier generator's variable. What does this dependency accomplish?",
+    options: [
+      "It is a syntax error — a later generator can never refer to an earlier one",
+      "It restricts y's range based on the current value of x, so pairs like (2,1) — where y is smaller than x — are never generated in the first place, rather than being generated and then filtered out",
+      "It makes x and y always equal to each other",
+      "It has no effect; y <- [x..4] behaves identically to y <- [1..4]"
+        ],
+    correctIndex: 1,
+    explanation: "A later generator is allowed to use any name already bound by an earlier one. Here, once x is fixed (say, at 2), y <- [x..4] draws only from [2..4], so (2,1) is never produced — the comprehension avoids generating a combination it would only have to discard with a separate test.",
+    optionFeedback: [
+      "This is valid, working Haskell — the transcript directly above shows its actual output, produced without any error.",
+      "Correct — the dependency narrows y's starting point to the current x, producing only pairs where y >= x, with no separate filtering test needed.",
+      "The output [(1,1),(1,2),(1,3),(1,4),(2,2),...] includes many pairs where x and y differ, e.g. (1,4) — they are not forced to be equal.",
+      "[x..4] and [1..4] are different ranges whenever x is greater than 1 — for x = 3, [x..4] is [3,4], not [1,2,3,4]."
+    ]
+  }
+]} />
+
 ## 5. Comprehensions and recursion are interchangeable
 
 Every comprehension can be written as a recursion, and vice versa. Compare the filter from the previous lesson:
@@ -330,6 +367,43 @@ Because a `String` is a list of `Char`, comprehensions work on text directly:
 ghci> [c | c <- "CSI243", c `elem` ['0'..'9']]
 "243"
 ```
+
+<Quiz title="Check: comprehensions over tuples and strings" questions={[
+  {
+    question: "In [name | (name, mark) <- marks, mark >= 70], what is (name, mark) doing as the generator's left-hand side?",
+    options: [
+      "It is a tuple pattern that destructures each pair in marks as it is drawn, binding name and mark separately, in the same step",
+      "It builds a new tuple from the elements of marks, doubling their size",
+      "It is invalid syntax; generators may only bind a single plain variable",
+      "It filters marks down to only the pairs, discarding anything that isn't a pair"
+    ],
+    correctIndex: 0,
+    explanation: "A generator's left-hand side can be any pattern, not just a bare name. (name, mark) <- marks matches each element of marks — already a (String, Integer) pair — and binds name and mark to its two components in one step, exactly the way a where clause's tuple pattern would.",
+    optionFeedback: [
+      "Correct — this is a tuple pattern used as a generator, destructuring while generating, exactly as this section's opening sentence describes.",
+      "Nothing is built or resized here; the pattern only takes apart pairs that already exist in marks, it does not construct new ones.",
+      "Generators accept any pattern on their left, tuple patterns included — this is exactly what makes list-of-tuple data usable directly inside a comprehension.",
+      "marks is already entirely pairs by construction ([(String, Integer)]); there is nothing here to filter out — every element matches (name, mark)."
+    ]
+  },
+  {
+    question: "The lesson runs [name | (name, mark) <- marks, mark >= 70] and [name | (name, mark) <- marks, mark < 70] side by side and calls the results \"complementary\". What does that mean here?",
+    options: [
+      "The two results are identical lists",
+      "Between the two lists, every student in marks is accounted for exactly once — the two tests partition marks into two disjoint groups with no overlap and no one left out",
+      "The second list is always empty because the first test already used every mark",
+      "The two comprehensions use different generators, not just different tests"
+    ],
+    correctIndex: 1,
+    explanation: "mark >= 70 and mark < 70 are exact opposites for any Integer — every mark satisfies exactly one of them, never both and never neither. So running the same generator with both tests splits marks into two lists that, put together, contain every original student exactly once.",
+    optionFeedback: [
+      "The two results are actually shown to be different in the lesson's exact output: [\"Kago\",\"Thato\"] versus [\"Naledi\"] — not identical.",
+      "Correct — every student satisfies exactly one of mark >= 70 or mark < 70, so the two lists between them cover marks completely with no overlap.",
+      "The second list, for this data, has one student (Naledi) — it is not empty, and there is no mechanism by which one comprehension's test would empty out a separate, independently-evaluated comprehension.",
+      "Both comprehensions use the exact same generator, (name, mark) <- marks — only the trailing test differs between them."
+    ]
+  }
+]} />
 
 ## 7. Common errors
 
