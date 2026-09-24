@@ -31,7 +31,25 @@ ghci> negateBool False
 True
 ```
 
+As a program:
+
+```haskell
+main :: IO ()
+main = do
+  print (negateBool True)
+  print (negateBool False)
+```
+
+```text
+False
+True
+```
+
 There are only two `Bool` values, so these two patterns cover everything.
+
+<Callout type="info" title="Why patterns instead of nested if">
+`negateBool` could be written as `if b then False else True`. For two outcomes that is no worse. But once a decision has three or more *exact* values to distinguish — a day number, a specific character, a specific list shape — pattern matching states each case as its own equation, aligned and independently checkable, where a chain of nested `if`/`else` would drift rightwards with every case added (see the previous lesson, Section 4). Patterns are the right tool exactly when the cases are literal values or structural shapes, not ranges — ranges are what guards, next lesson, are for.
+</Callout>
 
 ## 2. Matching is sequential, and order matters
 
@@ -53,6 +71,22 @@ ghci> square 5
 25
 ```
 
+As a program, adding a negative number to confirm the general equation handles it correctly too:
+
+```haskell
+main :: IO ()
+main = do
+  print (square 0)
+  print (square 5)
+  print (square (-3))
+```
+
+```text
+1
+25
+9
+```
+
 <Mermaid chart={`flowchart TD
   Start["Call f with an argument"] --> E1{"Matches equation 1's pattern?"}
   E1 -- Yes --> R1["Run equation 1's right-hand side"]
@@ -67,6 +101,20 @@ Reverse those two lines and the function breaks:
 -- WRONG: the variable pattern swallows every argument.
 square y = y * y
 square 0 = 1     -- unreachable
+```
+
+If a module contained only this reversed version, here is exactly what running it prints:
+
+```haskell
+main :: IO ()
+main = do
+  print (square 0)
+  print (square 5)
+```
+
+```text
+0
+25
 ```
 
 `square 0` would now return `0`, and GHC warns that the second equation is redundant. **A variable pattern matches anything, so nothing below it is ever reached.**
@@ -136,6 +184,18 @@ ghci> isZero 7
 False
 ```
 
+```haskell
+main :: IO ()
+main = do
+  print (isZero 0)
+  print (isZero 7)
+```
+
+```text
+True
+False
+```
+
 Writing `isZero n = False` would work identically, but `_` documents that the value is deliberately ignored, and avoids an unused-name warning.
 
 ## 4. Exhaustiveness
@@ -148,6 +208,22 @@ dayName :: Int -> String
 dayName 1 = "Monday"
 dayName 2 = "Tuesday"
 ```
+
+On inputs that do match, it behaves normally:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (dayName 1)
+  putStrLn (dayName 2)
+```
+
+```text
+Monday
+Tuesday
+```
+
+But `dayName` has no equation for `3` or above. Calling it on such an input crashes the whole program, not just that call — best seen directly at the `ghci` prompt rather than guessed at as compiled output:
 
 ```text
 ghci> dayName 3
@@ -173,6 +249,20 @@ ghci> dayName 3
 "Wednesday"
 ghci> dayName 9
 "Not a day number"
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (dayName 3)
+  putStrLn (dayName 9)
+  putStrLn (dayName 1)
+```
+
+```text
+Wednesday
+Not a day number
+Monday
 ```
 
 <Callout type="warn" title="-Wincomplete-patterns is a warning, not a rejection">
@@ -236,6 +326,20 @@ snd :: (a, b) -> b
 snd (_, x) = x
 ```
 
+They behave exactly as this definition promises:
+
+```haskell
+main :: IO ()
+main = do
+  print (fst (3, "abc"))
+  print (snd (3, "abc"))
+```
+
+```text
+3
+"abc"
+```
+
 The pattern destructures the pair and names only the component that is wanted.
 
 ```haskell
@@ -248,6 +352,49 @@ addPair (x, y) = x + y
 ghci> addPair (3, 4)
 7
 ```
+
+```haskell
+main :: IO ()
+main = do
+  print (addPair (3, 4))
+  print (addPair (-2, 5))
+```
+
+```text
+7
+3
+```
+
+### A second tuple example: which axis
+
+A different domain, still tuple and wildcard patterns, no arithmetic needed:
+
+```haskell
+-- Classify a 2D point by which axis it lies on.
+axisOf :: (Int, Int) -> String
+axisOf (0, 0) = "origin"
+axisOf (0, _) = "on the y-axis"
+axisOf (_, 0) = "on the x-axis"
+axisOf (_, _) = "off both axes"
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (axisOf (0, 0))
+  putStrLn (axisOf (0, 5))
+  putStrLn (axisOf (3, 0))
+  putStrLn (axisOf (2, 3))
+```
+
+```text
+origin
+on the y-axis
+on the x-axis
+off both axes
+```
+
+The order is forced exactly as it was for `square`: `(0, 0)` also matches the pattern `(0, _)`, so the literal-tuple case `(0, 0)` must come first, or it would never be reached.
 
 ## 6. List patterns
 
@@ -266,6 +413,20 @@ True
 ghci> stW "cat"
 False
 ghci> stW "boat"
+False
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (stW "bat")
+  print (stW "cat")
+  print (stW "boat")
+```
+
+```text
+True
+False
 False
 ```
 
@@ -306,6 +467,22 @@ False
 ghci> head [5,9,2]
 5
 ghci> tail [5,9,2]
+[9,2]
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (null [])
+  print (null [1,2,3])
+  print (head [5,9,2])
+  print (tail [5,9,2])
+```
+
+```text
+True
+False
+5
 [9,2]
 ```
 
@@ -385,6 +562,20 @@ ghci> isVowel 't'
 False
 ```
 
+```haskell
+main :: IO ()
+main = do
+  print (isVowel 'a')
+  print (isVowel 'A')
+  print (isVowel 't')
+```
+
+```text
+True
+True
+False
+```
+
 Ten literal patterns is verbose. This is precisely the shape of decision that guards handle better, and the next lesson rewrites it in two lines. Recognising *which* form suits a decision is the real skill of this chapter.
 
 ## 8. Common errors
@@ -416,6 +607,22 @@ secondElement _       = error "secondElement: list has fewer than two elements"
 ```
 
 The pattern `(_:x:_)` requires at least two elements: a head that is ignored, then `x`, then any remaining tail. A list of length 0 or 1 falls through to the catch-all. Returning `error` is honest here, because there is no sensible `a` to invent — Chapter 5 returns to error handling.
+
+On lists long enough to match, the first pattern succeeds:
+
+```haskell
+main :: IO ()
+main = do
+  print (secondElement [10, 20, 30])
+  print (secondElement "hi")
+```
+
+```text
+20
+'i'
+```
+
+`secondElement [5]` or `secondElement []` would instead run the `error` call and halt the program — that case is deliberately not shown here, since it has no output to print.
 
 </Accordion>
 </Accordions>
