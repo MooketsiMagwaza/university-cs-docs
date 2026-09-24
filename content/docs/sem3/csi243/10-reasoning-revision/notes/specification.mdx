@@ -66,6 +66,38 @@ ghci> splitAt' 2 [10,20,30,40]
 ([10,20],[30,40])
 ```
 
+All three specified functions, exercised together inside one real program rather than three separate prompt lines:
+
+```haskell
+-- File: SpecDemo.hs
+isDigit :: Char -> Bool
+isDigit c = ('0' <= c) && (c <= '9')
+
+isOdd :: Integral a => a -> Bool
+isOdd c = (mod c 2) /= 0
+
+splitAt' :: Int -> [a] -> ([a], [a])
+splitAt' n xs = (take n xs, drop n xs)
+
+main :: IO ()
+main = do
+  print (isDigit '5')             -- an ordinary digit
+  print (isDigit 'a')             -- the boundary-adjacent counter-example from the trace above
+  print (isOdd 7)
+  print (isOdd 4)
+  print (splitAt' 2 [10, 20, 30, 40])
+```
+
+```text
+True
+False
+True
+False
+([10,20],[30,40])
+```
+
+Each line's output is exactly what that function's own postcondition promises — that correspondence, checkable line by line, is the entire point of writing the postcondition down before the code.
+
 <Callout type="info" title="Specification first, always">
 A function's implementation is derived from its specification. Writing code first and then describing what it happens to do reverses the dependency — and means you have no independent standard against which to judge the code correct.
 </Callout>
@@ -342,6 +374,34 @@ ghci> report (average [2,4,6])
 ghci> reportAverage [2,4,6]
 "Average: 4.0"
 ```
+
+Run both routes side by side to see them agree exactly, which is the whole argument for why the split version is preferred despite producing an identical string:
+
+```haskell
+-- File: Cohesion.hs
+average :: [Double] -> Double
+average xs = sum xs / fromIntegral (length xs)
+
+report :: Double -> String
+report x = "Average: " ++ show x
+
+reportAverage :: [Double] -> String
+reportAverage xs = "Average: " ++ show (sum xs / fromIntegral (length xs))
+
+main :: IO ()
+main = do
+  putStrLn (report (average [2, 4, 6]))   -- the two-function route
+  putStrLn (reportAverage [2, 4, 6])       -- the one-function route
+  print (average [2, 4, 6])                -- only possible because average returns a Double, not a String
+```
+
+```text
+Average: 4.0
+Average: 4.0
+4.0
+```
+
+The third line is the practical payoff of the split: `average [2, 4, 6]` on its own is a genuine `Double` that anything expecting a number can use directly — feed it into a further calculation, compare it, average a list of averages. `reportAverage [2, 4, 6]` can never produce that `4.0` on its own; its result is permanently locked inside the string `"Average: 4.0"`.
 
 Both routes give the same string. The difference is not in what they compute, but in what you can test and reuse: `average` alone can be checked against a numeric postcondition (`result = sum / length`) without ever inspecting a string, and it can be reused anywhere a `Double` is needed — inside a report, a comparison, another calculation. `reportAverage` can only ever be tested by string comparison, and can only ever be reused as a full report.
 
