@@ -17,6 +17,51 @@ circleArea radius = pi * radius * radius
 
 Calling `circleArea 2` produces the same result wherever it appears. It does not modify `radius`, print a message, change a file, or read the clock.
 
+The same idea holds for any pure function, regardless of what it calculates:
+
+```haskell
+-- A pure function: the result depends only on the two side lengths.
+rectangleArea :: Double -> Double -> Double
+rectangleArea width height = width * height
+
+-- A pure function: the result depends only on the score supplied.
+isPassingGrade :: Integer -> Bool
+isPassingGrade score = score >= 50
+```
+
+```text
+ghci> circleArea 2
+12.566370614359172
+ghci> rectangleArea 4.0 5.0
+20.0
+ghci> isPassingGrade 42
+False
+ghci> isPassingGrade 73
+True
+```
+
+Three different result types — `Double`, `Double`, `Bool` — but the same guarantee each time: call any of them twice with the same arguments, and Haskell has no mechanism by which the second call could disagree with the first.
+
+<Quiz title="Check: pure functions" questions={[
+  {
+    question: "circleArea, rectangleArea, and isPassingGrade all count as pure. What do they have in common that makes this true?",
+    options: [
+      "They are all short, one-line definitions.",
+      "They all return a numeric type.",
+      "Each one's result depends only on its supplied arguments, and evaluating it causes no outside-world effect.",
+      "They are all defined using the keyword pure."
+    ],
+    correctIndex: 2,
+    explanation: "Purity is defined by two conditions in this lesson: same inputs always give the same output, and evaluation causes no secret interaction with the outside world. Length, return type, and keywords are irrelevant to the definition.",
+    optionFeedback: [
+      "Length is incidental. A much longer function can still be pure, and a one-line function can still be impure if it prints or reads something.",
+      "isPassingGrade returns Bool, not a number, so this cannot be the shared property — and return type has nothing to do with purity anyway.",
+      "Correct. This is exactly the two-part definition of purity: determinism from inputs, and no side effect during evaluation.",
+      "Haskell has no `pure` keyword for marking ordinary functions this way; purity is a property the function happens to have, not a declared modifier."
+    ]
+  }
+]} />
+
 ## What, why, when, and how
 
 | Question | Answer |
@@ -76,9 +121,29 @@ ghci> doubleAll [1, 2, 3, 4]
 Line by line:
 
 1. `[Integer] -> [Integer]` says the function transforms a list of integers into another list of integers.
-2. `map` captures the reusable pattern “apply one function to every element.”
+2. `map` captures the reusable pattern “apply one function to every element.” You have not written `map` from scratch yet — that comes in Chapter 7 — but here it means exactly what its name suggests: apply `double` to every element of `numbers` and collect the results in a new list, in the same order.
 3. `double` states only the element-level rule.
 4. No loop counter or changing result variable is required.
+
+<Quiz title="Check: functional vs imperative description" questions={[
+  {
+    question: "In doubleAll, what job does map actually do?",
+    options: [
+      "It sorts the list before doubling it.",
+      "It applies double to every element of the list and collects the results into a new list, in order.",
+      "It removes duplicate elements from the list.",
+      "It mutates numbers in place, replacing each element with its double."
+    ],
+    correctIndex: 1,
+    explanation: "map takes a one-argument function and a list, and produces a new list where that function has been applied to every element — nothing about sorting, deduplicating, or in-place mutation.",
+    optionFeedback: [
+      "Nothing about map involves ordering; doubleAll [3,1,2] would give [6,2,4] — same order as the input, not sorted.",
+      "Correct. This is exactly the reusable pattern named in the lesson: apply one function to every element.",
+      "map never removes anything from the list; the output list has exactly as many elements as the input.",
+      "numbers is never touched. doubleAll produces a brand-new list; the original binding, if it had a name elsewhere, would be completely unaffected."
+    ]
+  }
+]} />
 
 ## Immutability
 
@@ -97,6 +162,51 @@ Why this matters:
 - functions can be evaluated independently when their inputs are known;
 - tests do not depend on hidden mutation;
 - concurrent computations share fewer changing objects.
+
+### The same rule, two more times
+
+```haskell
+-- A different constant, same immutable shape.
+maxAttempts :: Integer
+maxAttempts = 3
+
+-- A binding built from another binding — still fixed once, not reassigned.
+discountedRate :: Double
+discountedRate = taxRate - 0.02
+```
+
+`discountedRate` is not "taxRate that got changed." It is a separate, independent name whose definition happens to mention `taxRate`. Evaluating `discountedRate` never touches or modifies `taxRate` — it just reads the fixed value `0.14` while computing its own fixed value:
+
+```text
+ghci> taxRate
+0.14
+ghci> discountedRate
+0.12
+ghci> taxRate
+0.14
+```
+
+Reading `taxRate` a second time, after `discountedRate` has already used it, gives the same `0.14` as before. Nothing about defining `discountedRate` in terms of `taxRate` put `taxRate` itself at risk of changing.
+
+<Quiz title="Check: immutability" questions={[
+  {
+    question: "After evaluating discountedRate, what is the value of taxRate?",
+    options: [
+      "0.12, because discountedRate overwrote it",
+      "0.14, unchanged — exactly what it was defined as",
+      "It becomes undefined, because it was used to build another value",
+      "It depends on the order the two names are evaluated in"
+    ],
+    correctIndex: 1,
+    explanation: "discountedRate reads taxRate's value to compute its own; reading is not writing. taxRate keeps meaning 0.14 in its scope no matter how many other definitions refer to it.",
+    optionFeedback: [
+      "This treats = as an imperative assignment that discountedRate's definition somehow performs on taxRate. Haskell's = never works that way — nothing here writes to taxRate.",
+      "Correct. taxRate is bound once, and every expression that mentions it — including discountedRate's own definition — simply reads that one fixed value.",
+      "A binding does not become 'used up' or undefined by being referenced elsewhere. taxRate remains a perfectly ordinary, still-defined name.",
+      "Haskell's immutable bindings do not have an evaluation order that could change the outcome here; taxRate means 0.14 regardless of when or how often it is read."
+    ]
+  }
+]} />
 
 ## Pure functions and side effects
 
@@ -128,25 +238,198 @@ Hello, Naledi
 
 The design keeps the reusable rule `greeting` independent of the terminal. It can be tested without performing input or output.
 
+<Mermaid chart={`flowchart LR
+  subgraph pureCore["Pure core"]
+    A["greeting name"]
+  end
+  subgraph effectBoundary["Effectful boundary"]
+    B["main / putStrLn"]
+  end
+  A -->|String| B
+  B --> C[Terminal]`} caption="greeting is pure and only ever produces a String; nothing crosses into IO until main hands that String to putStrLn." />
+
+`greeting` never appears on the effectful side of that boundary, no matter how the program grows. Two more pairs, built the same way:
+
+```haskell
+-- Pure: builds the report text from already-known values.
+report :: String -> Integer -> String
+report name mark = name ++ " scored " ++ show mark
+
+-- Effectful: the only line that touches the terminal.
+main :: IO ()
+main = putStrLn (report "Naledi" 82)
+```
+
+```text
+Naledi scored 82
+```
+
+```haskell
+-- Pure: works out how many days remain, given two day-of-year numbers.
+daysRemaining :: Integer -> Integer -> Integer
+daysRemaining today examDay = examDay - today
+
+-- Effectful: print is the boundary here, not the subtraction.
+main :: IO ()
+main = print (daysRemaining 100 130)
+```
+
+```text
+30
+```
+
+In both cases the pure function — `report`, `daysRemaining` — could be tested directly at the GHCi prompt with no `main` involved at all:
+
+```text
+ghci> report "Naledi" 82
+"Naledi scored 82"
+ghci> daysRemaining 100 130
+30
+```
+
+Only the last line of each program, the one that calls `putStrLn` or `print`, is effectful. Everything feeding into it is an ordinary, testable value.
+
+<Quiz title="Check: pure functions and side effects" questions={[
+  {
+    question: "In the daysRemaining example, which single line is the effect?",
+    options: [
+      "daysRemaining today examDay = examDay - today",
+      "main = print (daysRemaining 100 130)",
+      "Both lines are effects, since main uses daysRemaining",
+      "Neither line is an effect; Haskell programs have no effects until IO is imported"
+    ],
+    correctIndex: 1,
+    explanation: "print is what actually touches the terminal. daysRemaining just subtracts two already-known numbers — a pure calculation that produces a value, not an action.",
+    optionFeedback: [
+      "This is ordinary subtraction on two supplied Integer values. It produces a result; it does not interact with anything outside itself.",
+      "Correct. print is the boundary-crossing step. Everything daysRemaining does happens before that, as a pure calculation.",
+      "Calling a pure function from inside an effectful one does not make the pure function itself effectful — daysRemaining behaves identically whether or not main ever calls it.",
+      "main's type is IO (), and print is a standard Prelude action available without any explicit import; the program does perform an effect, on its last line."
+    ]
+  },
+  {
+    question: "Why can report \"Naledi\" 82 be tested directly at the GHCi prompt, with no main and no putStrLn involved?",
+    options: [
+      "Because GHCi secretly wraps every expression in an IO action.",
+      "Because report is pure: it only builds and returns a String value, so evaluating it needs nothing beyond the two arguments supplied.",
+      "Because putStrLn is automatically called behind the scenes whenever GHCi displays a String.",
+      "Because report has no type signature, so GHCi treats it specially."
+    ],
+    correctIndex: 1,
+    explanation: "report's entire job is to compute a String from name and mark. Since it performs no IO itself, GHCi can evaluate it directly and show the resulting value — exactly like circleArea 2 earlier in the lesson.",
+    optionFeedback: [
+      "Evaluating an expression at the ghci> prompt is not the same as performing an IO action; GHCi shows the value using its own display machinery, not by running putStrLn.",
+      "Correct. This is the whole benefit named earlier in the lesson: a pure function 'can be tested without performing input or output.'",
+      "putStrLn is not invoked here at all — GHCi's own value-display mechanism is what shows the quoted string \"Naledi scored 82\".",
+      "report does have an explicit signature, String -> Integer -> String, shown right above its definition."
+    ]
+  }
+]} />
+
 ## Function composition
 
-Composition connects the output of one function to the input of another.
+Composition connects the output of one function to the input of another, using the `.` operator. `(f . g) x` means `f (g x)`: run `g` first, then feed its result into `f`.
 
 ```haskell
--- Remove surrounding spaces and then convert to uppercase.
-normaliseName :: String -> String
-normaliseName = map toUpper . trim
+import Data.Char (toUpper)
+
+-- Add emphasis to an already-uppercased message.
+addEmphasis :: String -> String
+addEmphasis message = message ++ "!"
+
+-- Compose: first uppercase every character, then add emphasis.
+shout :: String -> String
+shout = addEmphasis . map toUpper
+
+main :: IO ()
+main = putStrLn (shout "training complete")
 ```
 
-Read `f . g` from right to left: first apply `g`, then apply `f`. The example needs suitable imports and a `trim` definition, but the important idea is a pipeline of transformations.
+```text
+TRAINING COMPLETE!
+```
 
-At this stage, prefer the clearer explicit version when composition feels mysterious:
+Read `f . g` from right to left: `shout` first applies `map toUpper` (the right-hand function), then feeds that whole result into `addEmphasis` (the left-hand function). `map` reappears here doing the same job as before — applying `toUpper` to every character of the string. Everything in this example is a real Prelude function or an ordinary top-level definition, so it can be typed into a file exactly as shown and run.
+
+<StepByStep>
+  <StepByStepTitle>Tracing shout "training complete"</StepByStepTitle>
+
+  <Step number={1}>
+  Start from the innermost, right-hand function: `map toUpper "training complete"` uppercases every character, giving `"TRAINING COMPLETE"`.
+  </Step>
+
+  <Step number={2}>
+  Feed that result into the left-hand function: `addEmphasis "TRAINING COMPLETE"` appends `"!"`.
+  </Step>
+
+  <Step number={3}>
+  The final value is `"TRAINING COMPLETE!"`, which `putStrLn` prints without its surrounding quotation marks.
+  </Step>
+</StepByStep>
+
+At this stage, prefer the clearer explicit version when composition feels mysterious. It calculates exactly the same value:
 
 ```haskell
-normaliseName name = map toUpper (trim name)
+shout' :: String -> String
+shout' message = addEmphasis (map toUpper message)
 ```
 
-Point-free notation is not automatically better. Clarity comes before cleverness.
+```text
+ghci> shout' "training complete"
+"TRAINING COMPLETE!"
+```
+
+Point-free notation is not automatically better. Clarity comes before cleverness — use `shout` when the pipeline reads naturally, and `shout'` when naming the intermediate step helps the reader.
+
+### A second composition, chaining three functions
+
+Composition is not limited to two steps. `words`, `length`, and a Boolean check can be chained to answer "does this sentence have more than three words?":
+
+```haskell
+hasManyWords :: String -> Bool
+hasManyWords = (> 3) . length . words
+```
+
+```text
+ghci> hasManyWords "Functional programming changes how we think"
+True
+ghci> hasManyWords "Short sentence"
+False
+```
+
+Read right to left again: `words` splits the string into a list of words; `length` counts them; `(> 3)` checks whether that count exceeds three. `(> 3)` is a section — an operator with one side already filled in — which Chapter 7 covers properly; for now, read it exactly as it sounds: "is greater than 3."
+
+<Quiz title="Check: function composition" questions={[
+  {
+    question: "In shout = addEmphasis . map toUpper, which function runs first on the input string?",
+    options: ["addEmphasis", "map toUpper", "Both run at the same time", "Neither — shout does not call either function directly"],
+    correctIndex: 1,
+    explanation: "Composition with (.) runs right to left: (f . g) x means f (g x), so the right-hand function, map toUpper, is applied to the original argument first, and its result is what addEmphasis receives.",
+    optionFeedback: [
+      "addEmphasis is the left-hand, outer function — it runs last, on whatever map toUpper has already produced.",
+      "Correct. (.) evaluates its right-hand argument first; that is exactly what 'read f . g from right to left' means.",
+      "Haskell evaluates one function at a time here; map toUpper's result becomes addEmphasis's argument, in that order.",
+      "shout is defined entirely in terms of these two composed functions — calling shout \"...\" does call both, just not simultaneously."
+    ]
+  },
+  {
+    question: "hasManyWords = (> 3) . length . words is applied to \"Short sentence\". What does it evaluate to, and why?",
+    options: [
+      "True, because the string is non-empty",
+      "False, because words gives 2 words, length gives 2, and 2 > 3 is False",
+      "True, because length counts characters, not words, and there are more than 3 characters",
+      "It is a type error, because (> 3) cannot be composed with length"
+    ],
+    correctIndex: 1,
+    explanation: "words \"Short sentence\" is [\"Short\",\"sentence\"], a two-element list. length of that list is 2. (> 3) 2 is False. Each stage feeds the next exactly as the right-to-left reading describes.",
+    optionFeedback: [
+      "Non-emptiness is not what (> 3) . length . words tests; it specifically counts words and compares that count to 3.",
+      "Correct. Trace it stage by stage: words splits into 2 words, length counts 2, and 2 is not greater than 3.",
+      "length here is applied to the list of words produced by words, not to the original string — it counts words, not characters.",
+      "The types line up correctly: words :: String -> [String], length :: [String] -> Int, and (> 3) :: Int -> Bool — this composes and type-checks cleanly."
+    ]
+  }
+]} />
 
 ## Common misconceptions
 
@@ -178,14 +461,14 @@ For each item, decide whether it is a pure calculation or an effectful action an
 
 Then design a program boundary: which parts can be pure, and which smallest part must perform `IO`?
 
-## Mastery check
-
-You are ready to continue when you can:
-
-- explain functional programming without saying only “it uses functions”;
-- distinguish a value-producing expression from an effectful action;
-- explain why pure functions are easier to test;
-- describe immutability and composition;
-- separate a calculation from the `IO` code that obtains or displays its data.
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can explain functional programming without saying only "it uses functions".' },
+  { type: 'must', text: 'I can distinguish a value-producing expression from an effectful action.' },
+  { type: 'must', text: 'I can explain why pure functions are easier to test, using the two-part definition of purity, not a vague sense of "clean code".' },
+  { type: 'must', text: 'I can describe immutability and say why rebinding a name is not mutation.' },
+  { type: 'must', text: 'I can trace a composed pipeline f . g by working right to left, one function at a time.' },
+  { type: 'must', text: 'I can separate a calculation from the IO code that obtains or displays its data.' },
+  { type: 'avoid', text: 'Do not pass off a code sample as verified unless you can show what it actually evaluates to.' }
+]} />
 
 Continue with [Setting Up and Using GHCi](/docs/sem3/csi243/02-expressions-types/notes/ghci), which installs the toolchain and puts these ideas in front of a real prompt.

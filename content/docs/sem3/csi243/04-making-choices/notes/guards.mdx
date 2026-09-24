@@ -3,8 +3,6 @@ title: "3. Guarded Equations"
 description: "Choose between results with a sequence of Boolean guards, place otherwise correctly, combine guards with pattern matching, and factor shared calculations into a where clause."
 ---
 
-
-
 Pattern matching chooses on the **shape** of an argument. But many decisions are about a **range** — is the mark above 50, is the number negative, is the value between 13 and 19? A literal pattern cannot express that, and nested conditionals become unreadable.
 
 **Guarded equations** are the answer. A guard is a Boolean expression that tests whether a property of some value holds.
@@ -43,7 +41,36 @@ getSign n
   | otherwise = 0
 ```
 
+```text
+ghci> getSign (-7)
+-1
+ghci> getSign 0
+0
+ghci> getSign 42
+1
+```
+
 The guarded version reads as a table of cases, which is exactly what the specification was.
+
+<Quiz title="Check: guard syntax" questions={[
+  {
+    question: "Why does a guarded equation write functionName parameters with no = sign on that first line, unlike an ordinary equation?",
+    options: [
+      "It is a typo that Haskell tolerates for historical reasons",
+      "Because the = sign belongs on each individual | line instead — the function's result is defined separately for each guarded case, not once for the whole equation",
+      "Guarded equations do not need an = anywhere because they never return a value",
+      "The = is optional and can be added or omitted freely"
+    ],
+    correctIndex: 1,
+    explanation: "In a guarded equation, each | condition = result line supplies its own result for its own case. There is no single right-hand side for the whole equation the way there is for functionName x = expression, so there is no single = to write on the header line.",
+    optionFeedback: [
+      "It is deliberate syntax, not a tolerated mistake — omitting the = on the header line is required, and including one there is an error (see the Common errors table below).",
+      "",
+      "Guarded equations absolutely return a value — exactly one of the guarded results, whichever condition is first True.",
+      "The header line's = is specifically forbidden, not optional; each | line supplies its own required ="
+    ]
+  }
+]} />
 
 ## 2. Guards are sequential
 
@@ -67,6 +94,15 @@ ghci> grade 85
 ghci> grade 42
 "F"
 ```
+
+<Mermaid chart={`flowchart TD
+  Call["grade score"] --> G1{"score >= 90?"}
+  G1 -- Yes --> A["\"A\""]
+  G1 -- No --> G2{"score >= 80?"}
+  G2 -- Yes --> B["\"B\""]
+  G2 -- No --> G3{"score >= 70?"}
+  G3 -- Yes --> C["\"C\""]
+  G3 -- No --> F["\"F\" (otherwise)"]`} caption="Guards are checked strictly top to bottom, exactly like pattern-matching equations. The first True guard wins and the rest are never examined." />
 
 Now reverse the order:
 
@@ -100,6 +136,26 @@ grade score
   </Step>
 </StepByStep>
 
+<Quiz title="Check: guard ordering" questions={[
+  {
+    question: "With guards ordered score >= 70, score >= 80, score >= 90, otherwise (least restrictive first), what does grade 95 return, and why?",
+    options: [
+      "\"A\", because 95 satisfies score >= 90, which is the most accurate case",
+      "\"C\", because score >= 70 is the first guard listed and 95 >= 70 is True, so that guard wins before the later, more specific guards are ever checked",
+      "A run-time exception, because guards must be in ascending order",
+      "\"F\", because otherwise always matches first when guards are misordered"
+    ],
+    correctIndex: 1,
+    explanation: "Guards are checked strictly in the order written, and the first True guard wins immediately — the later, more specific guards (score >= 80, score >= 90) are never even evaluated once an earlier one succeeds. Since 95 >= 70 is True, \"C\" is returned even though 95 also satisfies the more specific conditions.",
+    optionFeedback: [
+      "\"A\" would only be returned if score >= 90 were checked and found True before any less-restrictive guard — but with this ordering, score >= 70 is checked first and already succeeds.",
+      "",
+      "Guards do not have to be in any numeric order to compile or run; misordering causes wrong answers, not a crash.",
+      "otherwise is only reached if every earlier guard is False; here score >= 70 is True for 95, so otherwise is never reached at all."
+    ]
+  }
+]} />
+
 ## 3. `otherwise`
 
 `otherwise` is not special syntax. It is an ordinary name defined in the Prelude as:
@@ -125,6 +181,26 @@ classify n
 ghci> classify 0
 *** Exception: Non-exhaustive guards in function classify
 ```
+
+<Quiz title="Check: otherwise" questions={[
+  {
+    question: "otherwise = True, and True is also just a plain Bool literal. Why not write | True = defaultResult instead of | otherwise = defaultResult — would it behave any differently?",
+    options: [
+      "It would behave identically, since otherwise is literally defined as True — the difference is purely readability, naming the intent \"this is the catch-all case\" rather than repeating a bare literal",
+      "| True = ... is a syntax error and cannot appear as a guard",
+      "otherwise evaluates lazily while True does not, so only otherwise is safe to use last",
+      "otherwise can only be used in the guards lesson, not in real programs"
+    ],
+    correctIndex: 0,
+    explanation: "otherwise is an ordinary Prelude name bound to the value True — there is no compiler magic involved. | True = defaultResult would compile and behave exactly the same way. otherwise is preferred purely for readability: it documents to a human reader that this guard is intentionally the always-true fallback, not an accident.",
+    optionFeedback: [
+      "",
+      "| True = ... is entirely valid Haskell; True is an ordinary Bool value and can appear anywhere a guard condition can.",
+      "Both otherwise and True are simple, already-evaluated Bool values — there is no meaningful laziness distinction between them here.",
+      "otherwise is an ordinary Prelude binding available in every Haskell program, not something scoped to this lesson."
+    ]
+  }
+]} />
 
 ## 4. Guards combine with pattern matching
 
@@ -169,6 +245,13 @@ bmiTell weight height
     bmi = weight / (height ^ 2)
 ```
 
+```text
+ghci> bmiTell 60 1.7
+"normal weight"
+ghci> bmiTell 100 1.7
+"obese"
+```
+
 `bmi` is computed once and is visible to every guard and every result in that equation. It is not visible outside it.
 
 A `where` clause may define several names, and even local functions:
@@ -183,6 +266,13 @@ rectangleReport len wid
     area      = len * wid
     perimeter = 2 * (len + wid)
     isSquare  = len == wid
+```
+
+```text
+ghci> rectangleReport 4 4
+"Square with area 16.0"
+ghci> rectangleReport 4 6
+"Rectangle with area 24.0 and perimeter 20.0"
 ```
 
 <Callout type="warn" title="Indentation carries meaning">
@@ -210,6 +300,43 @@ Both introduce local definitions, but they attach to different things:
 
 Because guards cannot see a `let` binding placed in the result, `where` is the natural choice whenever guards share a calculation.
 
+<Quiz title="Check: where and sharing work" questions={[
+  {
+    question: "Why is where used for bmi in bmiTell, instead of writing weight / (height ^ 2) out again inside each of the four guards?",
+    options: [
+      "Writing it four times would be a syntax error",
+      "where computes bmi once and makes it visible to every guard and every result in the equation, avoiding both the repetition and the risk of the four copies drifting out of sync",
+      "Guards cannot contain arithmetic expressions directly, only names",
+      "where is required syntax whenever a function has more than one guard"
+    ],
+    correctIndex: 1,
+    explanation: "Repeating weight / (height ^ 2) in all four guards would work, but it is redundant and error-prone — if the formula ever needed to change, all four copies would need updating together. where names the shared calculation once, and because its scope covers the whole equation (every guard and every right-hand side), all four guards can refer to the same bmi.",
+    optionFeedback: [
+      "Repeating the expression would compile fine; the objection is about maintainability and repetition, not syntax validity.",
+      "",
+      "Guards can absolutely contain full arithmetic expressions directly — bmiTell simply chooses not to, for the stated reason.",
+      "where is optional; a function can have several guards with no where clause at all (grade earlier in this lesson has no where)."
+    ]
+  },
+  {
+    question: "Could bmi have been defined with let ... in inside bmiTell instead of where, and still be visible to all four guards?",
+    options: [
+      "Yes, let and where are fully interchangeable in every position",
+      "No — a let binding's scope is the one expression it is attached to, and guards are evaluated before any single result expression is reached, so a let placed in a result would not be visible to the guards themselves",
+      "Yes, but only if let is placed above the function's type signature",
+      "No, because let cannot bind a Double value"
+    ],
+    correctIndex: 1,
+    explanation: "As the comparison table states, where's scope is the whole equation including every guard, while let ... in's scope is confined to one particular expression. Guards are conditions checked before any particular result expression runs, so there is no single result expression to attach a let to that would also reach the guards themselves. This is precisely why where, not let, is the natural choice when guards need to share a calculation.",
+    optionFeedback: [
+      "They are not interchangeable — their scopes differ in exactly the way that matters for this example, as the comparison table shows.",
+      "",
+      "let's position is about which particular expression it attaches to, not about placement relative to a type signature — type signatures are unrelated to this scoping question.",
+      "let can bind any type, Double included; the limitation here is about scope (which guards can see it), not about what type of value it can hold."
+    ]
+  }
+]} />
+
 ## 6. Rewriting the vowel test
 
 The previous lesson needed eleven equations. One guard does it:
@@ -222,6 +349,15 @@ isVowel :: Char -> Bool
 isVowel c = toLower c `elem` "aeiou"
 ```
 
+```text
+ghci> isVowel 'a'
+True
+ghci> isVowel 'E'
+True
+ghci> isVowel 'z'
+False
+```
+
 Or, staying with guards and no import:
 
 ```haskell
@@ -232,7 +368,70 @@ isVowel c
   | otherwise        = False
 ```
 
-Backticks turn the two-argument function `elem` into an infix operator, which reads closer to English. Chapter 7 develops that idea.
+```text
+ghci> isVowel 'a'
+True
+ghci> isVowel 'A'
+True
+ghci> isVowel 'x'
+False
+```
+
+### What the backticks actually do
+
+`elem` is an ordinary function, applied like any other: `elem x ys` asks whether `x` occurs in the list `ys`, exactly the way `isDigitChar character` applies `isDigitChar` to `character`. Wrapping a **two-argument** function's name in backticks does not change what it computes — it only changes *where you write the arguments*, turning a **prefix** function (name first, both arguments after) into an **infix** operator (name written between its two arguments):
+
+```text
+ghci> elem 'a' "aeiou"
+True
+ghci> 'a' `elem` "aeiou"
+True
+```
+
+Both lines call the exact same function on the exact same two arguments, in the exact same order — `elem 'a' "aeiou"` and `` 'a' `elem` "aeiou" `` are two spellings of one call, mechanically:
+
+```text
+elem x ys   =====>   x `elem` ys
+```
+
+Take the function name that sat *before* both arguments, and move it to sit *between* them, wrapped in backticks. Nothing else changes. The backtick form exists purely because `` c `elem` "aeiou" `` reads closer to the English sentence "c is an element of aeiou" than `elem c "aeiou"` does. Any two-argument function can be made infix this way. Chapter 7 explores the reverse direction — turning an infix operator such as `+` into an ordinary prefix function by parenthesising it, `(+)`.
+
+<Quiz title="Check: backtick infix conversion" questions={[
+  {
+    question: "What precisely happens when a two-argument function name is wrapped in backticks, mechanically?",
+    options: [
+      "The function is redefined to accept its arguments in a different order",
+      "Nothing about the function itself changes; only the written position of its name moves from before both arguments to between them — elem x ys and x `elem` ys call the identical function on the identical arguments in the identical order",
+      "Backticks convert the function into a different, related function that does something similar",
+      "Backticks are required for every function call in Haskell, not just elem"
+    ],
+    correctIndex: 1,
+    explanation: "Backtick conversion is purely notational. elem x ys and x `elem` ys are two ways of writing one function application: same function, same two arguments, same order. Nothing about elem's definition or behaviour changes — only where you, the programmer, choose to write its name relative to its arguments.",
+    optionFeedback: [
+      "Argument order is unaffected — x `elem` ys still means \"is x an element of ys\", the same question elem x ys asks.",
+      "",
+      "It is the same function, not a different one — compare the two ghci transcripts above, which give identical results for identical inputs.",
+      "Ordinary prefix application (name then arguments with spaces) is the default and by far the most common form; backticks are an optional, occasional notational choice for specific two-argument functions."
+    ]
+  },
+  {
+    question: "Can any function be used with backtick notation, or only elem?",
+    options: [
+      "Only elem, because it is specially built into GHC for infix use",
+      "Any function that takes exactly two arguments can be written infix by surrounding its name with backticks — elem is simply a common, readable example",
+      "Only functions imported from Data.Char",
+      "Only functions whose name is a single word with no capital letters"
+    ],
+    correctIndex: 1,
+    explanation: "Backtick notation is a general Haskell feature: wrapping the name of any two-argument function in backticks lets you write it between its two arguments. elem `` is used here because `` c `elem` xs `` happens to read naturally in English, not because elem has special status.",
+    optionFeedback: [
+      "elem has no special compiler privilege here — the backtick mechanism works the same way for any two-argument function.",
+      "",
+      "Data.Char has nothing to do with which functions support backtick notation; div, mod, and countless other two-argument functions from anywhere can be used the same way.",
+      "Naming rules for identifiers (lowercase start, etc.) are unrelated to whether a function supports backtick notation — any ordinary two-argument function qualifies."
+    ]
+  }
+]} />
 
 ## 7. Common errors
 
@@ -280,6 +479,7 @@ The order is forced by the specification. Both `m == n` and `m < n` must be test
   { type: 'must', text: 'I know that otherwise is just a Prelude name bound to True.' },
   { type: 'must', text: 'I can use where to share a calculation across every guard in an equation.' },
   { type: 'must', text: 'I can state the difference in scope between where and let.' },
+  { type: 'must', text: 'I can explain mechanically what backtick notation does to a two-argument function call.' },
   { type: 'avoid', text: 'Do not omit otherwise; missing guards fail at run time.' }
 ]} />
 
