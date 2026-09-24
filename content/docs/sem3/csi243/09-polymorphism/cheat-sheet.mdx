@@ -1,0 +1,180 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for type variables, class constraints, the standard type classes, Maybe, and instances: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/09-polymorphism/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `a` / `b` | A type variable — stands for any type, concrete-type-agnostic | `[a] -> a` works on `[Int]`, `[Char]`, ... |
+| `TypeName` | A concrete, specific type | `Shape`, `Direction` |
+| `ClassName` | A type class name | `Eq`, `Ord`, `Show` |
+| `funcName` | The name you give a function | `countMatches`, `describe` |
+| `param` | A name that receives an argument | `x`, `xs` |
+| `pattern` | A shape matched against an argument (here, a constructor) | `Nothing`, `Just x` |
+| `expression` | What an equation evaluates to | `x + 1`, `"no value"` |
+
+## 2. Type variable vs. concrete type
+
+<ComparisonTable
+  columns={[
+    { header: 'Convention', key: 'form' },
+    { header: 'Meaning', key: 'meaning' }
+  ]}
+  rows={[
+    { form: 'Uppercase, e.g. Int, Bool, Shape', meaning: 'A concrete type — locked to exactly that one' },
+    { form: 'Lowercase, e.g. a, b, k, v', meaning: 'A type variable — any type at all, agnostic' }
+  ]}
+/>
+
+**Template:**
+```haskell
+funcName :: TypeName -> ResultType   -- concrete: only TypeName
+funcName :: a -> ResultType          -- type variable: any type
+```
+
+**Example:**
+```haskell
+firstChar :: String -> Char   -- locked to [Char]
+headOf    :: [a] -> a         -- any list at all
+```
+```text
+ghci> headOf [1,2,3]
+1
+ghci> headOf "hello"
+'h'
+ghci> firstChar [1,2,3]
+<interactive>: error:
+    * No instance for (Num Char) arising from the literal '1'
+```
+An unconstrained type variable supports **no** operations — a function of type `[a] -> a` cannot compare, add, or print its elements; it can only rearrange or select structurally.
+
+## 3. Reading a class constraint before `=>`
+
+**Template:**
+```haskell
+funcName :: ClassName a => a -> ResultType
+funcName :: (ClassName1 a, ClassName2 a) => a -> ResultType   -- several constraints
+```
+Read as: "for any type `a` that is a member of `ClassName`, ...". Everything before `=>` is the constraint; everything after it is the ordinary function type.
+
+**Example:**
+```haskell
+sumList :: Num a => [a] -> a
+sumList []     = 0
+sumList (x:xs) = x + sumList xs
+```
+```text
+ghci> sumList [1,2,3]
+6
+```
+Dropping `Num a =>` here is rejected: `No instance for (Num a) arising from a use of '+'`. `Ord` implies `Eq`, so `(Eq a, Ord a) =>` is redundant — `Ord a =>` alone already gives you `==`.
+
+## 4. The standard classes
+
+<ComparisonTable
+  columns={[
+    { header: 'Class', key: 'cls' },
+    { header: 'Provides', key: 'provides' },
+    { header: 'Example', key: 'ex' }
+  ]}
+  rows={[
+    { cls: 'Eq', provides: '==, /=', ex: '3 == 3 → True' },
+    { cls: 'Ord (needs Eq)', provides: '<, <=, >, >=, compare, max, min', ex: 'compare 3 5 → LT' },
+    { cls: 'Show', provides: 'show, print', ex: 'show 42 → "42"' },
+    { cls: 'Read', provides: 'read (the inverse of Show)', ex: 'read "42" :: Integer → 42' },
+    { cls: 'Num', provides: '+, -, *, abs, negate', ex: '3 + 4 → 7' },
+    { cls: 'Integral (needs Num)', provides: 'div, mod, quot, rem', ex: '7 `div` 2 → 3' },
+    { cls: 'Fractional (needs Num)', provides: '/, recip', ex: '7 / 2 → 3.5' },
+    { cls: 'Enum', provides: 'succ, pred, [x..y] ranges', ex: "['a'..'e'] → \"abcde\"" },
+    { cls: 'Bounded', provides: 'minBound, maxBound', ex: 'maxBound :: Int → 9223372036854775807' }
+  ]}
+/>
+
+`Integral` and `Fractional` never overlap on an ordinary numeric type — `div` on a `Double` and `/` on an `Int` are both rejected. `Integer` has no `Bounded` instance: it is arbitrary-precision, so there is no largest value to report.
+
+## 5. `Maybe` pattern-match template
+
+**Template:**
+```haskell
+funcName :: Maybe a -> ResultType
+funcName Nothing  = fallbackExpression
+funcName (Just x) = expression
+```
+
+**Example:**
+```haskell
+describe :: Maybe Int -> String
+describe Nothing  = "no value"
+describe (Just x) = "got " ++ show x
+```
+```text
+ghci> describe (Just 5)
+"got 5"
+ghci> describe Nothing
+"no value"
+```
+`Nothing` and `Just x` are ordinary constructors of `data Maybe a = Nothing | Just a` — matching only `Just x` compiles (with a warning) but crashes at run time the moment a `Nothing` actually arrives.
+
+## 6. Writing an instance by hand
+
+**Template:**
+```haskell
+instance ClassName TypeName where
+  methodName arg1 arg2 = expression
+```
+
+**Example:**
+```haskell
+data Shape = Circle Float | Rectangle Float Float
+
+instance Show Shape where
+  show (Circle r)      = "a circle of radius " ++ show r
+  show (Rectangle w l) = "a " ++ show w ++ " by " ++ show l ++ " rectangle"
+```
+```text
+ghci> print (Circle 2.0)
+a circle of radius 2.0
+```
+A type may have only one instance of a class — `deriving (Show)` and `instance Show Shape` together is a duplicate-instance error, not a conflict resolved in your favour.
+
+## 7. `fmap`/`Functor` and `>>=`/`Monad` — by name only
+
+```haskell
+fmap :: (a -> b) -> f a -> f b   -- apply a function inside a box you don't open
+(>>=) :: m a -> (a -> m b) -> m b -- feed the value inside m into the next step
+```
+```text
+ghci> fmap (+1) (Just 5)
+Just 6
+ghci> Just 5 >>= (\x -> Just (x + 1))
+Just 6
+```
+`map` is just list's `fmap`; `do`-notation is sugar for `>>=`. This course goes no further than recognising the two names — no instance-writing, no laws.
+
+<Callout type="warn" title="round breaks ties to even, not up">
+`round 2.5` is `2`, and `round 3.5` is `4` — Haskell's `round` uses round-half-to-even ("banker's rounding"), not round-half-up. Only an *exact* tie is affected; `round 2.7` is the unsurprising `3`.
+</Callout>
+
+## 8. Common errors, at a glance
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `No instance for (Eq a)` | Lowercase — a type **variable** in your own signature has no constraint | Add `Eq a =>` to that signature |
+| `No instance for (Eq Direction)` | Uppercase — a concrete type has no `Eq` instance at all | `deriving (Eq)`, or write `instance Eq Direction where ...` |
+| `No instance for (Fractional Int)` | `/` used on an `Int` | Use `div`, or convert with `fromIntegral` |
+| `Ambiguous type variable` with `read` | `read`'s result type is undetermined | Annotate: `read s :: Integer` |
+| Pattern match covers only `Just x` | The `Nothing` case is missing | Add a `Nothing` equation |
+| Both `deriving (Show)` and `instance Show ...` | Duplicate instance for the same class | Remove one |
+| `(+) == (*)` | Function types have no `Eq` instance | Not possible; compare results instead |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can tell a type variable from a concrete type on sight, by capitalisation.' },
+  { type: 'must', text: 'I can name what each of Eq, Ord, Show, Read, Num, Integral, Fractional, Enum, and Bounded provides.' },
+  { type: 'must', text: 'I can tell apart a missing-constraint "No instance" error (lowercase) from a missing-instance one (uppercase), and apply the right fix to each.' },
+]} />
+
+Full explanations, worked traces, and more examples: [Parametric Polymorphism](/docs/sem3/csi243/09-polymorphism/notes/parametric-polymorphism) · [Type Classes and Constraints](/docs/sem3/csi243/09-polymorphism/notes/type-classes) · [The Standard Type Classes](/docs/sem3/csi243/09-polymorphism/notes/standard-classes) · [Maybe and Writing Instances](/docs/sem3/csi243/09-polymorphism/notes/maybe-and-instances).
