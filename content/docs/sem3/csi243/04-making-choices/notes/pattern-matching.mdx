@@ -7,6 +7,45 @@ Conditional expressions choose on a **Boolean test**. Pattern matching chooses o
 
 The result is code that is neater, more readable, and simpler than the equivalent nest of conditionals.
 
+### Naming the parts of a function definition, once and for all
+
+Every pattern-matched function you will see in this course has the same skeleton. Learning to name each piece pays off immediately, because the same names are used to talk about every example from here on:
+
+```haskell
+funcName :: InputType -> OutputType     -- Type signature
+funcName pattern1 = expression1         -- Equation 1
+funcName pattern2 = expression2         -- Equation 2
+funcName _        = fallbackExpression  -- Catch-all
+```
+
+| Placeholder | What it stands for | An example you have already seen |
+|---|---|---|
+| `funcName` | The name you give the function | `isZero`, `dayName`, `square` |
+| `pattern` | A literal value, a variable, `_`, or a structure (tuple/list/cons) to match the argument against | `0`, `n`, `_`, `(x, _)`, `(x:xs)` |
+| `expression` | What the function evaluates to when that equation's pattern matches | `1`, `n * n`, `True` |
+
+Each line of the template above is one **equation** — a complete `funcName pattern = expression` definition. A function is the set of all its equations together, tried in order. This vocabulary — equation, pattern, expression — is not decoration. "Which pattern matched?" and "which equation is this?" are the exact questions you ask when debugging a pattern-matching function that returns the wrong answer, and Section 2 below is built entirely around asking them correctly.
+
+<Quiz title="Check: naming the parts" questions={[
+  {
+    question: "In fac 0 = 1, which word names 0, and which names the whole line?",
+    options: [
+      "0 is the expression; the whole line is a pattern",
+      "0 is a pattern; the whole line is an equation",
+      "0 is an equation; the whole line is an expression",
+      "0 is a funcName; the whole line is a pattern"
+    ],
+    correctIndex: 1,
+    explanation: "0 is what fac's argument is matched against — a pattern. fac 0 = 1 in full — name, pattern, and the result it produces — is one equation. A function is the complete set of its equations.",
+    optionFeedback: [
+      "0 is not an expression here; it is the pattern being matched against. 1, on the right of =, is the expression.",
+      "Correct — 0 is a literal pattern, and fac 0 = 1 taken as a whole is one equation.",
+      "An equation is the whole funcName-pattern-equals-expression line, not a single value inside it — 0 alone is too small to be called an equation.",
+      "funcName refers to the function's own name, fac, not to the pattern being matched inside one of its equations."
+    ]
+  }
+]} />
+
 ## 1. The idea
 
 Write several equations for the same function. Haskell tries them **in order**, top to bottom, and uses the first one whose pattern matches.
@@ -117,7 +156,22 @@ main = do
 25
 ```
 
-`square 0` would now return `0`, and GHC warns that the second equation is redundant. **A variable pattern matches anything, so nothing below it is ever reached.**
+`square 0` would now return `0` — silently wrong, not crashed and not refused. GHC does notice, though, and says so at the exact moment it compiles the file, before you ever call anything:
+
+```text
+Pattern.hs:3:1: warning: [-Woverlapping-patterns]
+    Pattern match is redundant
+    In an equation for `square': square 0 = ...
+  |
+3 | square 0 = 1
+  | ^^^^^^^^^^^^
+```
+
+Read this literally: **redundant**, not "wrong" or "unreachable" in so many words, but that is exactly what it means — GHC is telling you that every value `square 0` could ever match is already claimed by an earlier equation, so this one can never fire. It is a warning, not an error — the module still compiles and `square 0` still (wrongly) returns `0` — which is exactly why it is worth turning warnings on and reading them, rather than treating a successful compile as proof the function is right. **A variable pattern matches anything, so nothing below it is ever reached.**
+
+<Callout type="info" title="Naming the parts, precisely">
+`_` specifically is called the **wildcard pattern** (Section 3 gives it its own row). A bare name like `y` in `square y = y * y` is a **variable pattern** — it also matches anything, but *binds* what it matches to a name you can use on the right-hand side, unlike `_`, which matches anything and throws the value away. Both are "catch-all" in the sense that neither can ever fail to match; that shared property is exactly why either one, placed too early, swallows every equation below it.
+</Callout>
 
 <Quiz title="Check: sequential matching" questions={[
   {
@@ -166,6 +220,27 @@ main = do
 | **Tuple** | A tuple of the same arity whose components all match | `fst (x, _) = x` |
 | **List** | A list of matching structure and length | `stW ['b', _, _] = True` |
 | **Cons** `(x:xs)` | A non-empty list, splitting head from tail | `head1 (x:_) = x` |
+
+<Mermaid chart={`mindmap
+  root((Kinds of pattern))
+    Literal
+      "fac 0 = 1"
+      matches one exact value
+    Variable
+      "fac n = n * fac (n - 1)"
+      matches anything, binds a name
+    Wildcard
+      "isZero _ = False"
+      matches anything, binds nothing
+    Tuple
+      "fst (x, _) = x"
+      matches a fixed arity, piece by piece
+    List
+      "stW ['b', _, _] = True"
+      matches an exact length and shape
+    Cons
+      "head1 (x:_) = x"
+      splits a non-empty list into head and tail`} caption="Six ways to match, mapped from the same idea outward. Every one of them either pins down an exact value/shape or explicitly says 'anything goes here' — there is no third option." />
 
 ### The wildcard
 
