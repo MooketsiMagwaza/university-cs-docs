@@ -224,6 +224,121 @@ let doubled = number * 2
   }
 ]} />
 
+## Under the hood: why every later line can see every earlier binding
+
+By now you have written a `do` block with four statements in a row — an output, an input, and two `let` bindings — and each later line was able to use names introduced by earlier ones. `doubled` could see `number`; the final `putStrLn` could see `doubled`. It is worth asking directly: **why does that work, and why in that order and no other?**
+
+### What `do` actually is
+
+`do` is not a special control-flow keyword with its own private rules. It is convenient notation — Haskell calls it **syntactic sugar** — for a specific pattern of nested function calls that already existed before `do` was added to the language. The `do` block
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn "Enter a whole number:"
+  inputText <- getLine
+  let number = read inputText :: Integer
+  let doubled = number * 2
+  putStrLn ("Double: " ++ show doubled)
+```
+
+means *exactly* the same thing as this, with no `do` at all:
+
+```haskell
+main :: IO ()
+main =
+  putStrLn "Enter a whole number:" >>
+  getLine >>= \inputText ->
+    let number = read inputText :: Integer in
+    let doubled = number * 2 in
+    putStrLn ("Double: " ++ show doubled)
+```
+
+Do not worry about `>>` and `>>=` as operators to write yourself yet — Chapter 9 covers what they are in full. What matters right now is the *shape*: every statement after the first is written literally **inside** the one before it, as the body of a function. `getLine >>= \inputText -> ...` means "perform `getLine`, then call the following code — everything up to the end of the `do` block — with its result named `inputText`."
+
+<Mermaid chart={`flowchart TD
+  A["putStrLn ...\n(then run what follows)"] --> B["getLine >>= \\inputText -> ...\n(inputText now in scope for everything below)"]
+  B --> C["let number = ... in ...\n(number now in scope for everything below)"]
+  C --> D["let doubled = ... in ...\n(doubled now in scope for everything below)"]
+  D --> E["putStrLn (...)\n(can see inputText, number, AND doubled)"]`} caption="Each statement is nested inside the last, like Russian dolls. A name introduced at one level is visible at every level nested inside it — never at a level above it. This is why the final putStrLn can use doubled, but nothing earlier could have used it." />
+
+### This is the "recursive nesting" you can feel but not yet name
+
+If a `do` block ever felt like each line was quietly building on a growing pile of names — and that removing an earlier line would break everything after it, never before it — that feeling was correct, and this is the mechanism behind it. `\inputText -> (rest of the block)` is a function whose *body* is the entire remaining `do` block. That body is itself `\number -> (an even smaller rest)`, once the `let` is unfolded — a function nested inside a function inside a function, one layer per statement, each layer strictly containing every layer written after it.
+
+This is the same nesting principle behind ordinary lexical scope in any language with nested blocks, not something unique to `IO`. Compare it with a chain of ordinary `let ... in` expressions with no `do` and no `IO` anywhere:
+
+```haskell
+-- Pure, no IO at all — same nesting shape, easier to see all at once.
+report :: Integer -> String
+report score =
+  let passed = score >= 50 in
+  let bonus  = if passed then 7 else 0 in
+  let total  = score + bonus in
+  "Total: " ++ show total ++ if passed then " (passed)" else " (failed)"
+```
+
+```text
+ghci> report 46
+"Total: 46 (failed)"
+ghci> report 46 + 7 -- not real code, just illustrating: 46 does not clear 50, so bonus is never added
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (report 46)
+  putStrLn (report 51)
+```
+
+```text
+Total: 46 (failed)
+Total: 58 (passed)
+```
+
+`passed` is visible while computing `bonus`; both `passed` and `bonus` are visible while computing `total`; all three are visible in the final string. Nothing here is `IO`-specific — `let...in...let...in...` nests exactly the same way `do`'s `<-` and `let` do, because `do` is sugar built on top of this same nesting, not a different mechanism.
+
+### Why this answers "why can I keep saying let and it isn't mutation"
+
+Section 3's immutability point and this section's nesting point are the same fact, seen from two directions. Each `let` does not reach backward and rewrite an existing binding — it opens a **new, deeper level of nesting**, inside which a new name happens to be visible. `number` is never changed by the existence of `doubled`; `doubled`'s definition is simply written at a point in the nesting where `number` is already in scope to be *read*. Rebinding a name (as in `let score = 72` followed by `let score = 90` from the very first lesson) works the same way: the second `let` opens a new, inner level of nesting where the name `score` refers to something new, while any code written *between* the two `let`s — at the outer level — still sees the old one. Nothing is overwritten anywhere; everything is nested.
+
+<Quiz title="Check: what do actually desugars to" questions={[
+  {
+    question: "In getLine >>= \\inputText -> restOfBlock, what exactly is restOfBlock?",
+    options: [
+      "A completely separate program that happens to run afterward",
+      "The remainder of the do block, written as the body of a function whose one parameter is the name to the left of the arrow, inputText",
+      "A comment describing what getLine does",
+      "An error-handling fallback in case getLine fails"
+    ],
+    correctIndex: 1,
+    explanation: "That is precisely what the desugaring shows: everything after inputText <- getLine in the original do block becomes the body of the lambda \\inputText -> .... inputText is that function's parameter, which is exactly why every line after the <- can use it, and no line before it could.",
+    optionFeedback: [
+      "It is not separate at all — it is nested inside the >>= call, as the function that receives getLine's result.",
+      "Correct. This is the entire mechanism: each later statement becomes the body of a function taking the earlier binding as its parameter.",
+      "Nothing here is a comment; -- and {- -} are the only comment forms, and this is ordinary, executable desugared code.",
+      "This particular pattern is about sequencing and naming a result, not about error handling; >>= does not catch failures here."
+    ]
+  },
+  {
+    question: "Why can the final putStrLn in the DoubleNumber program use doubled, number, AND inputText all at once, but inputText <- getLine could never have used doubled?",
+    options: [
+      "Because Haskell allows any binding to be used anywhere in the same file, regardless of order",
+      "Because each binding opens a new, deeper level of nesting that everything written afterward sits inside of; a name can only be seen by code nested inside the point where it was introduced, never by code written before it",
+      "Because doubled happens to be a shorter name than inputText",
+      "Because putStrLn has special permission to see every binding in the program"
+    ],
+    correctIndex: 1,
+    explanation: "The nesting diagram above shows exactly this: each statement is the body of a function nested inside the previous one. Being nested inside a scope is what makes a name visible; inputText <- getLine is not nested inside doubled's let, so it cannot see doubled — the nesting only goes one direction.",
+    optionFeedback: [
+      "Order matters a great deal — that is the entire point of the nesting structure; nothing here is a whole-file free-for-all.",
+      "Correct. This is the general rule stated directly: visibility follows nesting, and nesting only goes one direction — inward, not backward.",
+      "Name length has no bearing on scope; a one-letter name and a thirty-letter name follow exactly the same nesting rule.",
+      "putStrLn is an entirely ordinary function; it has no special scope privileges. It can see doubled only because the line calling it is textually nested inside doubled's let, like every other line in this block."
+    ]
+  }
+]} />
+
 ## Converting entered text with `read`
 
 `getLine` always obtains a `String`, even if the user types digits. Typing `4` produces the two-stage idea “the text `"4"`,” not automatically the numeric value `4`.
@@ -579,6 +694,7 @@ Triple: 15
   { type: 'must', text: 'I can explain why getLine has type IO String rather than String.' },
   { type: 'must', text: 'I can choose correctly between name <- action and let name = expression.' },
   { type: 'must', text: 'I can explain why a let binding is immutable, using two named values in the same do block.' },
+  { type: 'must', text: 'I can explain, in my own words, why a do block desugars into nested functions, and why that nesting is exactly why later lines can see earlier bindings but not the reverse.' },
   { type: 'must', text: 'I can explain why read needs a type annotation such as :: Integer.' },
   { type: 'must', text: 'I can trace a complete input-bind-process-output program by hand for a given input.' },
   { type: 'must', text: 'I can name which of the four meanings of "store" a given piece of code actually performs.' },
