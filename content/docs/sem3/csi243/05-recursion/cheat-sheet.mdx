@@ -1,0 +1,217 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for the anatomy of a recursive function, termination, linear vs. branching recursion, and closing a domain gap: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/05-recursion/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `funcName` | The name you give the function | `fac`, `sumNumbers`, `rangeSum` |
+| `param` | An argument with no pattern to match on | `n`, `x`, `acc` |
+| `pattern` | A literal or shape an argument is matched against | `0`, `1`, `[]`, `(x:xs)` |
+| `expression` | What a case evaluates to | `n * fac (n - 1)`, `x + xs` |
+| `condition` | A Boolean test in a guard | `n < 0`, `m > n` |
+| `baseValue` | What the function returns at the base case, with no further call | `1` for `fac 0`, `0` for `fib 0` |
+
+## 2. The anatomy of a recursive function
+
+Every recursive definition needs exactly two parts: a **base case** that returns directly, and a **recursive case** that calls the function again on a smaller argument.
+
+**Template:**
+```haskell
+funcName :: InputType -> OutputType
+funcName basePattern = baseValue                       -- base case: returns directly, no further call
+funcName param       = expression (funcName smaller)   -- recursive case: calls itself on a smaller argument
+```
+
+**Example:**
+```haskell
+fac :: Integer -> Integer
+fac 0 = 1                -- base case
+fac n = n * fac (n - 1)  -- recursive case
+```
+```text
+ghci> fac 5
+120
+ghci> fac 0
+1
+```
+
+The base case must be listed **first**. A bare variable pattern (`n`) placed above the literal (`0`) would match everything, including `0`, and the base case underneath it would never be tried:
+
+```haskell
+-- WRONG: fac 0 always hits the first equation and recurses into negatives forever.
+fac n = n * fac (n - 1)
+fac 0 = 1
+```
+
+## 3. The termination checklist
+
+Three questions, asked of every recursive call, before a function is considered finished:
+
+| Check | Question to ask | Fails when |
+|---|---|---|
+| Base case exists | Is there a case that returns a value directly, with no further call? | No equation matches the smallest input |
+| Argument shrinks | Does every recursive call actually change the argument? | `sumNumbers n = n + sumNumbers n` — `n` never changes |
+| Shrinks *toward* the base case | Does the change move the argument closer to a base case that exists? | `fac (-4)` counts down by 1 each call, but away from `0`, forever |
+
+All three must hold together. "The argument changes" is not enough on its own — `n - 1` shrinks `n` whether `n` is `5` or `-4`; only the first of those two is heading anywhere.
+
+## 4. Linear recursion vs. a branching call tree
+
+`fac` calls itself **once** per step, so its calls form a single chain. `fib n = fib (n - 1) + fib (n - 2)` calls itself **twice** per step, so its calls branch into a tree — and because nothing is cached, identical sub-calls such as `fib 2` are recomputed from scratch every time they reappear. An accumulator-passing version collapses the tree back into a chain by carrying the running answer forward instead of leaving work pending.
+
+<ComparisonTable
+  columns={[
+    { header: 'Property', key: 'property' },
+    { header: 'Naive fib (branching)', key: 'naive' },
+    { header: 'Accumulator fib\' (linear)', key: 'acc' }
+  ]}
+  rows={[
+    { property: 'Recursive calls per step', naive: 'Two — fib (n-1) and fib (n-2)', acc: 'One — fibAcc b (a+b) (n-1)' },
+    { property: 'Shape of the computation', naive: 'A branching call tree', acc: 'A single flat chain' },
+    { property: 'Repeats identical sub-calls?', naive: 'Yes — fib 2 is recomputed every time it reappears', acc: 'No — every value is computed exactly once' },
+    { property: 'Calls needed for fib 30', naive: 'Over 2.5 million', acc: '30' }
+  ]}
+  highlightCol="acc"
+/>
+
+**Naive fib — Template and example:**
+```haskell
+fib :: Integer -> Integer
+fib 0 = 0
+fib 1 = 1
+fib n = fib (n - 1) + fib (n - 2)
+```
+```text
+ghci> fib 9
+34
+```
+
+**Accumulator fib — Template and example:**
+```haskell
+-- a and b are the two running Fibonacci values; n counts down to 0.
+fibAcc :: Integer -> Integer -> Integer -> Integer
+fibAcc a _ 0 = a
+fibAcc a b n = fibAcc b (a + b) (n - 1)
+
+fib' :: Integer -> Integer
+fib' n = fibAcc 0 1 n
+```
+```text
+ghci> fib' 9
+34
+```
+
+<Callout type="warn" title="A shrinking argument is not enough by itself">
+`fac n = n * fac (n - 1)` shrinks `n` by exactly `1` on every call — for `n = 5` and for `n = -4` alike. `fac 5` reaches the base case `fac 0` after five steps. `fac (-4)` shrinks by the same amount every time and still never reaches it, because it is moving *away* from `0`, not towards it. A type such as `Integer -> Integer` admits values a specification never intended; always check the direction, not just that something is changing.
+</Callout>
+
+## 5. Closing a domain gap: three repair strategies
+
+A type is often wider than the specification. `Integer -> Integer` accepts negative numbers even when a function like `fac` is only meant for non-negative ones. Three ways to handle the gap:
+
+<ComparisonTable
+  columns={[
+    { header: 'Strategy', key: 'strategy' },
+    { header: 'What it does', key: 'does' },
+    { header: 'Use when', key: 'when' }
+  ]}
+  rows={[
+    { strategy: 'error', does: 'Stops immediately with a message; cannot be recovered from', when: 'The input is genuinely invalid — there is no sensible answer' },
+    { strategy: 'Extend the base case', does: 'Gives the extra values a defined, documented answer', when: 'A sensible answer exists, e.g. an empty range summing to 0' },
+    { strategy: 'Maybe result', does: 'Returns Nothing for invalid input; the caller must handle it', when: 'The caller should be able to recover, not just be stopped' }
+  ]}
+/>
+
+**`error` — Template and example:**
+```haskell
+funcName :: InputType -> OutputType
+funcName param
+  | invalidCondition = error "funcName: message naming the rule that was broken"
+  | basePattern       = baseValue
+  | otherwise         = expression
+```
+```haskell
+fac :: Integer -> Integer
+fac n
+  | n < 0            = error "fac: only defined for non-negative integers"
+  | n >= 0 && n <= 1 = 1
+  | otherwise        = n * fac (n - 1)
+```
+```text
+ghci> fac 5
+120
+ghci> fac (-1)
+*** Exception: fac: only defined for non-negative integers
+```
+
+**Extend the base case — Template and example:**
+```haskell
+funcName :: InputType -> OutputType
+funcName param
+  | extendedCondition = extendedValue   -- the extra values get a defined answer
+  | basePattern        = baseValue
+  | otherwise          = expression
+```
+```haskell
+rangeSum :: Integer -> Integer -> Integer
+rangeSum m n
+  | m > n     = 0          -- a reversed range is treated as empty
+  | m == n    = m
+  | otherwise = m + rangeSum (m + 1) n
+```
+```text
+ghci> rangeSum 5 1
+0
+ghci> rangeSum 3 5
+12
+```
+
+**Maybe — Template and example:**
+```haskell
+funcName :: InputType -> Maybe OutputType
+funcName param
+  | invalidCondition = Nothing
+  | basePattern       = Just baseValue
+  | otherwise         = case funcName smaller of
+      Nothing -> Nothing
+      Just r  -> Just (expression r)
+```
+```haskell
+safeFac :: Integer -> Maybe Integer
+safeFac n
+  | n < 0     = Nothing
+  | n <= 1    = Just 1
+  | otherwise = case safeFac (n - 1) of
+      Nothing -> Nothing
+      Just r  -> Just (n * r)
+```
+```text
+ghci> safeFac 5
+Just 120
+ghci> safeFac (-1)
+Nothing
+```
+
+## 6. Common errors, at a glance
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| GHCi hangs, or stack overflow | No reachable base case, or the argument doesn't shrink | Add a base case; confirm the recursive call actually changes the argument |
+| `fac 0` loops forever even though `fac 0 = 1` is written | The recursive case is listed above the literal base case | Put the base case first |
+| Terminates, but the answer is wrong | The base case returns the wrong value | Dry run and compare against the specification, one line at a time |
+| Terminates for some inputs, hangs for others | Only one base case where the step reaches back further (e.g. `fib` needs two) | Add a base case for every value the recursive step can reach |
+| Argument changes but never arrives | Shrinking in the wrong direction, or skipping past the base case | Check the direction and the step size against the base case |
+| Correct, but unusably slow beyond small inputs | Naive branching recursion recomputes shared sub-results | Acceptable early on; switch to an accumulator when it matters |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can write the base-case-then-recursive-case template from memory and say why the order matters.' },
+  { type: 'must', text: 'I can apply the termination checklist to a new function and say which check it fails, if any.' },
+  { type: 'must', text: 'I can say why fib branches into a tree while an accumulator version stays a single chain, without running either.' },
+]} />
+
+Full explanations, worked traces, and more examples: [How Recursion Works](/docs/sem3/csi243/05-recursion/notes/how-recursion-works) · [Dry Running a Recursive Function](/docs/sem3/csi243/05-recursion/notes/dry-running) · [Writing Recursive Functions](/docs/sem3/csi243/05-recursion/notes/writing-recursive-functions) · [Termination and Error Handling](/docs/sem3/csi243/05-recursion/notes/termination-and-errors).
