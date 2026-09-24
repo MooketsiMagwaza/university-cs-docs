@@ -27,13 +27,194 @@ functionName (x:xs) = -- combine x with functionName xs
 
 The recursion terminates because `xs` is always one element shorter than the list you started with, so repeated calls must reach `[]`.
 
+### What `:` really is
+
+`:` (cons) is not an operator that glues two lists together — that is `++`. Cons is a **constructor**: it builds one new list out of one element and one already-existing list. The previous lesson showed the consequence directly, with a diagram and a step-by-step build: `[1,2,3]` is not a primitive three-slot box, it *is* `1 : (2 : (3 : []))` — three nested applications of the same constructor, bottoming out at `[]`.
+
+That is why `(x:xs)` is the pattern that takes a list apart: since every non-empty list was *built* by one application of `:`, pattern-matching on `:` simply undoes that one application, exposing the element that was consed on (`x`) and the list it was consed onto (`xs`). See [Lists §4](/docs/sem3/csi243/06-lists-tuples/notes/lists) for the full construction story, including a step-by-step build of `[1,2,3]`.
+
+<CommonMistake title="x:xs does not 'combine' x and xs, the way ++ combines two lists">
+It is true that `x : xs` *produces* a list — but thinking of `:` as "combining two things of the same kind," the way `++` combines two lists or `+` combines two numbers, is exactly the misreading that causes confusion later. `x` and `xs` are not two peers being merged; `xs` is already a complete list, and `x` is one new element being placed in front of it. `1 : [2,3]` does not "combine" `1` and `[2,3]` as equals — it constructs a new, longer list with `1` as its head and `[2,3]` as the whole of its tail.
+</CommonMistake>
+
 <Callout type="info" title="Naming convention">
 The plural `xs` is read “exes” and means “the rest of the x values”. The course lecture notes recommend ending list argument names with `s` for exactly this reason: `ints`, `lists`, `scores`.
 </Callout>
 
+### Pattern matching `(x:xs)`, precisely
+
+`(x:xs)` only matches a **non-empty** list — matching undoes exactly one `:`, and `[]` has no `:` to undo. When it does match:
+
+- `x` binds to the **head** — the single element that was consed on last, i.e. the one that appears first when the list is read left to right.
+- `xs` binds to the **entire remaining tail** — everything else, still a list, possibly many elements long, possibly a single element long, possibly `[]`.
+
+The common beginner misreading is that `xs` is "the second element." It never is. `xs` is *the rest of the list, as a list* — its own length depends entirely on how long the original list was, and it can be empty. A short program makes this concrete for several lists at once:
+
+```haskell
+-- Show exactly what (x:xs) binds, for several different lists.
+describeList :: Show a => [a] -> String
+describeList []     = "[] -- no x, no xs; nothing to bind"
+describeList (x:xs) = "x = " ++ show x ++ ", xs = " ++ show xs
+
+main :: IO ()
+main = do
+  putStrLn (describeList [10,20,30,40])
+  putStrLn (describeList [7,8])
+  putStrLn (describeList [42])
+  putStrLn (describeList ([] :: [Integer]))
+```
+
+Exact output:
+
+```text
+x = 10, xs = [20,30,40]
+x = 7, xs = [8]
+x = 42, xs = []
+[] -- no x, no xs; nothing to bind
+```
+
+Read the first line against the misreading directly: for `[10,20,30,40]`, `xs` is `[20,30,40]` — **three** elements, not "the element after `x`." The third line is the case worth sitting with: for the singleton `[42]`, `xs` binds to `[]`, the empty list, not to "nothing" and not to an error. `[]` is a perfectly ordinary value of type `[a]`, and a function's `[]` equation is exactly what a recursive call on this particular `xs` will match next.
+
+<Quiz title="Check: Binding x and xs" questions={[
+  {
+    question: "For the list [5,6,7], what does xs bind to when matched against the pattern (x:xs)?",
+    options: [
+      "6, the second element",
+      "[6,7], the rest of the list after the head",
+      "[5,6,7], the whole original list",
+      "7, the last element"
+    ],
+    correctIndex: 1,
+    explanation: "x binds to the head, 5. xs binds to everything else, as a list: [6,7]. It is not the second element on its own — it is the entire remaining tail, however many elements that turns out to be.",
+    optionFeedback: [
+      "6 is the head of xs, not xs itself — xs is the whole tail [6,7], not one element plucked out of it.",
+      "Correct — xs is the entire remainder of the list once the head is removed, still wrapped up as a list.",
+      "That would mean nothing was removed at all; x is bound to 5 specifically so it is peeled off, leaving xs as the shorter list [6,7].",
+      "7 is the last element of xs, but xs itself is the pair [6,7], not a single element."
+    ]
+  },
+  {
+    question: "describeList [42] prints \"x = 42, xs = []\". What does this show about xs for a one-element list?",
+    options: [
+      "That matching a singleton against (x:xs) fails, since there's nothing left for xs",
+      "That xs is bound to the empty list [] — a valid, ordinary value, not an error and not \"no value\"",
+      "That xs is bound to 42 as well, duplicating x",
+      "That describeList must have a bug, since xs should never be empty"
+    ],
+    correctIndex: 1,
+    explanation: "(x:xs) matches any list with at least one element. For [42], removing the head 42 leaves exactly []: a real, valid list value of length zero, not a failure and not the absence of a value. This is precisely why every list recursion still needs its own [] equation — the [] a singleton produces has to go somewhere on the next call.",
+    optionFeedback: [
+      "The match succeeds fine — [42] has a head (42) and a tail ([]), which is exactly what (x:xs) requires: at least one element.",
+      "Correct — [] is an ordinary, valid list value here, exactly the same [] you would pass in directly.",
+      "x and xs are bound independently to different parts of the list; xs is not a copy of x, it is what remains after x is removed.",
+      "This is the correct, expected behaviour for a singleton — not a bug. A one-element list's tail is always []."
+    ]
+  }
+]} />
+
 <CommonMistake title="Forgetting the [] equation">
 Every recursive list function needs a `[]` case, even when the problem statement never mentions an empty list explicitly — it is what stops the recursion. Skip it and GHC compiles the function anyway, because the type checker only confirms types line up, not that every pattern is covered. The very first call on `[]` then crashes with `Non-exhaustive patterns`.
 </CommonMistake>
+
+### Watching the crash happen
+
+The warning above is abstract until you see it fire. Compile a function that is deliberately missing its `[]` equation:
+
+```haskell
+-- Deliberately missing the [] case, to see what actually happens.
+headTotal :: [Integer] -> Integer
+headTotal (x:xs) = x + headTotal xs
+```
+
+Loading it with the incomplete-patterns warning turned on flags the exact gap, by name, before the program ever runs:
+
+```text
+ghci> :set -Wincomplete-patterns
+ghci> :load Crash.hs
+Crash.hs:2:1: warning: [-Wincomplete-patterns]
+    Pattern match(es) are non-exhaustive
+    In an equation for `headTotal':
+        Patterns of type `[Integer]' not matched: []
+Ok, one module loaded.
+```
+
+That warning is not a crash — the module still loads, exactly as the callout above says. Calling `headTotal` on any finite list, though, eventually reaches the unhandled `[]`:
+
+```text
+ghci> headTotal [4,7,2]
+*** Exception: Crash.hs:2:1-35: Non-exhaustive patterns in function headTotal
+```
+
+`headTotal [4,7,2]` unwinds to `4 + headTotal [7,2]`, then `4 + (7 + headTotal [2])`, then `4 + (7 + (2 + headTotal []))` — and there, `headTotal []` has no equation to match against, so the program aborts instead of producing a number. (The exact position GHC reports, and whether it also prints a numbered `[GHC-nnnnn]` code alongside `[-Wincomplete-patterns]`, can vary a little between GHC versions, the same way the `:load` progress messages do elsewhere in this course. The two facts that matter never do: it is a warning, not a compile error, and the crash names the very pattern the warning already pointed at.)
+
+This is also the concrete reason the two-case split is not a style preference. A list's own shape is either "empty" or "a head and a tail" — there is no third shape — so a function that only handles one of those two shapes is, by construction, partial on the other.
+
+### A third shape: counting occurrences
+
+Every function so far either measured the whole list or decided, per element, whether to keep it. Counting how many elements equal a specific value combines both ideas: recurse all the way to `[]`, and at each `(x:xs)` step decide whether *this* element counts, without ever throwing an element away from consideration.
+
+```haskell
+-- How many times does v occur in the list?
+countOccurrences :: Eq a => a -> [a] -> Int
+countOccurrences _ []     = 0
+countOccurrences v (x:xs)
+  | v == x    = 1 + countOccurrences v xs
+  | otherwise = countOccurrences v xs
+```
+
+`Eq a` is required because the function compares elements with `==`; without it, `v == x` would not typecheck for an arbitrary `a`.
+
+<StepByStep>
+  <StepByStepTitle>Tracing countOccurrences 3 [3,1,3,3,2]</StepByStepTitle>
+
+  <Step number={1}>
+  <StepTitle>Head matches</StepTitle>
+  `countOccurrences 3 [3,1,3,3,2]`: `x = 3`, `xs = [1,3,3,2]`. `3 == 3` is `True`, so this call contributes `1 + countOccurrences 3 [1,3,3,2]`.
+  </Step>
+
+  <Step number={2}>
+  <StepTitle>Head doesn't match</StepTitle>
+  `countOccurrences 3 [1,3,3,2]`: `x = 1`, `xs = [3,3,2]`. `3 == 1` is `False`, so this call contributes nothing extra: `countOccurrences 3 [3,3,2]`.
+  </Step>
+
+  <Step number={3}>
+  <StepTitle>Head matches again</StepTitle>
+  `countOccurrences 3 [3,3,2]` contributes `1 + countOccurrences 3 [3,2]`.
+  </Step>
+
+  <Step number={4}>
+  <StepTitle>Head matches a third time</StepTitle>
+  `countOccurrences 3 [3,2]` contributes `1 + countOccurrences 3 [2]`.
+  </Step>
+
+  <Step number={5}>
+  <StepTitle>Head doesn't match, list shrinks to empty</StepTitle>
+  `countOccurrences 3 [2]` contributes `countOccurrences 3 []`, which is the base case: `0`.
+  </Step>
+
+  <Step number={6}>
+  <StepTitle>Rewind</StepTitle>
+  `0` (step 5) becomes `1 + 0 = 1` (step 4), becomes `1 + 1 = 2` (step 3), passes through unchanged (step 2 adds nothing), becomes `1 + 2 = 3` (step 1). Final answer: `3`.
+  </Step>
+</StepByStep>
+
+```haskell
+main :: IO ()
+main = do
+  print (countOccurrences 3 [3,1,3,3,2])
+  print (countOccurrences 9 [3,1,3,3,2])
+  print (countOccurrences 'e' "elephant")
+```
+
+Exact output:
+
+```text
+3
+0
+2
+```
+
+The second call shows the not-found case: `9` never matches any head, so every call falls into the `otherwise` branch until `[]` returns `0` — no error, just a truthful zero. The third call shows `countOccurrences` working on a `String` (a `[Char]`) exactly as it does on a list of `Integer`, because `Eq a` is the only constraint the signature makes: `'e'` occurs at positions 0 and 2 of `"elephant"`, so the count is `2`.
 
 <Quiz title="Check: The Standard Split" questions={[
   {
@@ -117,6 +298,43 @@ length' [4,7,2]
 
 The same unwinding and rewinding as Chapter 5, with the list shrinking instead of a number.
 
+<StepByStep>
+  <StepByStepTitle>The same two phases, applied to a list</StepByStepTitle>
+
+  <Step number={1}>
+  <StepTitle>Unwinding</StepTitle>
+  Each call defers its `1 +` and recurses one element further in: `length' [4,7,2]` becomes `1 + length' [7,2]`, which becomes `1 + (1 + length' [2])`, which becomes `1 + (1 + (1 + length' []))`. Nothing is added up yet — every `1 +` is still waiting on the call to its right.
+  </Step>
+
+  <Step number={2}>
+  <StepTitle>Hitting the base case</StepTitle>
+  `length' []` matches the first equation directly: `0`. No further recursive call happens.
+  </Step>
+
+  <Step number={3}>
+  <StepTitle>Rewinding</StepTitle>
+  Each deferred `1 +` is now applied, innermost first: `1 + 0 = 1`, then `1 + 1 = 2`, then `1 + 2 = 3`. The final `3` is exactly the number of elements consed onto `[]` to build `[4,7,2]`.
+  </Step>
+</StepByStep>
+
+A complete program confirms `length'` on three different lists, including the two edge cases worth checking by habit — empty, and exactly one element:
+
+```haskell
+main :: IO ()
+main = do
+  print (length' ([] :: [Integer]))
+  print (length' [9])
+  print (length' [4,7,2,9,1])
+```
+
+Exact output:
+
+```text
+0
+1
+5
+```
+
 <Quiz title="Check: Defining the Prelude Functions" questions={[
   {
     question: "Why is sum' [] = 0 the right base case, rather than, say, sum' [] = 1?",
@@ -184,6 +402,43 @@ doubleAll [1,2,3]
 ```
 
 The base case returns `[]` because the result of transforming nothing is nothing.
+
+<StepByStep>
+  <StepByStepTitle>Tracing doubleAll [1,2,3], consing on the way back</StepByStepTitle>
+
+  <Step number={1}>
+  <StepTitle>Unwind, deferring each cons</StepTitle>
+  `doubleAll [1,2,3]` becomes `2 : doubleAll [2,3]`, which becomes `2 : (4 : doubleAll [3])`, which becomes `2 : (4 : (6 : doubleAll []))`. Each step computes its own doubled head immediately (`x * 2`), but the `:` that attaches it to the *rest* of the result has to wait for that rest to exist.
+  </Step>
+
+  <Step number={2}>
+  <StepTitle>Base case supplies the rest</StepTitle>
+  `doubleAll [] = []` — the only thing every pending `:` needs in order to finally build something concrete.
+  </Step>
+
+  <Step number={3}>
+  <StepTitle>Rewind, consing from the inside out</StepTitle>
+  `6 : [] = [6]`, then `4 : [6] = [4,6]`, then `2 : [4,6] = [2,4,6]`. The head consed *last*, during rewinding, is the one nearest the base case — but it ends up at the *back* of the result, since each outer cons places its own head in front of whatever the inner one already built.
+  </Step>
+</StepByStep>
+
+```haskell
+main :: IO ()
+main = do
+  print (doubleAll [])
+  print (doubleAll [5])
+  print (doubleAll [1,2,3,-4])
+```
+
+Exact output:
+
+```text
+[]
+[10]
+[2,4,6,-8]
+```
+
+The last line is worth a second look: `doubleAll` doubles whatever the elements are, including negative ones — `-4 * 2` is `-8`, not an error and not `4`.
 
 <Quiz title="Check: Returning a List" questions={[
   {
@@ -430,7 +685,240 @@ Both are acceptable. The recursive version shows the mechanism; the second shows
   }
 ]} />
 
-## 7. Common errors
+## 7. Generating a list by recursion
+
+Every function so far **consumed** a list: it pattern-matched on `[]` and `(x:xs)` and produced some answer from the pieces already there. Recursion can just as easily go the other way — **produce** a list from a plain number, with no input list at all. The same discipline still applies; it just splits on the value being counted instead of on an existing list's shape.
+
+`evensUpTo n` should behave like the range `[2,4 .. n]`, but built by an explicit recursive process rather than described directly:
+
+```haskell
+-- Build [2,4 .. n] by counting up from 2 and consing each survivor onto the rest.
+evensUpTo :: Integer -> [Integer]
+evensUpTo n = go 2
+  where
+    go k
+      | k > n     = []
+      | otherwise = k : go (k + 2)
+```
+
+`go` is a local helper, exactly like `myReverseFast`'s `go` earlier in this lesson — it carries the "current candidate" `k` as an extra argument that `evensUpTo`'s own signature doesn't need to expose. The base case is reached not by running out of list elements, but by `k` counting past `n`.
+
+<StepByStep>
+  <StepByStepTitle>Tracing evensUpTo 8, i.e. go 2</StepByStepTitle>
+
+  <Step number={1}>
+  <StepTitle>k = 2, within range</StepTitle>
+  `2 > 8` is `False`, so `go 2 = 2 : go 4`.
+  </Step>
+
+  <Step number={2}>
+  <StepTitle>k = 4, within range</StepTitle>
+  `go 4 = 4 : go 6`.
+  </Step>
+
+  <Step number={3}>
+  <StepTitle>k = 6, within range</StepTitle>
+  `go 6 = 6 : go 8`.
+  </Step>
+
+  <Step number={4}>
+  <StepTitle>k = 8, within range</StepTitle>
+  `go 8 = 8 : go 10`.
+  </Step>
+
+  <Step number={5}>
+  <StepTitle>k = 10, base case</StepTitle>
+  `10 > 8` is `True`, so `go 10 = []`. Nothing left to cons.
+  </Step>
+
+  <Step number={6}>
+  <StepTitle>Rewind</StepTitle>
+  `[]` becomes `8 : [] = [8]`, then `6 : [8] = [6,8]`, then `4 : [6,8] = [4,6,8]`, then `2 : [4,6,8] = [2,4,6,8]`.
+  </Step>
+</StepByStep>
+
+```haskell
+main :: IO ()
+main = do
+  print (evensUpTo 20)
+  print (evensUpTo 7)
+  print (evensUpTo 0)
+```
+
+Exact output:
+
+```text
+[2,4,6,8,10,12,14,16,18,20]
+[2,4,6]
+[]
+```
+
+`evensUpTo 7` stops at `6`, the last even number not exceeding `7` — the same rule a range applies. `evensUpTo 0` has no even number `>= 2` that is `<= 0`, so `go 2` hits its base case immediately and the answer is `[]`.
+
+<Callout type="info" title="Same list, two different techniques">
+[List Comprehensions §5](/docs/sem3/csi243/06-lists-tuples/notes/list-comprehensions) makes the point that comprehensions and recursion are interchangeable for *filtering* an existing list. The same equivalence holds here for *generating* one: `[2,4 .. 20]` and `[x | x <- [2..20], even x]` both state directly what the result is, while `evensUpTo` states how to build it, one cons at a time. All three produce `[2,4,6,8,10,12,14,16,18,20]`. Prefer the range or the comprehension in real code — they say exactly what is meant — but the recursive version is what a range is secretly doing underneath, and writing it out is what makes the "generate, don't just consume" side of `(x:xs)`-style recursion visible.
+</Callout>
+
+<CommonMistake title="Counting down and consing produces the list backwards">
+A tempting first attempt counts *down* from `n` instead of up from `2`, consing every even survivor as it goes: `evensDown n | n < 2 = [] | even n = n : evensDown (n - 1) | otherwise = evensDown (n - 1)`. It compiles, and `evensDown 8` does contain the right four numbers — but it evaluates to `[8,6,4,2]`, not `[2,4,6,8]`. Consing the *largest* survivor first (during the earliest, outermost call) puts it at the front of the result. This is the same "Result reversed" mistake the table below already names — worth catching here, since a generator has no input list to eyeball for a hint that the order came out wrong.
+</CommonMistake>
+
+<Quiz title="Check: Generating by Recursion" questions={[
+  {
+    question: "In evensUpTo, what determines when the recursion stops, given that there is no list to shrink toward []?",
+    options: [
+      "It never stops — evensUpTo would run forever",
+      "The counter k, once it exceeds n, matches the k > n guard and go returns [] with no further recursive call",
+      "It stops after exactly two recursive calls, always",
+      "It stops when k becomes negative"
+    ],
+    correctIndex: 1,
+    explanation: "There is no list argument shrinking here — the thing shrinking toward its base case is the gap between k and n. Once k > n, the guard fires, go returns [] directly, and the chain of pending conses can finally be built during rewinding.",
+    optionFeedback: [
+      "It does terminate, for exactly the reason a base case usually guarantees: k moves strictly closer to exceeding n on every call (k + 2 each time).",
+      "Correct — k > n plays the role [] plays in a consuming recursion: it is the condition that ends the recursive chain.",
+      "The number of calls depends entirely on n — evensUpTo 20 takes far more calls than evensUpTo 8.",
+      "k counts upward from 2 by 2s here; it is compared against n, not checked against 0 or negativity."
+    ]
+  },
+  {
+    question: "Why does evensDown (which counts down from n, consing along the way) return [8,6,4,2] for evensDown 8, instead of the ascending [2,4,6,8]?",
+    options: [
+      "It doesn't — this is a typo, and evensDown 8 actually returns [2,4,6,8]",
+      "Because the first element consed on, during the earliest call, is 8 itself — and consing always places the new head at the front of whatever comes after it",
+      "Because even numbers are always listed in descending order in Haskell",
+      "Because evensDown has a bug unrelated to the direction it counts"
+    ],
+    correctIndex: 1,
+    explanation: "evensDown 8 = 8 : evensDown 7 = 8 : evensDown 6 = 8 : (6 : evensDown 5) = ... — 8 is consed on right away, at the very first call, so it ends up at the front of the whole result. Counting down and consing immediately builds the list in the order the counting happens, which is the reverse of counting up.",
+    optionFeedback: [
+      "This is exactly what evensDown 8 evaluates to — the CommonMistake box traces it by hand, and it really is backwards.",
+      "Correct — the earliest cons (of the largest survivor) ends up outermost, hence at the front, giving descending order.",
+      "There's nothing special about even numbers here; the same backwards-order issue would happen counting down through any values.",
+      "The direction it counts is exactly the cause — evensUpTo, which counts the other way, produces the correct ascending order with the same overall shape of definition."
+    ]
+  }
+]} />
+
+## 8. Searching a list by recursion
+
+`elem` already answers "does this value occur in the list?" — but like `length`, `sum`, and every other Prelude function used so far, it is worth building once by hand to see the mechanism, and to have the pattern ready for searches `elem` cannot express, such as returning *where* a value is rather than just whether it is there.
+
+```haskell
+-- Does v occur anywhere in the list?
+contains :: Eq a => a -> [a] -> Bool
+contains _ []     = False
+contains v (x:xs)
+  | v == x    = True
+  | otherwise = contains v xs
+```
+
+The shape is the familiar filter shape from §4, with one difference: the moment a match is found, there is no need to keep looking. `contains` doesn't express that short-circuit explicitly — Haskell's laziness means the deeper recursive call for the remaining tail is simply never made once `True` is returned, so the search stops there anyway.
+
+<StepByStep>
+  <StepByStepTitle>Tracing contains 9 [3,7,9,2]</StepByStepTitle>
+
+  <Step number={1}>
+  <StepTitle>3 /= 9</StepTitle>
+  `contains 9 [3,7,9,2]`: `x = 3`, `9 == 3` is `False`, so `contains 9 [7,9,2]`.
+  </Step>
+
+  <Step number={2}>
+  <StepTitle>7 /= 9</StepTitle>
+  `contains 9 [7,9,2]`: `x = 7`, `9 == 7` is `False`, so `contains 9 [9,2]`.
+  </Step>
+
+  <Step number={3}>
+  <StepTitle>9 == 9, found</StepTitle>
+  `contains 9 [9,2]`: `x = 9`, `9 == 9` is `True`. The answer is `True` immediately — `[2]` is never inspected.
+  </Step>
+</StepByStep>
+
+```haskell
+main :: IO ()
+main = do
+  print (contains 7 [3,7,9,2])
+  print (contains 100 [3,7,9,2])
+```
+
+Exact output:
+
+```text
+True
+False
+```
+
+The second call is the one worth tracing by hand once: `100` matches none of `3`, `7`, `9`, or `2`, so every call falls into `otherwise` until the list is exhausted, and only then does the base case answer `False` — a search that finishes by *running out of list*, not by finding a mismatch worth reporting early.
+
+`atPosition` in §6 went from a **position** to an **element**. The natural companion goes the other way — from an element to the **position** of its first occurrence:
+
+```haskell
+-- The position of the first occurrence of v, or -1 if it never occurs.
+positionOf :: Eq a => a -> [a] -> Int
+positionOf v xs = go xs 0
+  where
+    go []     _ = -1
+    go (y:ys) i
+      | y == v    = i
+      | otherwise = go ys (i + 1)
+```
+
+`go` carries a running position `i`, incremented on every step that doesn't match — the same paired-shrinking idea as `atPosition`'s `y - 1`, run in the opposite direction: there, `y` counted down toward the target; here, `i` counts up toward it.
+
+```haskell
+main :: IO ()
+main = do
+  print (positionOf 9 [3,7,9,2])
+  print (positionOf 100 [3,7,9,2])
+```
+
+Exact output:
+
+```text
+2
+-1
+```
+
+`9` is at index `2` (lists index from 0, as §6 established), matching `atPosition`'s convention exactly. `-1` signals "not found," the same convention many languages' built-in searches use. `Data.List.elemIndex` gives the same answer more safely, wrapped in a `Maybe` rather than a sentinel value — worth knowing exists once Chapter 9 covers `Maybe` properly.
+
+<Quiz title="Check: Searching by Recursion" questions={[
+  {
+    question: "Once contains finds a match and returns True, what happens to the rest of the list that was not yet inspected?",
+    options: [
+      "It is still fully traversed before True is returned, just to be thorough",
+      "It is never inspected — the matching equation returns True immediately, with no further recursive call made",
+      "It causes a runtime error, since the list wasn't fully consumed",
+      "contains restarts from the beginning to double-check"
+    ],
+    correctIndex: 1,
+    explanation: "contains v (x:xs) | v == x = True fires as soon as the guard is True — the whole expression is just True, with no recursive call anywhere in that branch. Nothing after the matching element is ever looked at.",
+    optionFeedback: [
+      "There is nothing in the definition that forces the rest of the list to be visited — the True branch contains no call to contains at all.",
+      "Correct — the moment v == x holds, the answer is True and no further recursive call happens; the remaining tail is simply never inspected.",
+      "Returning early is completely normal and well-defined; it is not a partial pattern or an unhandled case.",
+      "contains has no notion of restarting; each call proceeds forward through the list exactly once, and stops the instant it can."
+    ]
+  },
+  {
+    question: "What does positionOf 100 [3,7,9,2] return, and why?",
+    options: [
+      "4, the length of the list, as if 100 were appended at the end",
+      "-1, because 100 never matches any element and go eventually reaches [] with i = 4",
+      "An error, since 100 is not in the list",
+      "0, defaulting to the first position"
+    ],
+    correctIndex: 1,
+    explanation: "go checks each element in turn, incrementing i each time none matches: i reaches 0, 1, 2, 3 across the four elements, none of which is 100, and then go [] 4 hits the base case, returning -1 regardless of what i had counted up to.",
+    optionFeedback: [
+      "The base case go [] _ = -1 discards i entirely — the running count is not what gets returned when nothing matches.",
+      "Correct — positionOf is total for this case: it does not crash, it reports -1 as its 'not found' sentinel.",
+      "positionOf never calls error; -1 is its designed way of reporting absence, matching the Bool version's False.",
+      "0 would mean the first element matched, which it doesn't here — none of the four elements is 100."
+    ]
+  }
+]} />
+
+## 9. Common errors
 
 | Symptom | Cause | Repair |
 |---|---|---|
@@ -441,7 +929,7 @@ Both are acceptable. The recursive version shows the mechanism; the second shows
 | `Couldn't match [a] with a` | `x` used where `xs` was meant, or vice versa | `x` is an element, `xs` is a list |
 | Wrong total for an empty list | Base case is not the identity value | `sum` needs `0`, `product` needs `1` |
 
-## 8. Practice
+## 10. Practice
 
 For each: specification, base case, recursive step, signature, implementation, dry run, and tests including the empty list.
 
@@ -520,7 +1008,11 @@ Recurse on the **first** list. When it is exhausted, the answer is simply the se
   { type: 'must', text: 'I can write a function that returns a list by consing in the recursive step.' },
   { type: 'must', text: 'I can filter a list with guards that either cons the head or skip it.' },
   { type: 'must', text: 'I can use (x:y:rest) to inspect two elements at once.' },
-  { type: 'avoid', text: 'Do not omit the [] equation; it is the base case and its absence crashes at run time.' }
+  { type: 'must', text: 'I can say precisely what x and xs bind to for a given list, including a singleton — and that xs is never "the second element".' },
+  { type: 'must', text: 'I can write a function that generates a list by recursion from a plain number, not just one that consumes an existing list.' },
+  { type: 'must', text: 'I can write a linear search by recursion, both as a Bool test and as a position lookup, without reaching for elem.' },
+  { type: 'avoid', text: 'Do not omit the [] equation; it is the base case and its absence crashes at run time.' },
+  { type: 'avoid', text: 'Do not think of : as combining two lists the way ++ does; it constructs one list from one element and one already-built list.' }
 ]} />
 
 Continue with [Tuples](/docs/sem3/csi243/06-lists-tuples/notes/tuples).

@@ -254,6 +254,27 @@ ghci> 1 : 2 : 3 : numbers
 [1,2,3,1,2,3,4]
 ```
 
+A complete program confirms the same three cases, side by side:
+
+```haskell
+main :: IO ()
+main = do
+  let numbers = [1,2,3,4]
+  print (0 : numbers)
+  print (1 : 2 : 3 : numbers)
+  print (10 : [])
+```
+
+Exact output:
+
+```text
+[0,1,2,3,4]
+[1,2,3,1,2,3,4]
+[10]
+```
+
+The last line is cons applied to `[]` directly — one cons cell, one element, exactly as small as the pattern `(x:xs)` will ever have to match.
+
 <Callout type="warn" title="You cannot cons a list onto an element">
 `:` takes an **element** on the left and a **list** on the right. `[1,2] : 3` is a type error. To join two lists use `++`, not `:`.
 </Callout>
@@ -349,6 +370,33 @@ ghci> numbers !! 1
 ghci> numbers !! 9
 *** Exception: Prelude.!!: index too large
 ```
+
+A complete program runs `take`, `drop`, and `!!` together on several sizes, staying inside valid indices so it doesn't crash:
+
+```haskell
+main :: IO ()
+main = do
+  let numbers = [1,2,3,4,5]
+  print (take 2 numbers)
+  print (take 8 numbers)
+  print (drop 2 numbers)
+  print (drop 8 numbers)
+  print (numbers !! 0)
+  print (numbers !! 4)
+```
+
+Exact output:
+
+```text
+[1,2]
+[1,2,3,4,5]
+[3,4,5]
+[]
+1
+5
+```
+
+`drop 8 numbers` is `[]` for the same reason `take 8 numbers` is the whole list: `drop` is total too, and discarding more elements than exist just leaves nothing.
 
 ### Concatenation with `++`
 
@@ -496,6 +544,28 @@ ghci> map length grid
 ```
 
 `length grid` is `3` because the outer list has three elements — each of which happens to be a list. The last line uses `map` to apply `length` to every inner list at once — read `map f lst` for now as "run `f` on each element of `lst`, and collect the results" (Chapter 7 covers `map` properly); here it turns the three inner lists into their three lengths, `[2,3,1]`.
+
+A second grid, with an empty row included, confirms `map length` handles that case with no special treatment:
+
+```haskell
+main :: IO ()
+main = do
+  let grid = [[1,2],[3,4,5],[6]]
+  print (length grid)
+  print (map length grid)
+  let deeper = [[1],[2,3],[4,5,6],[]]
+  print (map length deeper)
+```
+
+Exact output:
+
+```text
+3
+[2,3,1]
+[1,2,3,0]
+```
+
+`deeper` has four rows, so `map length deeper` has four results — its last row, `[]`, is a perfectly ordinary zero-length list, and `length []` is `0`, not an error.
 
 <Quiz title="Check: Lists of Lists" questions={[
   {
