@@ -258,6 +258,32 @@ doubleAll' :: [Integer] -> [Integer]
 doubleAll' xs = [x * 2 | x <- xs]
 ```
 
+A complete program runs both comprehension versions on a few varied lists, including two edge cases worth checking by habit — an empty list, and a list with nothing surviving the filter:
+
+```haskell
+main :: IO ()
+main = do
+  print (positiveNumbers' [-1,5,-3,8])
+  print (positiveNumbers' [-4,-4,-4])
+  print (positiveNumbers' [])
+  print (doubleAll' [1,2,3])
+  print (doubleAll' [])
+  print (doubleAll' [-5,0,5])
+```
+
+Exact output:
+
+```text
+[5,8]
+[]
+[]
+[2,4,6]
+[]
+[-10,0,10]
+```
+
+`positiveNumbers' [-4,-4,-4]` is `[]` not because the input was empty but because every element failed the test `x > 0` — an empty *result* from a non-empty *input*, which the comprehension handles with no special case at all.
+
 <Callout type="info" title="When to prefer which">
 A comprehension reads best when the result is “each element of that list, transformed and/or filtered.” Recursion is required when the result depends on more than one element at a time (as in `isSorted`), when elements must be combined into a single value (as in `sum`), or when the recursion is not over a list at all.
 </Callout>
@@ -277,6 +303,26 @@ ghci> [name | (name, mark) <- marks, mark >= 70]
 ghci> [(name, mark + 5) | (name, mark) <- marks]
 [("Kago",77),("Naledi",73),("Thato",96)]
 ```
+
+A complete program tries the filter both ways round the same threshold, to see the two results are complementary:
+
+```haskell
+main :: IO ()
+main = do
+  print [name | (name, mark) <- marks, mark >= 70]
+  print [(name, mark + 5) | (name, mark) <- marks]
+  print [name | (name, mark) <- marks, mark < 70]
+```
+
+Exact output:
+
+```text
+["Kago","Thato"]
+[("Kago",77),("Naledi",73),("Thato",96)]
+["Naledi"]
+```
+
+The first and third lines partition `marks` into two disjoint groups — everyone at or above 70, and everyone below it — using the same generator with opposite tests. Between them they account for all three students, with nobody counted twice.
 
 Because a `String` is a list of `Char`, comprehensions work on text directly:
 
@@ -331,6 +377,25 @@ vowelsIn s = [c | c <- s, c `elem` "aeiouAEIOU"]
 largerY :: [Integer] -> Integer -> [Integer]
 largerY xs y = [x | x <- xs, x > y]
 ```
+
+A complete program checks `vowelsIn` on three different strings, including one with no vowels at all:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (vowelsIn "Haskell")
+  putStrLn (vowelsIn "CSI243")
+  putStrLn (vowelsIn "xyz")
+```
+
+Exact output:
+
+```text
+ae
+I
+```
+
+The third line prints as nothing at all — `vowelsIn "xyz"` is `""`, the empty string, which `putStrLn` displays as a blank line rather than any visible marker. `"CSI243"` contributes only the capital `'I'`, since the test `` c `elem` "aeiouAEIOU" `` checks against both cases but the digits `2`, `4`, `3` and the consonants never match at all.
 
 Question 9 collapses four lines of recursion into one. That is the point of comprehensions — but only because you already know what the recursion was doing.
 
