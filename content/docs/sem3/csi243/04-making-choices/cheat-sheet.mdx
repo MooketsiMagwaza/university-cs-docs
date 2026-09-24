@@ -1,0 +1,209 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for conditional expressions, pattern matching, guards, and case expressions: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/04-making-choices/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `funcName` | The name you give the function | `isZero`, `grade`, `square` |
+| `param` / `parameters` | A name that receives an input value, with no pattern to match on | `x`, `n`, `mark` |
+| `pattern` | A literal, variable, wildcard, tuple, list, or cons shape to match an argument against | `0`, `True`, `(x:xs)`, `_` |
+| `expression` / `result` | What the equation, guard, or alternative evaluates to | `x * x`, `True`, `"Invalid"` |
+| `condition` | A Boolean test | `mark >= 80`, `n == 0` |
+
+## 2. Function equations and pattern matching
+
+**What it's called:** a function defined this way is a set of **equations**; `_` is the **wildcard pattern**; choosing between equations by their shape is **pattern matching**.
+
+**Template:**
+```haskell
+funcName :: InputType -> OutputType
+funcName pattern1 = expression1
+funcName pattern2 = expression2
+funcName _        = fallbackExpression   -- catch-all
+```
+
+**Example:**
+```haskell
+describeNumber :: Int -> String
+describeNumber 0 = "Zero"
+describeNumber 1 = "One"
+describeNumber _ = "Some other number"
+```
+```text
+ghci> describeNumber 0
+"Zero"
+ghci> describeNumber 99
+"Some other number"
+```
+
+### The wildcard `_`
+
+Matches anything, binds no name. Use it as a catch-all, or to ignore part of a tuple/list.
+
+```haskell
+getFirst :: (a, b) -> a
+getFirst (x, _) = x
+```
+`getFirst (10, 20)` → `10`.
+
+### Order matters — most specific first
+
+Equations are tried **top to bottom**; the first match wins. A wildcard or bare variable placed first swallows everything below it.
+
+```haskell
+-- WRONG: the wildcard/variable pattern comes first.
+describeWrong :: Int -> String
+describeWrong _ = "Some other number"   -- matches EVERYTHING
+describeWrong 0 = "Zero"                -- unreachable
+```
+`describeWrong 0` → `"Some other number"`, and GHC says so at compile time:
+```text
+warning: [-Woverlapping-patterns]
+    Pattern match is redundant
+    In an equation for `describeWrong': describeWrong 0 = ...
+```
+
+**Rule:** most specific pattern first, most general (`_` or a bare variable) last.
+
+## 3. Four ways to make a choice
+
+<ComparisonTable
+  columns={[
+    { header: 'Form', key: 'form' },
+    { header: 'Chooses on', key: 'basis' },
+    { header: 'Use when', key: 'when' }
+  ]}
+  rows={[
+    { form: 'if...then...else', basis: 'One Boolean condition', when: 'Exactly two outcomes' },
+    { form: 'Pattern matching', basis: 'Shape/literal value of an argument', when: 'Each case is a distinct literal or structure' },
+    { form: 'Guards (|)', basis: 'A sequence of Boolean tests', when: 'Ranges or compound conditions on one argument' },
+    { form: 'case...of', basis: 'The shape of any expression', when: 'You need pattern matching mid-expression, not just on an argument' }
+  ]}
+/>
+
+### `if ... then ... else`
+
+Both branches compulsory; both must have the **same type**.
+
+```haskell
+funcName param =
+  if condition
+    then expressionIfTrue
+    else expressionIfFalse
+```
+```haskell
+resultLabel :: Double -> String
+resultLabel mark = if mark >= 50 then "Pass" else "Fail"
+```
+`resultLabel 64` → `"Pass"`. `resultLabel 49.5` → `"Fail"`.
+
+### Guards (`|`)
+
+```haskell
+funcName param
+  | condition1 = expression1
+  | condition2 = expression2
+  | otherwise  = defaultExpression
+```
+```haskell
+grade :: Int -> String
+grade mark
+  | mark >= 80 = "A"
+  | mark >= 70 = "B"
+  | otherwise  = "F"
+```
+`grade 85` → `"A"`. `otherwise` is an ordinary Prelude binding equal to `True` — not special syntax.
+
+### Patterns combined with guards
+
+A pattern only matches a fixed shape or literal — it cannot express "greater than" or any other range test. When a specification needs both ("if it's this *shape*, AND this *condition* holds"), combine them: pattern first, then guards on that equation.
+
+**Template:**
+```haskell
+funcName pattern1
+  | condition1 = expression1
+  | condition2 = expression2
+funcName pattern2 = expression2
+```
+
+**Example — `isDiv`, which needs a precondition (`m` vs `n`) before the divisibility test:**
+```haskell
+isDiv :: Int -> Int -> String
+isDiv m n
+  | m == n          = "m and n are equal"
+  | m < n           = "m should be greater than n"
+  | m `mod` n == 0  = "Yes, m is divisible by n"
+  | otherwise       = "No, m is not divisible by n"
+```
+```text
+ghci> isDiv 8 4
+"Yes, m is divisible by n"
+ghci> isDiv 3 8
+"m should be greater than n"
+```
+Guard **order** encodes the precondition: `m == n` and `m < n` must be checked *before* `` m `mod` n == 0 `` — not because the question listed them first, but because the divisibility test only makes sense once you already know `m > n`. See the full decode of exactly this question: [Decoding Exam and Lab Language §3](/docs/sem3/csi243/decoding-questions#3-a-precondition-disguised-as-a-side-comment).
+
+### `case ... of`
+
+```haskell
+funcName param =
+  case expressionToInspect of
+    pattern1 -> result1
+    pattern2 -> result2
+    _        -> defaultResult
+```
+```haskell
+isVowel :: Char -> Bool
+isVowel letter =
+  case letter of
+    'a' -> True
+    'e' -> True
+    'i' -> True
+    'o' -> True
+    'u' -> True
+    _   -> False
+```
+`isVowel 'e'` → `True`. `isVowel 'z'` → `False`.
+
+<Callout type="info" title="case can inspect any expression, not just a bare argument">
+`case length xs of 0 -> "empty"; _ -> "has elements"` is valid — `length xs` is computed first, and *that result* is what gets matched, not `xs` itself. That is the one thing `case` can do that equation-level pattern matching cannot.
+</Callout>
+
+### Local bindings: `where` and `let`
+
+| Form | Attaches to | Visible to |
+|---|---|---|
+| `where` | The whole equation | Every guard and every result in that equation |
+| `let ... in ...` | One expression | Only the expression after `in` |
+
+```haskell
+bmiTell :: Double -> Double -> String
+bmiTell weight height
+  | bmi < 18.5 = "Underweight"
+  | otherwise  = "Normal"
+  where bmi = weight / (height ^ 2)
+```
+`bmiTell 70 1.75` → `"Normal"`.
+
+## 4. Common errors, at a glance
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Compiles, but an early case "steals" a later one | Wildcard/variable pattern too early | Reorder: specific first |
+| `Non-exhaustive patterns` at run time | A possible input has no matching equation/guard/alternative | Add a catch-all (`_` or `otherwise`) |
+| Missing `else` | `if` is an expression in Haskell — both branches required | Add `else` |
+| Two branches, two types | `if`/`case` needs one type for the whole expression | Make both branches the same type |
+| `where` definitions misaligned | Indentation is significant | Align every `where` binding under itself |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can name funcName, pattern, expression, and condition on sight in any of the four forms.' },
+  { type: 'must', text: 'I can say why a wildcard placed first breaks a function, without running it.' },
+  { type: 'must', text: 'I can pick the right one of the four forms for a described decision in under 10 seconds.' },
+]} />
+
+Full explanations, worked traces, and more examples: [Conditional Expressions](/docs/sem3/csi243/04-making-choices/notes/conditional-expressions) · [Pattern Matching](/docs/sem3/csi243/04-making-choices/notes/pattern-matching) · [Guarded Equations](/docs/sem3/csi243/04-making-choices/notes/guards) · [Case Expressions](/docs/sem3/csi243/04-making-choices/notes/case-expressions).

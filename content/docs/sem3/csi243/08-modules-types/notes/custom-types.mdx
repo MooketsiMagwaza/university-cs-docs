@@ -7,6 +7,39 @@ description: "Define genuinely new types with the data declaration, carry values
 
 A type synonym renames an existing type. The `data` declaration creates a **genuinely new type**, distinct from every other, which the compiler will keep separate.
 
+### The `data` template, formalised, and its four shapes
+
+**Template:**
+```haskell
+data TypeName = Constructor1 Field1 Field2 | Constructor2
+  deriving (ClassName1, ClassName2)
+```
+Read `TypeName` as the answer to "what type did I just create?", and each `Constructor` as one *way* to build a value of it — `|` between constructors reads as "or." A constructor with nothing listed after its name (`Constructor2` above) needs no arguments to build; a constructor followed by one or more types takes exactly that many arguments, in that order, every single time it is used.
+
+**Example — no fields at all (an enumeration):**
+```haskell
+data Result = Pass | Fail deriving (Show, Eq)
+```
+Worked in full in Section 1 below. Neither constructor carries any data; the type's only content *is* which of the two constructors a given value uses.
+
+**A variation: one constructor, with fields**
+```haskell
+data Point = Point Float Float deriving (Show)
+```
+Worked in full in Section 3 below. One constructor, `Point`, takes two `Float`s — it is a genuine curried function, `Float -> Float -> Point`, exactly like any two-argument function from Chapter 7, only this one builds a value instead of computing one.
+
+**A variation: multiple constructors, each with its own fields**
+```haskell
+data Shape = Circle Float | Rectangle Float Float deriving (Show)
+```
+Also Section 3. Different constructors of the same type may carry completely different numbers and kinds of fields — `Circle` carries one `Float`, `Rectangle` carries two — and a function pattern-matching over `Shape` needs one equation per constructor to stay exhaustive.
+
+**A variation: record syntax — the fields get names**
+```haskell
+data Student = Student { studentName :: String, studentMark :: Int } deriving (Show)
+```
+Worked in full in Sections 5.1–5.2 below, including the accessor functions GHC generates for free and `{ field = newValue }` update syntax. This is still exactly one constructor with two fields — record syntax changes *how the fields are written and read*, not how many constructors or fields the type has.
+
 ## 1. Enumerations
 
 The simplest form lists the values the type can have:
@@ -399,6 +432,43 @@ The decision in practice is a short chain of questions:
       "Recursion would need data; newtype's single-field, single-constructor shape cannot express it.",
       "Correct — this is exactly the case newtype is for: one value, wrapped only to get type-level separation, at no run-time cost.",
       "More than one constructor would need data; newtype allows exactly one."
+    ]
+  }
+]} />
+
+<Quiz title="Check: newtype" questions={[
+  {
+    question: "What does newtype keep from data, and what does it give up in exchange?",
+    options: [
+      "It keeps genuine type-level separation (mixing two newtypes is still a compile error) but gives up generality — exactly one constructor, exactly one field, no recursion",
+      "It keeps the extra run-time structure of data but gives up compile-time type checking entirely",
+      "It keeps everything data offers, with no trade-off at all",
+      "It gives up type-level separation in exchange for zero run-time cost"
+    ],
+    correctIndex: 0,
+    explanation: "newtype Metres = Metres Double still rejects Metres 100 + Feet 30 at compile time, exactly like data would — that separation is not given up. What is given up is data's extra flexibility: newtype cannot have more than one constructor, more than one field, or be recursive.",
+    optionFeedback: [
+      "Correct — the type checker still keeps Metres and Feet apart; the trade-off is purely about structural generality, not about safety.",
+      "This has it backwards on both counts: newtype keeps compile-time checking and gives up run-time structure (the wrapper is erased), not the reverse.",
+      "There is a genuine trade-off — newtype cannot express several fields, several constructors, or recursion, unlike data.",
+      "Type-level separation is exactly what newtype keeps; it is the run-time wrapper, not the safety, that disappears."
+    ]
+  },
+  {
+    question: "Why is newtype Shape = Circle Float | Rectangle Float Float rejected by GHC?",
+    options: [
+      "newtype allows only one constructor with exactly one field; GHC needs there to be exactly one way to build and unwrap the value to erase the wrapper safely",
+      "Float is not a valid field type for newtype",
+      "Shape is already the name of a built-in type",
+      "newtype requires every field to be named, as in record syntax"
+    ],
+    correctIndex: 0,
+    explanation: "The Common Mistake box states this directly: newtype needs exactly one constructor and exactly one field so that the compiler can erase the wrapper completely at compile time. Two constructors (Circle and Rectangle) or a constructor with two fields (Rectangle's pair of Floats) both break that requirement.",
+    optionFeedback: [
+      "Correct — the restriction is structural (one constructor, one field), not about which types can appear inside.",
+      "Float is used freely elsewhere as a newtype's field, e.g. newtype Metres = Metres Double works the same way with Double.",
+      "Shape is not a reserved or built-in name; the rejection has nothing to do with naming, only with structure.",
+      "Field names are optional for both data and newtype — this declaration is positional, and that is not the reason it fails."
     ]
   }
 ]} />

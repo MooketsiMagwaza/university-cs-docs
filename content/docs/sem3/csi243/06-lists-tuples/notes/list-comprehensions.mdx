@@ -22,6 +22,35 @@ ghci> [x * 2 | x <- [1,2,3,4,5]]
 
 Read aloud: “the list of `x * 2`, such that `x` is drawn from `[1,2,3,4,5]`.”
 
+### The template, formalised, with every variation named
+
+Everything in this lesson is one template, used with or without its optional pieces.
+
+**Template:**
+```haskell
+[ expr | x <- xs, condition ]
+```
+`expr` is the output function — what gets built. `x <- xs` is a generator — where the values come from. `condition`, after the comma, is optional and may be repeated, comma-separated, any number of times. Every variation below is this same template with one piece added, removed, or repeated.
+
+**Example:**
+```haskell
+squares :: [Integer] -> [Integer]
+squares xs = [x * x | x <- xs]
+```
+```text
+ghci> squares [1,2,3,4]
+[1,4,9,16]
+```
+This is the template with `condition` left out entirely — a comprehension needs at least one generator, but zero conditions is completely ordinary, not a special case requiring different syntax. Every value the generator produces is kept.
+
+**A variation: one condition** — covered fully in Section 2 below, e.g. `[x | x <- [1..10], mod x 2 == 0]`.
+
+**A variation: several conditions, comma-separated** — also Section 2, e.g. `[x | x <- [1..50], mod x 3 == 0, mod x 5 == 0]`; every listed condition must hold, since a comma inside a comprehension means "and."
+
+**A variation: several generators (nested iteration)** — Section 4 below, e.g. `[x + y | x <- [1,2,3], y <- [-3,0,3]]`, where the rightmost generator varies fastest.
+
+**A variation: a tuple pattern in the generator** — Section 6 below, e.g. `[name | (name, mark) <- marks, mark >= 70]`, which destructures each pair as it is drawn instead of naming the whole tuple and taking it apart separately.
+
 ## 1. The first part: the output function
 
 Everything **before** the pipe is the **output function**. It specifies what to apply to each input element. For every value that satisfies the second part, the output function is evaluated and its result is included in the constructed list.
@@ -223,6 +252,58 @@ ghci> [(x, y) | x <- [1..5], even x, y <- [1..2]]
 [(2,1),(2,2),(4,1),(4,2)]
 ```
 
+<Quiz title="Check: multiple generators" questions={[
+  {
+    question: "[x + y | x <- [1,2,3], y <- [-3,0,3]] produces nine results. Which generator varies fastest, and what does that mean concretely?",
+    options: [
+      "The leftmost generator (x) varies fastest — x runs through all three of its values while y stays fixed at -3",
+      "The rightmost generator (y) varies fastest — x is held at 1 while y runs through all three of its values, then x becomes 2 and y runs through all three again, and so on",
+      "Both generators vary at the same rate, in lockstep",
+      "Neither generator \"varies faster\" than the other — the nine results appear in an arbitrary order"
+    ],
+    correctIndex: 1,
+    explanation: "The lesson states this directly: the rightmost generator varies fastest, exactly like the innermost loop of a nested loop. x is fixed at 1 while y takes -3, 0, then 3 (three results), then x becomes 2 and y cycles through all three again, and so on for x = 3 — nine results total, in a fixed, predictable order.",
+    optionFeedback: [
+      "It's the other way around — the RIGHTMOST generator (y here) is the one that cycles through all its values first, for each fixed value of the leftmost one.",
+      "Correct — y is the rightmost generator and cycles fastest, exactly as a nested loop with y innermost would.",
+      "The two generators do not advance together; one is held fixed while the other cycles through its entire range before the first one advances.",
+      "The order is fixed and predictable, not arbitrary — it is exactly the order a nested loop with y innermost would produce, which is precisely why the rightmost-varies-fastest rule is worth memorising."
+    ]
+  },
+  {
+    question: "In [(x, y) | x <- [1..4], y <- [x..4]], the later generator y <- [x..4] refers to x, the earlier generator's variable. What does this dependency accomplish?",
+    options: [
+      "It is a syntax error — a later generator can never refer to an earlier one",
+      "It restricts y's range based on the current value of x, so pairs like (2,1) — where y is smaller than x — are never generated in the first place, rather than being generated and then filtered out",
+      "It makes x and y always equal to each other",
+      "It has no effect; y <- [x..4] behaves identically to y <- [1..4]"
+        ],
+    correctIndex: 1,
+    explanation: "A later generator is allowed to use any name already bound by an earlier one. Here, once x is fixed (say, at 2), y <- [x..4] draws only from [2..4], so (2,1) is never produced — the comprehension avoids generating a combination it would only have to discard with a separate test.",
+    optionFeedback: [
+      "This is valid, working Haskell — the transcript directly above shows its actual output, produced without any error.",
+      "Correct — the dependency narrows y's starting point to the current x, producing only pairs where y >= x, with no separate filtering test needed.",
+      "The output [(1,1),(1,2),(1,3),(1,4),(2,2),...] includes many pairs where x and y differ, e.g. (1,4) — they are not forced to be equal.",
+      "[x..4] and [1..4] are different ranges whenever x is greater than 1 — for x = 3, [x..4] is [3,4], not [1,2,3,4]."
+    ]
+  }
+]} />
+
+### A variation: a generator that draws from a list of lists
+
+The two generators above each drew from an independent, already-flat list. Nothing requires that — a later generator may draw from a list produced by iterating the *elements* of an earlier one, which is exactly how a comprehension flattens a list of lists into one list while filtering it in the same breath.
+
+```haskell
+-- Keep only the positive numbers, out of a list of lists of numbers.
+flattenPositives :: [[Int]] -> [Int]
+flattenPositives xss = [x | xs <- xss, x <- xs, x > 0]
+```
+```text
+ghci> flattenPositives [[1,-2,3],[-4,5],[],[6]]
+[1,3,5,6]
+```
+Read the two generators in order, exactly as Section 4 already teaches: `xs <- xss` draws each *inner list* in turn — `[1,-2,3]`, then `[-4,5]`, then `[]`, then `[6]` — and for each one, `x <- xs` draws every element of *that* inner list before `xs` advances to the next one. The empty inner list `[]` contributes nothing and needs no special case: there is simply nothing for `x` to be drawn from that time. The final `x > 0` test applies to every element produced this way, regardless of which inner list it came from.
+
 ## 5. Comprehensions and recursion are interchangeable
 
 Every comprehension can be written as a recursion, and vice versa. Compare the filter from the previous lesson:
@@ -258,6 +339,32 @@ doubleAll' :: [Integer] -> [Integer]
 doubleAll' xs = [x * 2 | x <- xs]
 ```
 
+A complete program runs both comprehension versions on a few varied lists, including two edge cases worth checking by habit — an empty list, and a list with nothing surviving the filter:
+
+```haskell
+main :: IO ()
+main = do
+  print (positiveNumbers' [-1,5,-3,8])
+  print (positiveNumbers' [-4,-4,-4])
+  print (positiveNumbers' [])
+  print (doubleAll' [1,2,3])
+  print (doubleAll' [])
+  print (doubleAll' [-5,0,5])
+```
+
+Exact output:
+
+```text
+[5,8]
+[]
+[]
+[2,4,6]
+[]
+[-10,0,10]
+```
+
+`positiveNumbers' [-4,-4,-4]` is `[]` not because the input was empty but because every element failed the test `x > 0` — an empty *result* from a non-empty *input*, which the comprehension handles with no special case at all.
+
 <Callout type="info" title="When to prefer which">
 A comprehension reads best when the result is “each element of that list, transformed and/or filtered.” Recursion is required when the result depends on more than one element at a time (as in `isSorted`), when elements must be combined into a single value (as in `sum`), or when the recursion is not over a list at all.
 </Callout>
@@ -278,12 +385,69 @@ ghci> [(name, mark + 5) | (name, mark) <- marks]
 [("Kago",77),("Naledi",73),("Thato",96)]
 ```
 
+A complete program tries the filter both ways round the same threshold, to see the two results are complementary:
+
+```haskell
+main :: IO ()
+main = do
+  print [name | (name, mark) <- marks, mark >= 70]
+  print [(name, mark + 5) | (name, mark) <- marks]
+  print [name | (name, mark) <- marks, mark < 70]
+```
+
+Exact output:
+
+```text
+["Kago","Thato"]
+[("Kago",77),("Naledi",73),("Thato",96)]
+["Naledi"]
+```
+
+The first and third lines partition `marks` into two disjoint groups — everyone at or above 70, and everyone below it — using the same generator with opposite tests. Between them they account for all three students, with nobody counted twice.
+
 Because a `String` is a list of `Char`, comprehensions work on text directly:
 
 ```text
 ghci> [c | c <- "CSI243", c `elem` ['0'..'9']]
 "243"
 ```
+
+<Quiz title="Check: comprehensions over tuples and strings" questions={[
+  {
+    question: "In [name | (name, mark) <- marks, mark >= 70], what is (name, mark) doing as the generator's left-hand side?",
+    options: [
+      "It is a tuple pattern that destructures each pair in marks as it is drawn, binding name and mark separately, in the same step",
+      "It builds a new tuple from the elements of marks, doubling their size",
+      "It is invalid syntax; generators may only bind a single plain variable",
+      "It filters marks down to only the pairs, discarding anything that isn't a pair"
+    ],
+    correctIndex: 0,
+    explanation: "A generator's left-hand side can be any pattern, not just a bare name. (name, mark) <- marks matches each element of marks — already a (String, Integer) pair — and binds name and mark to its two components in one step, exactly the way a where clause's tuple pattern would.",
+    optionFeedback: [
+      "Correct — this is a tuple pattern used as a generator, destructuring while generating, exactly as this section's opening sentence describes.",
+      "Nothing is built or resized here; the pattern only takes apart pairs that already exist in marks, it does not construct new ones.",
+      "Generators accept any pattern on their left, tuple patterns included — this is exactly what makes list-of-tuple data usable directly inside a comprehension.",
+      "marks is already entirely pairs by construction ([(String, Integer)]); there is nothing here to filter out — every element matches (name, mark)."
+    ]
+  },
+  {
+    question: "The lesson runs [name | (name, mark) <- marks, mark >= 70] and [name | (name, mark) <- marks, mark < 70] side by side and calls the results \"complementary\". What does that mean here?",
+    options: [
+      "The two results are identical lists",
+      "Between the two lists, every student in marks is accounted for exactly once — the two tests partition marks into two disjoint groups with no overlap and no one left out",
+      "The second list is always empty because the first test already used every mark",
+      "The two comprehensions use different generators, not just different tests"
+    ],
+    correctIndex: 1,
+    explanation: "mark >= 70 and mark < 70 are exact opposites for any Integer — every mark satisfies exactly one of them, never both and never neither. So running the same generator with both tests splits marks into two lists that, put together, contain every original student exactly once.",
+    optionFeedback: [
+      "The two results are actually shown to be different in the lesson's exact output: [\"Kago\",\"Thato\"] versus [\"Naledi\"] — not identical.",
+      "Correct — every student satisfies exactly one of mark >= 70 or mark < 70, so the two lists between them cover marks completely with no overlap.",
+      "The second list, for this data, has one student (Naledi) — it is not empty, and there is no mechanism by which one comprehension's test would empty out a separate, independently-evaluated comprehension.",
+      "Both comprehensions use the exact same generator, (name, mark) <- marks — only the trailing test differs between them."
+    ]
+  }
+]} />
 
 ## 7. Common errors
 
@@ -331,6 +495,25 @@ vowelsIn s = [c | c <- s, c `elem` "aeiouAEIOU"]
 largerY :: [Integer] -> Integer -> [Integer]
 largerY xs y = [x | x <- xs, x > y]
 ```
+
+A complete program checks `vowelsIn` on three different strings, including one with no vowels at all:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (vowelsIn "Haskell")
+  putStrLn (vowelsIn "CSI243")
+  putStrLn (vowelsIn "xyz")
+```
+
+Exact output:
+
+```text
+ae
+I
+```
+
+The third line prints as nothing at all — `vowelsIn "xyz"` is `""`, the empty string, which `putStrLn` displays as a blank line rather than any visible marker. `"CSI243"` contributes only the capital `'I'`, since the test `` c `elem` "aeiouAEIOU" `` checks against both cases but the digits `2`, `4`, `3` and the consonants never match at all.
 
 Question 9 collapses four lines of recursion into one. That is the point of comprehensions — but only because you already know what the recursion was doing.
 

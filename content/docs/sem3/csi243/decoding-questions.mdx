@@ -1,0 +1,339 @@
+---
+title: "Decoding Exam and Lab Language"
+description: "A reusable method for turning a lecturer's dense, formal question wording into plain English, then into a Haskell signature and implementation — worked through real CSI243 lab questions."
+---
+
+Lecturers and lab sheets often describe a function in language that is precise but far denser than the function itself. The gap between "I don't understand this question" and "I don't understand Haskell" is frequently just that: **the English needs decoding before the Haskell can start.** This page teaches that decoding as its own skill, worked through real CSI243 questions, so the method transfers to a question you have never seen before — including in an exam.
+
+## The three-step method
+
+<StepByStep>
+  <StepByStepTitle>Decoding any dense question</StepByStepTitle>
+
+  <Step number={1}>
+  <StepTitle>Find the verbs, and what each one is really asking for</StepTitle>
+  Underline every instruction verb — "write", "changes", "returns", "using" — and match each to a Haskell construct from the dictionary below. Ignore adjectives and scene-setting for now; they matter later, not first.
+  </Step>
+
+  <Step number={2}>
+  <StepTitle>Rewrite the whole question as one or two short, plain sentences</StepTitle>
+  If your plain-English rewrite is longer than the original, you have not decoded it yet — you have paraphrased it. A correct decoding is almost always *shorter* than the original, because formal phrasing repeats structure ("using the function X" after already naming X) that plain English drops.
+  </Step>
+
+  <Step number={3}>
+  <StepTitle>Turn the plain sentence into a signature, then the signature into equations</StepTitle>
+  Only once you can say what the function does in one plain sentence should you write `funcName :: InputType -> OutputType`. The signature falls out of the plain sentence almost mechanically — see [Cheat Sheet §1](/docs/sem3/csi243/04-making-choices/cheat-sheet) for the placeholder vocabulary this step reuses.
+  </Step>
+</StepByStep>
+
+## The word-to-Haskell dictionary
+
+| The question says... | It means... | You write... |
+|---|---|---|
+| "returns", "gives back", "produces" | The function's result | The right-hand side of `=`, or the type after the last `->` |
+| "takes", "accepts", "given" | An argument | A parameter in the signature and in the equation |
+| "checks if / whether ..." | A predicate — a yes/no question | A function returning `Bool` |
+| "else", "otherwise" | The remaining case(s) | `otherwise` in a guard, or the final pattern/`else` branch |
+| "for every element ...", "changes a given list using ..." | Apply one function to each element, keeping the list's length | `map` (Chapter 7), or a comprehension with no filter |
+| "recursively" | Built from a base case and a recursive case, not a Prelude shortcut | The `[]` / `(x:xs)` template — [Chapter 6 Cheat Sheet §5](/docs/sem3/csi243/06-lists-tuples/cheat-sheet) |
+| "using the in-built function(s) X and Y" | Compose two existing functions; do not hand-write their logic | `Y (X ...)`, e.g. `length (filter p xs)` |
+| "together with ... as a pair" | Bundle two results | A tuple in the return type and the return expression |
+| "should only work if ..." | A precondition — decides guard order, not just guard presence | The condition guarding that case must be checked, and checked **before** any guard whose body assumes it |
+| "generator" (this course's specific use) | A list comprehension | `[expr \| x <- xs]`, optionally with `, condition` clauses |
+| "assume the items can be arranged in some order" | The element type needs `Ord`, not just any type | Add `Ord a =>` to the signature |
+| "for any type that ..." / a constraint before `=>` | Every value the function touches of that type variable must support the named operation | `ClassName a =>` before the rest of the signature — see the full decode below |
+
+## Worked decodings
+
+### 1. The flagship example — a transform applied three ways
+
+**As written on the lab sheet:**
+
+> "Write a function `add` that adds 1 to an even integer else it adds 2 to it. Write a generator/list comprehension that changes a given integer list using the function `add`. Write the generator above using a map function and function `add`."
+
+**Plain English:**
+
+> Write `add`, which handles one number. Then apply `add` to *every* number in a list, using a comprehension. Then do the exact same thing again, using `map` instead of a comprehension.
+
+That is the whole question. "Changes a given integer list using the function add" is not a new, separate task — it is telling you to *apply the function you just wrote to each element*, nothing more. The sentence is long because it is precise about *how* (a comprehension, specifically), not because the underlying idea is complicated.
+
+**Signature and code:**
+
+```haskell
+add :: Int -> Int
+add x
+  | even x    = x + 1
+  | otherwise = x + 2
+
+addAllComp :: [Int] -> [Int]
+addAllComp xs = [add x | x <- xs]
+
+addAllMap :: [Int] -> [Int]
+addAllMap = map add
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (addAllComp [1, 2, 3, 4])
+  print (addAllMap  [1, 2, 3, 4])
+```
+
+```text
+[3,3,5,5]
+[3,3,5,5]
+```
+
+Full worked version, with a hand-trace and a quiz: [A conditional transform, three ways](/docs/sem3/csi243/07-higher-order/notes/map-and-filter#a-conditional-transform-three-ways-recursion-comprehension-map).
+
+### 2. A specification that seems to need a case that cannot exist
+
+**As written:**
+
+> "The function `isEven` is used to check if an integer is even or not. It returns 'The number is even' if the number is even and returns 'The number is odd' if the number is odd. Otherwise, it should return 'Invalid input'."
+
+**Plain English:**
+
+> `isEven` takes a whole number and reports which of two things it is. There is also an instruction for a third case, "otherwise" — check whether that case can actually happen.
+
+This is a genuinely useful trap to recognise, not just decode: for `isEven :: Integer -> String`, **every** `Integer` is either even or odd — there is no third possibility, so the "Invalid input" branch is unreachable dead code for that signature. A lecturer's "otherwise" does not automatically mean a real case exists; it is a defensive habit that sometimes outlives the specification it was written for.
+
+**What to actually do:** state this in your answer rather than silently guessing. Either argue explicitly that the case cannot arise given `Integer -> String` (and omit it, or include a `_ -> error "unreachable"` equation with a comment saying why), or change the signature to one where an invalid case genuinely exists (e.g. taking a `String` that might not parse as a number) and say that is what you did. Guessing silently, either way, loses marks a decoded, stated answer would not.
+
+### 3. A precondition disguised as a side comment
+
+**As written:**
+
+> "Create a function `isDiv` that accepts two integers `m` and `n` and determines if `m` is indeed divisible by `n`... The function should only work if `m` is greater than `n`."
+
+**Plain English:**
+
+> Check divisibility with `mod`. But first, handle the case where `m` is not greater than `n` — separately, with its own message.
+
+"Should only work if" is a precondition (Chapter 10's vocabulary for exactly this), and a precondition changes **guard order**, not just guard presence: the `m <= n` case must be checked, and must come *before* the `m `mod` n == 0` guard, or `mod` runs on a pair the specification never intended to reach that check.
+
+```haskell
+isDiv :: Int -> Int -> String
+isDiv m n
+  | m == n          = "m and n are equal"
+  | m < n           = "m should be greater than n"
+  | m `mod` n == 0  = "Yes, m is divisible by n"
+  | otherwise       = "No, m is not divisible by n"
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (isDiv 8 4)
+  putStrLn (isDiv 8 3)
+  putStrLn (isDiv 3 8)
+  putStrLn (isDiv 4 4)
+```
+```text
+Yes, m is divisible by n
+No, m is not divisible by n
+m should be greater than n
+m and n are equal
+```
+
+Notice the guard order in the code does **not** match the order the four outcomes were listed in the question — the equal and less-than cases had to move to the front, because they are the precondition, and a precondition is always checked first regardless of where in the prose it was mentioned.
+
+### 4. "Together with ... as a pair"
+
+**As written:**
+
+> "Define a function `atPosition` that takes a list and a number `y` and returns the element at position `y`, together with `y` as a pair (2-tuple)."
+
+**Plain English:**
+
+> Return two things at once: the element, and the position you were asked for. Bundle them in a tuple.
+
+"Together with ... as a pair" is this course's dictionary entry for **"the return type is a tuple, and here is what goes in each slot."** The order matters and is stated explicitly here — `atPosition [3,5,2,10] 3` must return `(3,10)`, i.e. `(y, element)`, position first.
+
+```haskell
+atPosition :: [a] -> Int -> (Int, a)
+atPosition xs y
+  | y < 0 || y >= length xs = error "atPosition: index out of range"
+  | otherwise                = (y, xs !! y)
+```
+```haskell
+main :: IO ()
+main = print (atPosition [3, 5, 2, 10] 3)
+```
+```text
+(3,10)
+```
+
+### 5. Edge cases stacked into one sentence
+
+**As written:**
+
+> "The function `isSorted` should return `True` if the list is sorted in descending order, `False` otherwise. Calling `isSorted` on an empty list should always return `True`. Also, a list with only one element is sorted."
+
+**Plain English:**
+
+> Descending order, checked pairwise. Two special cases are declared `True` by definition, not because you can check them: nothing to compare (empty), and nothing to compare *against* (one element).
+
+The phrase "should always return True" for the empty list is a **vacuous truth**, not a computed answer — there is no pair of out-of-order elements in `[]`, so the claim "every adjacent pair is in order" holds automatically. Recognising a vacuous-truth base case (as opposed to one you'd derive by testing something) is exactly why this lab's own callout warns "this one needs three cases": `[]`, a singleton, and everything else are three genuinely different patterns, not one pattern with two exceptions bolted on.
+
+```haskell
+isSorted :: [Integer] -> Bool
+isSorted []       = True
+isSorted [_]      = True
+isSorted (x:y:ys) = x >= y && isSorted (y:ys)
+```
+```haskell
+main :: IO ()
+main = do
+  print (isSorted [5, 3, 1])
+  print (isSorted [3, 1, 5])
+  print (isSorted ([] :: [Integer]))
+  print (isSorted [7])
+```
+```text
+True
+False
+True
+True
+```
+
+<Quiz title="Check: decoding technique" questions={[
+  {
+    question: "\"Write a generator/list comprehension that changes a given integer list using the function add\" — what is this sentence actually asking for, decoded?",
+    options: [
+      "A new, separate function that reimplements add's even/odd logic inside a comprehension",
+      "Apply the already-written add to every element of the list, using comprehension syntax — nothing about add's own logic needs to be rewritten",
+      "A function that filters the list down to only the even numbers",
+      "A recursive function with no use of add at all"
+    ],
+    correctIndex: 1,
+    explanation: "The dictionary entry '\"changes a given list using ...\" means apply one function to each element' applies directly here. The comprehension's job is only to apply add to every element — [add x | x <- xs] — not to duplicate what add already does.",
+    optionFeedback: [
+      "Reimplementing add's logic a second time inside the comprehension would defeat the point of writing add first — the comprehension is meant to reuse it, exactly as [add x | x <- xs] does.",
+      "Correct — this is precisely the 'apply to every element' pattern the dictionary maps to a comprehension or map, with add supplying the per-element rule.",
+      "Nothing in the sentence describes keeping some elements and dropping others — every element gets transformed, none are removed, which rules out a plain filter.",
+      "add is explicitly named as the function to use — 'using the function add' is the clearest possible instruction that it must appear in the answer."
+    ]
+  },
+  {
+    question: "isEven's task sheet mentions an \"Invalid input\" case for a function typed Integer -> String. What is the correct way to handle this in a decoded answer?",
+    options: [
+      "Silently add a catch-all pattern returning \"Invalid input\" without comment, to match the wording exactly",
+      "Ignore the sentence entirely and never mention it",
+      "State explicitly that every Integer is either even or odd, so the case cannot arise for this signature — and either omit it with that justification, or change the signature to one where it genuinely can occur",
+      "Assume the lecturer made a typo and delete that sentence from the question before answering"
+    ],
+    correctIndex: 2,
+    explanation: "The decoding move here is not silence and not blind literal compliance — it's recognising the mismatch and saying so. A stated, justified decision (whichever one you make) is what a decoded answer looks like; an unstated guess in either direction is not.",
+    optionFeedback: [
+      "Adding the case with no explanation hides the fact that you noticed (or didn't notice) the mismatch — the value of decoding is in making the reasoning visible, not in matching the wording silently.",
+      "Ignoring it silently is exactly the 'guessing without stating' failure mode this example warns against — the grader has no way to tell you understood the issue.",
+      "Correct — name the mismatch explicitly and make a deliberate, stated choice; that is what distinguishes a decoded answer from a guessed one.",
+      "Editing the question itself is not an available move in an exam or a lab; the task is to decide how to handle the specification as given, not to rewrite it."
+    ]
+  }
+]} />
+
+## Decoding a signature: `Eq a => [a] -> a -> Bool`
+
+Signatures are also written in a dense notation that decodes the same way prose does — one piece at a time, in a fixed order.
+
+**Template for reading any constrained signature:**
+
+```haskell
+ClassName a => RestOfSignature
+--    ^              ^
+--    |              `-- read exactly as any ordinary signature (Chapter 2's -> rule)
+--    `-- read FIRST, in isolation, before anything else
+```
+
+Read `ClassName a =>` as its own sentence: **"for any type `a` that supports `ClassName`'s operations."** Only once that is out of the way do you apply the ordinary left-to-right arrow rule to what remains.
+
+**Applied to `Eq a => [a] -> a -> Bool`, one piece at a time:**
+
+| Piece | Read as |
+|---|---|
+| `Eq a =>` | "For any type `a` that supports `==` and `/=`," |
+| `[a]` | "...takes a list of that type," |
+| `-> a` | "...then one more value of that same type," |
+| `-> Bool` | "...and gives back a `Bool`." |
+
+Chained into one sentence: *"For any type that can be compared for equality, take a list of it and one more value of it, and answer yes or no."* That sentence alone should be enough to recognise this as a **search** — "is this value in this list?" — before reading a single line of implementation.
+
+**Why the constraint is there at all:** the function's body almost certainly uses `==` to compare elements, and `==` is not defined for every possible type (Chapter 9). Any function that uses `==` on a value of type `a` must declare, in its own signature, that `a` is limited to types where `==` exists — otherwise GHC refuses to compile it, with `No instance for (Eq a) arising from a use of '=='`.
+
+**More constraint templates, for when one class is not enough:**
+
+```haskell
+-- Two constraints on the same type variable, as a tuple:
+funcName :: (Eq a, Show a) => a -> a -> String
+
+-- A constraint that already implies another (Ord implies Eq):
+funcName :: Ord a => [a] -> a   -- == is available too; (Eq a, Ord a) => would be redundant
+
+-- Two DIFFERENT type variables, each with its own constraint:
+funcName :: (Eq a, Show b) => a -> b -> String
+```
+
+Full worked version with a real GHC-verified example in both argument orders: [Reading `Eq a => [a] -> a -> Bool`](/docs/sem3/csi243/06-lists-tuples/notes/list-recursion#reading-eq-a--a---a---bool--the-constraint-and-the-argument-order). Every class, what it provides, and one example each: [Chapter 9 Cheat Sheet §4](/docs/sem3/csi243/09-polymorphism/cheat-sheet).
+
+<Quiz title="Check: decoding a constrained signature" questions={[
+  {
+    question: "Reading Eq a => [a] -> a -> Bool by the method above, what should you read FIRST?",
+    options: [
+      "[a], because it's the first thing after the arrow",
+      "Eq a =>, in isolation, before applying the ordinary arrow-by-arrow rule to anything after it",
+      "Bool, because the result is the most important part",
+      "It doesn't matter what order you read the pieces in"
+    ],
+    correctIndex: 1,
+    explanation: "The template states this as a fixed first step: the constraint is read as its own sentence — 'for any type a that supports ClassName's operations' — before the ordinary left-to-right arrow rule is applied to the rest of the signature.",
+    optionFeedback: [
+      "[a] is the first ordinary argument, but it comes after the constraint has already been read and set aside as a precondition on a, not as an argument itself.",
+      "Correct — this is the fixed order: constraint first, in isolation, then the arrows.",
+      "The result type matters, but reading it first without first knowing what a is allowed to be skips necessary context.",
+      "Order matters precisely because => and -> are different kinds of thing — mixing up which is read as a constraint and which as an argument produces a wrong reading of the whole signature."
+    ]
+  }
+]} />
+
+## Practice: decode these before you look anything up
+
+Each of these is real CSI243 lab wording. Write the plain-English decode and the signature for each — the full worked solutions live in the notes pages linked throughout this page, once you have tried your own decode first.
+
+1. "Write a function `isEmpty` that checks if a character is an empty character/space or not. Then write a function `len` that given a string `xs` counts the number of empty characters in the string. Use in-built functions `length` and `filter`. Use `isEmpty` as a predicate for the filter."
+2. "`bothEven` is another function that takes two integers and determines if one, both or none are even. If none of the numbers is even, the function should return 0, if only one is even, the function should return 1, if both numbers are even, it should return 2."
+3. "Given a list of integers and the integer `y`, the function `largerY` returns a list of all elements in the list which are larger than `y`. Assume the items can be arranged in some order."
+4. "The function must work for both lowercase and uppercase" (`isVowel`) — decode specifically what this adds to a signature that only checked lowercase vowels.
+
+<Accordions>
+<Accordion title="Check decode 1 — isEmpty and len">
+
+Plain English: "`isEmpty` answers one yes/no question about one character. `len` counts how many characters in a string answer yes to it, by filtering then measuring the result — do not hand-write a counting loop."
+
+`isEmpty :: Char -> Bool` — a predicate, dictionary row "checks if / whether". `len :: String -> Int` — "using in-built functions length and filter" is this page's "using the in-built function(s) X and Y" row: compose them, `length (filter isEmpty xs)`. Full worked version: [`filter`'s result doesn't have to be printed](/docs/sem3/csi243/07-higher-order/notes/map-and-filter#filters-result-doesnt-have-to-be-printed--it-can-feed-straight-into-another-function).
+
+</Accordion>
+<Accordion title="Check decode 2 — bothEven">
+
+Plain English: "Count how many of the two numbers are even, using each count-value (`0`, `1`, `2`) as the result directly, not as a message." This is the dictionary's "returns" row applied to a number result instead of a string one — the temptation is to write three separate `if`/guard branches describing each combination by name (both even, first only, second only, neither), but the plain decode ("count how many are even") suggests a shorter route worth trying: `bothEven a b = (if even a then 1 else 0) + (if even b then 1 else 0)` — worth comparing against the guard-based version [already worked in Chapter 4's notes](/docs/sem3/csi243/04-making-choices/notes/guards).
+
+</Accordion>
+<Accordion title="Check decode 3 — largerY">
+
+Plain English: "Keep only the elements greater than `y`." That is a single yes/no test per element — dictionary row "checks if/whether" — applied to every element and used to keep-or-drop, which is `filter`'s exact job: `largerY xs y = filter (> y) xs`. "Assume the items can be arranged in some order" is this page's `Ord a =>` dictionary row — it is telling you the element type needs ordering (for `>` to be defined), not adding a new task.
+
+</Accordion>
+<Accordion title="Check decode 4 — case-insensitive isVowel">
+
+Decoded: the function cannot just list `'a','e','i','o','u'` as its literal patterns — it must also match `'A','E','I','O','U'`, or normalise the input first (e.g. with `toLower` from `Data.Char`) and then check against the lowercase five. "Must work for both lowercase and uppercase" is an instruction about **coverage of cases**, not about a new capability of `isVowel` itself — decode it as "double the patterns, or normalise first," and pick whichever reads better to you.
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can turn a dense, multi-clause lab question into one or two plain sentences before writing any Haskell.' },
+  { type: 'must', text: 'I can read a constrained signature like Eq a => [a] -> a -> Bool by reading the constraint first, in isolation.' },
+  { type: 'must', text: 'I can recognise when a specification mentions a case that cannot actually occur for the given type, and state that explicitly rather than guessing silently.' },
+  { type: 'note', text: 'A correct plain-English decode is usually SHORTER than the original question, not longer.' }
+]} />

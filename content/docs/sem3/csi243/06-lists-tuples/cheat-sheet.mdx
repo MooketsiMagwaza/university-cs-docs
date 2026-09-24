@@ -1,0 +1,165 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for lists, tuples, cons, list recursion, and searching: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/06-lists-tuples/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Lists vs. tuples
+
+<ComparisonTable
+  columns={[
+    { header: 'Feature', key: 'feature' },
+    { header: 'Lists [a]', key: 'list' },
+    { header: 'Tuples (a, b, ...)', key: 'tuple' }
+  ]}
+  rows={[
+    { feature: 'Element types', list: 'Homogeneous — all the same type', tuple: 'Heterogeneous — each slot can differ' },
+    { feature: 'Length', list: 'Variable, can be []', tuple: 'Fixed by the type (arity)' },
+    { feature: 'Syntax', list: '[1, 2, 3]', tuple: '("Kago", 2026001, True)' },
+    { feature: 'Best for', list: 'A collection of similar items', tuple: 'One record made of distinct parts' }
+  ]}
+/>
+
+`[1, 'a']` is a type error — a list needs one shared type. `(1, 'a')` is a perfectly valid `(Integer, Char)`.
+
+## 2. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `funcName` | The name you give the function | `sumList`, `contains`, `evensUpTo` |
+| `x` | The head — the element at the front of a non-empty list | `3` in `3 : [7,9]` |
+| `xs` | The tail — everything after the head, still a list, possibly `[]` | `[7,9]` in `3 : [7,9]` |
+| `baseCaseValue` | What the function returns for `[]` | `0`, `False`, `[]` |
+
+## 3. Building a list: the cons operator `:`
+
+`[1,2,3]` is really `1 : 2 : 3 : []`, built one element at a time. `(x:xs)` undoes exactly one cons: `x` is the head, `xs` is the **entire remaining tail** (not "the second element" — for `[42]`, `xs` is `[]`).
+
+```text
+ghci> 1 : [2, 3]
+[1,2,3]
+ghci> 10 : []
+[10]
+```
+`:` takes an element on the left and a **list** on the right — `[1,2] : 3` is a type error. Use `++` to join two lists.
+
+## 4. First and rest
+
+<ComparisonTable
+  columns={[
+    { header: 'Structure', key: 'structure' },
+    { header: 'First part', key: 'first' },
+    { header: 'Rest', key: 'rest' }
+  ]}
+  rows={[
+    { structure: 'Pair (a, b)', first: 'fst (x, _) = x', rest: 'snd (_, y) = y' },
+    { structure: 'List [a]', first: 'head [5,14,20] → 5', rest: 'tail [5,14,20] → [14,20]' }
+  ]}
+/>
+
+⚠️ `head`/`tail`/`!!` crash on `[]` or an out-of-range index. Crash-safe alternative:
+```haskell
+safeHead :: [a] -> Maybe a
+safeHead []    = Nothing
+safeHead (x:_) = Just x
+```
+
+## 5. The list recursion template
+
+Nearly every list-processing function is one of these two shapes:
+
+```haskell
+-- Consuming a list (measure or transform it):
+funcName :: [a] -> ResultType
+funcName []     = baseCaseValue
+funcName (x:xs) = combine x (funcName xs)
+
+-- Generating a list (build one from a plain value, no input list):
+funcName :: InputType -> [a]
+funcName n = go startValue
+  where
+    go k
+      | doneCondition = []
+      | otherwise     = k : go (nextValue k)
+```
+
+**Consuming example — sum:**
+```haskell
+sumList :: [Int] -> Int
+sumList []     = 0
+sumList (x:xs) = x + sumList xs
+```
+`sumList [1,2,3]` → `1 + sumList [2,3] → 1 + (2 + sumList [3]) → 1 + 2 + 3 + 0` = `6`.
+
+**Generating example — evens up to n:**
+```haskell
+evensUpTo :: Integer -> [Integer]
+evensUpTo n = go 2
+  where
+    go k | k > n     = []
+         | otherwise = k : go (k + 2)
+```
+`evensUpTo 8` → `[2,4,6,8]`.
+
+<Callout type="warn" title="Counting down while generating reverses the order">
+A generator that counts *down* and conses as it goes builds the list backwards: the largest survivor is consed first, so it ends up at the *front*. `evensUpTo`-style generators must count up toward `n`, not down from it, to come out in ascending order.
+</Callout>
+
+**A third shape — walking two lists together:** needs `[]` written twice, once for each list, since either running out ends the recursion.
+```haskell
+funcName :: [a] -> [b] -> [ResultType]
+funcName []     _      = []
+funcName _      []     = []
+funcName (x:xs) (y:ys) = combine x y : funcName xs ys
+```
+```haskell
+pairUp :: [a] -> [b] -> [(a, b)]
+pairUp [] _ = []
+pairUp _ [] = []
+pairUp (x:xs) (y:ys) = (x, y) : pairUp xs ys
+```
+```text
+ghci> pairUp [1,2,3] "ab"
+[(1,'a'),(2,'b')]
+ghci> pairUp [1,2,3] [10,20,30,40]
+[(1,10),(2,20),(3,30)]
+```
+Both `[]` equations are needed, not one: `pairUp [1,2,3] []` must stop because the *second* list is empty, even though the first still has elements — either list running out ends the pairing. The result is only as long as the **shorter** input, exactly like the Prelude's own `zip`/`zipWith` (Chapter 7).
+
+## 6. Three ways to search
+
+| Method | Shape | Example |
+|---|---|---|
+| Built-in `elem` | ``target `elem` list`` | ``3 `elem` [1,2,3,21]`` → `True` |
+| Recursive, by hand | `[]`/`(x:xs)` + guards | `search _ [] = False; search t (x:xs) \| t == x = True \| otherwise = search t xs` |
+| List comprehension | Filter and collect | `findMatches t xs = [x \| x <- xs, x == t]` |
+
+Returning the **position**, not just whether it's found — carry a running counter:
+```haskell
+positionOf :: Eq a => a -> [a] -> Int
+positionOf v xs = go xs 0
+  where
+    go []     _ = -1
+    go (y:ys) i | y == v    = i
+                | otherwise = go ys (i + 1)
+```
+`positionOf 9 [3,7,9,2]` → `2`. `positionOf 100 [3,7,9,2]` → `-1`.
+
+## 7. Common errors, at a glance
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `[1, 'a', True]` rejected | Lists need one shared element type | Use a tuple, or one element type |
+| `head []` crashes | `head` is partial | Match `[]` yourself, or use a `Maybe`-returning version |
+| Generated list is backwards | Consing while counting the wrong direction | Count toward the target, not away from it |
+| Missing `[]` equation | Recursion never reaches a base case for some input | Every list function needs a `[]` (or equivalent) case |
+| `numbers !! 9` on a 5-element list | Index out of range | Check `length` first |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can expand [1,2,3] into 1 : 2 : 3 : [] and back, without hesitating.' },
+  { type: 'must', text: 'I can say what x and xs bind to for any given list, including a singleton.' },
+  { type: 'must', text: 'I can write the two-line []/(x:xs) template from memory for a new problem.' },
+]} />
+
+Full explanations, worked traces, and more examples: [Lists](/docs/sem3/csi243/06-lists-tuples/notes/lists) · [Recursion on Lists](/docs/sem3/csi243/06-lists-tuples/notes/list-recursion) · [Tuples](/docs/sem3/csi243/06-lists-tuples/notes/tuples) · [List Comprehensions](/docs/sem3/csi243/06-lists-tuples/notes/list-comprehensions).

@@ -7,6 +7,45 @@ Conditional expressions choose on a **Boolean test**. Pattern matching chooses o
 
 The result is code that is neater, more readable, and simpler than the equivalent nest of conditionals.
 
+### Naming the parts of a function definition, once and for all
+
+Every pattern-matched function you will see in this course has the same skeleton. Learning to name each piece pays off immediately, because the same names are used to talk about every example from here on:
+
+```haskell
+funcName :: InputType -> OutputType     -- Type signature
+funcName pattern1 = expression1         -- Equation 1
+funcName pattern2 = expression2         -- Equation 2
+funcName _        = fallbackExpression  -- Catch-all
+```
+
+| Placeholder | What it stands for | An example you have already seen |
+|---|---|---|
+| `funcName` | The name you give the function | `isZero`, `dayName`, `square` |
+| `pattern` | A literal value, a variable, `_`, or a structure (tuple/list/cons) to match the argument against | `0`, `n`, `_`, `(x, _)`, `(x:xs)` |
+| `expression` | What the function evaluates to when that equation's pattern matches | `1`, `n * n`, `True` |
+
+Each line of the template above is one **equation** — a complete `funcName pattern = expression` definition. A function is the set of all its equations together, tried in order. This vocabulary — equation, pattern, expression — is not decoration. "Which pattern matched?" and "which equation is this?" are the exact questions you ask when debugging a pattern-matching function that returns the wrong answer, and Section 2 below is built entirely around asking them correctly.
+
+<Quiz title="Check: naming the parts" questions={[
+  {
+    question: "In fac 0 = 1, which word names 0, and which names the whole line?",
+    options: [
+      "0 is the expression; the whole line is a pattern",
+      "0 is a pattern; the whole line is an equation",
+      "0 is an equation; the whole line is an expression",
+      "0 is a funcName; the whole line is a pattern"
+    ],
+    correctIndex: 1,
+    explanation: "0 is what fac's argument is matched against — a pattern. fac 0 = 1 in full — name, pattern, and the result it produces — is one equation. A function is the complete set of its equations.",
+    optionFeedback: [
+      "0 is not an expression here; it is the pattern being matched against. 1, on the right of =, is the expression.",
+      "Correct — 0 is a literal pattern, and fac 0 = 1 taken as a whole is one equation.",
+      "An equation is the whole funcName-pattern-equals-expression line, not a single value inside it — 0 alone is too small to be called an equation.",
+      "funcName refers to the function's own name, fac, not to the pattern being matched inside one of its equations."
+    ]
+  }
+]} />
+
 ## 1. The idea
 
 Write several equations for the same function. Haskell tries them **in order**, top to bottom, and uses the first one whose pattern matches.
@@ -31,7 +70,25 @@ ghci> negateBool False
 True
 ```
 
+As a program:
+
+```haskell
+main :: IO ()
+main = do
+  print (negateBool True)
+  print (negateBool False)
+```
+
+```text
+False
+True
+```
+
 There are only two `Bool` values, so these two patterns cover everything.
+
+<Callout type="info" title="Why patterns instead of nested if">
+`negateBool` could be written as `if b then False else True`. For two outcomes that is no worse. But once a decision has three or more *exact* values to distinguish — a day number, a specific character, a specific list shape — pattern matching states each case as its own equation, aligned and independently checkable, where a chain of nested `if`/`else` would drift rightwards with every case added (see the previous lesson, Section 4). Patterns are the right tool exactly when the cases are literal values or structural shapes, not ranges — ranges are what guards, next lesson, are for.
+</Callout>
 
 ## 2. Matching is sequential, and order matters
 
@@ -53,6 +110,22 @@ ghci> square 5
 25
 ```
 
+As a program, adding a negative number to confirm the general equation handles it correctly too:
+
+```haskell
+main :: IO ()
+main = do
+  print (square 0)
+  print (square 5)
+  print (square (-3))
+```
+
+```text
+1
+25
+9
+```
+
 <Mermaid chart={`flowchart TD
   Start["Call f with an argument"] --> E1{"Matches equation 1's pattern?"}
   E1 -- Yes --> R1["Run equation 1's right-hand side"]
@@ -69,7 +142,36 @@ square y = y * y
 square 0 = 1     -- unreachable
 ```
 
-`square 0` would now return `0`, and GHC warns that the second equation is redundant. **A variable pattern matches anything, so nothing below it is ever reached.**
+If a module contained only this reversed version, here is exactly what running it prints:
+
+```haskell
+main :: IO ()
+main = do
+  print (square 0)
+  print (square 5)
+```
+
+```text
+0
+25
+```
+
+`square 0` would now return `0` — silently wrong, not crashed and not refused. GHC does notice, though, and says so at the exact moment it compiles the file, before you ever call anything:
+
+```text
+Pattern.hs:3:1: warning: [-Woverlapping-patterns]
+    Pattern match is redundant
+    In an equation for `square': square 0 = ...
+  |
+3 | square 0 = 1
+  | ^^^^^^^^^^^^
+```
+
+Read this literally: **redundant**, not "wrong" or "unreachable" in so many words, but that is exactly what it means — GHC is telling you that every value `square 0` could ever match is already claimed by an earlier equation, so this one can never fire. It is a warning, not an error — the module still compiles and `square 0` still (wrongly) returns `0` — which is exactly why it is worth turning warnings on and reading them, rather than treating a successful compile as proof the function is right. **A variable pattern matches anything, so nothing below it is ever reached.**
+
+<Callout type="info" title="Naming the parts, precisely">
+`_` specifically is called the **wildcard pattern** (Section 3 gives it its own row). A bare name like `y` in `square y = y * y` is a **variable pattern** — it also matches anything, but *binds* what it matches to a name you can use on the right-hand side, unlike `_`, which matches anything and throws the value away. Both are "catch-all" in the sense that neither can ever fail to match; that shared property is exactly why either one, placed too early, swallows every equation below it.
+</Callout>
 
 <Quiz title="Check: sequential matching" questions={[
   {
@@ -119,6 +221,27 @@ square 0 = 1     -- unreachable
 | **List** | A list of matching structure and length | `stW ['b', _, _] = True` |
 | **Cons** `(x:xs)` | A non-empty list, splitting head from tail | `head1 (x:_) = x` |
 
+<Mermaid chart={`mindmap
+  root((Kinds of pattern))
+    Literal
+      "fac 0 = 1"
+      matches one exact value
+    Variable
+      "fac n = n * fac (n - 1)"
+      matches anything, binds a name
+    Wildcard
+      "isZero _ = False"
+      matches anything, binds nothing
+    Tuple
+      "fst (x, _) = x"
+      matches a fixed arity, piece by piece
+    List
+      "stW ['b', _, _] = True"
+      matches an exact length and shape
+    Cons
+      "head1 (x:_) = x"
+      splits a non-empty list into head and tail`} caption="Six ways to match, mapped from the same idea outward. Every one of them either pins down an exact value/shape or explicitly says 'anything goes here' — there is no third option." />
+
 ### The wildcard
 
 `_` is the catch-all. Use it when a position must match but its value is not needed:
@@ -136,6 +259,18 @@ ghci> isZero 7
 False
 ```
 
+```haskell
+main :: IO ()
+main = do
+  print (isZero 0)
+  print (isZero 7)
+```
+
+```text
+True
+False
+```
+
 Writing `isZero n = False` would work identically, but `_` documents that the value is deliberately ignored, and avoids an unused-name warning.
 
 ## 4. Exhaustiveness
@@ -148,6 +283,22 @@ dayName :: Int -> String
 dayName 1 = "Monday"
 dayName 2 = "Tuesday"
 ```
+
+On inputs that do match, it behaves normally:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (dayName 1)
+  putStrLn (dayName 2)
+```
+
+```text
+Monday
+Tuesday
+```
+
+But `dayName` has no equation for `3` or above. Calling it on such an input crashes the whole program, not just that call — best seen directly at the `ghci` prompt rather than guessed at as compiled output:
 
 ```text
 ghci> dayName 3
@@ -173,6 +324,20 @@ ghci> dayName 3
 "Wednesday"
 ghci> dayName 9
 "Not a day number"
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (dayName 3)
+  putStrLn (dayName 9)
+  putStrLn (dayName 1)
+```
+
+```text
+Wednesday
+Not a day number
+Monday
 ```
 
 <Callout type="warn" title="-Wincomplete-patterns is a warning, not a rejection">
@@ -226,7 +391,7 @@ dayName.hs:2:1: warning: [-Wincomplete-patterns]
 
 ## 5. Tuple patterns
 
-A tuple of patterns is itself a pattern. It matches any tuple of the same arity whose components all match in order. This is how the Prelude defines `fst` and `snd`:
+A tuple of patterns is itself a pattern. It matches any tuple of the same arity whose components all match in order. In plain English: line up the pattern's slots against the tuple's slots one by one, and the whole thing matches only if every slot's own piece matches whatever is sitting in that same slot — [Decoding Exam and Lab Language](/docs/sem3/csi243/decoding-questions) works through several dense definitions exactly this way, one phrase at a time. This is how the Prelude defines `fst` and `snd`:
 
 ```haskell
 fst :: (a, b) -> a
@@ -234,6 +399,20 @@ fst (x, _) = x
 
 snd :: (a, b) -> b
 snd (_, x) = x
+```
+
+They behave exactly as this definition promises:
+
+```haskell
+main :: IO ()
+main = do
+  print (fst (3, "abc"))
+  print (snd (3, "abc"))
+```
+
+```text
+3
+"abc"
 ```
 
 The pattern destructures the pair and names only the component that is wanted.
@@ -248,6 +427,86 @@ addPair (x, y) = x + y
 ghci> addPair (3, 4)
 7
 ```
+
+```haskell
+main :: IO ()
+main = do
+  print (addPair (3, 4))
+  print (addPair (-2, 5))
+```
+
+```text
+7
+3
+```
+
+### A second tuple example: which axis
+
+A different domain, still tuple and wildcard patterns, no arithmetic needed:
+
+```haskell
+-- Classify a 2D point by which axis it lies on.
+axisOf :: (Int, Int) -> String
+axisOf (0, 0) = "origin"
+axisOf (0, _) = "on the y-axis"
+axisOf (_, 0) = "on the x-axis"
+axisOf (_, _) = "off both axes"
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (axisOf (0, 0))
+  putStrLn (axisOf (0, 5))
+  putStrLn (axisOf (3, 0))
+  putStrLn (axisOf (2, 3))
+```
+
+```text
+origin
+on the y-axis
+on the x-axis
+off both axes
+```
+
+The order is forced exactly as it was for `square`: `(0, 0)` also matches the pattern `(0, _)`, so the literal-tuple case `(0, 0)` must come first, or it would never be reached.
+
+<Quiz title="Check: tuple pattern ordering" questions={[
+  {
+    question: "In axisOf, why must axisOf (0, 0) = \"origin\" be listed before axisOf (0, _) = \"on the y-axis\"?",
+    options: [
+      "Because tuple patterns must always be listed in the order the components were declared in the type signature",
+      "Because (0, 0) also matches the more general pattern (0, _) — if the general one came first, it would intercept every call to axisOf (0, 0) before the specific equation was ever tried",
+      "Because Haskell requires a literal-tuple pattern to appear before any pattern containing a wildcard, as a fixed syntax rule",
+      "It doesn't actually matter for this function; both orderings produce identical results"
+    ],
+    correctIndex: 1,
+    explanation: "This is the exact same most-specific-first discipline as square 0 versus square y in Section 2, applied to a tuple pattern instead of a plain literal. (0, 0) matches both (0, 0) and (0, _), so whichever is listed first wins for that input — the specific case must come first or it is permanently shadowed.",
+    optionFeedback: [
+      "Pattern ordering is a matching-order rule, not a rule about mirroring the signature's component order — nothing about (Int, Int) forces this particular sequence.",
+      "Correct — this is the tuple-pattern version of the exact ordering rule established for square 0 / square y earlier in this lesson.",
+      "There is no such blanket syntax rule; the ordering here follows from what each pattern matches, not from the presence of a wildcard as such.",
+      "Reversing the two equations changes the answer for axisOf (0, 0) specifically — swap them and it would print \"on the y-axis\" instead of \"origin\"."
+    ]
+  },
+  {
+    question: "What does axisOf (0, 5) return, and which equation supplies it?",
+    options: [
+      "\"origin\", from the first equation, because the first component is 0",
+      "\"on the y-axis\", from the second equation axisOf (0, _) = \"on the y-axis\", because (0,0) fails to match but (0,_) does",
+      "\"on the x-axis\", from the third equation",
+      "\"off both axes\", from the fourth equation, since neither component is exactly 0 and 0"
+    ],
+    correctIndex: 1,
+    explanation: "(0, 5) does not match the literal pattern (0, 0) — 5 is not 0 — so matching moves to the next equation, (0, _), which matches any tuple with a first component of 0. That equation fires and returns \"on the y-axis\".",
+    optionFeedback: [
+      "The first equation requires the second component to be exactly 0 as well; (0, 5) fails that literal match and falls through to the next equation.",
+      "Correct — the first equation's literal 0 in the second position fails to match 5, so the second equation, with its wildcard, takes over.",
+      "The third equation, (_, 0), requires the second component to be 0 — it is 5 here, so this equation is never reached for this input.",
+      "The fourth equation is only reached when none of the first three match; (0, _) already matches (0, 5), so matching stops there."
+    ]
+  }
+]} />
 
 ## 6. List patterns
 
@@ -266,6 +525,20 @@ True
 ghci> stW "cat"
 False
 ghci> stW "boat"
+False
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (stW "bat")
+  print (stW "cat")
+  print (stW "boat")
+```
+
+```text
+True
+False
 False
 ```
 
@@ -306,6 +579,22 @@ False
 ghci> head [5,9,2]
 5
 ghci> tail [5,9,2]
+[9,2]
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (null [])
+  print (null [1,2,3])
+  print (head [5,9,2])
+  print (tail [5,9,2])
+```
+
+```text
+True
+False
+5
 [9,2]
 ```
 
@@ -352,6 +641,70 @@ Function application binds more tightly than any operator, so `tail _:xs = xs` i
   }
 ]} />
 
+### Nested patterns: a pattern can sit inside another pattern
+
+Every pattern in Sections 3–6 above was one level deep — a tuple of variables, or a list of literals. Nothing stops a pattern from nesting a *second* structural pattern inside the first: a tuple inside a cons, a list inside a tuple, and so on, matched all in one go against however many layers the argument actually has.
+
+**Template:**
+```haskell
+funcName :: (OuterType) -> ResultType
+funcName (outerPattern innerPattern) = expression
+funcName fallbackPattern             = fallbackExpression
+```
+Read it exactly the way Section 5's tuple patterns were read, just one layer deeper: line up `outerPattern` against the argument's outer shape, and wherever that outer shape has a "slot," `innerPattern` gets to describe *that slot's own* internal shape, instead of only a bare variable or wildcard.
+
+**Example:**
+```haskell
+-- Sum the two numbers in the first pair of a list of pairs.
+firstPairSum :: [(Int, Int)] -> Int
+firstPairSum ((x, y):_) = x + y
+firstPairSum []         = 0
+```
+```text
+ghci> firstPairSum [(3,4),(1,1)]
+7
+ghci> firstPairSum []
+0
+```
+`((x, y):_)` is two patterns nested together: the outer pattern is the familiar cons `(_:_)` from Section 6, splitting a non-empty list into a head and a tail; but where the head would ordinarily be a bare variable, it is instead the tuple pattern `(x, y)` from Section 5, destructuring that head element too. Both layers are matched at once — the list must be non-empty, *and* its first element must be a pair — before `x` and `y` are bound to anything.
+
+**A variation: the nesting the other way round — a list inside a tuple**
+```haskell
+-- Describe a (list, number) pair by the list's own shape.
+describePair :: ([Int], Int) -> String
+describePair ([], _)    = "empty list paired with a number"
+describePair ((x:_), n) = "list starting with " ++ show x ++ ", paired with " ++ show n
+```
+```text
+ghci> describePair ([], 5)
+"empty list paired with a number"
+ghci> describePair ([9,2,3], 5)
+"list starting with 9, paired with 5"
+```
+Here the outer pattern is the tuple `(_, _)`, and the *first slot* of that tuple is where the nested pattern lives — either the literal empty list `[]`, or a cons `(x:_)`. Nesting has no preferred direction: Section 5's tuples and Section 6's lists can sit inside each other however the data is actually shaped.
+
+**A variation: nested pattern combined with guards**
+```haskell
+-- Compare the two numbers in the first pair of a list of pairs.
+closestPairFirst :: [(Int, Int)] -> String
+closestPairFirst ((x, y):_)
+  | x == y    = "first pair is balanced"
+  | x > y     = "first pair leans left"
+  | otherwise = "first pair leans right"
+closestPairFirst [] = "no pairs"
+```
+```text
+ghci> closestPairFirst [(3,3),(1,9)]
+"first pair is balanced"
+ghci> closestPairFirst [(5,1)]
+"first pair leans left"
+ghci> closestPairFirst [(1,5)]
+"first pair leans right"
+ghci> closestPairFirst []
+"no pairs"
+```
+Exactly the same combination the next lesson calls out in full (Guarded Equations, Section 4): the nested pattern `((x, y):_)` selects the equation and destructures two layers deep in one step, and once inside that equation, the guards decide *which* of several results to give based on a range-style comparison (`==`, `>`) that no pattern, nested or otherwise, could express on its own.
+
 ## 7. Worked example: recognising a vowel
 
 Specify, then implement.
@@ -382,6 +735,20 @@ True
 ghci> isVowel 'A'
 True
 ghci> isVowel 't'
+False
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (isVowel 'a')
+  print (isVowel 'A')
+  print (isVowel 't')
+```
+
+```text
+True
+True
 False
 ```
 
@@ -416,6 +783,22 @@ secondElement _       = error "secondElement: list has fewer than two elements"
 ```
 
 The pattern `(_:x:_)` requires at least two elements: a head that is ignored, then `x`, then any remaining tail. A list of length 0 or 1 falls through to the catch-all. Returning `error` is honest here, because there is no sensible `a` to invent — Chapter 5 returns to error handling.
+
+On lists long enough to match, the first pattern succeeds:
+
+```haskell
+main :: IO ()
+main = do
+  print (secondElement [10, 20, 30])
+  print (secondElement "hi")
+```
+
+```text
+20
+'i'
+```
+
+`secondElement [5]` or `secondElement []` would instead run the `error` call and halt the program — that case is deliberately not shown here, since it has no output to print.
 
 </Accordion>
 </Accordions>

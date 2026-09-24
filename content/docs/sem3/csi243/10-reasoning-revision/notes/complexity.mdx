@@ -30,6 +30,49 @@ The work grows in direct proportion to `n`. This is **linear** cost, written **O
 
 Most of the list functions you have written are linear: `sum`, `product`, `reverse` (naively), `map f`, `filter p`, `elem`.
 
+See the growth directly rather than only in a table, by counting calls inside a real program:
+
+```haskell
+-- File: CountCalls.hs
+length' :: [a] -> Int
+length' []     = 0
+length' (_:xs) = 1 + length' xs
+
+main :: IO ()
+main = do
+  print (length' [])              -- 0 elements: 1 call
+  print (length' [10])            -- 1 element: 2 calls
+  print (length' [10, 20, 30, 40, 50])  -- 5 elements: 6 calls
+```
+
+```text
+0
+1
+5
+```
+
+The printed *results* — `0`, `1`, `5` — are just the lengths; they say nothing about cost by themselves. The **call count** predicted by the table (`1`, `2`, `6`) is a separate fact about *how much work* each call did, not something `print` shows you directly. This is the core discipline of this whole chapter: two calls can print the identical value while doing wildly different amounts of work, and reading the output alone can never tell you which.
+
+<Quiz title="Check: counting calls vs. reading output" questions={[
+  {
+    question: "length' [10, 20, 30, 40, 50] prints 5. Does that output tell you anything about how many recursive calls were made to get it?",
+    options: [
+      "Yes — the output 5 directly means 5 calls were made",
+      "No — the output is just the final value; the table above shows 6 calls were needed (one per element, plus the base case), and nothing about the printed 5 reveals that count",
+      "Yes — Haskell always prints the call count alongside the result",
+      "No, because length' does not actually use recursion"
+    ],
+    correctIndex: 1,
+    explanation: "The value produced and the work done to produce it are two entirely separate things. print only ever shows the value. Counting calls requires reasoning about the definition itself, exactly as Section 1's table does — reading printed output can never substitute for that reasoning.",
+    optionFeedback: [
+      "This conflates the answer with the cost of computing it — two different numbers that happen to be close for this particular n, but are not the same fact.",
+      "Correct. This is precisely the point: cost is a property of the definition and how it recurses, not something a printed value ever exposes on its own.",
+      "Nothing in Haskell's IO output includes a call count automatically; that information exists only in your own reasoning about the definition.",
+      "length' is defined recursively right above — length' (_:xs) = 1 + length' xs is a self-referential definition, the textbook shape of recursion."
+    ]
+  }
+]} />
+
 ## 2. When cost explodes
 
 Now the Fibonacci definition:
@@ -42,6 +85,27 @@ fib n = fib (n - 1) + fib (n - 2)
 ```
 
 Each call makes **two** further calls. The trace from Chapter 5 showed `fib 5` evaluating `fib 2` three separate times.
+
+<Mermaid chart={`flowchart TD
+  F5["fib 5"] --> F4["fib 4"]
+  F5 --> F3a["fib 3"]
+  F4 --> F3b["fib 3"]
+  F4 --> F2a["fib 2"]
+  F3a --> F2b["fib 2"]
+  F3a --> F1a["fib 1"]
+  F3b --> F2c["fib 2"]
+  F3b --> F1b["fib 1"]
+  F2a --> F1c["fib 1"]
+  F2a --> F0a["fib 0"]
+  F2b --> F1d["fib 1"]
+  F2b --> F0b["fib 0"]
+  F2c --> F1e["fib 1"]
+  F2c --> F0c["fib 0"]
+  style F2a fill:#ff9f0a,stroke:#ff9f0a,color:#fff
+  style F2b fill:#ff9f0a,stroke:#ff9f0a,color:#fff
+  style F2c fill:#ff9f0a,stroke:#ff9f0a,color:#fff`} caption="Every call branches into two more, so the tree doubles in width at each level going down — this is exactly what O(2ⁿ) growth looks like drawn out. The three orange nodes are all fib 2: the same subproblem, computed three separate times within this one call to fib 5, and it only gets worse as n grows." />
+
+This diagram is the picture behind the word "recomputation" — `fib 2` is not merely called three times by coincidence; every one of `fib 5`'s branches that reaches down far enough will recompute it independently, because nothing in this definition remembers a result once it has been thrown away.
 
 | `n` | Approximate calls |
 |---|---|
@@ -75,7 +139,55 @@ ghci> fibFast 40
 102334155
 ```
 
-Instant, where the naive version would take minutes. Same specification, same results, a completely different cost.
+Instant, where the naive version would take minutes. Same specification, same results, a completely different cost. Run both side by side, on inputs small enough that the naive one still finishes in reasonable time, to see them agree exactly before trusting the fast one on larger input:
+
+```haskell
+-- File: FibCompare.hs
+fib :: Integer -> Integer
+fib 0 = 0
+fib 1 = 1
+fib n = fib (n - 1) + fib (n - 2)
+
+fibFast :: Integer -> Integer
+fibFast n = go n 0 1
+  where
+    go 0 a _ = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = do
+  print (fib 10, fibFast 10)      -- both should agree
+  print (fib 20, fibFast 20)      -- both should still agree
+  print (fibFast 40)              -- fib 40 would still finish, but takes vastly longer to reach the same number
+```
+
+```text
+(55,55)
+(6765,6765)
+102334155
+```
+
+Both definitions are pure functions computing the *same specification* — same inputs give the same outputs, always — so the two numbers in each pair are identical. What differs is invisible in this output entirely: it is the number of reduction steps GHC performed to get there, which the Mermaid tree above visualises for `fib` and which never branches at all for `fibFast`, since `go` makes exactly one recursive call per step.
+
+<Quiz title="Check: recomputation, not recursion, is the fault" questions={[
+  {
+    question: "fibFast is also defined recursively (go calls itself). Why is it fast while naive fib is unusably slow for even moderate n?",
+    options: [
+      "fibFast is not really recursive; it only looks that way",
+      "fibFast's go makes exactly one recursive call per step and carries the two values it needs forward as arguments, so nothing is ever recomputed; naive fib makes two calls per step and recomputes the same overlapping subproblems many times over",
+      "fibFast uses a different, non-recursive language feature that fib does not have access to",
+      "fibFast is fast only for small n, and becomes exponential for large n just like fib"
+    ],
+    correctIndex: 1,
+    explanation: "This is the callout's exact point, now shown as running code: recursion itself is not what makes naive fib slow. fibFast is recursive too — go k a b = go (k-1) b (a+b) calls itself — but each call carries forward everything needed and never revisits a subproblem, giving it linear, not exponential, cost.",
+    optionFeedback: [
+      "go (k - 1) b (a + b) is a genuine recursive call — fibFast is exactly as recursive as fib, just structured differently.",
+      "Correct. One call per step with values carried forward, versus two calls per step with massive overlap — same tool (recursion), radically different cost from a different shape of definition.",
+      "Both fib and fibFast use nothing beyond ordinary Haskell pattern-matching recursion — there is no special non-recursive trick in fibFast.",
+      "fibFast stays linear for arbitrarily large n — that is exactly the point of carrying an accumulator, and fibFast 40 above returns instantly precisely because it never becomes exponential."
+    ]
+  }
+]} />
 
 ## 3. The cost of common operations
 
@@ -111,6 +223,55 @@ fastReverse xs = go xs []
     go (y:ys) acc = go ys (y : acc)
 ```
 
+Both compute the identical result — proof that "different cost" never means "different answer":
+
+```haskell
+-- File: ReverseCompare.hs
+myReverse :: [a] -> [a]
+myReverse []     = []
+myReverse (x:xs) = myReverse xs ++ [x]
+
+fastReverse :: [a] -> [a]
+fastReverse xs = go xs []
+  where
+    go [] acc     = acc
+    go (y:ys) acc = go ys (y : acc)
+
+main :: IO ()
+main = do
+  print (myReverse [1, 2, 3, 4, 5])
+  print (fastReverse [1, 2, 3, 4, 5])
+  print (myReverse "hello")
+  print (fastReverse "hello")
+```
+
+```text
+[5,4,3,2,1]
+[5,4,3,2,1]
+"olleh"
+"olleh"
+```
+
+<Quiz title="Check: consing versus appending" questions={[
+  {
+    question: "myReverse and fastReverse print identical results above. Why is myReverse still O(n^2) while fastReverse is O(n)?",
+    options: [
+      "They aren't actually different costs; the table only applies to sorting functions",
+      "myReverse's ++ [x] rebuilds the entire reversed tail at each of n steps (n + (n-1) + ... + 1 work); fastReverse's go conses onto the accumulator with :, an O(1) operation, at each of n steps",
+      "fastReverse is faster only because it uses a where clause",
+      "myReverse is slower only because it is defined with two equations instead of one"
+    ],
+    correctIndex: 1,
+    explanation: "The cost difference traces to a single operation choice: ++ walks and rebuilds its left argument every time it's used, and myReverse calls it once per recursive step on a tail that keeps growing, giving quadratic total work. : always costs O(1) regardless of how large the accumulator already is, so fastReverse's total cost stays linear in n.",
+    optionFeedback: [
+      "The table lists costs for ordinary list operations generally, not only sort — head, :, length, ++, and reverse all have their own entries, exactly as used here.",
+      "Correct — this is precisely 'consing is cheap; appending is not' applied to the two reverse definitions: O(1) per step versus an O(n)-and-growing rebuild per step.",
+      "where is just a syntactic way to introduce a local helper (go); it has no effect on cost by itself — the cost comes from which list operation go uses inside its own body.",
+      "Both definitions use exactly one equation per case (two total) in the style used throughout this course; equation count is unrelated to the cost of the operation each equation performs."
+    ]
+  }
+]} />
+
 **`length` inside a loop is a trap.** Calling `length` for each element turns a linear pass into a quadratic one:
 
 ```haskell
@@ -120,6 +281,51 @@ slow xs = [x | x <- xs, length xs > 3]
 -- O(n): computed once.
 fast xs = if length xs > 3 then xs else []
 ```
+
+```haskell
+-- File: LengthTrap.hs
+slow :: [Int] -> [Int]
+slow xs = [x | x <- xs, length xs > 3]
+
+fast :: [Int] -> [Int]
+fast xs = if length xs > 3 then xs else []
+
+main :: IO ()
+main = do
+  print (slow [1, 2, 3, 4, 5])   -- same answer as fast below
+  print (fast [1, 2, 3, 4, 5])
+  print (slow [1, 2])            -- length xs > 3 is False for every element checked
+  print (fast [1, 2])
+```
+
+```text
+[1,2,3,4,5]
+[1,2,3,4,5]
+[]
+[]
+```
+
+The two pairs of results match exactly, which is exactly the trap: nothing about the *output* warns you that `slow` recomputed `length xs` once per surviving element (an `O(n)` operation repeated up to `n` times, giving `O(n²)`), while `fast` computed it exactly once. Correctness and cost are independent questions; a program can be perfectly correct and still needlessly quadratic.
+
+<Quiz title="Check: spotting a length-in-a-loop trap" questions={[
+  {
+    question: "slow xs = [x | x <- xs, length xs > 3] and fast xs = if length xs > 3 then xs else [] produce identical results on the same input. Why is slow still worse?",
+    options: [
+      "It isn't worse; identical output means identical cost",
+      "The list comprehension re-evaluates length xs on every single element it checks — an O(n) operation repeated up to n times, giving O(n^2) — while fast calls length xs exactly once regardless of how long xs is",
+      "slow is worse only because list comprehensions are always slower than if expressions",
+      "fast is actually wrong because it does not filter individual elements"
+    ],
+    correctIndex: 1,
+    explanation: "length xs does not depend on which element x is currently being checked — it is the same value every single time inside the comprehension, yet slow's structure recomputes it once per element anyway. fast asks the question exactly once, outside any per-element loop, keeping it linear.",
+    optionFeedback: [
+      "Identical output was the whole point of the demonstration — it proves cost and correctness are separate facts; this example is specifically chosen to make that separation visible.",
+      "Correct. This is precisely the O(n^2)-inside-a-comprehension trap the lesson names: the same length computed redundantly, once per element, rather than once overall.",
+      "The comprehension form itself is not inherently slow; the problem is specifically calling length once per element inside it — a comprehension that does O(1) work per element stays linear.",
+      "fast's specification here is deliberately about the whole list at once (return it entirely or return nothing), matching what length xs > 3 tests — it is answering a different, but equally valid, question from slow's per-element filter, and the example is chosen so both happen to agree on this input."
+    ]
+  }
+]} />
 
 ## 4. Laziness
 
@@ -136,7 +342,44 @@ ghci> take 3 (map (*2) [1..])
 [2,4,6]
 ```
 
-`[1..]` is never fully built. Only the five elements demanded are computed.
+`[1..]` is never fully built. Only the five elements demanded are computed. Inside a full program, not just at the prompt:
+
+```haskell
+-- File: LazyDemo.hs
+main :: IO ()
+main = do
+  print (take 5 [1..])              -- [1..] is infinite; only 5 elements are ever forced
+  print (take 3 (map (*2) [1..]))   -- map is applied lazily too, one element at a time
+  print (take 4 (filter even [1..])) -- filter also only inspects as many elements as needed
+```
+
+```text
+[1,2,3,4,5]
+[2,4,6]
+[2,4,6,8]
+```
+
+None of these three lines would terminate if Haskell tried to build the entire infinite list first and only afterward hand it to `take`. Each of `take`, `map`, and `filter` is written to produce (or, for `filter`, consume) one element at a time, which is exactly what makes chaining them over `[1..]` safe.
+
+<Quiz title="Check: laziness and infinite lists" questions={[
+  {
+    question: "take 4 (filter even [1..]) terminates and prints [2,4,6,8]. Why doesn't Haskell need to build the whole infinite list first?",
+    options: [
+      "[1..] secretly stops at some large finite number under the hood",
+      "Evaluation only happens when a value is actually demanded — take asks filter for one element at a time, and filter only inspects as many elements of [1..] as it needs to produce each one, so nothing beyond the 4 answers required is ever forced",
+      "filter always pre-computes exactly as many elements as its second argument will need",
+      "This only works because even is a cheap function to evaluate"
+    ],
+    correctIndex: 1,
+    explanation: "Laziness means each stage of the pipeline is driven by demand from the stage after it. take 4 demands a 4th element, which makes filter keep pulling from [1..] just far enough to find it, which makes [1..] produce just enough of itself — none of the three ever computes further ahead than what is actually needed.",
+    optionFeedback: [
+      "[1..] is a genuinely infinite range with no built-in stopping point; if fully forced it would never finish. The termination comes from take limiting how much of it is ever demanded, not from any hidden cutoff.",
+      "Correct — this is the thunk mechanism in action: nothing is evaluated without a reason, and take's demand for 4 results is the only reason anything gets evaluated at all.",
+      "filter has no way to know in advance how many elements a later take will ask for; it simply produces (or skips) one element at a time as it is pulled, which happens to be exactly what makes this lazy chaining safe.",
+      "The cost of even is irrelevant to why this terminates — the same laziness argument would apply to any predicate, cheap or expensive; termination is about how many elements are forced, not how expensive each one is to check."
+    ]
+  }
+]} />
 
 **Unused arguments cost nothing**:
 
@@ -150,9 +393,52 @@ ghci> constant 5 (fib 40)
 5
 ```
 
-`fib 40` is never evaluated, because its value is never demanded.
+`fib 40` is never evaluated, because its value is never demanded. Seen as a full program:
+
+```haskell
+-- File: UnusedArg.hs
+constant :: a -> b -> a
+constant x _ = x
+
+fib :: Integer -> Integer
+fib 0 = 0
+fib 1 = 1
+fib n = fib (n - 1) + fib (n - 2)
+
+main :: IO ()
+main = do
+  print (constant 5 (fib 40))   -- fib 40 is built into a thunk, then thrown away unevaluated
+  print (constant "ready" undefined) -- even undefined, which would crash if forced, is safe here
+```
+
+```text
+5
+"ready"
+```
+
+The second line is the sharpest possible demonstration of laziness: `undefined` is a value that crashes the program the instant anything actually forces it. `constant "ready" undefined` still runs cleanly and prints `"ready"`, because `constant`'s second argument, whatever it is, is never looked at — `constant x _ = x` binds it to `_`, meaning "some value I am explicitly promising never to inspect."
 
 Laziness also explains why `takeWhile` can be cheaper than `filter`: it stops at the first failure and never examines the rest.
+
+<Quiz title="Check: what laziness actually delays" questions={[
+  {
+    question: "constant \"ready\" undefined prints \"ready\" without crashing, even though undefined would crash the program if it were ever evaluated. Why doesn't it crash here?",
+    options: [
+      "Haskell silently converts undefined into a harmless placeholder value",
+      "constant x _ = x never inspects its second argument at all — the pattern _ discards it without forcing it — so undefined's crash-on-evaluation is simply never triggered",
+      "undefined only crashes inside GHCi, not inside a compiled or loaded program",
+      "This is a coincidence specific to the string \"ready\""
+    ],
+    correctIndex: 1,
+    explanation: "Laziness means an expression is only evaluated when something actually demands its value. constant's definition, x _ = x, returns x and never looks at the second parameter at all — matching it with _ is Haskell's way of saying 'bind this argument to nothing, never examine it.' Since it's never examined, undefined's crash — which only happens on evaluation, not on being passed as an argument — never has a reason to fire.",
+    optionFeedback: [
+      "undefined is not converted into anything; it remains a value that crashes the moment it is forced — the point is that this call never forces it.",
+      "Correct. This is the sharpest version of 'unused arguments cost nothing': an argument guaranteed to crash on evaluation is still perfectly safe to pass, as long as nothing ever evaluates it.",
+      "undefined crashes identically whether run in GHCi or as a compiled program, the moment its value is actually demanded — the safety here comes from laziness, not from which environment is running it.",
+      "Nothing about this behaviour depends on the string \"ready\" specifically — any first argument would be returned the same way, with the second argument just as unexamined."
+    ]
+  }
+]} />
 
 <Callout type="info" title="Laziness is not always a saving">
 Unevaluated thunks occupy memory. A long chain of them can use more space than computing the values would have. At this stage, simply know the mechanism; tuning it is beyond CSI243.
@@ -214,6 +500,7 @@ The procedure to apply in an examination:
   { type: 'must', text: 'I can explain why consing is cheap and appending is not.' },
   { type: 'must', text: 'I can spot a linear operation inside a loop turning a pass quadratic.' },
   { type: 'must', text: 'I can explain laziness with thunks, and why take 5 [1..] terminates.' },
+  { type: 'must', text: 'I can explain why constant "ready" undefined does not crash, using the fact that _ never forces its argument.' },
   { type: 'note', text: 'Recursion is not slow. Recomputing the same subproblem is.' }
 ]} />
 

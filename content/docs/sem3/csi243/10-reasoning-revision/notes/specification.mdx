@@ -66,6 +66,38 @@ ghci> splitAt' 2 [10,20,30,40]
 ([10,20],[30,40])
 ```
 
+All three specified functions, exercised together inside one real program rather than three separate prompt lines:
+
+```haskell
+-- File: SpecDemo.hs
+isDigit :: Char -> Bool
+isDigit c = ('0' <= c) && (c <= '9')
+
+isOdd :: Integral a => a -> Bool
+isOdd c = (mod c 2) /= 0
+
+splitAt' :: Int -> [a] -> ([a], [a])
+splitAt' n xs = (take n xs, drop n xs)
+
+main :: IO ()
+main = do
+  print (isDigit '5')             -- an ordinary digit
+  print (isDigit 'a')             -- the boundary-adjacent counter-example from the trace above
+  print (isOdd 7)
+  print (isOdd 4)
+  print (splitAt' 2 [10, 20, 30, 40])
+```
+
+```text
+True
+False
+True
+False
+([10,20],[30,40])
+```
+
+Each line's output is exactly what that function's own postcondition promises — that correspondence, checkable line by line, is the entire point of writing the postcondition down before the code.
+
 <Callout type="info" title="Specification first, always">
 A function's implementation is derived from its specification. Writing code first and then describing what it happens to do reverses the dependency — and means you have no independent standard against which to judge the code correct.
 </Callout>
@@ -101,6 +133,80 @@ A function's implementation is derived from its specification. Writing code firs
     ]
   }
 ]} />
+
+### Three more worked variations, chosen to vary the shape of `Prec` and `Postc`
+
+`isDigit`, `isOdd`, and `splitAt'` above all have `Prec: none` and a `Postc` that is one closed formula. Three more, deliberately different in shape:
+
+**A variation: a precondition on two arguments, not one**
+```text
+isDiv : Int -> Int -> String
+Purpose: report whether m is divisible by n.
+Prec:    m > n.
+Postc:   result = "Yes, m is divisible by n" if (m mod n = 0),
+                  else "No, m is not divisible by n"
+```
+```haskell
+isDiv :: Int -> Int -> String
+isDiv m n
+  | m == n          = "m and n are equal"
+  | m < n           = "m should be greater than n"
+  | m `mod` n == 0  = "Yes, m is divisible by n"
+  | otherwise       = "No, m is not divisible by n"
+```
+```text
+ghci> isDiv 8 4
+"Yes, m is divisible by n"
+ghci> isDiv 3 8
+"m should be greater than n"
+```
+`Prec` here is a *relationship between* `m` and `n`, not a limit on either one alone — `m = 3` is fine on its own, `n = 8` is fine on its own, but the pair `(3, 8)` violates `m > n`. The two extra guards, `m == n` and `m < n`, exist purely to give the out-of-precondition pair a defined, honest answer instead of silently misapplying the divisibility check to it.
+
+**A variation: a postcondition defined inductively, not by one formula**
+```text
+isSorted : [Integer] -> Bool
+Purpose: report whether a list is sorted in descending order.
+Prec:    none.
+Postc:   result = True, if xs = [] or xs has exactly one element;
+         result = True, if head xs >= head (tail xs) and isSorted (tail xs) is True;
+         result = False, otherwise.
+```
+```haskell
+isSorted :: [Integer] -> Bool
+isSorted []       = True
+isSorted [_]      = True
+isSorted (x:y:ys) = x >= y && isSorted (y:ys)
+```
+```text
+ghci> isSorted [5,3,1]
+True
+ghci> isSorted [3,1,5]
+False
+```
+`isDigit`'s postcondition names one Boolean expression that can be checked directly against `c`, with no reference to `isDigit` itself. `isSorted`'s postcondition is **recursive** — the second line's condition mentions `isSorted (tail xs)`, the very function being specified — which is exactly why the implementation below it is a recursion, not a single expression: the postcondition and the base-case/recursive-case template from Chapter 5 are stating the same structure twice, once in prose and once in code.
+
+**A variation: a postcondition stated behind a class constraint**
+```text
+containsValue : Eq a => a -> [a] -> Bool
+Purpose: report whether v occurs anywhere in xs.
+Prec:    none on the values of v or xs — but the constraint Eq a => is doing
+         precondition-like work on the type itself: a must support ==.
+Postc:   result = True, if v equals some element of xs; False, otherwise.
+```
+```haskell
+containsValue :: Eq a => a -> [a] -> Bool
+containsValue _ []     = False
+containsValue v (x:xs)
+  | v == x    = True
+  | otherwise = containsValue v xs
+```
+```text
+ghci> containsValue 3 [1,2,3]
+True
+ghci> containsValue 5 [1,2,3 :: Int]
+False
+```
+This one is worth pausing on, because it is tempting to write `Prec: none` and stop there — no numeric range or list-emptiness condition restricts `v` or `xs` the way `average`'s precondition restricts its list. But `Eq a =>` is restricting something all the same: not which *values* are acceptable, but which *types* are — the same constraint-first reading [Decoding Exam and Lab Language](/docs/sem3/csi243/decoding-questions) and Chapter 9 both build on. A specification's `Prec` line can state a condition on the type variable itself, not only on the values that variable's arguments happen to take.
 
 ## 2. Partitioning the input and output
 
@@ -343,9 +449,57 @@ ghci> reportAverage [2,4,6]
 "Average: 4.0"
 ```
 
+Run both routes side by side to see them agree exactly, which is the whole argument for why the split version is preferred despite producing an identical string:
+
+```haskell
+-- File: Cohesion.hs
+average :: [Double] -> Double
+average xs = sum xs / fromIntegral (length xs)
+
+report :: Double -> String
+report x = "Average: " ++ show x
+
+reportAverage :: [Double] -> String
+reportAverage xs = "Average: " ++ show (sum xs / fromIntegral (length xs))
+
+main :: IO ()
+main = do
+  putStrLn (report (average [2, 4, 6]))   -- the two-function route
+  putStrLn (reportAverage [2, 4, 6])       -- the one-function route
+  print (average [2, 4, 6])                -- only possible because average returns a Double, not a String
+```
+
+```text
+Average: 4.0
+Average: 4.0
+4.0
+```
+
+The third line is the practical payoff of the split: `average [2, 4, 6]` on its own is a genuine `Double` that anything expecting a number can use directly — feed it into a further calculation, compare it, average a list of averages. `reportAverage [2, 4, 6]` can never produce that `4.0` on its own; its result is permanently locked inside the string `"Average: 4.0"`.
+
 Both routes give the same string. The difference is not in what they compute, but in what you can test and reuse: `average` alone can be checked against a numeric postcondition (`result = sum / length`) without ever inspecting a string, and it can be reused anywhere a `Double` is needed — inside a report, a comparison, another calculation. `reportAverage` can only ever be tested by string comparison, and can only ever be reused as a full report.
 
 The second version can be tested without inspecting strings, and `average` is reusable. Each has a postcondition you could actually write down.
+
+<Quiz title="Check: cohesion" questions={[
+  {
+    question: "What, precisely, does 'cohesion' mean for a function, as this section uses the term?",
+    options: [
+      "A function should be as short as possible, measured in lines of code",
+      "A function should do one and only one logical task — focus on what is computed, and let composition combine small, single-purpose functions rather than folding several tasks into one definition",
+      "A function should never call any other function",
+      "A function should always return a String, since that is the most flexible output type"
+    ],
+    correctIndex: 1,
+    explanation: "Cohesion is about the number of logical jobs a function does, not its length or whether it calls other functions. reportAverage is short and calls nothing external, yet it still bundles two tasks (computing and formatting) into one definition — exactly the thing cohesion says to avoid.",
+    optionFeedback: [
+      "reportAverage is actually the shorter of the two versions by line count, yet it is the one criticised — brevity is not what cohesion measures.",
+      "Correct — cohesion asks whether a function has exactly one logical job; average and report are each cohesive on their own, while reportAverage folds both jobs into one.",
+      "average and report each call other functions freely (sum, fromIntegral, show, ++); calling other functions is not what cohesion restricts.",
+      "String is the return type of report and reportAverage, but average deliberately returns a Double instead — cohesion is about task count, not about preferring any particular result type."
+    ]
+  }
+]} />
 
 ## 6. Composition and specifications
 

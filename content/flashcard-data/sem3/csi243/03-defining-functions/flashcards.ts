@@ -39,4 +39,48 @@ export const flashcardData = [
     front: "Input-process-output pipeline",
     back: "Acquire data with an IO action, transform the resulting value with pure functions, then perform another IO action to present the result.",
   },
+  {
+    front: "The six-part construction process — why do examples come before the signature and implementation?",
+    back: "Writing concrete input-output pairs forces the specification to be precise before any code is written. Examples are also load-bearing later: step 6 (verification) checks the implementation against them.",
+  },
+  {
+    front: "isDigitChar '/' and isDigitChar ':' are tested even though neither is a digit — what's the point?",
+    back: "They are the characters immediately outside the boundary ('/' just before '0', ':' just after '9'), which catches an off-by-one comparison mistake (such as using > instead of >=) that a mid-range test like isDigitChar '5' could never reveal.",
+  },
+  {
+    front: "Curried versus tupled — how do rectangleArea and rectangleAreaPair actually get called differently?",
+    back: "rectangleArea 5.0 3.0 supplies two separate Double arguments (curried). rectangleAreaPair (5.0, 3.0) supplies one (Double, Double) tuple as its single argument. They are different types, and GHC rejects calling one with the other's argument shape.",
+  },
+  {
+    front: "Partial application — why does greet \"Hello\" work as a standalone value, but greetPair (\"Hello\", \"Ada\") can't be split the same way?",
+    back: "greet is curried, so supplying just one argument yields a new one-argument function. greetPair takes one tuple as its single, complete argument — there is nothing left to withhold.",
+  },
+  {
+    front: "Why doesn't compiling successfully prove a function is correct?",
+    back: "A compiler proves type consistency, not that your formula matches the problem. If the code runs but the answer is wrong, the fix is to return to the examples and dry run, not just to the code.",
+  },
+  {
+    front: "Is cube 4 an IO action just because it appears inside main's do block, as in print (cube 4)?",
+    back: "No. cube 4 is a pure Integer-producing expression; wrapping it in print is what creates the IO () action. Appearing inside a do block does not make a subexpression an action by itself.",
+  },
+  {
+    front: "Is the order actions run in inside a do block the same as strict, top-to-bottom evaluation order?",
+    back: "No. The do block describes the order IO actions run in, but Haskell is lazy — a pure expression like cube 4 is only evaluated once its value is actually needed, not necessarily the instant execution reaches that line.",
+  },
+  {
+    front: "print n versus putStrLn (show n) — what's the relationship?",
+    back: "print n behaves like putStrLn (show n) — it is not a separate mechanism. print first obtains the value's readable representation via show, then displays that text with a trailing newline.",
+  },
+  {
+    front: "Why doesn't show 42 print anything by itself inside a real program (not the GHCi prompt)?",
+    back: "show is a pure calculation: it returns a String value and performs no terminal output. GHCi's habit of echoing a typed expression's value is a feature of the interactive prompt, not something show does on its own — inside a compiled do block, an unused show result is simply computed and discarded.",
+  },
+  {
+    front: "Why does a do block let later lines see earlier bindings, but never the reverse?",
+    back: "do is syntactic sugar for nested function calls: each statement is written literally inside the one before it (via >>= and a lambda). A name is visible to everything nested inside the point where it was introduced, never to anything written before it.",
+  },
+  {
+    front: "Of the four meanings of \"store\", which one does let doubled = number * 2 actually provide?",
+    back: "Only an immutable binding — a name meaningful while the program is running. It does not survive after the program exits; that would require persistent external storage, an explicit IO write to a file or similar.",
+  },
 ];

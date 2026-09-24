@@ -1,0 +1,245 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for map, filter, folds, lambdas, currying, sections, and composition: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/07-higher-order/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `funcName` | The name you give the function | `sumOddSquares`, `withVat` |
+| `f` / `g` | A function value passed as an argument — the "rule" | `(*2)`, `square`, `\n -> n * n` |
+| `p` | A predicate — a function returning `Bool` | `even`, `(>0)` |
+| `xs` | The list argument — the "data" | `[1,2,3]` |
+| `x` | One element of a list | `3` |
+| `acc` | An accumulated, already-combined result | `0` for `foldr (+) 0`, `1` for `foldr (*) 1` |
+
+## 2. `map` and `filter`: the two-argument shape, spelled out
+
+`map :: (a -> b) -> [a] -> [b]` and `filter :: (a -> Bool) -> [a] -> [a]` both take their arguments in the **same fixed order**. Confusing which is which is the single most common source of wrong answers with both.
+
+| Position | `map`'s argument | `filter`'s argument |
+|---|---|---|
+| 1st | The **rule** — a function `a -> b`, applied to one element | The **rule** — a predicate `a -> Bool`, tested against one element |
+| 2nd | The **data** — the list every element is drawn from | The **data** — the list every element is drawn from |
+
+```text
+ghci> map (*2) [1,2,3]
+[2,4,6]
+ghci> filter even [1,2,3,4,5,6]
+[2,4,6]
+```
+
+`(*2)` and `even` are complete, meaningful functions *before* they ever see a list — `:type (*2)` and `:type even` both report a plain function type with no list in sight. `map` and `filter` only ever apply that rule to the list handed to them second.
+
+<Callout type="warn" title="The first argument is the rule, never the data — always">
+`map f xs` and `filter p xs`: the function or predicate always comes first, the list always comes second. `map [1,2,3] (*2)` and `filter xs even` are both type errors — a list is not a function, and swapping the two arguments does not "still work the other way around." If a call is not type-checking, check this order before anything else.
+</Callout>
+
+## 3. The recursive definitions of `map` and `filter`
+
+**`map` — Template and example:**
+```haskell
+map :: (a -> b) -> [a] -> [b]
+map _ []     = []
+map f (x:xs) = f x : map f xs
+```
+```text
+ghci> map (*2) [1,2,3]
+[2,4,6]
+```
+
+**`filter` — Template and example:**
+```haskell
+filter :: (a -> Bool) -> [a] -> [a]
+filter _ [] = []
+filter p (x:xs)
+  | p x       = x : filter p xs
+  | otherwise = filter p xs
+```
+```text
+ghci> filter even [1..6]
+[2,4,6]
+```
+
+<ComparisonTable
+  columns={[
+    { header: 'Function', key: 'fn' },
+    { header: 'Signature', key: 'sig' },
+    { header: 'Length of result', key: 'len' },
+    { header: 'Element type', key: 'type' }
+  ]}
+  rows={[
+    { fn: 'map', sig: '(a -> b) -> [a] -> [b]', len: 'Always the same as the input', type: 'May change' },
+    { fn: 'filter', sig: '(a -> Bool) -> [a] -> [a]', len: 'Same or shorter — never longer', type: 'Unchanged' }
+  ]}
+  highlightCol="len"
+/>
+
+**Combining them — a pipeline, read inside-out:**
+```haskell
+funcName = map transform . filter predicate
+-- or, applied directly to a list:
+map transform (filter predicate xs)
+```
+```text
+ghci> map (*2) (filter even [1..10])
+[4,8,12,16,20]
+```
+Read right to left: `filter even [1..10]` runs *first* (innermost), producing `[2,4,6,8,10]`; `map (*2)` then runs on *that* result. The equivalent comprehension states the same pipeline the other way round, transform first, test after — both orders are read left to right in the comprehension, unlike the nested function calls:
+```text
+ghci> [x * 2 | x <- [1..10], even x]
+[4,8,12,16,20]
+```
+
+## 4. `foldr` vs. `foldl`
+
+Both collapse a list to one value with a combining function and a starting value. They differ in **which end they combine from**, which changes the answer whenever the operator is not associative.
+
+<ComparisonTable
+  columns={[
+    { header: 'Fold', key: 'fold' },
+    { header: 'Combines from', key: 'direction' },
+    { header: 'Substitution picture on [1,2,3]', key: 'picture' },
+    { header: 'foldr/foldl (-) 0 [1,2,3]', key: 'example' }
+  ]}
+  rows={[
+    { fold: 'foldr', direction: 'The right end inward — the last element combines with acc first', picture: '1 - (2 - (3 - 0))', example: '2' },
+    { fold: 'foldl', direction: 'The left end outward — acc combines with the first element first', picture: '((0 - 1) - 2) - 3', example: '-6' }
+  ]}
+  highlightCol="example"
+/>
+
+**`foldr` — Template and example:**
+```haskell
+foldr :: (a -> b -> b) -> b -> [a] -> b
+foldr _ acc []     = acc
+foldr f acc (x:xs) = f x (foldr f acc xs)
+```
+```text
+ghci> foldr (-) 0 [1,2,3]
+2
+```
+
+**`foldl` — Template and example:**
+```haskell
+foldl :: (b -> a -> b) -> b -> [a] -> b
+foldl _ acc []     = acc
+foldl f acc (x:xs) = foldl f (f acc x) xs
+```
+```text
+ghci> foldl (-) 0 [1,2,3]
+-6
+```
+
+For `+`, `*`, `max`, `&&`, and `||` the two agree, because those operators are associative. Default to `foldr` when unsure — it also works on an infinite list, provided the combining function does not insist on seeing the whole thing; `foldl` must reach the end of the list before it can return anything at all.
+
+## 5. Lambda expressions
+
+An anonymous function: no name, used directly or passed as an argument.
+
+**Template:**
+```haskell
+\param -> expression
+\param1 param2 -> expression
+```
+
+**Example:**
+```text
+ghci> (\x -> x * x) 5
+25
+ghci> (\x y -> x + y) 3 4
+7
+```
+
+A lambda used as an applied expression **must** be parenthesised — its body extends as far right as it can, so `\x -> x + 1 5` parses as `\x -> (x + (1 5))`, not "apply the lambda to `5`."
+
+## 6. Currying: every function takes one argument
+
+`f :: a -> b -> c` really means `a -> (b -> c)`: `f` takes one `a` and returns a *function* still waiting for a `b`.
+
+**Template:**
+```haskell
+funcName :: a -> b -> c
+-- really
+funcName :: a -> (b -> c)
+```
+
+**Example:**
+```haskell
+add :: Integer -> Integer -> Integer
+add x y = x + y
+```
+```text
+ghci> :type add 3
+add 3 :: Integer -> Integer
+ghci> (add 3) 4
+7
+```
+
+Supplying fewer arguments than the full count — **partial application** — is not a special feature; it is the direct consequence of currying. `add 3` is a complete, usable value on its own.
+
+## 7. Sections
+
+An operator with one side already supplied — partial application written in operator form.
+
+**Template:**
+```haskell
+(value `op`)   -- left section:  value is fixed on the left; the argument goes on the right
+(`op` value)   -- right section: value is fixed on the right; the argument goes on the left
+```
+
+**Example:**
+```text
+ghci> (10-) 3
+7
+ghci> (>5) 8
+True
+```
+
+`(10-)` is the function `\y -> 10 - y`; `(>5)` is the function `\x -> x > 5`. `(-)` is the one operator that does **not** section cleanly on the right — `(-5)` parses as the number negative five, not a section. Use `subtract 5` to mean "subtract 5 from the next value":
+
+```text
+ghci> subtract 5 10
+5
+```
+
+## 8. Function composition `(.)`
+
+**Template:**
+```haskell
+(f . g) x = f (g x)
+```
+
+Read `f . g` **right to left**: apply `g` first, then `f`.
+
+**Example:**
+```text
+ghci> ((*2) . (+1)) 5
+12
+ghci> ((+1) . (*2)) 5
+11
+```
+
+The first adds 1 to get `6`, then doubles it to `12`. The second doubles first to get `10`, then adds 1 to get `11`. Order matters.
+
+## 9. Common errors, at a glance
+
+| Attempt | Problem | Fix |
+|---|---|---|
+| `map (*2) 5` | The second argument must be a list | `map (*2) [5]` |
+| `filter (*2) xs` | `filter` needs a predicate returning `Bool`, not a transformer | `filter even xs` |
+| `map xs (*2)` / `filter xs even` | Arguments swapped — the list given first | Function or predicate first, list second, always |
+| `(-5)` used as a section | Parses as the number negative five | `subtract 5` |
+| `foldr (-) 0 xs` expected to equal `foldl (-) 0 xs` | `-` is not associative | Pick the fold whose direction matches the specification |
+| `(f . g) x` expected to apply `f` first | Composition applies right to left | Read (and write) the right-hand function as the first to run |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can say which argument of map and filter is the rule and which is the data without hesitating.' },
+  { type: 'must', text: 'I can predict foldr (op) acc xs and foldl (op) acc xs for a non-associative operator, without running either.' },
+  { type: 'must', text: 'I can write a left section and a right section for a given operator and value, and name the one case (-) where a right section fails.' },
+]} />
+
+Full explanations, worked traces, and more examples: [Lambda Expressions](/docs/sem3/csi243/07-higher-order/notes/lambdas) · [Currying and Sections](/docs/sem3/csi243/07-higher-order/notes/currying-and-sections) · [Mapping and Filtering](/docs/sem3/csi243/07-higher-order/notes/map-and-filter) · [Folds and Function Composition](/docs/sem3/csi243/07-higher-order/notes/folds-and-composition).

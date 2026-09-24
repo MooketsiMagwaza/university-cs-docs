@@ -5,15 +5,76 @@ description: "Replace error with the Maybe type so failure is recoverable, handl
 
 
 
-Chapter 5 closed a gap using `error`, and noted the cost: `error` stops the whole program and the caller cannot recover. This lesson introduces the tool that fixes that, and then shows how to define class membership yourself.
+Chapter 5 closed a gap using `error`, and noted the cost: `error` stops the whole program and the caller cannot recover. This lesson shows exactly how badly that cost bites, introduces the tool that fixes it, and then shows how to define class membership yourself.
 
-## 1. The `Maybe` type
+## 1. Watching a partial function fail
+
+`safeHead` from Chapter 6 has a perfectly reasonable-looking signature, `[a] -> a`, but it lies to the type checker: there is no sensible `a` to return for an empty list, so it calls `error` instead.
+
+```haskell
+safeHead :: [a] -> a
+safeHead []    = error "safeHead: empty list"
+safeHead (x:_) = x
+
+main :: IO ()
+main = do
+  putStrLn "First element of [10,20,30]:"
+  print (safeHead [10, 20, 30])
+  putStrLn "First element of []:"
+  print (safeHead ([] :: [Int]))
+```
+
+```text
+First element of [10,20,30]:
+10
+First element of []:
+*** Exception: safeHead: empty list
+```
+
+Notice exactly where execution stops: the label `"First element of []:"` is printed — `putStrLn` already ran — but `print (safeHead ...)` never produces anything, and the program terminates right there. Nothing written *after* `main` in a larger program would run either.
+
+A second version makes the cost more vivid still, because it involves no explicit `error` call at all — an *ordinary* arithmetic partiality is enough to do the same damage to an entire batch of work:
+
+```haskell
+-- Average a class's marks. Wrong for an empty class: sum [] `div`
+-- length [] is 0 `div` 0, and integer division by zero is an error.
+reportAverage :: [Int] -> Int
+reportAverage xs = sum xs `div` length xs
+
+main :: IO ()
+main = do
+  putStrLn "Class A average:"
+  print (reportAverage [70, 80, 90])
+  putStrLn "Class B average:"
+  print (reportAverage [])
+  putStrLn "Class C average:"
+  print (reportAverage [60, 65])
+```
+
+```text
+Class A average:
+80
+Class B average:
+*** Exception: divide by zero
+```
+
+Read the output carefully: **"Class C average:" is never printed.** Class B's empty list did not just produce a wrong or missing result for Class B — it took the entire remaining batch down with it, including a perfectly good, computable result for Class C. This is what "`error` cannot be recovered from" costs in practice: one bad input among many ruins all of them.
+
+<Callout type="warn" title="Two different partialities, one lesson">
+`safeHead []` fails because *we* called `error` explicitly. `reportAverage []` fails because `div` is itself partial — it has no sensible answer for a zero divisor, and raises the built-in `divide by zero` exception without any `error` call in sight. Both are examples of a **partial function**: one whose signature promises a result for every input of the right type, but whose definition cannot actually produce one for some of them.
+</Callout>
+
+## 2. The `Maybe` type
 
 `Maybe` is an ordinary data declaration in the Prelude:
 
 ```haskell
 data Maybe a = Nothing | Just a
 ```
+
+<Mermaid chart={`flowchart TD
+  M["Maybe a"] --> N["Nothing — no value of type a"]
+  M --> J["Just x — holds exactly one value x :: a"]`} caption="Maybe a is a two-constructor sum type, exactly like Bool's True and False, except the second constructor also carries a value. Nothing needs no argument; Just always needs exactly one." />
 
 A `Maybe a` is either `Nothing`, meaning no result, or `Just` holding a value of type `a`. It is polymorphic, so `Maybe Int`, `Maybe String`, and `Maybe Shape` are all available.
 
@@ -26,9 +87,9 @@ ghci> :type Just 'a'
 Just 'a' :: Maybe Char
 ```
 
-The point is that **failure becomes part of the result type**. A caller receiving a `Maybe Int` can see from the signature alone that the function might not produce an answer.
+The point is that **failure becomes part of the result type**. A caller receiving a `Maybe Int` can see from the signature alone that the function might not produce an answer — nothing needs to crash to communicate that.
 
-## 2. Replacing `error`
+## 3. Replacing `error`
 
 Compare the two ways of handling an empty list:
 
@@ -53,6 +114,28 @@ Nothing
 
 No crash. The empty case produced a perfectly ordinary value.
 
+Rewrite the batch-averaging example from Section 1 the same way, and the difference is dramatic:
+
+```haskell
+maybeAverage :: [Int] -> Maybe Int
+maybeAverage []  = Nothing
+maybeAverage xs  = Just (sum xs `div` length xs)
+
+main :: IO ()
+main = do
+  print (maybeAverage [70, 80, 90])
+  print (maybeAverage [])
+  print (maybeAverage [60, 65])
+```
+
+```text
+Just 80
+Nothing
+Just 62
+```
+
+**Every** report now appears — Class B is honestly marked `Nothing` instead of destroying Class C's result. The batch survives a bad input; only that one input is affected.
+
 <ComparisonTable
   columns={[
     { header: 'Approach', key: 'a' },
@@ -62,15 +145,35 @@ No crash. The empty case produced a perfectly ordinary value.
   ]}
   rows={[
     { a: 'No handling', f: 'Crashes or loops', r: 'No', v: 'No' },
-    { a: 'error "..."', f: 'Stops with a message', r: 'No', v: 'No' },
-    { a: 'Maybe', f: 'Returns Nothing', r: 'Yes', v: 'Yes' }
+    { a: 'error "..."', f: 'Stops with a message, taking any remaining work with it', r: 'No', v: 'No' },
+    { a: 'Maybe', f: 'Returns Nothing for that one case; everything else still runs', r: 'Yes', v: 'Yes' }
   ]}
   highlightCol="v"
 />
 
 The last column matters most. `[a] -> a` promises a result and lies; `[a] -> Maybe a` tells the truth.
 
-## 3. Handling a `Maybe`
+<Quiz title="Check: error versus Maybe" questions={[
+  {
+    question: "In the reportAverage batch example, why does \"Class C average:\" never get printed?",
+    options: [
+      "reportAverage [60, 65] itself throws an exception",
+      "The exception raised by reportAverage [] on Class B stops the whole main action, so no later line in the do block runs",
+      "Haskell evaluates do blocks in a random order",
+      "print always fails after the first Exception anywhere in the program"
+    ],
+    correctIndex: 1,
+    explanation: "An uncaught exception (here, divide by zero from Class B's empty list) terminates the whole running program at the point it is raised. Every action listed after it in main's do block, including Class C's, simply never executes.",
+    optionFeedback: [
+      "reportAverage [60, 65] = 125 `div` 2 = 62, a perfectly ordinary division with no error — it never gets the chance to run in this particular program.",
+      "Correct — the exception thrown while evaluating Class B's report propagates up and ends the program before any later action in the do block can run.",
+      "do blocks run their actions strictly in the order written, top to bottom; there is nothing random about it — that ordering is exactly why Class C's line, coming last, never gets its turn.",
+      "print itself is not 'broken' by an earlier exception; the program has already terminated by the time Class C's print would have run, so print is never even called for it."
+    ]
+  }
+]} />
+
+## 4. Handling a `Maybe`
 
 Because `Nothing` and `Just` are ordinary constructors, you handle them by pattern matching — one equation per constructor, exactly as in Chapter 8:
 
@@ -90,25 +193,73 @@ ghci> describeHead ([] :: [Int])
 "the list is empty"
 ```
 
+<Mermaid chart={`flowchart TD
+  V["v :: Maybe a"] --> D{"Which constructor?"}
+  D -->|"Nothing"| H1["Handle the no-value case"]
+  D -->|"Just x"| H2["Use x, now safely known to be of type a"]`} caption="Pattern matching a Maybe always forces exactly these two branches. Omitting Nothing compiles (with a warning) but crashes at run time the moment a Nothing actually arrives." />
+
 The compiler will not let you forget the `Nothing` case, which is the whole benefit: the failure cannot be ignored silently.
 
-The Prelude provides `fromMaybe` for supplying a default:
+Pattern matching directly in a function's equations, rather than through `case`, works just as well and is often shorter:
 
 ```haskell
-fromMaybe :: a -> Maybe a -> a
+-- Use x if there is one, otherwise fall back to a default.
+addDefault :: Maybe Int -> Int -> Int
+addDefault Nothing  d = d
+addDefault (Just x) _ = x
+
+main :: IO ()
+main = do
+  print (addDefault (Just 7) 0)
+  print (addDefault Nothing 0)
 ```
 
 ```text
-ghci> import Data.Maybe (fromMaybe)
-ghci> fromMaybe 0 (maybeHead [5,6])
-5
-ghci> fromMaybe 0 (maybeHead ([] :: [Int]))
+7
 0
 ```
 
-## 4. A lookup returning `Maybe`
+The Prelude provides exactly this idea, generalised, as `fromMaybe`:
 
-This is the most common use. Chapter 8 sketched it; here it is in full:
+```haskell
+import Data.Maybe (fromMaybe)
+
+fromMaybe :: a -> Maybe a -> a
+
+main :: IO ()
+main = do
+  print (fromMaybe 0 (maybeHead [5, 6]))
+  print (fromMaybe 0 (maybeHead ([] :: [Int])))
+```
+
+```text
+5
+0
+```
+
+<Quiz title="Check: handling Maybe" questions={[
+  {
+    question: "Why does GHC warn (and the program crash at run time) if a function pattern-matches only Just x and never Nothing?",
+    options: [
+      "Nothing is not a real constructor of Maybe",
+      "The match is non-exhaustive: Nothing is a value the function's own argument type admits, and no equation covers it",
+      "Maybe requires a special import to use Nothing",
+      "GHC automatically supplies a default for Nothing, so this is actually safe"
+    ],
+    correctIndex: 1,
+    explanation: "Maybe a has exactly two constructors, Nothing and Just a. A function that only matches Just x leaves Nothing completely uncovered, which is precisely the incomplete-pattern situation Chapter 4 warned about for any data type.",
+    optionFeedback: [
+      "Nothing is one of Maybe's two ordinary constructors, declared right alongside Just in data Maybe a = Nothing | Just a.",
+      "Correct — the whole point of Maybe is that Nothing is a legitimate value of the type, so any function ignoring it has an incomplete match.",
+      "Maybe, Nothing, and Just are all part of the Prelude and need no import to use.",
+      "GHC does not supply a default; an unmatched Nothing at run time raises a non-exhaustive-patterns exception, exactly like any other missed constructor."
+    ]
+  }
+]} />
+
+## 5. Two shapes of Maybe-producing function
+
+The most common use is search — looking something up and possibly not finding it. Chapter 8 sketched it; here it is in full:
 
 ```haskell
 type Assoc k v = [(k, v)]
@@ -131,15 +282,102 @@ Nothing
 
 Note the `Eq k` constraint: the function compares keys, so `k` cannot be an arbitrary type. The Prelude's own `lookup` has exactly this shape.
 
-## 5. Writing your own instances
+A second, genuinely different shape is **computing** a result that is only sometimes defined, with no searching involved at all:
 
-`deriving` handles the obvious cases. When you want different behaviour, write the instance by hand.
+```haskell
+-- Divide safely: Nothing for a zero divisor, instead of a crash.
+safeDivide :: Int -> Int -> Maybe Int
+safeDivide _ 0 = Nothing
+safeDivide m n = Just (m `div` n)
+
+main :: IO ()
+main = do
+  print (safeDivide 10 2)
+  print (safeDivide 7 0)
+  print (safeDivide (-9) 3)
+```
+
+```text
+Just 5
+Nothing
+Just (-3)
+```
+
+`lookUp` fails when nothing in the data matches. `safeDivide` fails when the arithmetic itself has no answer. Both return `Maybe`, and both hand the decision of what "no answer" means to the caller — but the *reason* for failure is completely different in each, which is exactly why "wrap it in Maybe" is a pattern you apply again and again, not a single fixed recipe.
+
+<Quiz title="Check: two shapes of Maybe" questions={[
+  {
+    question: "lookUp \"Sipho\" marks and safeDivide 7 0 both evaluate to Nothing. Do they fail for the same reason?",
+    options: [
+      "Yes — both fail because the argument had the wrong type",
+      "No — lookUp fails because nothing in the association list matches the key (a search that came up empty); safeDivide fails because dividing by zero has no mathematical answer at all (a computation with no result), regardless of what data exists",
+      "Yes — both fail because Eq k => is missing from one of the signatures",
+      "No — lookUp always succeeds; only safeDivide can return Nothing"
+    ],
+    correctIndex: 1,
+    explanation: "Same result type, same Nothing, genuinely different cause: lookUp's Nothing means 'searched and found nothing'; safeDivide's Nothing means 'there is no answer to compute, full stop' — no amount of additional data would ever make m `div` 0 defined.",
+    optionFeedback: [
+      "Both calls are perfectly well-typed; \"Sipho\" is a valid String key and 0 is a valid Int divisor. The failure is not a type problem in either case.",
+      "Correct — a failed search and an undefined computation are two different shapes of 'no answer', even though Maybe reports both the same way.",
+      "Both signatures have exactly the constraints they need — lookUp's Eq k => and safeDivide's lack of any class constraint are both correct as written.",
+      "lookUp \"Sipho\" marks demonstrates exactly the opposite — lookUp returns Nothing here, so it can and does fail."
+    ]
+  }
+]} />
+
+### The template behind both shapes, formalised — plus `Maybe` as an input
+
+**Template:**
+```haskell
+funcName :: InputType -> Maybe ResultType
+funcName param
+  | invalidCondition = Nothing
+  | otherwise         = Just (expression param)
+```
+`lookUp` and `safeDivide` just above are both this template: one equation (or guard) produces `Nothing` for whichever situation counts as "no answer" for that function, and every other situation produces `Just` wrapped around an ordinary, already-computed value. What counts as `invalidCondition` is the only thing that differs between them — a failed search for `lookUp`, an undefined calculation for `safeDivide` — the shape of the signature and the two-constructor result are identical.
+
+**A variation: `Maybe` as an input, not just a result**
+Every example so far *produces* a `Maybe`. Nothing stops a function from *consuming* one (or several) instead, pattern-matching on `Nothing`/`Just` exactly the way `describeHead` and `addDefault` did above — including matching more than one `Maybe` argument at once:
+```haskell
+-- Combine two Maybe values by adding them, only if both are actually present.
+combineBoth :: Maybe Int -> Maybe Int -> Maybe Int
+combineBoth (Just x) (Just y) = Just (x + y)
+combineBoth _        _        = Nothing
+```
+```text
+ghci> combineBoth (Just 3) (Just 4)
+Just 7
+ghci> combineBoth Nothing (Just 4)
+Nothing
+ghci> combineBoth (Just 3) Nothing
+Nothing
+```
+The first equation only fires when *both* arguments are `Just` — pattern matching two constructors at once, the same way `closestPairFirst` in Chapter 4 matched two pieces of one nested pattern. The catch-all second equation, `combineBoth _ _`, covers every other combination — `Nothing` paired with anything, in either position — with a single wildcard-pair equation rather than three separate ones. This is the same "propagate failure automatically" idea `chain` uses via `do`-notation in Section 7 below, written out by hand instead of desugared.
+
+## 6. Writing your own instances
+
+`deriving` handles the obvious cases: equality by comparing every field, ordering by declaration or field order, display as the constructor name followed by its arguments. When you want genuinely different behaviour, you write the instance by hand.
 
 Take the `Shape` type from Chapter 8:
 
 ```haskell
 data Shape = Circle Float | Rectangle Float Float
+
+area :: Shape -> Float
+area (Circle r)      = pi * r * r
+area (Rectangle w l) = w * l
 ```
+
+**What.** An instance declaration supplies, for one specific type, the operations a class requires:
+
+```haskell
+instance ClassName TypeName where
+  -- definitions of the class's operations
+```
+
+**Why.** A derived instance is always *structural* — it only ever looks at which constructor was used and what its raw fields are. Sometimes the behaviour you actually want depends on something *computed* from those fields instead, and no amount of generic field-by-field logic can produce that.
+
+**When.** Use a hand-written instance when display should be human prose rather than constructor syntax, when equality should mean something domain-specific rather than "same constructor, same fields", or when ordering should follow a computed value rather than declaration order. Otherwise, default to `deriving` — it is shorter, and it is exactly right far more often than not.
 
 A derived `Show` would print `Circle 2.0`. Suppose you want something friendlier:
 
@@ -154,18 +392,13 @@ ghci> print (Circle 2.0)
 a circle of radius 2.0
 ```
 
-The form is:
+**How.** The mechanism is the same type-directed dispatch from Lesson 2: wherever `show` is applied to a `Shape`, GHC looks up the one `Show Shape` instance in scope and runs the code written there, instead of generating field-by-field text.
 
-```haskell
-instance ClassName TypeName where
-  -- definitions of the class's operations
-```
+Now `Shape` is a member of `Show`, and every function with a `Show a =>` constraint accepts it.
 
-You write the operations the class requires, for your type. Now `Shape` is a member of `Show`, and every function with a `Show a =>` constraint accepts it.
+### An `Eq` instance, and an `Ord` instance built to match it
 
-### An `Eq` instance
-
-Suppose two shapes should count as equal when their areas match:
+Suppose two shapes should count as equal when their areas match, regardless of which constructor produced them:
 
 ```haskell
 instance Eq Shape where
@@ -179,24 +412,195 @@ True
 
 A derived instance would have said `False`, because the constructors carry different numbers. Writing the instance by hand lets you define equality to mean what your problem needs.
 
+Having decided that "equal" means "same area", the natural `Ord` instance orders shapes the same way — by area — rather than by declaration order or by their raw fields:
+
+```haskell
+instance Ord Shape where
+  compare s1 s2 = compare (area s1) (area s2)
+```
+
+```haskell
+import Data.List (sort)
+
+main :: IO ()
+main = do
+  print (sort [Rectangle 3 4, Circle 2.0, Rectangle 1 1])
+```
+
+```text
+[a 1.0 by 1.0 rectangle,a 3.0 by 4.0 rectangle,a circle of radius 2.0]
+```
+
+`sort` needs nothing but the `Ord Shape` instance — it has no idea "area" is involved at all. It asked `compare` for each pair and trusted the answer, exactly as it would for any other `Ord` instance, derived or hand-written.
+
+**Properties.** Nothing forces two hand-written instances of *different* classes to agree with each other. Here they do, by design — `Eq` and `Ord` both key off `area`. But notice that `Rectangle 2 6 == Rectangle 3 4` is `True`, while `show (Rectangle 2 6)` and `show (Rectangle 3 4)` print two visibly different descriptions. Two values can be `==` and still *look* completely different when shown — "equal" here means "same area", not "indistinguishable in every respect". A derived `Eq` would never produce that surprise, because it only ever calls two values equal when every field is literally identical. Deciding whether that surprise is acceptable for your problem is exactly the judgement a hand-written instance asks you to make.
+
+<Mermaid chart={`flowchart TD
+  A["Need Eq / Show / Ord for a type"] --> B{"Does field-by-field, declaration-order behaviour already mean what you want?"}
+  B -->|"Yes"| C["deriving (...)"]
+  B -->|"No: custom display, domain-specific equality, or ordering by a computed value"| D["Write instance ClassName Type where ..."]
+  D --> E{"Is that class also named in the deriving clause?"}
+  E -->|"Yes"| F["Remove it from deriving — a type may have only one instance per class"]
+  E -->|"No"| G["Fine as written"]`} caption="deriving and a hand-written instance both end up giving GHC exactly one implementation to dispatch to; the decision is only about which one is the right implementation for your problem." />
+
 <Callout type="warn" title="Derive or define, not both">
 A type may have only one instance of a class. If you write `instance Show Shape`, remove `Show` from the `deriving` clause, or GHC reports duplicate instance declarations.
 </Callout>
 
-## 6. When to derive and when to write
+<Quiz title="Check: writing instances" questions={[
+  {
+    question: "Why does a hand-written `instance Eq Shape where s1 == s2 = area s1 == area s2` make `Rectangle 2 6 == Rectangle 3 4` True, when a derived Eq would not?",
+    options: [
+      "It is a bug; Rectangle 2 6 and Rectangle 3 4 should never be equal",
+      "The instance defines equality by computed area (both are 12) rather than by comparing the raw constructor fields, which a derived instance always does instead",
+      "GHC automatically converts all Rectangles to Circles for comparison",
+      "Float equality is always True in Haskell"
+    ],
+    correctIndex: 1,
+    explanation: "This instance deliberately redefines what == means for Shape: same area, not same constructor and fields. Rectangle 2 6 has area 12, Rectangle 3 4 has area 12 too, so by this definition they are equal — exactly what the instance says, on purpose.",
+    optionFeedback: [
+      "It is intentional, not a bug — the whole point of writing the instance by hand is to choose a notion of equality other than the derived, field-by-field one.",
+      "Correct — 2*6 = 12 and 3*4 = 12, so by the area-based definition written in the instance, the two rectangles count as equal.",
+      "No such conversion happens; area works directly on whichever constructor it is given, Circle or Rectangle, without changing one into the other.",
+      "Float equality behaves like any other Eq instance's equality — it is not universally True; == on two different Floats is generally False unless they are bit-for-bit identical."
+    ]
+  },
+  {
+    question: "Why must `Show` be removed from a type's `deriving` clause before writing `instance Show ThatType where ...` for it?",
+    options: [
+      "It is only a style preference",
+      "A type may have only one instance of a class; keeping both would give GHC two conflicting definitions and it reports a duplicate instance error",
+      "deriving and instance produce identical code, so it does not matter either way",
+      "Show cannot be derived at all once a type has more than one constructor"
+    ],
+    correctIndex: 1,
+    explanation: "GHC must pick exactly one implementation to run whenever show is used at that type. deriving (Show) and a hand-written instance Show are two separate definitions of the same thing, and having both is rejected outright as a duplicate instance declaration.",
+    optionFeedback: [
+      "It is enforced by the compiler, not a matter of taste — GHC rejects the program if both are present.",
+      "Correct — exactly one instance per (class, type) pair is allowed; deriving and a hand-written instance are two competing definitions of that one allowed instance.",
+      "They typically produce different code — deriving generates field-by-field text; a hand-written instance can produce anything you like, as the friendlier Shape output shows.",
+      "Show can be, and routinely is, derived for types with several constructors — Shape itself derives it happily until the hand-written version replaces it."
+    ]
+  }
+]} />
 
-| Situation | Do this |
-|---|---|
-| You just need to print a value while testing | `deriving (Show)` |
-| Equality means comparing every field | `deriving (Eq)` |
-| Ordering follows the constructor sequence | `deriving (Ord)` |
-| Display should be human-readable prose | Write `instance Show` |
-| Equality means something domain-specific | Write `instance Eq` |
-| Ordering follows a computed value | Write `instance Ord` |
+## 7. Naming the bigger pattern: Functor and Monad
 
-Default to `deriving`. Write an instance only when the derived behaviour is genuinely wrong for your problem.
+Two things you have now met without their real names deserve those names before this chapter ends, because you will meet them again by name the moment you look at any real Haskell code or documentation.
 
-## 7. Common errors
+### `fmap`: applying a function inside a box you don't open
+
+Chapter 10's `facMaybe` used `fmap (n *) (facMaybe (n - 1))` to apply a multiplication *inside* a `Maybe`, without ever pattern-matching it by hand. That "apply a function to whatever's inside, without unwrapping it yourself" operation has a name and a class:
+
+```haskell
+class Functor f where
+  fmap :: (a -> b) -> f a -> f b
+```
+
+Read the class header as: "any type constructor `f` that can be made a `Functor` supports `fmap`, which takes an ordinary function `a -> b` and lifts it to work on an `f a` instead, producing an `f b`." `Maybe` is one instance; **lists are another** — and you have been calling list's `fmap` by its other name, `map`, since Chapter 7:
+
+```haskell
+main :: IO ()
+main = do
+  print (fmap (+1) (Just 5))
+  print (fmap (+1) Nothing)
+  print (fmap (*2) [1, 2, 3])
+```
+
+```text
+Just 6
+Nothing
+[2,4,6]
+```
+
+`fmap (+1) (Just 5) = Just 6`; `fmap (+1) Nothing = Nothing` — the fmap for `Maybe` is precisely the "apply if `Just`, pass through unchanged if `Nothing`" idea from Section 3, generalised into one reusable operation instead of a bespoke pattern match every time. `fmap (*2) [1,2,3]` behaves exactly like `map (*2) [1,2,3]` because, for lists, it *is* the same function — `map` is list's `fmap`.
+
+### `>>=` and `do`: the pattern behind Chapter 3's desugaring, now named
+
+Chapter 3's [do-notation section](/docs/sem3/csi243/03-defining-functions/notes/input-processing) showed that `main = do { a <- getLine; ... }` desugars to `getLine >>= \a -> ...`, and promised the real meaning of `>>=` would come later. Here it is:
+
+```haskell
+class Monad m where
+  (>>=) :: m a -> (a -> m b) -> m b
+  return :: a -> m a
+```
+
+`>>=` ("bind") takes an `m a` — a value of type `a` sitting inside some context `m` — and a function that says what to do with the plain `a` *once you have it*, and produces an `m b`. `IO` is one instance of `Monad`: `IO a` is "an action that, when performed, yields an `a`," and `>>=` is exactly "perform this action, then feed its result into what comes next" — the mechanism Chapter 3 traced by hand.
+
+`Maybe` is a **second, completely independent** instance of `Monad` — and because `do`-notation is defined generically for *any* `Monad`, not specially for `IO`, the exact same `do` syntax works for chaining `Maybe`-producing functions, with the exact same short-circuiting Section 3 built by hand with nested `case`s:
+
+```haskell
+chain :: Int -> Int -> Int -> Maybe Int
+chain a b c = do
+  x <- safeDivide a b
+  y <- safeDivide x c
+  return y
+
+main :: IO ()
+main = do
+  print (chain 100 5 2)
+  print (chain 100 0 2)
+  print (chain 100 5 0)
+```
+
+```text
+Just 10
+Nothing
+Nothing
+```
+
+`chain 100 5 2`: `safeDivide 100 5` is `Just 20`, so `x = 20`; `safeDivide 20 2` is `Just 10`, so `y = 10`; `return y` wraps it back up as `Just 10`. `chain 100 0 2` fails at the very first `<-` — `safeDivide 100 0` is `Nothing` — and the whole `do` block short-circuits to `Nothing` without ever reaching the second line, exactly the way an `error` inside `IO`'s `do` block aborted the rest of `main` in Section 1, except recoverably: the caller gets `Nothing` back as an ordinary value, not a crash. `chain 100 5 0` shows the failure can just as easily come from the *second* line instead of the first.
+
+<Mermaid chart={`flowchart TD
+  A["Chapter 3: do-notation desugars to nested >>= / lambdas"] --> B["What IS >>= ?"]
+  B --> C["A method of the Monad class:\nm a -> (a -> m b) -> m b"]
+  C --> D["IO is one instance\n(perform, then continue)"]
+  C --> E["Maybe is another instance\n(continue if Just, short-circuit on Nothing)"]
+  D --> F["do-notation works for IO"]
+  E --> G["The exact same do-notation\nworks for Maybe, unchanged"]`} caption="do-notation was never IO-specific. It is generic syntax for any Monad, and the mechanism Chapter 3 traced for IO is the identical mechanism at work here for Maybe." />
+
+<Callout type="info" title="This is intentionally the edge of this course">
+CSI243 does not require you to write your own `Functor` or `Monad` instance, or to memorise the monad laws. What matters here is recognition: when you see `fmap`, `<$>`, `>>=`, or a `do` block over something that is not `IO`, you now know it is the same small family of ideas you have already used — applying a function inside a context (`Functor`), and sequencing steps that each produce a context-wrapped value (`Monad`) — not a new, unrelated piece of syntax to memorise from scratch.
+</Callout>
+
+<Quiz title="Check: Functor and Monad, named" questions={[
+  {
+    question: "map (*2) [1,2,3] and fmap (*2) [1,2,3] both evaluate to [2,4,6]. Why?",
+    options: [
+      "map and fmap are unrelated functions that happen to agree on lists by coincidence",
+      "For lists, map IS fmap — list's Functor instance defines fmap to behave exactly like map, so the two names refer to the same computation on a list",
+      "fmap secretly converts the list to a Maybe first",
+      "This only works because 2 is an even number"
+    ],
+    correctIndex: 1,
+    explanation: "fmap is the class method; map is list's specific, historical name for its own Functor instance of fmap. They are not two functions that happen to agree — for [a], they are the same function under two names.",
+    optionFeedback: [
+      "It is not a coincidence: list's Functor instance is defined so that fmap = map for lists, specifically.",
+      "Correct — map is exactly list's fmap, which is why they are interchangeable on a list argument.",
+      "Nothing here converts anything to Maybe; the whole expression stays a list throughout.",
+      "The result would be identical for any starting list, of any elements — evenness has nothing to do with why map and fmap agree."
+    ]
+  },
+  {
+    question: "chain a b c uses do-notation over Maybe, not IO. Why does that same do syntax work here at all?",
+    options: [
+      "It doesn't really — GHC secretly converts the Maybe values to IO actions behind the scenes",
+      "do-notation is generic syntax for any type that has a Monad instance; Maybe has one, so the same <- and return syntax Chapter 3 used for IO works unchanged for Maybe",
+      "Maybe is secretly a special case of IO",
+      "This is a coincidence specific to this one function"
+    ],
+    correctIndex: 1,
+    explanation: "do is sugar for >>=, and >>= is a method of the Monad class — it is defined once per instance (once for IO, once for Maybe, and so on), not specially wired to IO. Any type with a Monad instance can be sequenced with do, with the exact same short-circuiting-on-failure behaviour Maybe's instance happens to give it.",
+    optionFeedback: [
+      "No conversion to IO happens anywhere; chain's type is Maybe Int throughout, never IO Int.",
+      "Correct — this is exactly why the same do block, with no special-casing, works over Maybe: Monad is the general mechanism, and IO and Maybe are two of its many instances.",
+      "Maybe and IO are two entirely separate, independent Monad instances; neither is built out of the other.",
+      "The same works for any Maybe-returning chain of functions, not just this one — it is a general property of Maybe's Monad instance, not a one-off."
+    ]
+  }
+]} />
+
+## 8. Common errors
 
 | Attempt | Problem | Repair |
 |---|---|---|
@@ -206,8 +610,11 @@ Default to `deriving`. Write an instance only when the derived behaviour is genu
 | Both `deriving (Show)` and `instance Show` | Duplicate instance | Remove one |
 | `instance Show Shape` missing `show` | The class operation is undefined | Define every required operation |
 | `lookUp :: k -> Assoc k v -> Maybe v` | `==` needs a constraint | `Eq k =>` |
+| `sort [Circle 1, Rectangle 2 3]` with no `Ord Shape` | `sort` needs `Ord`, and none exists yet | Derive or write `instance Ord Shape` |
+| Expecting `Eq` and `Show` to "agree" | Nothing enforces this for hand-written instances | Decide deliberately, and document the choice |
+| Expecting `fmap` to unwrap the result | `fmap` keeps the same context (`Maybe`, `[]`, ...) | `fmap` returns `f b`, not `b` — pattern match if you need the bare value |
 
-## 8. Practice
+## 9. Practice
 
 1. Give the data declaration for `Maybe` and explain what each constructor means.
 2. Write `maybeHead` and test it on a non-empty and an empty list.
@@ -216,6 +623,8 @@ Default to `deriving`. Write an instance only when the derived behaviour is genu
 5. Write `lookUp` and explain why it needs `Eq k`.
 6. Write a `Show` instance for `Result` from Chapter 8 printing `"passed"` and `"failed"`.
 7. Explain, in two sentences, why `Maybe` is preferable to `error` for a function a caller might reasonably call with invalid input.
+8. Trace the `reportAverage` batch example by hand and state exactly which line of output is never produced, and why.
+9. Write `instance Ord Shape` ordering by area, given the area-based `Eq` instance already shown, and use `sort` to order `[Rectangle 3 4, Circle 2.0, Rectangle 1 1]`.
 
 <Accordions>
 <Accordion title="Check questions 3 and 7">
@@ -233,16 +642,38 @@ The literal `0` pattern is matched first, so `div` is never reached with a zero 
 **7.** `error` stops the entire program and cannot be caught by the surrounding pure code, so the caller has no chance to recover or ask the user to try again. `Maybe` makes the possibility of failure part of the return type, so the caller both sees it in the signature and is forced by the compiler to handle it.
 
 </Accordion>
+<Accordion title="Check questions 8 and 9">
+
+**8.** `main` runs `reportAverage [70,80,90]` (prints `80`), then `reportAverage []`, which evaluates `sum [] `div` length []` = `0 `div` 0`, raising `divide by zero`. The program terminates at that exception. The line `"Class C average:"` — and everything meant to come after it — is never printed, because it appears later in the same `do` block, after the point where execution stopped.
+
+**9.**
+
+```haskell
+instance Ord Shape where
+  compare s1 s2 = compare (area s1) (area s2)
+```
+
+```text
+ghci> sort [Rectangle 3 4, Circle 2.0, Rectangle 1 1]
+[a 1.0 by 1.0 rectangle,a 3.0 by 4.0 rectangle,a circle of radius 2.0]
+```
+
+Areas are `12`, `pi * 2.0 * 2.0 ≈ 12.566`, and `1`, so ascending order is `Rectangle 1 1`, `Rectangle 3 4`, `Circle 2.0` — exactly what `sort` produced, using only `compare` and no knowledge of what "area" even means.
+
+</Accordion>
 </Accordions>
 
 <Checklist title="Mastery check" rules={[
   { type: 'must', text: 'I can give the data declaration for Maybe and explain both constructors.' },
-  { type: 'must', text: 'I can rewrite a partial function to return Maybe instead of calling error.' },
-  { type: 'must', text: 'I can handle a Maybe by pattern matching on both constructors.' },
+  { type: 'must', text: 'I can rewrite a partial function to return Maybe instead of calling error, and explain concretely what is lost when error is used on a batch of inputs instead.' },
+  { type: 'must', text: 'I can handle a Maybe by pattern matching on both constructors, whether via case or via separate equations.' },
   { type: 'must', text: 'I can explain why Maybe in a signature is more honest than a bare result type.' },
-  { type: 'must', text: 'I can write an instance declaration for Show or Eq on my own type.' },
-  { type: 'must', text: 'I can say when to derive and when to write an instance by hand.' },
-  { type: 'avoid', text: 'Do not both derive and hand-write the same instance.' }
+  { type: 'must', text: 'I can write an instance declaration for Show, Eq, or Ord on my own type, and say when to derive instead.' },
+  { type: 'must', text: 'I can explain a property that a hand-written instance does not automatically guarantee, using the Shape Eq/Show example.' },
+  { type: 'must', text: 'I can say what fmap does in one sentence, and explain why map is just list\'s version of it.' },
+  { type: 'must', text: 'I can explain why the same do-notation and <- syntax Chapter 3 used for IO also works, unchanged, for Maybe.' },
+  { type: 'avoid', text: 'Do not both derive and hand-write the same instance.' },
+  { type: 'note', text: 'A search-shaped Maybe function (lookUp) and a computation-shaped one (safeDivide) fail for different reasons, even though both return Maybe.' }
 ]} />
 
 Continue to [Practice Questions](/docs/sem3/csi243/09-polymorphism/questions), then [Review](/docs/sem3/csi243/09-polymorphism/review).
