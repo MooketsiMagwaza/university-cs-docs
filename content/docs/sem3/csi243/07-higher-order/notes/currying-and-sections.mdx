@@ -31,7 +31,14 @@ add :: Integer -> Integer -> Integer
 add :: Integer -> (Integer -> Integer)
 ```
 
-Read it as: “`add` takes an `Integer` and returns a function from `Integer` to `Integer`.”
+Read it as: “`add` takes an `Integer` and returns a function from `Integer` to `Integer`.” If the `->` in a type still feels unfamiliar on its own, [Expressions and Types](/docs/sem3/csi243/02-expressions-types/notes/expressions-types) in Chapter 2 builds it up from scratch before currying is introduced at all.
+
+<Mermaid chart={`flowchart TD
+  X["Integer<br/>(the value 3)"] --> ADD["add<br/>:: Integer -> Integer -> Integer"]
+  ADD --> ADDX["add 3<br/>:: Integer -> Integer<br/>a FUNCTION VALUE, not a number yet"]
+  Y["Integer<br/>(the value 4)"] --> ADDX
+  ADDX --> RESULT["add 3 4<br/>:: Integer<br/>= 7, finally a number"]
+`} caption="add takes its two Integers one at a time. add 3 is itself a function waiting for one more Integer — the chain only produces a number once y arrives." />
 
 Application associates to the **left**, which is the matching half of the rule:
 
@@ -64,6 +71,43 @@ Put the argument that varies *least* first. `add` is more useful as `Integer -> 
 </Callout>
 
 This is why Chapter 3 recommended the curried form over the tupled form. A tupled function cannot be partially applied: `addPair (3, 4)` needs the whole pair at once.
+
+<Quiz title="Check yourself: currying and partial application" questions={[
+  {
+    question: "add :: Integer -> Integer -> Integer. What is the type of add 3?",
+    options: [
+      "Integer -> Integer",
+      "Integer",
+      "A type error — add needs two arguments at once",
+      "Integer -> Integer -> Integer"
+    ],
+    correctIndex: 0,
+    explanation: "add really has type Integer -> (Integer -> Integer). Supplying the first Integer consumes the first arrow and leaves the function that consumes the second one: Integer -> Integer.",
+    optionFeedback: [
+      "Correct — one arrow has been consumed, leaving a function still waiting for the second Integer.",
+      "That would be the type of add 3 4, once both arguments have been supplied — add 3 alone is still a function.",
+      "Currying means arguments arrive one at a time; add 3 is a perfectly legal, complete value on its own.",
+      "That's add's original, unconsumed type — supplying 3 must remove at least one arrow."
+    ]
+  },
+  {
+    question: "Why can a tupled function like addPair :: (Integer, Integer) -> Integer NOT be partially applied the way add can?",
+    options: [
+      "It takes exactly one argument — the whole pair — so there is no intermediate stage to stop at",
+      "Tupled functions are not allowed to have arguments",
+      "Tuples cannot contain Integers",
+      "addPair is not a function, it's a value"
+    ],
+    correctIndex: 0,
+    explanation: "A tupled function has only one arrow in its type: (Integer, Integer) -> Integer. There is nothing to supply 'partially' — the single argument must be a complete, ready-made pair before the function can do anything.",
+    optionFeedback: [
+      "Correct — with only one arrow, there is no intermediate function value to stop at partway through.",
+      "Tupled functions take arguments freely; the issue is that they take just one argument (the pair), not zero.",
+      "Tuples of Integers are completely ordinary — (Integer, Integer) is a perfectly valid type.",
+      "addPair is a function (Integer, Integer) -> Integer; the limitation is about its arity, not whether it's a function at all."
+    ]
+  }
+]} />
 
 ## 2.1 Curried, tupled, and uncurried forms
 
@@ -220,6 +264,43 @@ ghci> map (subtract 5) [10, 20]
 
 Left sections are fine: `(5-)` is the function that subtracts its argument from 5.
 
+<Quiz title="Check yourself: sections" questions={[
+  {
+    question: "What does (subtract 5) 10 evaluate to, and why is subtract needed instead of (-5)?",
+    options: [
+      "5, because subtract 5 x computes x - 5, and (-5) alone would parse as the number negative five, not a section",
+      "-5, because (-5) is a right section that subtracts 5 from its argument",
+      "5, because (-5) 10 works fine and subtract is just an alternative spelling",
+      "15, because subtract adds its two arguments"
+    ],
+    correctIndex: 0,
+    explanation: "(-) is the one operator that does not section on the right, because Haskell's grammar already gives (-5) a meaning: the literal number negative five. subtract 5 sidesteps the ambiguity entirely: subtract 5 10 computes 10 - 5 = 5.",
+    optionFeedback: [
+      "Correct — subtract 5 10 is 10 - 5 = 5, and (-5) is reserved for the number negative five rather than a section.",
+      "(-5) is not a section at all in Haskell — it is parsed as the literal number negative five, so (-5) 10 is a type error, not -5.",
+      "(-5) 10 is a type error in GHCi, since (-5) is a number, not a function — subtract exists precisely because of this gap.",
+      "subtract x y computes y - x, not x + y — it performs subtraction, matching its name."
+    ]
+  },
+  {
+    question: "map (*2) [1,2,3] and filter (>5) [3,7,2,9] both use sections as their first argument. Why does this work?",
+    options: [
+      "map needs a function a -> b and filter needs a -> Bool; (*2) and (>5) are exactly those shapes once one operand is fixed",
+      "Sections are a special case map and filter recognise by name",
+      "It only works because the lists contain numbers",
+      "(*2) and (>5) are lists, and map/filter distribute over lists of functions"
+    ],
+    correctIndex: 0,
+    explanation: "A section like (*2) is exactly a one-argument function — here, Integer -> Integer — because one operand of * has already been supplied. That is precisely the shape map's first argument (a -> b) requires. Likewise (>5) is a -> Bool, which is exactly what filter's predicate must be.",
+    optionFeedback: [
+      "Correct — a section is just an ordinary function value once one operand is fixed, and its type happens to match what map or filter expects.",
+      "map and filter take any (a -> b) or (a -> Bool) function respectively; a section is not special-cased, it just happens to have the right type.",
+      "The element type matters for what the section can be applied to, but the reason a section works as an argument is about its function type, not the list's contents.",
+      "(*2) and (>5) are functions, not lists — map and filter apply them to each list element one at a time."
+    ]
+  }
+]} />
+
 ## 4.1 Ways to make a partially applied function
 
 The same idea appears in several Haskell forms:
@@ -295,6 +376,21 @@ Keep these properties in mind when reading or designing Haskell code:
 5. **Type-safe staging:** each stage has its own type, so GHC can catch an argument supplied at the wrong stage.
 6. **No automatic evaluation requirement:** creating a partial application does not mean all of its work has already run; Haskell may evaluate it lazily when its result is needed.
 7. **Argument order is part of the API:** putting stable configuration arguments first makes useful partial applications available.
+
+<Callout type="info" title="What 'lazily' means here">
+In plain terms: binding a name to an expression does not make Haskell compute that expression right away. GHC instead builds a small, unevaluated placeholder for the work — sometimes called a **thunk** — and only performs the calculation later, at the point something actually forces the value, such as printing it or pattern-matching on it. Binding `addThree 3` therefore succeeds immediately, whether or not `addThree 3` is ever looked at again:
+
+```text
+ghci> let addThree = add 3
+ghci> let x = addThree 10
+ghci> :type x
+x :: Integer
+ghci> x
+13
+```
+
+The second line succeeds instantly — no addition has actually happened yet. Only the fourth line, which asks GHCi to display `x`, forces the computation to actually run. This is a small preview of Haskell's evaluation model; the full laziness story — including how it lets a function work on infinite lists — lives in [The Cost of a Definition](/docs/sem3/csi243/10-reasoning-revision/notes/complexity) in Chapter 10.
+</Callout>
 
 Currying does not make a function automatically faster, pure, or recursive. It is a way of representing the function's interface and composing it with other functions.
 
@@ -596,6 +692,60 @@ ghci> wordCount \"Pure Functions Are Composable\"
 ~~~
 
 This is a higher-order pipeline: each function is a value, and currying lets functions such as **map** receive their operation before they receive the collection.
+
+<Quiz title="Check yourself: reading curried code" questions={[
+  {
+    question: "raiseTo exponent base = base ^ exponent. square = raiseTo 2. What is the type of square, and what does square 5 compute?",
+    options: [
+      "Integer -> Integer, and square 5 computes 5 ^ 2 = 25",
+      "Integer, and square 5 is a type error because square is already a finished number",
+      "Integer -> Integer -> Integer, the same as raiseTo",
+      "Integer -> Integer, and square 5 computes 2 ^ 5 = 32"
+    ],
+    correctIndex: 0,
+    explanation: "raiseTo 2 fixes the exponent argument, leaving a function that still needs base: Integer -> Integer. Applying it to 5 computes base ^ exponent with base = 5, exponent = 2, i.e. 5 ^ 2 = 25.",
+    optionFeedback: [
+      "Correct — raiseTo 2 has consumed the exponent argument, and square 5 substitutes base = 5, giving 5 ^ 2 = 25.",
+      "square is a function value (Integer -> Integer), not a finished number — it is legitimate to apply it to 5.",
+      "One argument (2, the exponent) has already been supplied, so one arrow has been consumed from raiseTo's type.",
+      "The order matters: raiseTo's parameters are exponent then base, so raiseTo 2 fixes the EXPONENT at 2, and square 5 computes base ^ exponent = 5 ^ 2, not 2 ^ 5."
+    ]
+  },
+  {
+    question: "cleanWords = words . map toLower. Reading right to left, what happens first when cleanWords is applied to a string?",
+    options: [
+      "map toLower runs first, lowercasing every character",
+      "words runs first, splitting the string into a list of words",
+      "Both run at the same time",
+      "Neither runs until cleanWords is composed with a third function"
+    ],
+    correctIndex: 0,
+    explanation: "f . g applies g first, then f. In words . map toLower, g is map toLower and f is words, so the whole string is lowercased first, and only then split into words.",
+    optionFeedback: [
+      "Correct — composition applies the right-hand function first, so map toLower runs before words does.",
+      "This reverses the order: words is the left-hand (outer) function, so it runs last, on the already-lowercased string.",
+      "Haskell evaluates left-to-right through a single-threaded reduction here — there's no concurrency implied by (.); one call genuinely happens before the other.",
+      "cleanWords is a complete, two-stage function on its own — applying it to a string right now runs both stages, no third function needed."
+    ]
+  },
+  {
+    question: "Why is filter passedMark [35, 50, 67, 101] well-typed when passedMark = between 50 100?",
+    options: [
+      "between 50 100 has type Integer -> Bool, exactly the predicate shape filter's first argument needs",
+      "filter accepts any function regardless of its type",
+      "between 50 100 evaluates to a Bool immediately, and filter treats that Bool as a predicate",
+      "passedMark is a list, and filter concatenates lists"
+    ],
+    correctIndex: 0,
+    explanation: "between :: Ord a => a -> a -> a -> Bool. Supplying two arguments (50 and 100) leaves a function of type Integer -> Bool — one value left to test, returning a Bool. That is exactly filter :: (a -> Bool) -> [a] -> [a]'s required first argument.",
+    optionFeedback: [
+      "Correct — two of between's three arguments are already supplied, leaving exactly an Integer -> Bool predicate.",
+      "filter is typed: its first argument must be a -> Bool for the same a as the list's element type, or GHC rejects it.",
+      "between 50 100 is still a function (Integer -> Bool), not a Bool value — it has not yet been applied to the value it tests.",
+      "passedMark is a function (Integer -> Bool), not a list — filter's second argument is the list [35, 50, 67, 101]."
+    ]
+  }
+]} />
 
 ## 7. Reading a curried type
 

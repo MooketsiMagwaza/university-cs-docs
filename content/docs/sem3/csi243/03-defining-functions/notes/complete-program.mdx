@@ -3,8 +3,6 @@ title: "3. A Complete Haskell Program"
 description: "Assemble known pieces and understand comments, signatures, main, IO (), do, indentation, and execution order."
 ---
 
-
-
 You already know strings, function application, `putStrLn`, and `print`. We can now assemble those pieces.
 
 ```haskell
@@ -48,6 +46,15 @@ The cube of 4 is:
 | `do` | do | Begins a readable action sequence |
 | `(cube 4)` | cube of four | The pure expression supplied to `print` |
 
+<Mermaid chart={`flowchart TD
+  subgraph Definitions["Top level, outside main"]
+    S["cube :: Integer -> Integer"] --> D["cube x = x * x * x"]
+  end
+  subgraph Main["main's do block"]
+    M1["putStrLn \"The cube of 4 is:\""] --> M2["print (cube 4)"]
+  end
+  Definitions -. "cube is available wherever it is called" .-> M2`} caption="A type signature and a definition describe cube once; main's do block is a separate, ordered list of actions that may call it." />
+
 ## Value versus action
 
 <ComparisonTable
@@ -64,6 +71,26 @@ The cube of 4 is:
 
 `IO` marks a description of work involving the external world. `()` is **unit**, a value carrying no useful information. The useful outcome of terminal output is the visible effect.
 
+<Quiz title="Check: assembling the pieces" questions={[
+  {
+    question: "cube 4 appears inside print (cube 4). Which statement correctly separates what is a value from what is an action here?",
+    options: [
+      "cube 4 is itself an IO action, because it appears inside main's do block",
+      "cube 4 is a pure Integer-producing expression; print (cube 4) is the IO () action that displays whatever cube 4 produces",
+      "print (cube 4) is a pure expression because cube is pure",
+      "Both cube 4 and print (cube 4) are IO actions, since both appear inside a do block"
+    ],
+    correctIndex: 1,
+    explanation: "cube :: Integer -> Integer is an entirely pure function — cube 4 is just a number, 64, with no notion of terminal output. Wrapping it in print is what turns that number into an IO () action capable of producing a visible effect. Being written inside a do block does not make a subexpression an action; only print (cube 4) as a whole is the action listed in that do block.",
+    optionFeedback: [
+      "cube 4 by itself has type Integer, not IO anything — it is purely a calculation with no interaction with the outside world.",
+      "",
+      "print (cube 4) has type IO (), which marks it as an action, precisely because print turns a pure value into something that can affect the terminal.",
+      "Only print (cube 4) is the IO action; cube 4 is the pure Integer value passed into it. The do block lists actions, and cube 4 alone is not one of its listed lines."
+    ]
+  }
+]} />
+
 ## `do` and execution order
 
 The `do` block lists multiple actions in order. Both action lines are aligned, so Haskell groups them into the same block.
@@ -75,6 +102,30 @@ The `do` block lists multiple actions in order. Both action lines are aligned, s
   <StepperStep title="Second action">`print` displays `64` and a newline.</StepperStep>
   <StepperStep title="Finish">The action sequence finishes with unit `()`.</StepperStep>
 </InteractiveStepper>
+
+<Callout type="info" title="This is action order, not evaluation order">
+The steps above describe the order the two **IO actions** run in: `putStrLn` first, then `print`. They do not mean Haskell evaluates every expression strictly, top to bottom, the moment execution reaches it. Haskell is a **lazy** language — a pure expression like `cube 4` is only evaluated once its value is actually needed, which here happens to be while `print` is performing its action. For this particular program the difference is invisible, because `cube 4` has no side effects to delay. Treat the sequence above as "this is the order the *actions* run in," not "this is the order everything is *computed* in" — Chapter 10 covers lazy evaluation properly.
+</Callout>
+
+<Quiz title="Check: do-block ordering" questions={[
+  {
+    question: "The InteractiveStepper above lists \"Pure processing: cube 4 evaluates to 64\" as a step between the two IO actions. What does the callout say about taking that literally as strict, top-to-bottom evaluation?",
+    options: [
+      "It confirms that is exactly correct: Haskell evaluates every expression the instant execution reaches that line",
+      "It warns that the steps describe the order IO actions run in, not a claim that every expression is evaluated strictly at that point — Haskell is lazy and only evaluates cube 4 when its value is actually needed",
+      "It says the stepper is completely wrong and should be ignored",
+      "It says cube 4 is evaluated before the program starts, at compile time"
+    ],
+    correctIndex: 1,
+    explanation: "The stepper is a useful simplification for understanding which IO actions happen in which order. But Haskell does not evaluate expressions strictly the instant control reaches them; it evaluates lazily, only when a value is actually demanded. For this simple program the visible behaviour is identical either way, but the mental model \"Haskell runs top to bottom evaluating as it goes\" is the wrong one to carry forward.",
+    optionFeedback: [
+      "This is precisely the misconception the callout corrects — Haskell does not evaluate strictly top to bottom.",
+      "",
+      "The stepper is not wrong as a description of IO action order; it is only incomplete as a description of evaluation order, which the callout clarifies.",
+      "cube 4 depends on nothing but a literal, but in general Haskell values are computed lazily at run time when demanded, not ahead of time at compile time."
+    ]
+  }
+]} />
 
 ## Save, load, run
 
@@ -98,3 +149,12 @@ Compiler progress wording can vary. The successful load and exact two output lin
 | `main =` has nothing after it | Every definition needs a right side | Supply one action or a `do` block |
 | `cube :: Integer` | This describes a value, not a function | Use `Integer -> Integer` |
 | `print cube 4` | Application groups left incorrectly for this intention | Use `print (cube 4)` |
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can name every symbol in a small complete program: comments, signature, main, IO (), do, indentation.' },
+  { type: 'must', text: 'I can distinguish a pure expression like cube 4 from an IO action like print (cube 4).' },
+  { type: 'must', text: 'I can state the order in which the actions inside a do block run.' },
+  { type: 'must', text: 'I can explain why "action order" is not the same claim as "strict evaluation order".' },
+  { type: 'avoid', text: 'Do not misalign the lines of a do block; layout is meaningful in Haskell, not cosmetic.' },
+  { type: 'note', text: 'Haskell is lazy: a pure expression is evaluated when its value is needed, not necessarily the instant it is written. Chapter 10 covers this in full.' }
+]} />

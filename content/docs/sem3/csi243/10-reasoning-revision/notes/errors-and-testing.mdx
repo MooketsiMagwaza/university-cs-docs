@@ -34,6 +34,51 @@ This is why Chapter 2 insisted on asking "is it well typed?" before "what value 
 
 **Strong typing** is important because adherence to the discipline helps in designing clear, well-structured programs, and because a wide range of logical errors can be trapped by a computer that enforces it.
 
+<Mermaid chart={`flowchart LR
+  E["Expression submitted"] --> S{"Syntax OK?"}
+  S -- "no" --> SE["Syntax error\n(nothing runs)"]
+  S -- "yes" --> T{"Well typed?"}
+  T -- "no" --> TE["Type error\n(nothing runs)"]
+  T -- "yes" --> R["Evaluation\n(the expression actually runs)"]
+`} caption="Both gates must pass before a single reduction step happens. A semantic error can only occur inside the third box." />
+
+<Quiz title="Check: the two stages" questions={[
+  {
+    question: "A definition has balanced parentheses, a present else branch, and consistent indentation, but applies (+) to a Bool and an Int. Which stage catches this, and what is it called?",
+    options: [
+      "Syntax analysis catches it, as a syntax error",
+      "Type analysis catches it, as a type error",
+      "Evaluation catches it, at run time",
+      "Nothing catches it — GHC would silently coerce the Bool to an Int"
+    ],
+    correctIndex: 1,
+    explanation: "The structure of the expression is fine (it parses), so syntax analysis passes. But (+) requires both arguments to be of the same Num-constrained type, and Bool is not a Num instance, so type analysis rejects it before any evaluation begins.",
+    optionFeedback: [
+      "Syntax analysis only checks structure/shape — parentheses, keywords, layout. This expression parses just fine; the problem only shows up when types are checked.",
+      "Correct. The expression is syntactically well-formed but ill-typed, so it is rejected in the type-analysis stage, before evaluation.",
+      "Evaluation never begins, because the expression fails the type stage first — that's the whole point of the two-stage gate.",
+      "Haskell has no implicit coercion between Bool and Int; there is no numeric interpretation of True or False to fall back on, so this is rejected outright."
+    ]
+  },
+  {
+    question: "Why does a type error 'prevent evaluation entirely', even for the parts of the program that don't involve the error?",
+    options: [
+      "It doesn't — GHC runs whatever it can and skips the broken part",
+      "Because a module must pass both syntax and type analysis as a whole before GHC will run any of it; a single type error stops the module from loading at all",
+      "Because type errors are warnings, not errors, so they only affect performance",
+      "Because Haskell evaluates lazily, so type errors are simply postponed until the last line runs"
+    ],
+    correctIndex: 1,
+    explanation: "GHC checks an entire module before running anything in it. If any definition fails to type check, the module does not load, and nothing in it — including unrelated, perfectly correct functions — gets to run. This is why 'is it well typed?' has to be asked before 'what value does it produce?'.",
+    optionFeedback: [
+      "GHC does not selectively skip ill-typed definitions and run the rest — the whole module must type check before ghci will load it or a program will compile.",
+      "Correct — type checking is whole-module, so one ill-typed definition blocks the entire module from being accepted, regardless of what else in it is fine.",
+      "A type error is a hard error, not a warning — it stops compilation/loading outright, not merely a performance note.",
+      "Laziness postpones *evaluation* of well-typed expressions until their value is needed; it has nothing to do with type checking, which happens statically, before any evaluation at all."
+    ]
+  }
+]} />
+
 ## 2. Syntax errors versus semantic errors
 
 The two classes of error, with examples from the course notes:
@@ -51,6 +96,47 @@ The practical difference is **when** they surface:
 <Callout type="info" title="Which is better to have?">
 A compile-time error, every time. It is found immediately, on your machine, with a message pointing at the line. This is why widening a partial function into a total one — with `Maybe`, or an extra pattern — converts a run-time failure into something the compiler can check.
 </Callout>
+
+<CommonMistake title="'Syntax error' is used two ways — know which one you mean">
+The table above uses "syntax error" loosely, for **anything** caught before the program runs — which is why it lists a type mismatch alongside a missing `else`. Section 3 below is more precise: it splits that broad compile-time bucket into **Syntax** (structural only — parentheses, keywords, layout), **Scope**, **Type**, **Class constraint**, **Module**, and **Import** categories. When precision matters, as it does on an exam, a type mismatch is a **type error**, not a syntax error in the strict sense — even though both are compile-time and both stop the module from loading.
+</CommonMistake>
+
+<Quiz title="Check: syntax versus semantic errors" questions={[
+  {
+    question: "head [] compiles without complaint but crashes when run. Which class of error is this, and why does it slip past compilation?",
+    options: [
+      "Syntax error — head is spelled correctly but used wrongly",
+      "Semantic error — head :: [a] -> a type checks against any list argument, including an empty one, so nothing about the types is wrong; the failure is about meaning (there is no first element), and only shows up once the empty list actually reaches head",
+      "It is not an error at all, since Haskell allows empty lists",
+      "Type error — [a] and [] are different types"
+    ],
+    correctIndex: 1,
+    explanation: "head [] is a semantic error: everything type checks (head really does accept any [a], including []), so GHC has no basis to reject it. The problem is a meaning-level one — head is undefined on an empty list — and it can only be detected by actually running the program and reaching that call.",
+    optionFeedback: [
+      "head is used with entirely correct syntax and the correct type of argument (a list); nothing about the structure or naming is wrong.",
+      "Correct. This is the standard example of a semantic error: well-typed, well-formed, and wrong only in what it means to ask for the first element of nothing.",
+      "It is a genuine, well-documented run-time error (Prelude.head: empty list) — Haskell allows the empty list as a value, but head is a partial function that is not defined on it.",
+      "[] is perfectly compatible with type [a] for any a (it's the empty list of that type) — there is no type mismatch here at all."
+    ]
+  },
+  {
+    question: "Why does the lesson insist on separating 'syntax error' (narrow sense) from 'type error', even though both stop compilation?",
+    options: [
+      "It doesn't matter — they are the same thing under a different name",
+      "Because the fix is different: a syntax error means the parser couldn't build an expression at all (check brackets/keywords/layout), while a type error means the expression parsed fine but the types don't line up (check which subexpression should have which type)",
+      "Because type errors are actually run-time errors",
+      "Because GHC reports them with the exact same message"
+    ],
+    correctIndex: 1,
+    explanation: "The two need different remedies, which is why Section 3's diagnostic table asks a different question for each: for a syntax error, 'is an else missing, are the parentheses balanced'; for a type error, 'which subexpression must produce Bool'. Knowing which one you have tells you where to look.",
+    optionFeedback: [
+      "They are different stages (Section 1's diagram) with different causes and different fixes, even though both happen before evaluation.",
+      "Correct — this is exactly why Section 3 gives each its own diagnostic question: a syntax error is fixed by repairing structure, a type error by finding the mismatched subexpression.",
+      "Type errors are caught in the type-analysis stage, strictly before evaluation ever starts — they are compile-time, not run-time.",
+      "GHC's messages are distinctive — 'parse error on input' for a syntax error versus 'Couldn't match expected type' for a type error, as Section 3's table shows."
+    ]
+  }
+]} />
 
 ## 3. The standard CSI243 errors
 
@@ -81,6 +167,43 @@ Collected from every chapter, with the category and the question to ask.
 | `divide by zero` | Semantic | Is the divisor guarded? |
 | Session hangs | Semantic | Is the recursive argument shrinking towards the base case? |
 
+<Quiz title="Check: recognising the standard errors" questions={[
+  {
+    question: "GHC reports No instance for (Num a). What category is this, and what should you check first?",
+    options: [
+      "Syntax — check for a missing else",
+      "Scope — check the spelling of a variable name",
+      "Class constraint — check which typeclass the operation needs, and whether it appears before => in the signature",
+      "Semantic — check whether the recursion terminates"
+    ],
+    correctIndex: 2,
+    explanation: "No instance for (...) messages report a missing typeclass constraint — here, some numeric operation is being used on a type parameter that was never declared Num. The fix is to add the required constraint before => in the type signature.",
+    optionFeedback: [
+      "A missing else produces 'parse error on input', a structural complaint — this message is about typeclasses, not parsing.",
+      "A scope error looks like 'Variable not in scope: x' and is about names, not about which operations a type supports.",
+      "Correct. 'No instance for' names a missing constraint — the fix is adding it (e.g. Num a =>) to the signature.",
+      "Semantic errors are run-time failures (head [], divide by zero, ...); 'No instance for' is a compile-time message, caught before anything runs."
+    ]
+  },
+  {
+    question: "A program compiles cleanly but the ghci session hangs and never returns a prompt. Which category, and what's the first thing to check?",
+    options: [
+      "Type error — check the type signature",
+      "Semantic error — check whether the recursive argument is actually shrinking towards the base case",
+      "Syntax error — check for unbalanced parentheses",
+      "Scope error — check for a misspelled variable"
+    ],
+    correctIndex: 1,
+    explanation: "A hang is a run-time (semantic) failure: the program compiled and started running, but the recursion never reaches its base case — exactly the non-terminating fac (-1) style of fault from Chapter 5.",
+    optionFeedback: [
+      "A type problem would be caught before the session even starts running; 'compiles cleanly' rules this out.",
+      "Correct — hanging is a semantic, run-time symptom, and the standard cause is recursion that never reaches its base case.",
+      "Unbalanced parentheses would be caught at the syntax stage and the module wouldn't load in the first place — it wouldn't get as far as hanging.",
+      "A misspelled variable produces 'Variable not in scope', caught before running; it wouldn't compile cleanly in the first place."
+    ]
+  }
+]} />
+
 ## 4. Choosing test cases
 
 Chapter 3 gave three categories. Use all three, every time:
@@ -102,6 +225,25 @@ ghci> absoluteValue 5
 5
 ```
 
+Boundary tests are not a formality — they are where a specific, common class of bug hides:
+
+```haskell
+-- A tempting but wrong version: strict inequalities instead of <=.
+isDigitBad :: Char -> Bool
+isDigitBad c = ('0' < c) && (c < '9')
+```
+
+```text
+ghci> isDigitBad '5'
+True
+ghci> isDigitBad '0'
+False
+ghci> isDigitBad '9'
+False
+```
+
+`isDigitBad` passes every normal test — `'5'` looks perfectly fine — and fails on **both** boundary digits, `'0'` and `'9'`, because `<` excludes the very endpoints that the postcondition `'0' <= c <= '9'` includes. A suite of `'3'`, `'5'`, `'7'` never finds this fault; a suite that also tries `'0'` and `'9'` finds it on the first run.
+
 ### Boundaries worth testing by type
 
 | Argument type | Test at least |
@@ -112,6 +254,43 @@ ghci> absoluteValue 5
 | Two arguments | The equal case, and each ordering |
 
 The `Char` row is the one most often skipped. Chapter 3's `isDigitChar` used `'/'` and `':'` — the characters immediately either side of `'0'` and `'9'` — precisely because a mistaken strict comparison passes ordinary examples while rejecting the boundary digits.
+
+<Quiz title="Check: choosing test cases" questions={[
+  {
+    question: "Why did isDigitBad pass isDigitBad '5' but fail isDigitBad '0' and isDigitBad '9'?",
+    options: [
+      "Because '5' is not actually a digit",
+      "Because isDigitBad uses strict inequalities (< instead of <=), which correctly include interior digits like '5' but wrongly exclude the two digits that sit exactly on the boundary",
+      "Because ghci evaluates '0' and '9' differently from other characters",
+      "Because absoluteValue and isDigitBad share the same bug"
+    ],
+    correctIndex: 1,
+    explanation: "'0' < '0' is False (a value is never strictly less than itself), so isDigitBad '0' fails even though '0' is a digit. The same happens at '9' via c < '9'. Interior digits like '5' satisfy both strict inequalities, so only the boundary values expose the fault.",
+    optionFeedback: [
+      "'5' is a perfectly ordinary decimal digit — the point is that the bug is invisible on ordinary digits and only shows up at the two edges.",
+      "Correct. Strict < excludes the endpoints, so isDigitBad wrongly rejects exactly the two digits that sit on the boundary of its own comparison.",
+      "ghci evaluates every Char comparison the same way, by character code — there's nothing special happening to '0' or '9' in the evaluator itself.",
+      "They are unrelated examples illustrating the same general principle (test the boundary), not the same bug in the same function."
+    ]
+  },
+  {
+    question: "For a function f :: [a] -> b, which set of test inputs best follows the 'test by type' guidance in this section?",
+    options: [
+      "[1,2,3], [4,5,6], [7,8,9] — three normal-looking lists",
+      "[] (empty), a singleton like [1], and a list of two or more elements like [1,2,3]",
+      "Just one very long list, to stress-test performance",
+      "[1,2,3] tested three times, to rule out non-determinism"
+    ],
+    correctIndex: 1,
+    explanation: "The 'Boundaries worth testing by type' table specifically calls out [], a singleton, and a list of two-or-more for list arguments — these are the shapes where list-processing code most often mishandles a case (an empty pattern match, an off-by-one on a one-element list, or general recursion).",
+    optionFeedback: [
+      "Three lists of the same shape (all length 3, all normal) test the same case three times — they miss the empty-list and singleton edges entirely.",
+      "Correct — this is exactly the list row of the boundary table: empty, singleton, and 2+ elements are the shapes where list functions most often break.",
+      "Performance is not what boundary testing targets here; a single long list also doesn't touch the empty or singleton edge cases at all.",
+      "Haskell functions are pure — the same input always gives the same output, so repeating an identical test cannot reveal anything a single run wouldn't."
+    ]
+  }
+]} />
 
 ## 5. A diagnostic procedure
 
@@ -146,6 +325,43 @@ When something fails, work through this rather than changing code at random.
   </Step>
 </StepByStep>
 
+<Quiz title="Check: the diagnostic procedure" questions={[
+  {
+    question: "A function compiles and runs, but gives the wrong answer on some inputs. Which step of the procedure applies, and what should you do?",
+    options: [
+      "Step 1 — read the message more carefully, there must be one",
+      "Step 4 — compare against the specification: since it compiles and runs, the fault is in the formula, not the syntax or types, so return to the specification's examples and dry run the failing input",
+      "Step 2 — classify it as a syntax error",
+      "Step 5 — silence it with a catch-all pattern"
+    ],
+    correctIndex: 1,
+    explanation: "If it compiles and runs, both compile-time gates (syntax, type) already passed, and it isn't crashing, so it isn't a semantic run-time exception either. What's left is that the formula itself computes the wrong value — exactly what Step 4 is for, and exactly the situation in Section 2's Practice question 7.",
+    optionFeedback: [
+      "There is no error message here at all — the program ran to completion and simply produced a wrong value. Step 1 doesn't apply when nothing failed to compile or crashed.",
+      "Correct. A wrong-but-running answer means the fault is in the logic (the formula), which is precisely what Step 4 directs you to check against the specification.",
+      "A syntax error would have prevented the program from compiling in the first place — it can't be classified as one if it already compiled and ran.",
+      "Adding a catch-all doesn't fix a wrong formula, and Step 5 explicitly warns against silencing symptoms rather than fixing causes — it also isn't about a non-crashing wrong answer at all."
+    ]
+  },
+  {
+    question: "Why does Step 3 recommend entering parts of a failing expression at the ghci prompt separately, rather than just re-reading the whole thing?",
+    options: [
+      "It doesn't help — the whole expression must always be tested as one unit",
+      "Because checking sub-expressions individually with :type narrows down exactly which piece disagrees with your expectation, rather than guessing across the whole expression at once",
+      "Because ghci cannot evaluate whole expressions, only fragments",
+      "Because it avoids having to read the error message at all"
+    ],
+    correctIndex: 1,
+    explanation: "This is a standard bisection strategy: instead of staring at a large failing expression, you isolate the smallest failing subexpression by testing pieces individually. :type on each piece tells you exactly where the type you expected and the type GHC infers diverge.",
+    optionFeedback: [
+      "Breaking a large expression into testable pieces is exactly the point of this step — it isolates where the disagreement is, rather than treating the whole expression as an opaque unit.",
+      "Correct — this is a bisection approach: narrow down which specific subexpression is responsible, rather than treating the whole failing line as a single mystery.",
+      "ghci evaluates whole expressions perfectly well; the recommendation to test fragments is a diagnostic strategy, not a technical limitation of ghci.",
+      "Step 1 already asked you to read the message; Step 3 is a follow-up strategy for when the message alone doesn't pinpoint the fault, not a way to skip reading it."
+    ]
+  }
+]} />
+
 ## 6. Turning run-time failures into compile-time ones
 
 The single most valuable habit, and the tools you now have for it:
@@ -163,7 +379,44 @@ ghci> :set -Wincomplete-patterns
 ghci> :reload
 ```
 
-Turn this on for every laboratory.
+Turn this on for every laboratory. With the flag set, a function missing a case for negative arguments produces a warning naming the unmatched pattern **as soon as the module loads** — before you ever supply the input that would otherwise have crashed it at run time with `Non-exhaustive patterns in function f`.
+
+<Quiz title="Check: converting run-time failures to compile-time ones" questions={[
+  {
+    question: "Which change converts head []'s run-time crash into something the type checker can flag instead?",
+    options: [
+      ":set -Wincomplete-patterns, since head's problem is a missing pattern",
+      "Changing the function that calls head to match [] itself first, or to work with a Maybe-returning alternative instead of the partial head",
+      "Adding deriving (Show) to the list type",
+      "Nothing can be done — head's precondition can never be checked before run time"
+    ],
+    correctIndex: 1,
+    explanation: "head is partial: it simply has no equation for []. -Wincomplete-patterns helps for functions *you* write with missing patterns, but head itself is a library function whose partiality you cannot annotate away. The fix is at the call site: pattern-match [] yourself, or use a total alternative that returns Maybe, so the empty case is handled — or visible in the type — before the crash can happen.",
+    optionFeedback: [
+      "-Wincomplete-patterns flags missing equations in functions you define; it cannot retroactively add a case to Prelude's own head, which is inherently partial.",
+      "Correct — since you can't fix head itself, the fix moves to wherever head is called: handle [] explicitly, or use a Maybe-returning function so the empty case is forced into the type.",
+      "deriving (Show) only affects how values are printed to text; it has nothing to do with head's partiality on the empty list.",
+      "It can be prevented — this is exactly what widening a partial function into a total one (Section 2's Callout) means: convert it into something the compiler, or at least an explicit pattern match, catches first."
+    ]
+  },
+  {
+    question: "read s :: Integer throws Prelude.read: no parse on bad input. What is the recommended prevention, and why doesn't -Wincomplete-patterns help here?",
+    options: [
+      "Validate the input text before parsing it — -Wincomplete-patterns only warns about missing equations in your own pattern matches, not about whether arbitrary text denotes a valid value",
+      "There is no way to prevent this failure",
+      "Use :set -Wincomplete-patterns, since read is missing a pattern for invalid text",
+      "Rename the variable to avoid the scope error"
+    ],
+    correctIndex: 0,
+    explanation: "read's failure isn't a missing pattern in code you wrote — it's a property of the input string itself, checked only when read actually tries to parse it. -Wincomplete-patterns cannot see into a String's contents at compile time; the only prevention is to validate the text (or use a safe-read alternative) before calling read.",
+    optionFeedback: [
+      "Correct. The fix targeted at this specific failure is validating the input before parsing — a compiler flag about incomplete pattern matches can't inspect the contents of a String.",
+      "Section 6's table lists a concrete prevention for this exact failure: validate before parsing.",
+      "-Wincomplete-patterns checks whether your equations/guards cover every constructor shape of an argument's type — it has no way to know which strings look like valid Integer literals.",
+      "There is no scope error anywhere in this example — the fault is that the text can't be parsed as the target type, which is a different category entirely."
+    ]
+  }
+]} />
 
 ## 7. Practice
 

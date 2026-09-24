@@ -3,8 +3,6 @@ title: "1. Conditional Expressions"
 description: "Use if-then-else as a value-producing expression, understand why the else branch is mandatory, nest conditionals, and recognise when nesting becomes unreadable."
 ---
 
-
-
 Most functions treat some inputs differently from others. The most direct way to express that in Haskell is the **conditional expression**:
 
 ```haskell
@@ -54,6 +52,43 @@ Two rules follow, and both are enforced by the type checker:
 <Callout type="warn" title="The condition must be Bool">
 `if 1 then "a" else "b"` is rejected too. Haskell does not treat non-zero numbers as truth. The condition must have type `Bool`.
 </Callout>
+
+<Quiz title="Check: expression, not statement" questions={[
+  {
+    question: "Why does if n > 0 then \"positive\" else 0 get rejected, when both \"positive\" and 0 are perfectly valid Haskell values?",
+    options: [
+      "0 is not a valid Haskell value",
+      "The whole if expression must have one single type, but \"positive\" is a String and 0 is a number — the two branches disagree on what type the expression as a whole would be",
+      "if expressions can only return Bool values",
+      "The condition n > 0 is invalid syntax"
+    ],
+    correctIndex: 1,
+    explanation: "Because if...then...else is an expression, it must reduce to exactly one value of exactly one type. If the then branch could produce a String and the else branch could produce an Int, the expression's type would be ambiguous — GHC refuses to accept a program where that could happen, catching the disagreement at compile time.",
+    optionFeedback: [
+      "0 is a perfectly valid Haskell value (an Int, Integer, or another Num instance depending on context) — the problem is not that it is invalid, but that its type clashes with the other branch's type.",
+      "",
+      "if expressions can return any type at all, as long as both branches agree — resultLabel above returns String, for instance.",
+      "n > 0 is valid Bool-producing syntax; the type error is about the branches, not the condition."
+    ]
+  },
+  {
+    question: "Why is `if 1 then \"a\" else \"b\"` rejected, given that many languages treat 1 as \"truthy\"?",
+    options: [
+      "Because 1 is too small a number to use as a condition",
+      "Because Haskell requires the condition of an if to have type Bool specifically; it has no concept of numbers standing in for truth values",
+      "Because \"a\" and \"b\" are different strings",
+      "Because the then and else keywords are missing"
+    ],
+    correctIndex: 1,
+    explanation: "Haskell's if requires condition :: Bool, full stop. Unlike C, Python, or JavaScript, there is no implicit conversion from a number (or any other type) to Bool. You must write an actual comparison, such as n /= 0, to get a Bool.",
+    optionFeedback: [
+      "Size is irrelevant — no numeric literal, large or small, is treated as a condition in Haskell.",
+      "",
+      "\"a\" and \"b\" are both Strings, so the two branches actually agree in type here; the rejection is about the condition's type, not the branches.",
+      "then and else are both present in this expression; the problem is the condition 1, which is not a Bool."
+    ]
+  }
+]} />
 
 ## 3. A worked example: the sign of an integer
 
@@ -107,6 +142,26 @@ ghci> getSign 42
 
 Now trace `getSign 0` yourself: the first condition is `False`, so evaluation moves into the outer `else`, which is itself an `if`. Its condition `0 > 0` is also `False`, so the innermost `else` supplies `0`.
 
+<Quiz title="Check: tracing nested conditionals" questions={[
+  {
+    question: "Tracing getSign 42: which branches are actually examined, and which are skipped entirely?",
+    options: [
+      "All three branches (-1, 1, and 0) are evaluated, and the last one to run wins",
+      "n < 0 is tested and found False, so evaluation moves to the else, which tests n > 0 and finds it True, returning 1; the innermost else (0) is never examined",
+      "Only n > 0 is tested; n < 0 is skipped because 42 is positive",
+      "getSign 42 does not evaluate any condition, since 42 is a literal"
+    ],
+    correctIndex: 1,
+    explanation: "Evaluation always starts at the outermost if. n < 0 is False for 42, so the outer else — itself a full nested if — is evaluated next. Its condition, n > 0, is True for 42, so its then branch, 1, is the result. The final else (0) is inside a branch that was never reached.",
+    optionFeedback: [
+      "Haskell does not evaluate every branch and pick a winner — it evaluates the condition chain in order and stops at the first True, exactly as getSign (-7) did above.",
+      "",
+      "n < 0 is tested first because it is the outermost condition — it must be evaluated (and found False) before evaluation can even reach the else that contains n > 0.",
+      "42 is the argument bound to n, not a condition itself; the conditions n < 0 and n > 0 are still evaluated using that value."
+    ]
+  }
+]} />
+
 ## 4. Nesting works, but it does not scale
 
 Conditional expressions are exactly right for **two** outcomes. Beyond that they grow awkward:
@@ -124,6 +179,24 @@ grade score =
         else "F"
 ```
 
+```text
+ghci> grade 95
+"A"
+ghci> grade 85
+"B"
+ghci> grade 42
+"F"
+```
+
+<Mermaid chart={`flowchart TD
+  Call["grade score"] --> Q1{"score >= 90?"}
+  Q1 -- Yes --> A["\"A\""]
+  Q1 -- No --> Q2{"score >= 80?"}
+  Q2 -- Yes --> B["\"B\""]
+  Q2 -- No --> Q3{"score >= 70?"}
+  Q3 -- Yes --> C["\"C\""]
+  Q3 -- No --> F["\"F\""]`} caption="The decision itself is a flat list of four cases. Nested if...then...else buries each later case one level deeper inside the previous else — the source code's shape no longer matches the decision's shape. Guards, next lesson, fix exactly this." />
+
 The problems compound as cases are added:
 
 - The conditions drift rightwards, so the shape of the decision is hidden by indentation.
@@ -136,6 +209,26 @@ The remaining lessons in this chapter introduce three forms that express the sam
 <Callout type="info" title="Not a rule against if">
 `if … then … else` remains the clearest form for a genuine two-way decision. Prefer it there. The advice is only against deep nesting.
 </Callout>
+
+<Quiz title="Check: why nesting doesn't scale" questions={[
+  {
+    question: "The lesson says the source code's \"shape\" no longer matches the decision's shape once if...then...else is nested three or four deep. What does that mean concretely?",
+    options: [
+      "The code produces the wrong answer once nested more than twice",
+      "The decision is really a flat list of independent cases (>=90, >=80, >=70, otherwise), but nesting forces each later case to be physically indented inside the previous case's else, so the code no longer visually reads as a flat list",
+      "Nested if expressions are slower to run than a flat list of cases",
+      "GHC refuses to compile more than two levels of nested if"
+    ],
+    correctIndex: 1,
+    explanation: "Look at the grade example: conceptually, there are four independent, equally-important cases. But because each else has to contain the next if, the source code shows case 4 nested three levels deep inside case 1's else, case 2's else, and case 3's else. The code's visual structure (deep nesting) no longer matches the decision's real structure (a flat list of cases) — which is exactly what makes it hard to scan.",
+    optionFeedback: [
+      "Correctness is not the issue — the nested version computes exactly the right answers, as the ghci transcript shows. The issue is purely readability and maintainability.",
+      "",
+      "This is not about runtime performance; both forms evaluate a similar number of comparisons. The problem is how the code reads to a human.",
+      "There is no such limit — Haskell will happily compile if expressions nested arbitrarily deep. The problem is that humans find deep nesting hard to read and edit."
+    ]
+  }
+]} />
 
 ## 5. Indentation
 

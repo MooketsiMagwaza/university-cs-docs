@@ -204,9 +204,343 @@ ghci> sumFac 3
 
 Because `fac 0 + fac 1 + fac 2 + fac 3 = 1 + 1 + 2 + 6 = 10`.
 
-The base case is `sumFac 0 = 1` because `fac 0` is `1`. Writing `sumFac 0 = 0` would be a natural-looking mistake — and the dry run catches it, because the total would come out one short.
+The base case is `sumFac 0 = 1` because `fac 0` is `1`. Writing `sumFac 0 = 0` would be a natural-looking mistake — and the dry run catches it, because the total would come out one short. Here is that dry run, so the claim has evidence behind it rather than just asserting it.
 
-## 6. Common errors
+**Dry run: `sumFac 3`, with the correct base case.** Using `fac 0 = 1`, `fac 1 = 1`, `fac 2 = 2`, `fac 3 = 6` from earlier in this chapter:
+
+```text
+sumFac 3
+= fac 3 + sumFac 2
+= fac 3 + (fac 2 + sumFac 1)
+= fac 3 + (fac 2 + (fac 1 + sumFac 0))
+= fac 3 + (fac 2 + (fac 1 + 1))     <- base case reached: sumFac 0 = 1
+= 6 + (2 + (1 + 1))
+= 6 + (2 + 2)
+= 6 + 4
+= 10
+```
+
+Matches `sumFac 3` at the prompt: `10`.
+
+**Now retrace with the mistaken base case, `sumFac 0 = 0`.** Every other line is identical — only the base-case substitution changes:
+
+```text
+sumFac 3
+= fac 3 + sumFac 2
+= fac 3 + (fac 2 + sumFac 1)
+= fac 3 + (fac 2 + (fac 1 + sumFac 0))
+= fac 3 + (fac 2 + (fac 1 + 0))     <- base case reached: sumFac 0 = 0 (the mistake)
+= 6 + (2 + (1 + 0))
+= 6 + (2 + 1)
+= 6 + 3
+= 9
+```
+
+A complete program confirms the buggy total:
+
+```haskell
+fac :: Integer -> Integer
+fac 0 = 1
+fac n = n * fac (n - 1)
+
+-- BUGGY: the base case should return 1 (fac 0), not 0.
+sumFacBug :: Integer -> Integer
+sumFacBug 0 = 0            -- the mistake
+sumFacBug n = fac n + sumFacBug (n - 1)
+
+main :: IO ()
+main = print (sumFacBug 3)
+```
+
+```text
+9
+```
+
+Both traces are identical except for one substituted value, and that is exactly what makes the dry run useful here: the fault is pinned to a single line — the base-case substitution — rather than showing up only as a mysteriously wrong final number.
+
+<Quiz title="Check Your Understanding: Dry-Running sumFac" questions={[
+  {
+    question: "In the correct dry run of `sumFac 3`, the base-case line reads `fac 3 + (fac 2 + (fac 1 + 1))`. Where does that final `1` come from?",
+    options: [
+      "It is `sumFac 0`, substituted in because the base case defines `sumFac 0 = 1`",
+      "It is `fac 1`, evaluated early out of order",
+      "It is a typo in the trace; the line should show `0`",
+      "It is the result of dividing `fac 3` by something"
+    ],
+    correctIndex: 0,
+    explanation: "sumFac 0 is the base case reached at the deepest point of unwinding. It is defined as 1 because fac 0 = 1, the first term of the sum sumFac is meant to compute. Substituting it in is exactly what 'hitting the base case' means.",
+    optionFeedback: [
+      "Correct — that 1 is sumFac 0, substituted in when the base case is reached.",
+      "fac 1 also equals 1, which makes this easy to confuse, but fac 1 already appears earlier in the same line (added separately); the final 1 specifically comes from substituting sumFac 0.",
+      "It is not a typo — sumFac 0 = 1 is the correct base case, because the sum sumFac is meant to compute starts with fac 0, and fac 0 = 1.",
+      "sumFac's recursive step is fac n + sumFac (n - 1) — only addition appears anywhere in this definition, never division."
+    ]
+  },
+  {
+    question: "Changing the base case to `sumFac 0 = 0` makes `sumFac 3` evaluate to `9` instead of `10`. What does comparing the two traces demonstrate?",
+    options: [
+      "A dry run can isolate a wrong-answer fault to the exact line where it enters the computation, here the base-case substitution",
+      "sumFac no longer terminates with the buggy base case",
+      "fac must also contain a bug",
+      "9 is actually the mathematically correct answer, and the original specification was wrong"
+    ],
+    correctIndex: 0,
+    explanation: "Both traces terminate identically — sumFac 0 still matches immediately either way. Every line of the two traces is the same except the one substituted value (1 vs 0), which is exactly how a dry run pins a wrong-answer fault to a single line, the same technique the dry-running lesson used on fac 0 = 0.",
+    optionFeedback: [
+      "Correct — the traces are identical except at the base case, which is exactly what isolates the fault there.",
+      "Both versions of sumFac terminate immediately at sumFac 0; changing what value the base case returns does not affect whether the base case is reached.",
+      "fac is untouched here — only sumFac's base case changed. fac 0, fac 1, fac 2, and fac 3 still correctly evaluate to 1, 1, 2, and 6.",
+      "The specification sumFac n = fac 0 + fac 1 + ... + fac n sums to 1 + 1 + 2 + 6 = 10 for n = 3 by direct arithmetic. 9 is the bug's output, not the intended one."
+    ]
+  }
+]} />
+
+## 6. Worked example: a recursive list generator (`evensUpTo`)
+
+The functions so far have each produced a single number. `evensUpTo` produces a **list**, built up as the recursion unwinds — the same "cons in the recursive step" shape Chapter 6 uses throughout, reached here starting from a number rather than from an existing list.
+
+**Purpose.** `evensUpTo n` returns the list of even numbers from `2` up to and including `n`, in ascending order (or up to the largest even number below `n`, if `n` is odd).
+
+**Examples.**
+
+```text
+evensUpTo 1 = []
+evensUpTo 2 = [2]
+evensUpTo 7 = [2,4,6]
+evensUpTo 8 = [2,4,6,8]
+```
+
+**Base case.** The recursion tracks a running value, counting up from `2`. Once that running value has stepped past `n`, there are no more even numbers to add, and the answer for that point onward is the empty list.
+
+**Recursive step.** If the running value has not yet passed `n`, put it at the front of the list and recurse with the next even number, two higher.
+
+This counts **up** rather than down, which needs the same trick as `rangeSum` in Section 4: a helper that closes the gap between a starting point and a target, carried in an extra argument the public function hides.
+
+**Signature and implementation.**
+
+```haskell
+-- Helper: build the ascending list of even numbers from k up to n.
+evensFrom :: Integer -> Integer -> [Integer]
+evensFrom k n
+  | k > n     = []
+  | otherwise = k : evensFrom (k + 2) n
+
+-- Build the list of even numbers from 2 up to (and including, if even) n.
+evensUpTo :: Integer -> [Integer]
+evensUpTo n = evensFrom 2 n
+```
+
+Read `evensFrom` equation by equation:
+
+- `k > n`: the base-case guard. Once the running value `k` has stepped past the bound `n`, nothing more belongs in the list, so the answer is `[]`.
+- `k : evensFrom (k + 2) n`: the recursive step. `:` conses `k` onto the **front** of whatever the recursive call produces; the call itself asks for the rest of the list starting two higher, skipping the odd number in between since only even numbers are wanted.
+
+**Dry run: `evensUpTo 7`.**
+
+```text
+evensUpTo 7
+= evensFrom 2 7
+= 2 : evensFrom 4 7
+= 2 : (4 : evensFrom 6 7)
+= 2 : (4 : (6 : evensFrom 8 7))
+= 2 : (4 : (6 : []))             <- base case reached: 8 > 7
+= [2,4,6]
+```
+
+**Verification.**
+
+```haskell
+evensFrom :: Integer -> Integer -> [Integer]
+evensFrom k n
+  | k > n     = []
+  | otherwise = k : evensFrom (k + 2) n
+
+evensUpTo :: Integer -> [Integer]
+evensUpTo n = evensFrom 2 n
+
+main :: IO ()
+main = do
+  print (evensUpTo 1)
+  print (evensUpTo 2)
+  print (evensUpTo 7)
+  print (evensUpTo 8)
+```
+
+```text
+[]
+[2]
+[2,4,6]
+[2,4,6,8]
+```
+
+<Callout type="info" title="The same function, one line long">
+Chapter 6's lesson on list comprehensions writes this exact function as a one-liner — worth comparing once you reach it. The recursive version above shows the mechanism: what "count up by twos, stopping at the bound" actually means, one call at a time. The comprehension states the same rule without spelling out the mechanism.
+</Callout>
+
+<Quiz title="Check Your Understanding: evensUpTo" questions={[
+  {
+    question: "Why does `evensFrom` recurse on `k + 2` instead of `k + 1`?",
+    options: [
+      "Only even numbers belong in the result, and adding 2 to an even number gives the next even number, skipping the odd one in between",
+      "The base case only fires on even arguments",
+      "Adding 1 instead would cause the recursion to never terminate",
+      "It is arbitrary; +1 would produce an identical list"
+    ],
+    correctIndex: 0,
+    explanation: "Starting from the even number 2, adding 2 each time stays on even numbers forever: 2, 4, 6, 8, .... Adding 1 would visit odd numbers too, which the specification excludes.",
+    optionFeedback: [
+      "Correct — stepping by 2 from an even start keeps every value in the sequence even.",
+      "The base case, k > n, does not check parity at all — it fires whenever the running value has passed the bound, whether that value is even or odd.",
+      "+1 would still shrink the gap between k and n, so it would still terminate — it would just produce the wrong list, with odd numbers mixed in.",
+      "+1 would produce [2,3,4,5,6,7] for evensUpTo 7, not [2,4,6] — a completely different, and wrong, list."
+    ]
+  },
+  {
+    question: "What does the expression `k : evensFrom (k + 2) n` do?",
+    options: [
+      "Places k at the front of the list produced by the recursive call, which continues from k + 2",
+      "Appends k to the end of the recursive call's result",
+      "Filters k out of the result if k turns out to be odd",
+      "Compares k with n and returns a Bool"
+    ],
+    correctIndex: 0,
+    explanation: "`:` is cons — it builds a new list with its left operand as the head and its right operand (here, the recursive call's result) as the tail. Because k is placed at the front before the recursive call runs, and the recursive call always continues with a larger k, the finished list comes out in ascending order.",
+    optionFeedback: [
+      "Correct — cons builds onto the front; the recursive call supplies everything after k.",
+      "`:` conses onto the front, not the end. Appending to the end is what ++ does, and it is not used anywhere in this definition.",
+      "Nothing here checks whether k is odd — evensFrom conses k unconditionally in the otherwise branch; the only test anywhere in the function is the guard k > n.",
+      "That describes the guard k > n, which does return a Bool used to choose between the two equations — but k : evensFrom (k + 2) n is the otherwise branch, and it builds a list, not a Bool."
+    ]
+  }
+]} />
+
+## 7. Worked example: recursive linear search (`containsValue`)
+
+**Purpose.** `containsValue v xs` decides whether the value `v` occurs anywhere in the list `xs`.
+
+**Examples.**
+
+```text
+containsValue 3 [1,2,3]  = True
+containsValue 5 [1,2,3]  = False
+containsValue 'a' "cat"  = True
+containsValue 7 []       = False
+```
+
+**Base case.** The smallest list is the empty list, and nothing occurs in it: `containsValue v [] = False`, whatever `v` is.
+
+**Recursive step.** For a non-empty list `(x:xs)`, `v` occurs in it exactly when `v` is the head, or `v` occurs somewhere in the tail.
+
+**Signature.** Comparing `v` against elements requires `==`, which is only available for types that support equality — so the type needs an `Eq a` constraint:
+
+```haskell
+containsValue :: Eq a => a -> [a] -> Bool
+```
+
+**Implementation.**
+
+```haskell
+-- Does v occur anywhere in xs?
+containsValue :: Eq a => a -> [a] -> Bool
+containsValue _ []     = False
+containsValue v (x:xs)
+  | v == x    = True
+  | otherwise = containsValue v xs
+```
+
+Read the pattern `(x:xs)` the way Chapter 6 will introduce it formally: `x` is the head of the list, the one element being looked at right now; `xs` is everything after it, the list still to search if `x` is not a match. The two equations are exhaustive the same way every list recursion's are: `[]` is the base case, `(x:xs)` covers every non-empty list, and together they cover every possible list.
+
+**Dry run: `containsValue 3 [5,1,3,9]`, a value that is found.**
+
+```text
+containsValue 3 [5,1,3,9]
+= containsValue 3 [1,3,9]     <- guard: 3 == 5 is False, so recurse on the tail
+= containsValue 3 [3,9]       <- guard: 3 == 1 is False, so recurse on the tail
+= True                         <- guard: 3 == 3 is True, returned directly, no further call
+```
+
+**Dry run: `containsValue 5 [1,2,3]`, a value that is absent.**
+
+```text
+containsValue 5 [1,2,3]
+= containsValue 5 [2,3]       <- guard: 5 == 1 is False
+= containsValue 5 [3]         <- guard: 5 == 2 is False
+= containsValue 5 []          <- guard: 5 == 3 is False
+= False                        <- base case reached: containsValue _ [] = False
+```
+
+Both traces terminate — one by finding a match partway through and returning immediately, the other by exhausting the list down to `[]` and letting the base case answer. That is the shape of every linear search: shrink towards `[]`, and either a guard fires early or the base case has the final word.
+
+**Verification.**
+
+```haskell
+containsValue :: Eq a => a -> [a] -> Bool
+containsValue _ []     = False
+containsValue v (x:xs)
+  | v == x    = True
+  | otherwise = containsValue v xs
+
+main :: IO ()
+main = do
+  print (containsValue 3 [1,2,3])
+  print (containsValue 5 [1,2,3])
+  print (containsValue 'a' "cat")
+  print (containsValue (7 :: Integer) [])
+```
+
+```text
+True
+False
+True
+False
+```
+
+<CommonMistake title="Forgetting to recurse on the tail">
+A tempting first attempt is `containsValue v (x:xs) = v == x`, with no `otherwise` branch calling `containsValue` again. This compiles, and even passes a quick test where the value happens to be the *first* element — but it only ever looks at the head. `containsValue 3 [5,1,3,9]` would incorrectly return `False`, because only `3 == 5` is checked. Every recursive search needs an explicit "keep looking in the rest of the list" branch, or it stops after one comparison.
+</CommonMistake>
+
+<Callout type="info" title="An index-returning variant">
+A natural extension asks *where* the value is, not just whether it is present, by threading a position counter through the recursion — the same technique `atPosition` uses in Chapter 6. That variant is left as an exercise; `containsValue` itself is the version later chapters build on.
+</Callout>
+
+<Quiz title="Check Your Understanding: containsValue" questions={[
+  {
+    question: "Why does `containsValue` need the constraint `Eq a`, rather than working for any type `a` at all?",
+    options: [
+      "The recursive step compares `v == x`, and `==` is only defined for types that implement equality",
+      "Lists require `Eq a` to be constructed in the first place",
+      "`Bool`, the result type, requires `Eq a` to exist",
+      "`Eq` is only ever needed for `Integer`, which is what the examples happen to use"
+    ],
+    correctIndex: 0,
+    explanation: "`(==) :: Eq a => a -> a -> Bool`. containsValue's recursive step uses `v == x`, so anything calling containsValue must supply a type where `==` is defined — hence the `Eq a` constraint on containsValue itself.",
+    optionFeedback: [
+      "Correct — the constraint comes directly from using == inside the function.",
+      "Lists can hold values of any type at all, Eq a or not — a list of functions, for instance, is perfectly valid Haskell even though functions have no Eq instance. The constraint comes specifically from using == inside containsValue.",
+      "Bool needs no constraint to use or return; it is the comparison v == x, producing a Bool, that requires v and x's type to support equality.",
+      "Eq is a general-purpose typeclass implemented by many types — Integer, Char, Bool, and more. containsValue works for any of them, which is exactly why the constraint is written generically as Eq a rather than naming one specific type."
+    ]
+  },
+  {
+    question: "Tracing `containsValue 5 [1,2,3]`, the recursion runs out of list at `containsValue 5 []`. What causes the trace to stop there?",
+    options: [
+      "The base case `containsValue _ [] = False` matches, since 5 was not found anywhere and the list has shrunk to empty",
+      "The guard `v == x` finally becomes True",
+      "GHCi enforces a limit on how many recursive calls a search can make",
+      "The list [1,2,3] causes a type error at this point"
+    ],
+    correctIndex: 0,
+    explanation: "5 does not equal 1, 2, or 3, so the otherwise branch fires each time and the list shrinks by one element per call: [1,2,3], then [2,3], then [3], then []. At [], the pattern (x:xs) no longer matches, so the [] equation — the base case — takes over and returns False directly.",
+    optionFeedback: [
+      "Correct — the trace reaches the base case because the list has been fully, unsuccessfully searched.",
+      "The guard v == x never becomes True in this trace — 5 is not equal to 1, 2, or 3 anywhere in the list. That is exactly why the search runs all the way to the empty list.",
+      "GHCi has no built-in call limit for a terminating recursion; this trace stops because it reaches its base case, not because of any imposed limit.",
+      "There is no type error here — Integer has an Eq instance, and [1,2,3] is an ordinary [Integer]. The recursion stops because the list has been fully searched, not because of a type mismatch."
+    ]
+  }
+]} />
+
+## 8. Common errors
 
 | Symptom | Cause | Repair |
 |---|---|---|
@@ -215,8 +549,10 @@ The base case is `sumFac 0 = 1` because `fac 0` is `1`. Writing `sumFac 0 = 0` w
 | Base case never matched | The argument skips past it | Make the step move by one, or widen the base to a range with guards |
 | Works for `n > 0`, hangs on `0` | The base case is `1` but `0` was allowed by the type | Either widen the base case or reject `0` explicitly |
 | Correct for small `n`, unbearably slow for large | The definition recomputes sub-results, as `fib` does | Acceptable at this stage; note it and move on |
+| List-generator returns `[]` unexpectedly | The base-case guard (e.g. `k > n`) fires before the first value is consed | Check the guard's boundary against the examples, especially the smallest one |
+| `No instance for (Eq a)` | A function compares elements with `==` but the signature omits the constraint | Add `Eq a =>` before the arrow, as `containsValue` does |
 
-## 7. Practice
+## 9. Practice
 
 For each: specification, base case, recursive step, signature, implementation, dry run, and three tests.
 

@@ -189,6 +189,38 @@ ghci> 9 + (-7)
 2
 ```
 
+<Quiz title="Check: evaluating expressions" questions={[
+  {
+    question: "What does 1 + 2 * 3 + 4 evaluate to, and why?",
+    options: ["21, because Haskell evaluates strictly left to right", "11, because * has higher precedence than +, so 2 * 3 reduces first", "9, because + is evaluated before *", "A type error, because the expression mixes + and *"],
+    correctIndex: 1,
+    explanation: "Multiplication binds tighter than addition, so 2 * 3 becomes 6 first, giving 1 + 6 + 4 = 11 — exactly the reduction shown for 1 + 2 * 3 just above.",
+    optionFeedback: [
+      "Haskell does not evaluate strictly left to right when operators of different precedence are mixed; * is applied before the surrounding + operations regardless of position.",
+      "Correct. 2 * 3 reduces to 6 first because * has higher precedence, leaving 1 + 6 + 4, which is 11.",
+      "This has the precedence backwards — * binds tighter than +, not the other way around.",
+      "Mixing + and * is completely ordinary arithmetic in Haskell; there is no type conflict between two numeric operators."
+    ]
+  },
+  {
+    question: "Why does 9 + -7 produce an error while 9 + (-7) does not?",
+    options: [
+      "Haskell reads the - after + as subtraction, so 9 + -7 parses as an incomplete '9 + minus 7' rather than '9 plus negative 7'",
+      "GHCi has a bug that misreads negative numbers",
+      "9 + -7 is fine; the error only happens with larger numbers",
+      "Negative numbers are not allowed anywhere in Haskell"
+    ],
+    correctIndex: 0,
+    explanation: "Haskell writes negative numbers with a leading -, but that same symbol also means subtraction. Straight after an operator, GHCi cannot tell which meaning you intend, so the brackets in (-7) remove the ambiguity by making it unmistakably one literal value.",
+    optionFeedback: [
+      "Correct. This is exactly the rule stated just above: brackets are required around a negative number that immediately follows an operator.",
+      "This is standard, documented Haskell parsing behaviour, not a bug.",
+      "The size of the numbers is irrelevant; 9 + -1 fails for the identical reason.",
+      "Negative numbers are used throughout this course — cube (-2) appears later in this very lesson — they just need brackets in certain positions."
+    ]
+  }
+]} />
+
 ## 5. Ask for types with `:type`
 
 ```text
@@ -261,6 +293,43 @@ False
 
 This is because **everything in Haskell is an expression, and every expression has a type**. Without an `else`, the expression would have no value when the condition is `False`, so it could not have a type.
 
+<Quiz title="Check: defining functions and if-else" questions={[
+  {
+    question: "Why does Haskell reject an if expression with no else branch, while Java accepts an if statement with no else?",
+    options: [
+      "Haskell simply has stricter syntax rules for no particular reason",
+      "In Haskell, if...then...else is an expression that must produce a value on every path; a missing else would leave no value for the False case, so the expression could not have a type",
+      "Java's if is also an expression, so the two languages behave identically",
+      "Haskell requires else only when the condition might be True"
+    ],
+    correctIndex: 1,
+    explanation: "Every Haskell expression must have a type, and its type comes from the value it produces. An if with no else would have nothing to produce when the condition is False, so GHC cannot assign it a type at all — it is rejected before evaluation even starts.",
+    optionFeedback: [
+      "There is a precise structural reason, not an arbitrary style rule: if...then...else must produce a value on both branches because it is an expression.",
+      "Correct. This is the exact reasoning given in the lesson: without an else, the expression would have no value when the condition is False, so it could not have a type.",
+      "Java's if is a statement that performs an action; it does not need to produce a value, which is why an else-less if is legal there but not in Haskell.",
+      "The rule applies regardless of which branch is actually taken at run time — GHC checks types before any evaluation happens, so it cannot know in advance which branch will run."
+    ]
+  },
+  {
+    question: "cube x = x * x * x is defined at the prompt. What does :type cube report, and why does it mention Num a rather than a concrete type like Integer?",
+    options: [
+      "cube :: Integer -> Integer, because all numbers default to Integer",
+      "cube :: Num a => a -> a, because cube was never given an explicit signature, so GHC infers the most general type that makes x * x * x valid",
+      "cube :: a -> a, because cube works on any type whatsoever",
+      "GHCi cannot report a type for a function defined without a signature"
+    ],
+    correctIndex: 1,
+    explanation: "Without an explicit signature, GHC infers the most general type consistent with the definition. x * x * x only requires that x support multiplication, i.e. belong to the Num class — it does not require any one specific numeric type, so GHC leaves it general.",
+    optionFeedback: [
+      "This is what defaulting does when you evaluate an ambiguous numeric expression directly, but :type on a function definition reports the general inferred type, not a defaulted one.",
+      "Correct — this is exactly what the transcript in this section shows: cube :: Num a => a -> a.",
+      "cube is not fully unconstrained: x must support multiplication, which not every type does (a Bool, for instance, cannot be multiplied), so a itself is restricted to Num a.",
+      ":type works perfectly well on functions with inferred types; GHC always has some type to report once a definition type-checks."
+    ]
+  }
+]} />
+
 ## 8. Entering something longer
 
 Some definitions are too long for one line. Enclose them between `:{` and `:}`, pressing Enter after each line:
@@ -293,6 +362,51 @@ GHCi commands begin with a colon; ordinary expressions do not. Most can be abbre
 | `:cd directory` | — | Change GHCi's current directory |
 | `:!command` | — | Run an external operating-system command |
 | `:quit` | `:q` | Leave GHCi (Ctrl+D also works) |
+
+### `:info` in practice
+
+`:type` answers "what type does this expression have?" `:info` answers the bigger question: "what *is* this name, and where did it come from?" For a type, it shows how the type is built and which typeclasses it belongs to:
+
+```text
+ghci> :info Bool
+type Bool :: *
+data Bool = False | True
+        -- Defined in ‘GHC.Types’
+instance Eq Bool -- Defined in ‘GHC.Classes’
+instance Ord Bool -- Defined in ‘GHC.Classes’
+instance Enum Bool -- Defined in ‘GHC.Enum’
+instance Show Bool -- Defined in ‘GHC.Show’
+instance Read Bool -- Defined in ‘GHC.Read’
+instance Bounded Bool -- Defined in ‘GHC.Enum’
+```
+
+Read this line by line: `data Bool = False | True` is `Bool`'s complete definition — exactly two values, no more, no less. Each `instance` line lists a capability `Bool` has: it can be compared for equality (`Eq`), it can be ordered (`Ord`), and so on. The `-- Defined in …` comments tell you which library module to look up if you want the source. `:info` works on functions too:
+
+```text
+ghci> :info not
+type Bool :: *
+...
+not :: Bool -> Bool     -- Defined in ‘GHC.Classes’
+```
+
+<Callout type="info" title=":type vs :info">
+`:type expr` answers a question about an **expression** you supply. `:info name` answers a question about a **name already in scope** — a function, a type, or an operator — including facts `:type` does not show, such as which module defined it.
+</Callout>
+
+<Quiz title="Check: the GHCi command set" questions={[
+  {
+    question: "You want to know which module defines the not function. Which command answers that directly?",
+    options: [":type not", ":info not", ":load not", ":browse not"],
+    correctIndex: 1,
+    explanation: ":info shows a -- Defined in ‘...’ comment naming the module. :type only reports not's type signature, Bool -> Bool, with no information about where it comes from.",
+    optionFeedback: [
+      ":type not reports not :: Bool -> Bool — useful, but it says nothing about which module defined the name.",
+      "Correct. :info's whole purpose is to answer 'what is this name and where did it come from', including the defining module.",
+      ":load expects a filename ending in .hs, not the name of an existing function; this would fail.",
+      ":browse expects a module name (like :browse Prelude), not a single function name."
+    ]
+  }
+]} />
 
 ```text
 ghci> :quit

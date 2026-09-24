@@ -3,8 +3,6 @@ title: "4. Input, Bindings, and Processing"
 description: "Read text with getLine, bind an input using <-, create immutable local names with let, convert text with read, process a value, and display the result."
 ---
 
-
-
 This lesson starts with a complete beginner's question: **How does information enter a Haskell program, how does the program work with it, and how does a result leave the program?**
 
 The short answer is:
@@ -13,6 +11,11 @@ The short answer is:
 2. **Bind:** give the obtained value a local name using `<-`.
 3. **Process:** create new values with pure expressions and `let`.
 4. **Output:** perform an action such as `putStrLn`.
+
+<Mermaid chart={`flowchart LR
+  A["1. Input\ngetLine"] --> B["2. Bind\ninputText <- getLine"]
+  B --> C["3. Process\nlet number = read inputText :: Integer\nlet doubled = number * 2"]
+  C --> D["4. Output\nputStrLn (...)"]`} caption="Every interactive program in this lesson follows this same four-stage shape, even as the processing step grows more complex in later chapters." />
 
 By the end, you will be able to explain every symbol in this program rather than merely copying it.
 
@@ -87,6 +90,26 @@ Now unpack every part:
 | `IO String` | Complete action type | An input/output action that can produce a `String` result |
 
 `getLine` is not the text itself. It is an action that can obtain text. The text becomes available only when the action is performed as part of `main` or another `IO` action.
+
+<Quiz title="Check: getLine as an action" questions={[
+  {
+    question: "Why does getLine's type mention IO at all, instead of simply being String?",
+    options: [
+      "IO is just a naming convention with no real meaning",
+      "getLine cannot know what text it will produce until a real user types something at a real keyboard — that dependency on the outside world is exactly what IO marks in the type",
+      "IO String means the same thing as String, just written more formally",
+      "getLine :: IO String means it returns a list of Strings"
+    ],
+    correctIndex: 1,
+    explanation: "A pure Haskell value like a String literal is fixed once and for all by the source code. getLine cannot be like that — its result depends on what the user types, which varies at run time and involves the outside world. IO in the type is the signal that the value is obtained through an effect, not computed purely.",
+    optionFeedback: [
+      "IO carries real meaning: it marks a type as describing an action that interacts with the world outside the program, as distinct from a pure value.",
+      "",
+      "IO String and String are different types entirely — an IO String is an action that can produce a String, not a String itself. That distinction is the whole point of this section.",
+      "IO String is one action producing one String result; it is unrelated to list types such as [String]."
+    ]
+  }
+]} />
 
 ## Getting the result with `<-`
 
@@ -164,6 +187,43 @@ let doubled = number * 2
   ]}
 />
 
+<Quiz title="Check: <- versus let" questions={[
+  {
+    question: "A student writes `doubled <- number * 2` inside a do block. What is wrong, precisely?",
+    options: [
+      "Nothing; <- and let are interchangeable in a do block",
+      "number * 2 is a pure Integer expression, not an IO action, and <- requires its right side to be an action to perform — this needs let instead",
+      "doubled is not a valid variable name",
+      "number was never defined, so the line is meaningless regardless of <- or let"
+    ],
+    correctIndex: 1,
+    explanation: "<- is specifically for performing an IO action and capturing its result. number * 2 does not describe any interaction with the outside world — it is a pure calculation that already has a definite value. The correct form is let doubled = number * 2.",
+    optionFeedback: [
+      "They are not interchangeable: <- performs an IO action, let names a pure expression. Using the wrong one for the wrong side is a type error.",
+      "",
+      "doubled is a perfectly ordinary identifier; the problem is the choice of <- rather than let, not the name itself.",
+      "This question is about the syntax choice between <- and let assuming number is already bound; that is a separate, real issue but not the one being tested here."
+    ]
+  },
+  {
+    question: "After `let number = 4` and then `let doubled = number * 2`, what does `number` refer to?",
+    options: [
+      "8, because doubled's definition changed it",
+      "Still 4 — let creates a new named binding (doubled) without modifying the existing one (number)",
+      "It becomes undefined once doubled is created",
+      "It depends on which line runs last in the program"
+    ],
+    correctIndex: 1,
+    explanation: "Haskell bindings are immutable. let doubled = number * 2 reads the current value of number to compute a brand new value and gives that new value its own name, doubled. It has no mechanism for reaching back and changing what number means.",
+    optionFeedback: [
+      "number is never modified by defining doubled; only doubled receives the new value 8.",
+      "",
+      "number remains a valid, unchanged binding for as long as it is in scope — defining another name never invalidates it.",
+      "Binding order matters for what is in scope, but once number is bound to 4, no later let can change that binding — Haskell has no reassignment."
+    ]
+  }
+]} />
+
 ## Converting entered text with `read`
 
 `getLine` always obtains a `String`, even if the user types digits. Typing `4` produces the two-stage idea “the text `"4"`,” not automatically the numeric value `4`.
@@ -199,6 +259,26 @@ ghci> read "4" :: Double
 <Callout type="warn" title="read is unsafe for untrusted input">
 `read "four" :: Integer` cannot produce an `Integer`, so the program stops with a runtime error similar to `Prelude.read: no parse`. This first program uses `read` so that the input pipeline is visible. Input validation is introduced later, after the required types have been taught.
 </Callout>
+
+<Quiz title="Check: read and type annotations" questions={[
+  {
+    question: "Why does `read \"4\"` need the annotation `:: Integer` (or `:: Double`) to be usable, rather than Haskell just picking a type on its own?",
+    options: [
+      "Because \"4\" is not valid input for read without an annotation",
+      "Because read's result type is determined by what the caller asks for; the same text \"4\" could validly become an Integer, a Double, or another Read type, so the annotation resolves that ambiguity",
+      "Because :: Integer changes the string \"4\" into the character '4'",
+      "The annotation is purely optional style and never changes the result"
+    ],
+    correctIndex: 1,
+    explanation: "read :: Read a => String -> a is polymorphic in its result type — nothing about the string \"4\" by itself says whether the intended result is 4 :: Integer or 4.0 :: Double. Without other context forcing a specific type, GHC needs the annotation to know which Read instance to use.",
+    optionFeedback: [
+      "\"4\" is valid input for read; the issue is not validity but which result type to parse it as.",
+      "",
+      "The annotation affects only the type of the Haskell value produced by read, not the string being parsed — read \"4\" always starts from the same three characters.",
+      "The annotation is exactly what determines the result here — try read \"4\" :: Integer versus read \"4\" :: Double and compare the two outputs shown above."
+    ]
+  }
+]} />
 
 ## Rebuild the complete program
 
@@ -291,6 +371,38 @@ Double: 8
 
 The middle line is **user input**, not a line printed by the Haskell program.
 
+### A second worked run
+
+The same seven steps apply to any valid integer, including negative numbers. Suppose the user enters `-7` instead:
+
+```text
+Enter a whole number:
+-7
+Double: -14
+```
+
+`read "-7" :: Integer` parses to `-7`, and `-7 * 2` evaluates to `-14`. Nothing about the pipeline changes — only the value flowing through it.
+
+<Quiz title="Check: tracing the pipeline" questions={[
+  {
+    question: "In the trace above, step 5 says the original binding number still refers to 4 even after doubled is computed. Why is this true?",
+    options: [
+      "Because let bindings in Haskell are immutable — computing doubled reads number's value but cannot change what number itself is bound to",
+      "Because number and doubled are actually the same binding under two names",
+      "It is only true because the user entered a small number; larger numbers would change number",
+      "Because doubled is computed before number in the actual execution order"
+    ],
+    correctIndex: 0,
+    explanation: "Every let in this program introduces a brand-new, separate, immutable binding. number = 4 and doubled = number * 2 are two independent names; computing the second reads the first's value without any ability to alter it. This is the same immutability point made earlier in the lesson, now shown inside a full execution trace.",
+    optionFeedback: [
+      "",
+      "They are two distinct bindings with two distinct values (4 and 8) — number and doubled are not aliases for the same thing.",
+      "The size of the number entered has no bearing on whether number can be mutated; Haskell bindings are immutable regardless of the value.",
+      "The do block's statements run in the written order: number is bound (step 4) strictly before doubled is computed (step 5)."
+    ]
+  }
+]} />
+
 ## Four meanings of “store”
 
 “Store the number” is not precise enough. Ask which of these operations is intended:
@@ -312,6 +424,26 @@ The middle line is **user input**, not a line printed by the Haskell program.
 
 This lesson implements the first meaning and uses an already saved source file. Lists and tuples teach the second meaning. File-input/output lessons will teach the fourth meaning explicitly.
 
+<Quiz title="Check: four meanings of store" questions={[
+  {
+    question: "A student says: \"the program stores the doubled number so I can use it later, even after the program exits.\" Which meaning of \"store\" does `let doubled = number * 2` actually provide, and does it satisfy that claim?",
+    options: [
+      "It provides persistent external storage, so the claim is correct",
+      "It provides only an immutable binding, which exists solely while the program is running; the claim is false — nothing here survives after the program exits",
+      "It provides a data structure, which is why it survives",
+      "It provides a source file, since the binding is written inside DoubleNumber.hs"
+    ],
+    correctIndex: 1,
+    explanation: "let doubled = number * 2 is an immutable binding: a name meaningful only within the running program's current scope. It vanishes the moment the program ends. Surviving the program's exit requires the fourth meaning — persistent external storage, using IO to write to a file or similar — which this lesson does not yet do.",
+    optionFeedback: [
+      "Persistent external storage requires an explicit IO write to something outside the process, such as a file; a let binding does no such thing.",
+      "",
+      "doubled is a single Integer value bound by let, not a data structure like a list or tuple, and even a data structure would not survive the program ending on its own.",
+      "The binding lives inside the running program's memory, not as text in the source file — the source file's persistence (as saved text) is a different meaning from the binding's lifetime while running."
+    ]
+  }
+]} />
+
 ## Common errors and why they happen
 
 ### Error 1: trying to use the action as if it were the result
@@ -321,7 +453,11 @@ This lesson implements the first meaning and uses an already saved source file. 
 let inputText = getLine
 ```
 
-Here `inputText` would refer to the action itself. Use `<-` when you need the string produced by the action:
+<CommonMistake title="Binding the action instead of its result">
+Here `inputText` would refer to the *action* `getLine` itself — a description of "go read a line," never actually performed — not the text the user types. Passing `inputText` to something expecting a `String` (such as `read inputText`) then fails to type-check, because `inputText` has type `IO String`, not `String`. The fix is not a small syntax tweak; it is choosing the operator that actually *performs* the action.
+</CommonMistake>
+
+Use `<-` when you need the string produced by the action:
 
 ```haskell
 -- Correct: perform the action and bind its String result.
@@ -334,6 +470,10 @@ inputText <- getLine
 -- Incorrect: number * 2 is an Integer calculation, not an IO action.
 doubled <- number * 2
 ```
+
+<CommonMistake title="Using <- where let belongs">
+`<-` demands an `IO` action on its right side, because its entire job is "perform this action, then bind its result." `number * 2` is a pure expression with no action to perform — it already has a value. GHC reports a type error naming a missing `Num (IO t)`-style instance or a similar mismatch; the precise wording varies, but the underlying cause is always this same confusion between performing an action and naming a value.
+</CommonMistake>
 
 Use `let` for the pure result:
 
@@ -434,3 +574,14 @@ Triple: 15
   Use `number * 3`. The completed line is `let tripled = number * 3`. It is a pure calculation, so it uses `let`, not `<-`.
   </Accordion>
 </Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can explain why getLine has type IO String rather than String.' },
+  { type: 'must', text: 'I can choose correctly between name <- action and let name = expression.' },
+  { type: 'must', text: 'I can explain why a let binding is immutable, using two named values in the same do block.' },
+  { type: 'must', text: 'I can explain why read needs a type annotation such as :: Integer.' },
+  { type: 'must', text: 'I can trace a complete input-bind-process-output program by hand for a given input.' },
+  { type: 'must', text: 'I can name which of the four meanings of "store" a given piece of code actually performs.' },
+  { type: 'avoid', text: 'Do not bind an IO action with let, or a pure expression with <-; each requires the other.' },
+  { type: 'note', text: 'read fails at run time on unparseable text — this lesson does not yet validate input.' }
+]} />
