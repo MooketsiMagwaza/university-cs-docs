@@ -419,6 +419,39 @@ A predicate always has a return type of `Bool`. If you can imagine asking the te
   }
 ]} />
 
+### `filter`'s result doesn't have to be printed — it can feed straight into another function
+
+Every `filter` call so far has had its result shown directly. But `filter p xs` is an ordinary list value like any other, so it can be handed to any function that accepts one — most usefully, `length`, when the actual question is "**how many** elements pass the test," not "**which** elements pass it":
+
+```haskell
+-- Is this character a space?
+isSpaceChar :: Char -> Bool
+isSpaceChar c = c == ' '
+
+-- Count the space characters in a string.
+countSpaces :: String -> Int
+countSpaces xs = length (filter isSpaceChar xs)
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (countSpaces "a b c d")
+  print (countSpaces "hello")
+  print (filter isSpaceChar "a b c d")
+```
+```text
+3
+0
+"   "
+```
+
+Read `countSpaces` from the inside out, exactly as with any composed pair of function calls: `filter isSpaceChar xs` runs first, producing a *new, shorter string* containing only the space characters found — the third line above shows that intermediate value directly, three literal spaces. `length` then counts how many characters are in *that* string, which is exactly the count of spaces in the original. Nothing here is a new technique — it is `filter` (Section 3) composed with an ordinary Prelude function (`length`), the same composing-by-nesting idea from `putStrLn (show 42)` back in Chapter 3.
+
+<Callout type="info" title="filter then length, not a special counting function">
+Haskell has no separate "count how many elements satisfy a test" primitive — `length . filter p` (or, written the other way round, `length (filter p xs)`) **is** that operation, built from two pieces you already have. This is worth recognising by shape: any lab question phrased as "how many elements have property X" is `length (filter X xs)`, whatever `X` happens to be.
+</Callout>
+
 ## 4. A worked example: grades, using `map` and `filter` as HOFs
 
 Consider a class of eight students and their marks out of 100:
@@ -579,6 +612,72 @@ doubleAll = map (* 2)
 ```
 
 Note the last two: with the list argument dropped from both sides, the definition says directly *what the function is* rather than what it does to an argument. That is legitimate precisely because of currying — `filter (> 0)` is already a complete `[Integer] -> [Integer]` function.
+
+### A conditional transform, three ways: recursion, comprehension, `map`
+
+`doubleAll` applies the *same* rule to every element. A function that applies a *different* rule depending on each element — "add 1 if it's even, add 2 if it's odd" — is still a `map`, because `map` never required the function passed to it to be simple; it only required there to be **one** function, of type `a -> b`, applied to every element:
+
+```haskell
+-- The per-element rule: even numbers get +1, odd numbers get +2.
+add :: Int -> Int
+add x
+  | even x    = x + 1
+  | otherwise = x + 2
+```
+
+**As a hand-written recursion** (the Chapter 6 shape):
+```haskell
+addAllRec :: [Int] -> [Int]
+addAllRec []     = []
+addAllRec (x:xs) = add x : addAllRec xs
+```
+
+**As a list comprehension:**
+```haskell
+addAllComp :: [Int] -> [Int]
+addAllComp xs = [add x | x <- xs]
+```
+
+**As `map`:**
+```haskell
+addAllMap :: [Int] -> [Int]
+addAllMap = map add
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (addAllRec  [1, 2, 3, 4])
+  print (addAllComp [1, 2, 3, 4])
+  print (addAllMap  [1, 2, 3, 4])
+```
+```text
+[3,3,5,5]
+[3,3,5,5]
+[3,3,5,5]
+```
+
+Trace one element to see why all three agree: `1` is odd, so `add 1 = 1 + 2 = 3`. `2` is even, so `add 2 = 2 + 1 = 3`. `3` is odd, `add 3 = 3 + 2 = 5`. `4` is even, `add 4 = 4 + 1 = 5`. All three versions apply exactly this one rule, element by element, in the same order — a comprehension and `map` are not restricted to *simple* per-element functions; `add` itself can be as elaborate as it needs to be, with its own guards, and the comprehension or `map` calling it never changes.
+
+<Quiz title="Check: a conditional transform is still a map" questions={[
+  {
+    question: "add uses a guard (even x, otherwise) to decide between two different results. Does this stop addAllMap = map add from being a valid use of map?",
+    options: [
+      "Yes — map can only apply simple, unconditional functions like (*2)",
+      "No — map only requires one function of type a -> b applied to every element; nothing about that function's own internal logic, including guards, is map's concern",
+      "Yes — conditional logic requires filter, not map",
+      "No, but only because add happens to always return an Int"
+    ],
+    correctIndex: 1,
+    explanation: "map f xs applies f to each element and collects the results — f can be as simple as (*2) or as elaborate as a multi-guard function; map never inspects or cares how f decides its answer, only that f :: a -> b and it never drops an element.",
+    optionFeedback: [
+      "map's own definition, map f (x:xs) = f x : map f xs, places no restriction on f beyond its type; add :: Int -> Int qualifies exactly like (*2) :: Int -> Int does.",
+      "Correct — map's contract is purely about type and about producing exactly one output per input; how that output is computed is entirely up to the function supplied.",
+      "filter decides whether to keep an element at all (dropping some); add never drops anything, it transforms every element, which is precisely what map does, guard or no guard.",
+      "The reason is general, not specific to Int — map add would work identically for any a -> b function, whatever type b happens to be."
+    ]
+  }
+]} />
 
 ## 6. Combining them
 

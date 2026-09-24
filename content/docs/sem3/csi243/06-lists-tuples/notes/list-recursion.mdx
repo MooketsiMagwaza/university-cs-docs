@@ -850,6 +850,55 @@ False
 
 The second call is the one worth tracing by hand once: `100` matches none of `3`, `7`, `9`, or `2`, so every call falls into `otherwise` until the list is exhausted, and only then does the base case answer `False` — a search that finishes by *running out of list*, not by finding a mismatch worth reporting early.
 
+### Reading `Eq a => [a] -> a -> Bool` — the constraint, and the argument order
+
+`contains` above is written `Eq a => a -> [a] -> Bool` — element first, list second, matching the Prelude's own `elem :: Eq a => a -> [a] -> Bool`. You will also see this exact search written the other way round, list first:
+
+```haskell
+linearSearch :: Eq a => [a] -> a -> Bool
+linearSearch []     _      = False
+linearSearch (x:xs) target
+  | x == target = True
+  | otherwise   = linearSearch xs target
+```
+
+Read the signature the same way Chapter 9 teaches any constrained signature: `Eq a =>` is read first, in isolation — "for any type `a` that supports `==`" — *then* the ordinary arrow-by-arrow reading applies to what follows: `[a] -> a -> Bool` is "takes a list of `a`, then an `a`, and gives back a `Bool`." The constraint is not itself an argument; it is a precondition on the type variable `a`, which is why it sits before `=>` while every actual argument sits after it, separated by ordinary `->` arrows.
+
+```haskell
+main :: IO ()
+main = do
+  print (linearSearch [1,2,3,4,5] 3)
+  print (linearSearch [1,2,3,4,5] 9)
+```
+```text
+True
+False
+```
+
+**Why `Eq a` is required at all:** the body compares `x == target`. `==` is not defined for every possible type — Chapter 9 covers exactly this — so any function that uses it on a value of type `a` must say, in its own signature, that `a` is constrained to types where `==` actually exists. Drop the constraint and GHC refuses to compile the function, with `No instance for (Eq a) arising from a use of '=='`, before ever running it.
+
+**Why the argument order differs between the two versions:** it doesn't change what the function computes, only how a call reads. `contains target xs` reads "does `xs` contain `target`" only if you already know which argument is which; `linearSearch xs target` mirrors how the *specification* is usually phrased — "does this **list** have this **element**" — list first. Both orders appear in real code and in this course's own lab sheets; neither is more "correct" than the other. What matters is that the signature, the equations, and every call site agree with each other. Pick one order for a given function and use it consistently.
+
+<Quiz title="Check: constraint vs argument in a signature" questions={[
+  {
+    question: "In linearSearch :: Eq a => [a] -> a -> Bool, how many arguments does linearSearch actually take?",
+    options: [
+      "Three — Eq a, [a], and a",
+      "Two — a list of a, and one a; Eq a => is a constraint on the type variable, not a third argument",
+      "One — the whole Eq a => [a] -> a part is a single combined argument",
+      "It depends on which type a is instantiated to"
+    ],
+    correctIndex: 1,
+    explanation: "Everything before => constrains what a is allowed to be; it is never itself a value you supply. Only the arrows after => separate actual arguments: [a] is the first, a is the second, and Bool is the result. linearSearch [1,2,3] 2 supplies exactly those two.",
+    optionFeedback: [
+      "Eq a is a constraint, not a value — there is no way to 'pass' Eq a as an argument the way you pass [1,2,3] or 2.",
+      "Correct — two ordinary arguments after the constraint, exactly as a call like linearSearch [1,2,3] 2 shows.",
+      "The constraint and the first argument type are separated by => precisely because they are different kinds of thing — a requirement on a type, versus the type of a real argument.",
+      "The number of arguments is fixed by the signature's arrow structure and never changes based on which concrete type a becomes."
+    ]
+  }
+]} />
+
 `atPosition` in §6 went from a **position** to an **element**. The natural companion goes the other way — from an element to the **position** of its first occurrence:
 
 ```haskell
