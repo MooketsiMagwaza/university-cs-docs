@@ -373,6 +373,8 @@ ghci> read "4" :: Double
 
 <Callout type="warn" title="read is unsafe for untrusted input">
 `read "four" :: Integer` cannot produce an `Integer`, so the program stops with a runtime error similar to `Prelude.read: no parse`. This first program uses `read` so that the input pipeline is visible. Input validation is introduced later, after the required types have been taught.
+
+**In plain English:** `Prelude.read: no parse` just means "the built-in `read` function tried to interpret your text as the type you asked for, and the characters you gave it don't spell out a valid value of that type." `Prelude` names the library `read` comes from; "no parse" is the actual complaint. A GHC error message is dense on purpose — it is precise, not padded — and [Decoding Exam and Lab Language](/docs/sem3/csi243/decoding-questions) applies the same decode-first habit to error text, not only to lab-sheet wording.
 </Callout>
 
 <Quiz title="Check: read and type annotations" questions={[
@@ -585,9 +587,15 @@ inputText <- getLine
 -- Incorrect: number * 2 is an Integer calculation, not an IO action.
 doubled <- number * 2
 ```
+```text
+error:
+    * Couldn't match expected type `IO a0' with actual type `Integer'
+    * In the first argument of `(*)', namely `number'
+      In a stmt of a 'do' block: doubled <- number * 2
+```
 
 <CommonMistake title="Using <- where let belongs">
-`<-` demands an `IO` action on its right side, because its entire job is "perform this action, then bind its result." `number * 2` is a pure expression with no action to perform — it already has a value. GHC reports a type error naming a missing `Num (IO t)`-style instance or a similar mismatch; the precise wording varies, but the underlying cause is always this same confusion between performing an action and naming a value.
+`<-` demands an `IO` action on its right side, because its entire job is "perform this action, then bind its result." `number * 2` is a pure expression with no action to perform — it already has a value. GHC's message names the mismatch directly: it expected `IO a0` (something it can run as an action) but found `Integer` (a value that's already there). Wording can drift slightly between GHC versions, but the underlying cause is always this same confusion between performing an action and naming a value.
 </CommonMistake>
 
 Use `let` for the pure result:
