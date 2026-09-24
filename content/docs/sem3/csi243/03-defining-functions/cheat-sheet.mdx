@@ -1,0 +1,146 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for a complete program's anatomy, putStr/putStrLn/print/show, <- vs let, and first-session failures: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/03-defining-functions/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `funcName` | The name you give the function | `cube`, `doubled` |
+| `param` | A name that receives an input value | `x`, `inputText` |
+| `expression` | A pure calculation with no IO involved | `x * x * x`, `number * 2` |
+| `IOAction` | A line that performs input or output | `putStrLn "..."`, `getLine` |
+
+## 2. Anatomy of a complete program
+
+**Template:**
+```haskell
+-- PURPOSE: one-line comment describing what the program does.
+
+funcName :: InputType -> OutputType    -- the contract: what goes in, what comes out
+funcName param = expression             -- the implementation
+
+main :: IO ()                           -- entry point; every runnable program needs one
+main = do                                -- do: a sequence of IO actions
+  IOAction1                              -- both actions must be aligned —
+  IOAction2                              -- indentation is what groups them into one block
+```
+
+**Example:**
+```haskell
+-- PURPOSE: Calculate a cube, then display a label and the result.
+
+cube :: Integer -> Integer
+cube x = x * x * x
+
+main :: IO ()
+main = do
+  putStrLn "The cube of 4 is:"
+  print (cube 4)
+```
+```text
+The cube of 4 is:
+64
+```
+`cube 4` is a pure `Integer` — nothing is printed until `print` hands it to the terminal. Only the lines inside `main`'s `do` block are actions; `cube` itself never touches `IO`.
+
+## 3. `putStr`, `putStrLn`, `print`, `show`
+
+<ComparisonTable
+  columns={[
+    { header: 'Function', key: 'function' },
+    { header: 'Accepts', key: 'input' },
+    { header: 'Adds newline?', key: 'newline' },
+    { header: 'Use when', key: 'use' }
+  ]}
+  rows={[
+    { function: 'putStr', input: 'String', newline: 'No', use: 'The next output should continue on the same line' },
+    { function: 'putStrLn', input: 'String', newline: 'Yes', use: 'Writing a human-facing message' },
+    { function: 'print', input: 'Any Show value', newline: 'Yes', use: 'Displaying a number, Bool, list, etc. directly' },
+    { function: 'show', input: 'Any Show value', newline: 'No output at all — it is pure', use: 'Building a String for later use, e.g. inside ++' }
+  ]}
+/>
+
+**Example — all four in one program:**
+```haskell
+main :: IO ()
+main = do
+  putStr "CSI"
+  putStrLn "243"
+  print 42
+  putStrLn (show 42 ++ "!")
+```
+```text
+CSI243
+42
+42!
+```
+`print n` is really `putStrLn (show n)` — `show` alone never reaches the terminal.
+
+<Callout type="warn" title="show computes text; it does not print, even though GHCi makes it look that way">
+Typed alone at the `ghci>` prompt, `show 42` seems to "print" `"42"` — but that is GHCi's own auto-display of a returned value, not an effect of `show`. Inside a real `do` block, a line like `show 42` on its own computes a `String` and then throws it away: nothing appears on the terminal unless an action such as `putStrLn` actually uses the result.
+</Callout>
+
+## 4. `<-` versus `let` inside a `do` block
+
+| Form | Right side must be | Purpose | Example |
+|---|---|---|---|
+| `param <- IOAction` | An `IO` action | Perform the action, bind its result | `inputText <- getLine` |
+| `let funcName = expression` | A pure expression | Name an already-known value | `let doubled = number * 2` |
+
+**Template:**
+```haskell
+main :: IO ()
+main = do
+  param <- IOAction              -- performs an effect, then binds the result
+  let funcName = expression      -- no effect here — just naming a calculation
+  IOAction2
+```
+
+**Example:**
+```haskell
+main :: IO ()
+main = do
+  putStrLn "Enter a whole number:"
+  inputText <- getLine
+  let number  = read inputText :: Integer
+  let doubled = number * 2
+  putStrLn ("Double: " ++ show doubled)
+```
+```text
+Enter a whole number:
+4
+Double: 8
+```
+`<-` demands an `IO` action on its right (`getLine` waits on the keyboard). `number * 2` has no action to perform — it already has a value — so it needs `let`, not `<-`. Mixing them up is a type error, not a style complaint.
+
+## 5. Common first-session failures
+
+| Attempt | Why it fails | Fix |
+|---|---|---|
+| `main =` with nothing after it | Every definition needs a right-hand side | Supply one action or a `do` block |
+| `print cube 4` | Application groups left: this means `(print cube) 4` | `print (cube 4)` |
+| Statements in `do` not aligned | Haskell groups a `do` block by indentation | Line up every statement under `do` |
+| `cube :: Integer` | Describes a value, not a function | `cube :: Integer -> Integer` |
+| Edited the file but forgot to reload | GHCi still has the *old* definitions loaded | `:reload` before testing again |
+
+## 6. Common errors, at a glance
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `doubled <- number * 2` rejected | `<-` requires an `IO` action; `number * 2` is a pure expression | `let doubled = number * 2` |
+| `let inputText = getLine` never has real text | `inputText` is bound to the *action*, not its result | `inputText <- getLine` |
+| `putStrLn 42` rejected | `putStrLn` needs a `String`, `42` is a number | `putStrLn (show 42)`, or `print 42` |
+| `"Double: " ++ doubled` rejected | `++` needs two strings; `doubled` is a number | `"Double: " ++ show doubled` |
+| `Prelude.read: no parse` at run time | `read` was given text it can't parse as the requested type | Enter valid input, e.g. `4` not `four` |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can name every piece of a small complete program: comment, signature, main, IO (), do, indentation.' },
+  { type: 'must', text: 'I can pick correctly between putStr, putStrLn, print, and show for a given value and goal.' },
+  { type: 'must', text: 'I can say why number * 2 needs let while getLine needs <-, not the other way round.' },
+]} />
+
+Full explanations, worked traces, and more examples: [Defining Functions](/docs/sem3/csi243/03-defining-functions/notes/defining-functions) · [A Complete Haskell Program](/docs/sem3/csi243/03-defining-functions/notes/complete-program) · [Terminal Output: putStr, putStrLn, and show](/docs/sem3/csi243/03-defining-functions/notes/output) · [Input, Bindings, and Processing](/docs/sem3/csi243/03-defining-functions/notes/input-processing).
