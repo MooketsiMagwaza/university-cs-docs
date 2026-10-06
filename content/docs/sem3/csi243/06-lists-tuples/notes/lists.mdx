@@ -153,7 +153,7 @@ ghci> ['a' .. 'f']
 
 Giving the first **two** elements sets the step: `[1, 3 .. 10]` steps by 2. To count downwards you must supply the step, because `[10 .. 1]` produces the empty list.
 
-Haskell is lazy, so a range may be infinite. `[1 ..]` is a valid list; taking a finite part of it is safe:
+Haskell is lazily **evaluated**, so a range may be infinite. It is not “lazily typed”: GHC still checks the type of the whole program before it runs. `[1 ..]` is a valid list; taking a finite part of it is safe because `take 5` demands only five list cells:
 
 ```text
 ghci> take 5 [1 ..]
@@ -161,6 +161,34 @@ ghci> take 5 [1 ..]
 ```
 
 Evaluating `[1 ..]` on its own at the prompt prints forever — press Ctrl+C to stop it.
+
+At GHCi, each of the three expressions above can be entered directly. In a saved `.hs` file, `print [1..5]` is an output action, and three output actions must be sequenced inside the program's entry point. The complete form therefore uses the recommended signature `main :: IO ()`, followed by `main = do`. The statements under `do` must be indented to the same level:
+
+```haskell
+main :: IO ()
+main = do
+  print [1..5]
+  print [1,3..10]
+  print (take 5 [1..])
+```
+
+- `main` is the action the compiled program runs first.
+- `IO ()` says that `main` may perform input/output and finishes without returning an ordinary result value.
+- `do` combines several actions into one action, in order.
+- The signature is strongly recommended documentation, although GHC can infer it here.
+- The indentation is required by Haskell's layout rule; unindented `print` lines are no longer visibly part of the `do` block.
+
+See [Static typing and lazy evaluation are different ideas](/docs/sem3/csi243/02-expressions-types/notes/expressions-types#static-typing-and-lazy-evaluation-are-different-ideas) for the full distinction.
+
+<HaskellTryIt
+  title="Try finite and lazy ranges"
+  description="Change the step or the number passed to take. Keep take around an open-ended range so the output stays finite."
+  code={`main :: IO ()
+main = do
+  print [1..5]
+  print [1,3..10]
+  print (take 5 [1..])`}
+/>
 
 <Quiz title="Check: Ranges" questions={[
   {
@@ -214,7 +242,7 @@ So `[1,2,3]` is an abbreviation of `1:(2:(3:[]))`. The cons operator associates 
 
 Each `:` builds one **cons cell**: a small box holding a head value and a pointer to the rest of the list. A list is a chain of these cells ending in `[]`:
 
-<Mermaid chart={`flowchart LR
+<SiteDiagram chart={`flowchart LR
   C1["head: 1"] -->|tail| C2["head: 2"]
   C2 -->|tail| C3["head: 3"]
   C3 -->|tail| N["empty list"]
@@ -274,6 +302,15 @@ Exact output:
 ```
 
 The last line is cons applied to `[]` directly — one cons cell, one element, exactly as small as the pattern `(x:xs)` will ever have to match.
+
+<HaskellTryIt
+  title="Build a list with cons"
+  description="Add another value with : and compare it with joining two complete lists using ++."
+  code={`main = do
+  let numbers = [1,2,3]
+  print (0 : numbers)
+  print ([8,9] ++ numbers)`}
+/>
 
 <Callout type="warn" title="You cannot cons a list onto an element">
 `:` takes an **element** on the left and a **list** on the right. `[1,2] : 3` is a type error. To join two lists use `++`, not `:`.
@@ -643,6 +680,16 @@ The `[]` pattern is matched first, so the cons pattern only ever sees a non-empt
 
 </Accordion>
 </Accordions>
+
+<HaskellPlayground
+  title="Experiment with list construction and selection"
+  description="Change a range, cons another value, or try a different take/drop count. Reset restores the safe starting examples."
+  initialCode={`main = do
+  print (take 4 [1..])
+  print (7 : 8 : 9 : [])
+  print (length [[1,2],[3,4,5]])
+  print (drop 2 [5,4,3,2,1])`}
+/>
 
 <Checklist title="Mastery check" rules={[
   { type: 'must', text: 'I can explain why lists are homogeneous and what error a mixed list produces.' },

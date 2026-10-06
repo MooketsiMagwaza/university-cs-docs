@@ -33,7 +33,7 @@ add :: Integer -> (Integer -> Integer)
 
 Read it as: “`add` takes an `Integer` and returns a function from `Integer` to `Integer`.” If the `->` in a type still feels unfamiliar on its own, [Expressions and Types](/docs/sem3/csi243/02-expressions-types/notes/expressions-types) in Chapter 2 builds it up from scratch before currying is introduced at all.
 
-<Mermaid chart={`flowchart TD
+<SiteDiagram chart={`flowchart TD
   X["Integer<br/>(the value 3)"] --> ADD["add<br/>:: Integer -> Integer -> Integer"]
   ADD --> ADDX["add 3<br/>:: Integer -> Integer<br/>a FUNCTION VALUE, not a number yet"]
   Y["Integer<br/>(the value 4)"] --> ADDX
@@ -65,6 +65,17 @@ ghci> addThree 100
 ```
 
 Supplying fewer arguments than the full count is **partial application**. It is not an error or a special feature — it is the direct consequence of currying.
+
+<HaskellTryIt
+  title="Try partial application"
+  description="Change the fixed first value in addThree, then reuse the resulting one-argument function several times."
+  code={`add x y = x + y
+addThree = add 3
+
+main = do
+  print (addThree 10)
+  print (addThree 100)`}
+/>
 
 <Callout type="info" title="Why curried order matters">
 Put the argument that varies *least* first. `add` is more useful as `Integer -> Integer -> Integer` than as a tupled `(Integer, Integer) -> Integer`, because only the curried form lets you fix one argument and reuse the result.
@@ -108,6 +119,133 @@ This is why Chapter 3 recommended the curried form over the tupled form. A tuple
     ]
   }
 ]} />
+
+### Worked from first principles: why `filter (isThere wanted)` works
+
+Consider this complete example:
+
+```haskell
+isThere :: String -> String -> Bool
+isThere wanted current = wanted == current
+
+goBackMachine :: [String] -> String -> [String]
+goBackMachine [] _ = ["Null?"]
+goBackMachine items wanted = filter (isThere wanted) items
+
+main :: IO ()
+main = do
+  let fruit = ["apple", "banana", "cherry", "apple"]
+  let choice = "banana"
+  print (goBackMachine fruit choice)
+```
+
+The output is:
+
+```text
+["banana"]
+```
+
+The expression `filter (isThere wanted) items` can look impossible at first: `isThere` appears to need two strings, while `filter` needs a function that tests only one list element. The missing step is that the first argument creates exactly that one-argument function.
+
+Start with the two relevant types:
+
+```haskell
+isThere :: String -> String -> Bool
+filter  :: (a -> Bool) -> [a] -> [a]
+```
+
+For this call, `filter` is working with strings, so replace its type variable `a` with `String`:
+
+```haskell
+filter :: (String -> Bool) -> [String] -> [String]
+```
+
+Its first argument must therefore be a value of type `String -> Bool`. Now add the parentheses that Haskell's arrow rule implies:
+
+```haskell
+isThere :: String -> (String -> Bool)
+```
+
+Supplying just `wanted` consumes the first `String` and leaves everything inside the parentheses:
+
+```haskell
+isThere wanted :: String -> Bool
+```
+
+That remaining function waits for one list element. If `wanted` is `"banana"`, the partial application behaves like this lambda:
+
+```haskell
+isThere "banana"
+-- means the same test as
+\current -> "banana" == current
+```
+
+`filter` calls that test once for every element. It does not pass the whole list to `isThere`:
+
+| Current element | Test performed | Boolean | Decision |
+|---|---|---:|---|
+| `"apple"` | `"banana" == "apple"` | `False` | discard |
+| `"banana"` | `"banana" == "banana"` | `True` | keep |
+| `"cherry"` | `"banana" == "cherry"` | `False` | discard |
+| `"apple"` | `"banana" == "apple"` | `False` | discard |
+
+So the entire expression can be expanded mechanically:
+
+```haskell
+filter (isThere wanted) items
+
+-- substitute wanted = "banana" and items = fruit
+filter (isThere "banana") ["apple", "banana", "cherry", "apple"]
+
+-- expose the function produced by partial application
+filter (\current -> "banana" == current)
+       ["apple", "banana", "cherry", "apple"]
+
+-- final result
+["banana"]
+```
+
+The parameter names are local to each function. The `wanted` in `goBackMachine` becomes the first argument named `wanted` inside `isThere`; `filter` later supplies each value named `current`. Names such as `c` and `n` also compile, but descriptive names make this hand-off much easier to see.
+
+The empty-list equation is separate:
+
+```haskell
+goBackMachine [] _ = ["Null?"]
+```
+
+`[]` matches an empty first argument. `_` means that the second argument exists but its value is deliberately ignored. `"Null?"` is one `String`; `["Null?"]` is a list containing one string, which matches the promised result type `[String]`. Returning `[]` would be more conventional for a search, but the custom sentinel is legal.
+
+The same search can be shortened because equality itself can be partially applied:
+
+```haskell
+goBackMachine items wanted = filter (== wanted) items
+```
+
+Here `(== wanted)` means `\current -> current == wanted`. String equality is symmetric, so this tests the same relationship as `isThere wanted`, although the two expressions place `wanted` on opposite sides of `==`.
+
+<HaskellTryIt
+  title="Try the function that filter receives"
+  description="Change wanted and the list. The partially applied isThere wanted is the one-argument predicate filter needs."
+  code={`isThere wanted current = wanted == current
+
+main = do
+  let wanted = "banana"
+  print (filter (isThere wanted) ["apple", "banana", "cherry", "banana"])`}
+/>
+
+<HaskellPlayground
+  title="Trace partial application through filter"
+  description="Change choice, add duplicate fruit, or empty the list. The browser-friendly version uses if/null because the practice subset does not implement multiple pattern-matching equations."
+  initialCode={`isThere :: String -> String -> Bool
+isThere wanted current = wanted == current
+
+goBackMachine items wanted = if null items then ["Null?"] else filter (isThere wanted) items
+
+main = do
+  let fruit = ["apple", "banana", "cherry", "apple"]
+  let choice = "banana"
+  print (goBackMachine fruit choice)`}
+/>
 
 ## 2.1 Curried, tupled, and uncurried forms
 
