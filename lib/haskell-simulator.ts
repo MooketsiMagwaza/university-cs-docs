@@ -1207,7 +1207,14 @@ export function runHaskell(source: string): HaskellRunResult {
     const ended = typeof performance === 'undefined' ? Date.now() : performance.now();
     const simulatorError = error instanceof SimulatorError
       ? error
-      : new SimulatorError('Runtime error', error instanceof Error ? error.message : 'Unknown simulator failure.');
+      : error instanceof RangeError
+        ? new SimulatorError(
+          'Runtime error',
+          'Evaluation limit exceeded.',
+          undefined,
+          'This usually means the recursion does not reach a base case, or an infinite list was demanded without take.',
+        )
+        : new SimulatorError('Runtime error', error instanceof Error ? error.message : 'Unknown simulator failure.');
     return {
       ok: false,
       output: '',
