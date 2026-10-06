@@ -18,6 +18,7 @@ import { Step, StepByStep, StepByStepTitle, StepTitle } from './interactive/step
 import { InteractiveStepper, StepperStep } from './interactive/interactive-stepper';
 import { Flashcard } from './interactive/flashcard';
 import { GraphViewer } from './visuals/graph-viewer';
+import { Mermaid } from './visuals/mermaid';
 import { SiteDiagram } from './visuals/site-diagram';
 import { Card } from './callouts/card';
 import { ResourceHub } from './interactive/resource-hub';
@@ -91,6 +92,7 @@ export function getMDXComponents(components?: MDXComponents) {
     StepperStep,
     Flashcard,
     GraphViewer,
+    Mermaid,
     SiteDiagram,
     Callout,
     Tabs,
