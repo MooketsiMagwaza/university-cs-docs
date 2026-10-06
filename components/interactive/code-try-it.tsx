@@ -12,6 +12,8 @@ type CodeTryItProps = {
   title?: string;
   description?: string;
   stdin?: string;
+  /** Id of a seed dataset (see content/playground-data) to load before the code runs. */
+  seed?: string;
 };
 
 /** A static code sample with a "Try it Yourself" button that opens an editable, runnable copy. */
@@ -21,6 +23,7 @@ export function CodeTryIt({
   title = 'Try it yourself',
   description = 'Change the example, run it, and compare the result with your prediction.',
   stdin,
+  seed,
 }: CodeTryItProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -42,6 +45,7 @@ export function CodeTryIt({
           description={description}
           showExamplePicker={false}
           stdin={stdin}
+          seed={seed}
         />
       </div>
     );

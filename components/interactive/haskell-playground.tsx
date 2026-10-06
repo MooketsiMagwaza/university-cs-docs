@@ -3,80 +3,10 @@
 import { useId, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Play, RotateCcw, TerminalSquare } from 'lucide-react';
 import { runHaskell, type HaskellRunResult } from '@/lib/haskell-simulator';
+import { getPlaygroundData } from '@/lib/playground/data';
 
-type Example = {
-  label: string;
-  code: string;
-};
-
-const examples: Example[] = [
-  {
-    label: 'Map and filter',
-    code: `double x = x * 2
-isLarge x = x > 5
-
-main = do
-  print (map double [1..6])
-  print (filter isLarge [1..10])`,
-  },
-  {
-    label: 'Binary function with zipWith',
-    code: `add x y = x + y
-
-main = do
-  print (zipWith add [1,2,3] [10,20,30])
-  print (zipWith max [1,9,3] [5,2,8])`,
-  },
-  {
-    label: 'Folds and scans',
-    code: `main = do
-  print (foldr (-) 0 [1,2,3])
-  print (foldl (-) 0 [1,2,3])
-  print (scanl (+) 0 [1,2,3])
-  print (scanr (+) 0 [1,2,3])`,
-  },
-  {
-    label: 'Factorial with foldr',
-    code: `newFactorial :: Integer -> Integer
-newFactorial n = foldr (*) 1 [1..n]
-
-main = do
-  let number = 6
-  print (newFactorial number)`,
-  },
-  {
-    label: 'Partial application with filter',
-    code: `isThere :: String -> String -> Bool
-isThere wanted current = wanted == current
-
-goBackMachine items wanted = if null items then ["Null?"] else filter (isThere wanted) items
-
-main = do
-  let fruit = ["apple", "banana", "cherry", "apple"]
-  let choice = "banana"
-  print (goBackMachine fruit choice)`,
-  },
-  {
-    label: 'List comprehensions',
-    code: `main = do
-  print [x * x | x <- [1..10], odd x]
-  print [(x, y) | x <- [1,2], y <- [10,20], x + y > 11]`,
-  },
-  {
-    label: 'Lazy infinite list',
-    code: `main = print (take 5 (map (*2) [1..]))`,
-  },
-  {
-    label: 'Recursive function',
-    code: `factorial n = if n == 0 then 1 else n * factorial (n - 1)
-
-main = print (factorial 6)`,
-  },
-  {
-    label: 'Type error to diagnose',
-    code: `main = print (map [1,2,3] (*2))`,
-  },
-];
+// The practice examples live in content/playground-data/haskell.json.
+const examples = getPlaygroundData('haskell').examples;
 
 type HaskellPlaygroundProps = {
   title?: string;

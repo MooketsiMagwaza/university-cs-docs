@@ -1,14 +1,19 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Play, RotateCcw, TerminalSquare } from 'lucide-react';
-import { EXAMPLES, LANGUAGE_META } from '@/lib/playground/examples';
+import { AlertTriangle, CheckCircle2, Database, Loader2, Play, RotateCcw, TerminalSquare } from 'lucide-react';
+import { LANGUAGE_META } from '@/lib/playground/examples';
+import { getPlaygroundData } from '@/lib/playground/data';
 import { runInWorker, type PlaygroundLanguage, type RunResult } from '@/lib/playground/runners';
 
 type CodePlaygroundProps = {
   language: PlaygroundLanguage;
-  /** Starting code. When omitted the first built-in example for the language is used. */
+  /** Starting code. When omitted, the chosen example (or the first one for the language) is used. */
   code?: string;
+  /** Id of an example from content/playground-data to start with. */
+  example?: string;
+  /** Id of a seed dataset to run before the learner's code. */
+  seed?: string;
   title?: string;
   description?: string;
   showExamplePicker?: boolean;
@@ -19,22 +24,29 @@ type CodePlaygroundProps = {
 export function CodePlayground({
   language,
   code: initialCode,
+  example: initialExampleId,
+  seed: initialSeedId,
   title,
   description,
   showExamplePicker = true,
-  stdin: initialStdin = '',
+  stdin: initialStdin,
 }: CodePlaygroundProps) {
   const meta = LANGUAGE_META[language];
-  const examples = EXAMPLES[language];
-  const startingCode = initialCode ?? examples[0].code;
+  const { examples, seeds } = getPlaygroundData(language);
   const exampleSelectId = useId();
+  const seedSelectId = useId();
   const stdinId = useId();
   const escapedTab = useRef(false);
 
-  const matchIndex = examples.findIndex((example) => example.code === startingCode);
-  const [selected, setSelected] = useState(matchIndex >= 0 ? String(matchIndex) : 'lesson');
+  const startingExample = examples.find((item) => item.id === initialExampleId) ?? (initialCode === undefined ? examples[0] : undefined);
+  const startingCode = initialCode ?? startingExample?.code ?? examples[0].code;
+  const startingSeed = initialSeedId ?? startingExample?.seed ?? '';
+  const startingStdin = initialStdin ?? startingExample?.stdin ?? '';
+
+  const [selected, setSelected] = useState(startingExample?.id ?? 'lesson');
+  const [seedId, setSeedId] = useState(startingSeed);
   const [code, setCode] = useState(startingCode);
-  const [stdin, setStdin] = useState(initialStdin);
+  const [stdin, setStdin] = useState(startingStdin);
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('');
@@ -43,7 +55,7 @@ export function CodePlayground({
   const [previewRuns, setPreviewRuns] = useState(0);
 
   const isHtml = language === 'html';
-  const exampleCode = (index: string) => (index === 'lesson' ? startingCode : examples[Number(index)]?.code ?? startingCode);
+  const activeSeed = seeds.find((item) => item.id === seedId);
 
   const run = async () => {
     if (isHtml) {
@@ -56,28 +68,26 @@ export function CodePlayground({
     setStatus('Running…');
     setResult(null);
     try {
-      setResult(await runInWorker(language, { code, stdin }, setStatus));
+      setResult(await runInWorker(language, { code, stdin, prelude: activeSeed?.code }, setStatus));
     } finally {
       setRunning(false);
       setStatus('');
     }
   };
 
-  const loadCode = (next: string) => {
-    setCode(next);
+  const loadExample = (id: string) => {
+    const example = examples.find((item) => item.id === id);
+    const nextCode = example?.code ?? startingCode;
+    setSelected(example ? example.id : 'lesson');
+    setSeedId(example ? example.seed ?? '' : startingSeed);
+    setStdin(example ? example.stdin ?? '' : startingStdin);
+    setCode(nextCode);
     setResult(null);
     if (isHtml) {
-      setPreviewDoc(next);
+      setPreviewDoc(nextCode);
       setPreviewRuns((count) => count + 1);
     }
   };
-
-  const selectExample = (index: string) => {
-    setSelected(index);
-    loadCode(exampleCode(index));
-  };
-
-  const reset = () => loadCode(exampleCode(selected));
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -100,11 +110,12 @@ export function CodePlayground({
   };
 
   const hasOutput = result && (result.lines.length > 0 || result.tables.length > 0);
+  const selectClass = 'rounded-lg border border-fd-border bg-fd-background px-3 py-2 text-sm text-fd-foreground';
 
   return (
     <section className="not-prose my-8 overflow-hidden rounded-2xl border border-fd-border bg-fd-card shadow-sm">
       <div className="border-b border-fd-border bg-fd-muted/40 px-4 py-4 sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <TerminalSquare className="h-5 w-5 text-fd-primary" aria-hidden="true" />
@@ -116,20 +127,38 @@ export function CodePlayground({
             <p className="mb-0 mt-2 max-w-3xl text-sm text-fd-muted-foreground">{description ?? meta.tagline}</p>
           </div>
           {showExamplePicker && (
-            <label htmlFor={exampleSelectId} className="flex shrink-0 items-center gap-2 text-sm text-fd-muted-foreground">
-              Example
-              <select
-                id={exampleSelectId}
-                value={selected}
-                onChange={(event) => selectExample(event.target.value)}
-                className="rounded-lg border border-fd-border bg-fd-background px-3 py-2 text-sm text-fd-foreground"
-              >
-                {matchIndex < 0 && <option value="lesson">This lesson</option>}
-                {examples.map((example, index) => (
-                  <option key={example.label} value={index}>{example.label}</option>
-                ))}
-              </select>
-            </label>
+            <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+              <label htmlFor={exampleSelectId} className="flex items-center gap-2 text-sm text-fd-muted-foreground">
+                Example
+                <select
+                  id={exampleSelectId}
+                  value={selected}
+                  onChange={(event) => loadExample(event.target.value)}
+                  className={selectClass}
+                >
+                  {selected === 'lesson' && <option value="lesson">This lesson</option>}
+                  {examples.map((example) => (
+                    <option key={example.id} value={example.id}>{example.label}</option>
+                  ))}
+                </select>
+              </label>
+              {seeds.length > 0 && (
+                <label htmlFor={seedSelectId} className="flex items-center gap-2 text-sm text-fd-muted-foreground">
+                  Dataset
+                  <select
+                    id={seedSelectId}
+                    value={seedId}
+                    onChange={(event) => { setSeedId(event.target.value); setResult(null); }}
+                    className={selectClass}
+                  >
+                    <option value="">None</option>
+                    {seeds.map((seed) => (
+                      <option key={seed.id} value={seed.id}>{seed.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -155,6 +184,18 @@ export function CodePlayground({
             wrap="off"
             className="min-h-80 w-full resize-y whitespace-pre bg-zinc-950 p-4 font-mono text-[13px] leading-6 text-zinc-100 outline-none [tab-size:2] focus:ring-2 focus:ring-inset focus:ring-fd-primary"
           />
+          {activeSeed && (
+            <details className="border-t border-zinc-800 bg-zinc-900 text-zinc-300">
+              <summary className="flex cursor-pointer items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                <Database className="h-3.5 w-3.5" aria-hidden="true" />
+                Dataset loaded: {activeSeed.label}
+              </summary>
+              <p className="m-0 px-4 pb-2 text-sm leading-5 text-zinc-400">
+                {activeSeed.description} It runs before your code on every run, so you do not need to write it yourself.
+              </p>
+              <pre className="m-0 max-h-60 overflow-auto border-t border-zinc-800 p-4 font-mono text-[12px] leading-5 text-zinc-300">{activeSeed.code}</pre>
+            </details>
+          )}
           {language === 'python' && (
             <div className="border-t border-zinc-800 bg-zinc-900 px-4 py-2">
               <label htmlFor={stdinId} className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-400">
@@ -182,7 +223,7 @@ export function CodePlayground({
             </button>
             <button
               type="button"
-              onClick={reset}
+              onClick={() => loadExample(selected)}
               className="inline-flex items-center gap-2 rounded-lg border border-fd-border bg-fd-background px-4 py-2 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-muted"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -294,7 +335,7 @@ export function CodePlayground({
             ? 'Runs locally in a Web Worker with a 5-second limit. It has no access to this page, and top-level await works.'
             : language === 'python'
               ? 'Runs locally with Pyodide (CPython compiled to WebAssembly). The first run downloads about 10 MB, then it is cached. Packages that need the network or files are not available.'
-              : 'Runs locally with SQLite compiled to WebAssembly. The database is created fresh from your script on every run, so include your CREATE TABLE and INSERT statements.'}
+              : 'Runs locally with SQLite compiled to WebAssembly. The database is created fresh on every run: pick a dataset to start with ready-made tables, or write your own CREATE TABLE and INSERT statements.'}
       </div>
     </section>
   );

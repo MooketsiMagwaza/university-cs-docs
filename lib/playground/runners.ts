@@ -27,7 +27,12 @@ type WorkerReply =
   | { id: number; type: 'line'; stream: OutputLine['stream']; text: string }
   | { id: number; type: 'done'; tables?: SqlTable[]; error?: string };
 
-type Job = { code: string; stdin?: string };
+type Job = {
+  code: string;
+  stdin?: string;
+  /** Seed dataset code that runs first, in the same scope, so the learner's code can use what it defines. */
+  prelude?: string;
+};
 
 const PYODIDE_VERSION = '0.27.2';
 const PYODIDE_BASE = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
@@ -51,7 +56,7 @@ const format = (value, depth = 0) => {
 };
 
 self.onmessage = async (event) => {
-  const { id, code } = event.data;
+  const { id, code, prelude } = event.data;
   const post = (stream, text) => self.postMessage({ id, type: 'line', stream, text });
   const log = (stream) => (...args) => post(stream, args.map((arg) => format(arg)).join(' '));
   console.log = log('out');
@@ -62,7 +67,7 @@ self.onmessage = async (event) => {
   self.alert = (message) => post('out', String(message));
   try {
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-    const result = await new AsyncFunction(code)();
+    const result = await new AsyncFunction(prelude ? prelude + '\n' + code : code)();
     if (result !== undefined) post('info', '= ' + format(result, 1));
     self.postMessage({ id, type: 'done' });
   } catch (error) {
@@ -105,7 +110,7 @@ const cleanTraceback = (message) => {
 };
 
 self.onmessage = async (event) => {
-  const { id, code, stdin } = event.data;
+  const { id, code, stdin, prelude } = event.data;
   self.postMessage({ id, type: 'status', text: pyodide ? 'Running…' : 'Loading Python (first run only)…' });
   try {
     await ready();
@@ -136,6 +141,8 @@ self.onmessage = async (event) => {
     });
     const globals = pyodide.globals.get('dict')();
     try {
+      // The seed runs first in the same globals, so tracebacks from the learner's code keep their own line numbers.
+      if (prelude) await pyodide.runPythonAsync(prelude, { globals });
       await pyodide.runPythonAsync(code, { globals });
     } finally {
       globals.destroy();
@@ -162,12 +169,13 @@ const ready = () => {
 };
 
 self.onmessage = async (event) => {
-  const { id, code } = event.data;
+  const { id, code, prelude } = event.data;
   self.postMessage({ id, type: 'status', text: SQL ? 'Running…' : 'Loading SQLite (first run only)…' });
   try {
     await ready();
     const db = new SQL.Database();
     try {
+      if (prelude) db.exec(prelude);
       const results = db.exec(code);
       const tables = results.map((table) => ({ columns: table.columns, rows: table.values }));
       self.postMessage({ id, type: 'done', tables });
