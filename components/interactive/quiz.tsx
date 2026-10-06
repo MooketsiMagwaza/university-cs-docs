@@ -5,12 +5,30 @@ import { MathText } from './math-text';
 
 type Question = {
   question: string;
+  /** Optional program or snippet shown in a code block beneath the question text. */
+  code?: string;
   options: string[];
   correctIndex: number;
   explanation?: string;
   /** Optional per-option feedback, same length/order as `options`. Shown for
    *  whichever option the student picked instead of the shared `explanation`. */
   optionFeedback?: string[];
+};
+
+/** Renders `inline code` spans as <code> and passes everything else through MathText. */
+const RichText = ({ text }: { text: string }) => {
+  const parts = text.split(/(`[^`\n]+`)/g);
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.length > 2 && part.startsWith('`') && part.endsWith('`') ? (
+          <code key={index} className="rounded bg-fd-muted px-1.5 py-0.5 font-mono text-[0.85em] text-fd-foreground">{part.slice(1, -1)}</code>
+        ) : (
+          <MathText key={index} text={part} />
+        ),
+      )}
+    </>
+  );
 };
 
 type QuizProps = {
@@ -75,8 +93,11 @@ export function Quiz({ title = "Knowledge Check", questions }: QuizProps) {
         {questions.map((q, qIndex) => (
           <div key={qIndex} className="space-y-3">
             <p className="text-lg font-semibold text-fd-foreground">
-              {qIndex + 1}. <MathText text={q.question} />
+              {qIndex + 1}. <RichText text={q.question} />
             </p>
+            {q.code && (
+              <pre className="m-0 overflow-x-auto rounded-lg border border-fd-border bg-zinc-950 p-4 font-mono text-[13px] leading-6 text-zinc-100"><code>{q.code}</code></pre>
+            )}
             <div className="space-y-2 pl-2">
               {q.options.map((option, optIndex) => {
                 let btnClass = 'w-full text-left p-3 rounded-lg border transition-all flex items-center justify-between text-sm ';
@@ -90,7 +111,7 @@ export function Quiz({ title = "Knowledge Check", questions }: QuizProps) {
                 }
                 return (
                   <button key={optIndex} onClick={() => handleSelect(qIndex, optIndex)} className={btnClass} disabled={isSubmitted}>
-                    <span><MathText text={option} /></span>
+                    <span><RichText text={option} /></span>
                     {isSubmitted && optIndex === q.correctIndex && <Check className="h-4 w-4 shrink-0 ml-2" />}
                     {isSubmitted && answers[qIndex] === optIndex && optIndex !== q.correctIndex && <X className="h-4 w-4 shrink-0 ml-2" />}
                   </button>
@@ -103,14 +124,14 @@ export function Quiz({ title = "Knowledge Check", questions }: QuizProps) {
               if (isCorrect) {
                 return q.explanation ? (
                   <div className="mt-3 p-4 rounded-lg bg-fd-muted border border-fd-border text-sm text-fd-muted-foreground">
-                    <span className="font-semibold text-fd-foreground">Why:</span> <MathText text={q.explanation} />
+                    <span className="font-semibold text-fd-foreground">Why:</span> <RichText text={q.explanation} />
                   </div>
                 ) : null;
               }
               const feedback = q.optionFeedback?.[selected] || q.explanation;
               return feedback ? (
                 <div className="mt-3 p-4 rounded-lg bg-fd-muted border border-fd-border text-sm text-fd-muted-foreground">
-                  <span className="font-semibold text-fd-foreground">What went wrong:</span> <MathText text={feedback} />
+                  <span className="font-semibold text-fd-foreground">What went wrong:</span> <RichText text={feedback} />
                 </div>
               ) : null;
             })()}

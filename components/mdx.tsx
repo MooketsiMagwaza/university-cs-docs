@@ -4,6 +4,7 @@ import type { MDXComponents } from 'mdx/types';
 // 1. Import your custom components
 import { SafeImage } from './visuals/safe-image';
 import { Quiz } from './interactive/quiz';
+import { QuizRef } from './interactive/quiz-ref';
 import { Columns, Column } from './layouts/columns';
 import { ComparisonTable } from './layouts/comparison-table';
 import { PresetCard } from './callouts/preset-card';
@@ -57,6 +58,7 @@ export function getMDXComponents(components?: MDXComponents) {
     // 2. Register them globally
     SafeImage,
     Quiz,
+    QuizRef,
     Columns,
     Column,
     ComparisonTable,

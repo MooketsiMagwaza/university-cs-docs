@@ -35,6 +35,45 @@ import { quizData } from '@/content/quiz-data/sem3/csi213/01-combinatorics-quiz'
 import { Columns, MathEnv, Quiz, Callout } from '@/components/...'; // BREAKS GLOBAL REGISTRY
 ```
 
+### 1.3 Preferred for New Quizzes: JSON Data and `<QuizRef />`
+
+Quiz questions never go inline in an `.mdx` file. For new quizzes, put them in a JSON file whose path mirrors the page path, and reference each quiz by id. This needs no import, so the zero-import rule is untouched.
+
+```
+content/docs/sem3/csi243/01-functional-thinking/notes/functional-thinking.mdx
+content/quiz-data/sem3/csi243/01-functional-thinking/notes/functional-thinking.json
+```
+
+```json
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-pure-functions": {
+      "title": "Check: pure functions",
+      "questions": [
+        {
+          "question": "What makes a function pure?",
+          "code": ["double :: Integer -> Integer", "double x = x * 2"],
+          "options": ["...", "...", "...", "..."],
+          "correctIndex": 2,
+          "explanation": "Shown after submitting.",
+          "optionFeedback": ["Why option 1 is wrong.", "...", "Correct.", "..."]
+        }
+      ]
+    }
+  }
+}
+```
+
+```mdx
+<QuizRef src="sem3/csi243/01-functional-thinking/notes/functional-thinking" id="check-pure-functions" />
+```
+
+- `code` is optional and shown in a code block under the question; an array is one entry per line.
+- `optionFeedback` is optional, with one entry per option, in the same order.
+- Run `npm run audit:quizzes` to check every data file and every reference. The audit fails on a malformed question, a reference to a missing file or id, or a quiz that no page uses.
+- The older `quizData` TypeScript modules (section 1.2) remain valid. `<QuizRef />` and `<Quiz questions={...} />` render the same component.
+
 ---
 
 ## 📦 Phase 2: Component Implementation & Expanded Examples
