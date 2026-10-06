@@ -1,0 +1,149 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-error-versus-maybe": {
+      "title": "Check: error versus Maybe",
+      "questions": [
+        {
+          "question": "In the reportAverage batch example, why does \"Class C average:\" never get printed?",
+          "options": [
+            "reportAverage [60, 65] itself throws an exception",
+            "The exception raised by reportAverage [] on Class B stops the whole main action, so no later line in the do block runs",
+            "Haskell evaluates do blocks in a random order",
+            "print always fails after the first Exception anywhere in the program"
+          ],
+          "correctIndex": 1,
+          "explanation": "An uncaught exception (here, divide by zero from Class B's empty list) terminates the whole running program at the point it is raised. Every action listed after it in main's do block, including Class C's, simply never executes.",
+          "optionFeedback": [
+            "reportAverage [60, 65] = 125 `div` 2 = 62, a perfectly ordinary division with no error — it never gets the chance to run in this particular program.",
+            "Correct — the exception thrown while evaluating Class B's report propagates up and ends the program before any later action in the do block can run.",
+            "do blocks run their actions strictly in the order written, top to bottom; there is nothing random about it — that ordering is exactly why Class C's line, coming last, never gets its turn.",
+            "print itself is not 'broken' by an earlier exception; the program has already terminated by the time Class C's print would have run, so print is never even called for it."
+          ]
+        }
+      ]
+    },
+    "check-handling-maybe": {
+      "title": "Check: handling Maybe",
+      "questions": [
+        {
+          "question": "Why does GHC warn (and the program crash at run time) if a function pattern-matches only Just x and never Nothing?",
+          "options": [
+            "Nothing is not a real constructor of Maybe",
+            "The match is non-exhaustive: Nothing is a value the function's own argument type admits, and no equation covers it",
+            "Maybe requires a special import to use Nothing",
+            "GHC automatically supplies a default for Nothing, so this is actually safe"
+          ],
+          "correctIndex": 1,
+          "explanation": "Maybe a has exactly two constructors, Nothing and Just a. A function that only matches Just x leaves Nothing completely uncovered, which is precisely the incomplete-pattern situation Chapter 4 warned about for any data type.",
+          "optionFeedback": [
+            "Nothing is one of Maybe's two ordinary constructors, declared right alongside Just in data Maybe a = Nothing | Just a.",
+            "Correct — the whole point of Maybe is that Nothing is a legitimate value of the type, so any function ignoring it has an incomplete match.",
+            "Maybe, Nothing, and Just are all part of the Prelude and need no import to use.",
+            "GHC does not supply a default; an unmatched Nothing at run time raises a non-exhaustive-patterns exception, exactly like any other missed constructor."
+          ]
+        }
+      ]
+    },
+    "check-two-shapes-of-maybe": {
+      "title": "Check: two shapes of Maybe",
+      "questions": [
+        {
+          "question": "lookUp \"Sipho\" marks and safeDivide 7 0 both evaluate to Nothing. Do they fail for the same reason?",
+          "options": [
+            "Yes — both fail because the argument had the wrong type",
+            "No — lookUp fails because nothing in the association list matches the key (a search that came up empty); safeDivide fails because dividing by zero has no mathematical answer at all (a computation with no result), regardless of what data exists",
+            "Yes — both fail because Eq k => is missing from one of the signatures",
+            "No — lookUp always succeeds; only safeDivide can return Nothing"
+          ],
+          "correctIndex": 1,
+          "explanation": "Same result type, same Nothing, genuinely different cause: lookUp's Nothing means 'searched and found nothing'; safeDivide's Nothing means 'there is no answer to compute, full stop' — no amount of additional data would ever make m `div` 0 defined.",
+          "optionFeedback": [
+            "Both calls are perfectly well-typed; \"Sipho\" is a valid String key and 0 is a valid Int divisor. The failure is not a type problem in either case.",
+            "Correct — a failed search and an undefined computation are two different shapes of 'no answer', even though Maybe reports both the same way.",
+            "Both signatures have exactly the constraints they need — lookUp's Eq k => and safeDivide's lack of any class constraint are both correct as written.",
+            "lookUp \"Sipho\" marks demonstrates exactly the opposite — lookUp returns Nothing here, so it can and does fail."
+          ]
+        }
+      ]
+    },
+    "check-writing-instances": {
+      "title": "Check: writing instances",
+      "questions": [
+        {
+          "question": "Why does a hand-written `instance Eq Shape where s1 == s2 = area s1 == area s2` make `Rectangle 2 6 == Rectangle 3 4` True, when a derived Eq would not?",
+          "options": [
+            "It is a bug; Rectangle 2 6 and Rectangle 3 4 should never be equal",
+            "The instance defines equality by computed area (both are 12) rather than by comparing the raw constructor fields, which a derived instance always does instead",
+            "GHC automatically converts all Rectangles to Circles for comparison",
+            "Float equality is always True in Haskell"
+          ],
+          "correctIndex": 1,
+          "explanation": "This instance deliberately redefines what == means for Shape: same area, not same constructor and fields. Rectangle 2 6 has area 12, Rectangle 3 4 has area 12 too, so by this definition they are equal — exactly what the instance says, on purpose.",
+          "optionFeedback": [
+            "It is intentional, not a bug — the whole point of writing the instance by hand is to choose a notion of equality other than the derived, field-by-field one.",
+            "Correct — 2*6 = 12 and 3*4 = 12, so by the area-based definition written in the instance, the two rectangles count as equal.",
+            "No such conversion happens; area works directly on whichever constructor it is given, Circle or Rectangle, without changing one into the other.",
+            "Float equality behaves like any other Eq instance's equality — it is not universally True; == on two different Floats is generally False unless they are bit-for-bit identical."
+          ]
+        },
+        {
+          "question": "Why must `Show` be removed from a type's `deriving` clause before writing `instance Show ThatType where ...` for it?",
+          "options": [
+            "It is only a style preference",
+            "A type may have only one instance of a class; keeping both would give GHC two conflicting definitions and it reports a duplicate instance error",
+            "deriving and instance produce identical code, so it does not matter either way",
+            "Show cannot be derived at all once a type has more than one constructor"
+          ],
+          "correctIndex": 1,
+          "explanation": "GHC must pick exactly one implementation to run whenever show is used at that type. deriving (Show) and a hand-written instance Show are two separate definitions of the same thing, and having both is rejected outright as a duplicate instance declaration.",
+          "optionFeedback": [
+            "It is enforced by the compiler, not a matter of taste — GHC rejects the program if both are present.",
+            "Correct — exactly one instance per (class, type) pair is allowed; deriving and a hand-written instance are two competing definitions of that one allowed instance.",
+            "They typically produce different code — deriving generates field-by-field text; a hand-written instance can produce anything you like, as the friendlier Shape output shows.",
+            "Show can be, and routinely is, derived for types with several constructors — Shape itself derives it happily until the hand-written version replaces it."
+          ]
+        }
+      ]
+    },
+    "check-functor-and-monad-named": {
+      "title": "Check: Functor and Monad, named",
+      "questions": [
+        {
+          "question": "map (*2) [1,2,3] and fmap (*2) [1,2,3] both evaluate to [2,4,6]. Why?",
+          "options": [
+            "map and fmap are unrelated functions that happen to agree on lists by coincidence",
+            "For lists, map IS fmap — list's Functor instance defines fmap to behave exactly like map, so the two names refer to the same computation on a list",
+            "fmap secretly converts the list to a Maybe first",
+            "This only works because 2 is an even number"
+          ],
+          "correctIndex": 1,
+          "explanation": "fmap is the class method; map is list's specific, historical name for its own Functor instance of fmap. They are not two functions that happen to agree — for [a], they are the same function under two names.",
+          "optionFeedback": [
+            "It is not a coincidence: list's Functor instance is defined so that fmap = map for lists, specifically.",
+            "Correct — map is exactly list's fmap, which is why they are interchangeable on a list argument.",
+            "Nothing here converts anything to Maybe; the whole expression stays a list throughout.",
+            "The result would be identical for any starting list, of any elements — evenness has nothing to do with why map and fmap agree."
+          ]
+        },
+        {
+          "question": "chain a b c uses do-notation over Maybe, not IO. Why does that same do syntax work here at all?",
+          "options": [
+            "It doesn't really — GHC secretly converts the Maybe values to IO actions behind the scenes",
+            "do-notation is generic syntax for any type that has a Monad instance; Maybe has one, so the same <- and return syntax Chapter 3 used for IO works unchanged for Maybe",
+            "Maybe is secretly a special case of IO",
+            "This is a coincidence specific to this one function"
+          ],
+          "correctIndex": 1,
+          "explanation": "do is sugar for >>=, and >>= is a method of the Monad class — it is defined once per instance (once for IO, once for Maybe, and so on), not specially wired to IO. Any type with a Monad instance can be sequenced with do, with the exact same short-circuiting-on-failure behaviour Maybe's instance happens to give it.",
+          "optionFeedback": [
+            "No conversion to IO happens anywhere; chain's type is Maybe Int throughout, never IO Int.",
+            "Correct — this is exactly why the same do block, with no special-casing, works over Maybe: Monad is the general mechanism, and IO and Maybe are two of its many instances.",
+            "Maybe and IO are two entirely separate, independent Monad instances; neither is built out of the other.",
+            "The same works for any Maybe-returning chain of functions, not just this one — it is a general property of Maybe's Monad instance, not a one-off."
+          ]
+        }
+      ]
+    }
+  }
+}

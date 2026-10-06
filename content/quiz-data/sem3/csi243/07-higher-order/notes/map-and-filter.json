@@ -1,0 +1,329 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-yourself-map": {
+      "title": "Check yourself: map",
+      "questions": [
+        {
+          "question": "map :: (a -> b) -> [a] -> [b]. What does this signature guarantee about the length of map (*2) [1,2,3]?",
+          "options": [
+            "It has the same length as [1,2,3], i.e. 3",
+            "It always has exactly one element",
+            "Its length depends on the values inside the list, not just the type",
+            "It has twice the length of the input"
+          ],
+          "correctIndex": 0,
+          "explanation": "map's recursive definition attaches exactly one result to the front of the output for every element consumed from the input (f x : map f xs), so the output always has the same length as the input, regardless of what the function or the values are.",
+          "optionFeedback": [
+            "Correct — one result is produced per input element, so the lengths always match.",
+            "map does not collapse the list to one element; every element of the input produces its own result in the output.",
+            "The lengths matching is guaranteed by map's definition itself, not by the particular values inside — it holds for any list and any function.",
+            "map (*2) [1,2,3] is [2,4,6] — three elements, not six; doubling each value does not double how many values there are."
+          ]
+        },
+        {
+          "question": "Given square n = n * n, is square a valid first argument to map before it is ever combined with a list?",
+          "options": [
+            "Yes — square :: Integer -> Integer (or similar) is a complete function value, just like (*2) or show",
+            "No — square has no type until it is passed to map",
+            "No — map only accepts functions imported from the Prelude, not ones you define yourself",
+            "Yes, but only because square happens to return a number"
+          ],
+          "correctIndex": 0,
+          "explanation": "Any function with the right shape, a -> b, can be map's first argument, regardless of where it was defined. square is a complete, typed function the moment its equation is written; map simply arranges to call it once per list element.",
+          "optionFeedback": [
+            "Correct — square is fully typed and usable on its own, exactly like a Prelude function or a section.",
+            "square has a type the moment it is defined (Integer -> Integer here) — GHCi can report it with :type without ever mentioning map.",
+            "map's first argument can be any function with type a -> b, whether it comes from the Prelude, a library, or your own code.",
+            "The reason square works has nothing to do with what it returns — any a -> b function fits, whatever a and b are."
+          ]
+        },
+        {
+          "question": "Which of these is NOT a valid first argument to map :: (a -> b) -> [a] -> [b]?",
+          "options": [
+            "5",
+            "even",
+            "(*3)",
+            "\\x -> x + 1"
+          ],
+          "correctIndex": 0,
+          "explanation": "map's first argument must have a function type a -> b. even, (*3), and the lambda are all functions; 5 is a plain number with no arrow in its type at all, so map 5 xs fails to type-check.",
+          "optionFeedback": [
+            "Correct — 5 :: Num a => a has no arrow in its type, so it cannot fill map's (a -> b) slot.",
+            "even :: Integral a => a -> Bool fits the shape a -> b with b = Bool — an unusual choice, perhaps, but a perfectly valid one.",
+            "(*3) :: Num a => a -> a is a section — a complete one-argument function, exactly the shape map needs.",
+            "\\x -> x + 1 has type Num a => a -> a — an ordinary lambda value with a genuine function type."
+          ]
+        }
+      ]
+    },
+    "check-yourself-map-and-laziness": {
+      "title": "Check yourself: map and laziness",
+      "questions": [
+        {
+          "question": "Why can map (*2) [1..] return a usable value at all, given that [1..] never reaches its base case []?",
+          "options": [
+            "Because map f (x:xs) = f x : map f xs only needs to pattern-match the list into one head and one tail to produce a result; it never needs the tail to be fully evaluated, or finite, to build that cons cell",
+            "Because GHC secretly converts [1..] into a large finite list before map ever runs",
+            "Because map has a special case for infinite lists that skips the recursive definition",
+            "It cannot — map (*2) [1..] on its own never terminates, with or without take"
+          ],
+          "correctIndex": 0,
+          "explanation": "map's cons f x : map f xs can be constructed the moment x and xs are known, with map f xs left as an unevaluated placeholder. Nothing about building a : requires evaluating what is on its right, so an infinite tail is never a problem for map by itself.",
+          "optionFeedback": [
+            "Correct — laziness means : can be built with its second part still unevaluated, so map only ever needs to look one element ahead.",
+            "GHC does not materialise [1..] as a finite list anywhere — it stays exactly as infinite as written; what changes is how much of it ever gets forced.",
+            "map's definition is the same two ordinary equations shown throughout this lesson — there is no separate infinite-list code path.",
+            "map (*2) [1..] alone, with nothing consuming it, indeed never finishes printing — but paired with take 5, the combination does terminate, which is exactly what this section demonstrates."
+          ]
+        },
+        {
+          "question": "In take 5 (map (*2) [1..]), what is take 0 _ = [] doing, precisely, that lets the whole program terminate?",
+          "options": [
+            "It matches immediately once the count reaches 0, using a wildcard that does not inspect the list argument at all — so the sixth element of [1..] is never generated and map never has to process it",
+            "It forces the rest of [1..] to be evaluated, then discards it",
+            "It is a special-cased error handler for infinite lists",
+            "It converts the remaining infinite list into an empty one by iterating over it"
+          ],
+          "correctIndex": 0,
+          "explanation": "The wildcard _ in take 0 _ = [] deliberately does not pattern-match the list at all, so nothing about that argument — infinite or not — is ever touched. That is precisely why the recursion can stop clean, without needing to somehow 'finish' the infinite list first.",
+          "optionFeedback": [
+            "Correct — a wildcard pattern never forces the value it stands in for; that is exactly why take can stop without touching what is left of [1..].",
+            "The opposite happens: nothing about the remaining list is forced or discarded — it is simply never looked at.",
+            "This is take's ordinary first equation, present for any list, finite or infinite — there is nothing infinite-list-specific about it.",
+            "There is no iteration here at all — pattern matching against _ is a single, immediate step with no traversal."
+          ]
+        }
+      ]
+    },
+    "check-yourself-filter": {
+      "title": "Check yourself: filter",
+      "questions": [
+        {
+          "question": "filter :: (a -> Bool) -> [a] -> [a]. Why must the first argument return Bool specifically?",
+          "options": [
+            "Because filter's definition uses guards (p x = ... | otherwise = ...) to decide keep-or-drop, and only Bool has the True/False cases those guards need",
+            "Because Bool is the only type Haskell allows inside a list",
+            "Because filter automatically converts any other return type to Bool",
+            "It doesn't have to — any return type works as long as it's used consistently"
+          ],
+          "correctIndex": 0,
+          "explanation": "filter p (x:xs) is defined with a guard | p x = ... | otherwise = .... Guards need exactly two cases to choose between, True and False, which is precisely what Bool provides and no other type does automatically.",
+          "optionFeedback": [
+            "Correct — filter's own definition pattern-matches the predicate's result as a guard, and guards need Bool's two cases.",
+            "Lists can hold values of any type; Bool is required for the predicate's result specifically, not for list elements in general.",
+            "There is no automatic conversion — a predicate returning, say, an Int would simply fail to type-check against filter's signature.",
+            "filter's type signature fixes the predicate's result type at Bool; nothing else can be substituted, consistently or not."
+          ]
+        },
+        {
+          "question": "filter isTeenager [8, 13, 19, 20, 45, 15] with isTeenager age = age >= 13 && age <= 19. What is the result, and why was isTeenager given a name?",
+          "options": [
+            "[13,19,15] — named because the rule combines two comparisons, and the name documents what they mean together",
+            "[8,20,45] — named because filter requires all predicates to be named functions",
+            "[13,19,15] — but a lambda would have been just as clear here; naming never matters",
+            "[8,13,19,20,45,15] — isTeenager never actually rejects anything"
+          ],
+          "correctIndex": 0,
+          "explanation": "8 fails (< 13); 13 and 19 pass (both bounds are inclusive); 20 and 45 fail (> 19); 15 passes — giving [13,19,15]. A two-condition rule is exactly the case where a name earns its keep, unlike the short, one-off tests used elsewhere on this page.",
+          "optionFeedback": [
+            "Correct — 8, 20, and 45 all fail one of the two bounds, leaving 13, 19, and 15.",
+            "filter accepts any (a -> Bool) function at all — a section or a lambda works exactly as well as a named one.",
+            "Naming does matter for readability, even though filter itself doesn't require it — a rule combining two conditions benefits from a name explaining what they mean together.",
+            "isTeenager does reject ages outside 13–19 (8, 20, 45 are dropped) — it is an active filter, not a pass-through."
+          ]
+        },
+        {
+          "question": "Why does filter (\\w -> length w > 4) ws need a lambda, when filter (>4) ws (a plain section) would not type-check for a list of Strings?",
+          "options": [
+            "A section fixes one side of a single operator; it cannot first call another function like length before comparing",
+            "length is not allowed to appear inside filter under any circumstances",
+            "Sections only work on numbers, and length happens to return a number too, so this is unrelated to the real reason",
+            "(length > 4) is valid Haskell and behaves exactly like the lambda"
+          ],
+          "correctIndex": 0,
+          "explanation": "(>4) alone would compare a String to the number 4, which does not type-check. The actual rule needs two steps — first compute length w, then compare the result to 4 — and a single-operator section cannot express two steps. A lambda can, because its body is an arbitrary expression.",
+          "optionFeedback": [
+            "Correct — a section supplies one operand to one operator; it has no way to call length first.",
+            "length is an ordinary function and may appear freely inside a lambda's body.",
+            "Sections work over operators regardless of the types involved; the real obstacle is structural — one operator can't do two jobs.",
+            "(length > 4) is not valid Haskell syntax on its own; length needs an argument before > can compare anything, which a bare section never supplies."
+          ]
+        }
+      ]
+    },
+    "check-yourself-grades-as-map-and-filter": {
+      "title": "Check yourself: grades as map and filter",
+      "questions": [
+        {
+          "question": "In filter (< 50) marks, what exactly is (< 50), and what is marks?",
+          "options": [
+            "(< 50) is the predicate — a rule tested against one mark at a time; marks is the data — the list the rule is tested against",
+            "(< 50) is the data being filtered; marks is the rule deciding what to keep",
+            "They are interchangeable — filter marks (< 50) would work identically",
+            "(< 50) transforms each mark into a new mark; marks is unused"
+          ],
+          "correctIndex": 0,
+          "explanation": "filter :: (a -> Bool) -> [a] -> [a]. The first argument is always the predicate — the yes/no rule — and the second is always the list of data it gets tested against. (< 50) never touches the list directly; filter is what applies it, one mark at a time.",
+          "optionFeedback": [
+            "Correct — the predicate is the rule, always the first argument; the list is the data, always the second.",
+            "This swaps the two roles entirely: (< 50) has no marks to filter on its own, and marks is not itself a decision procedure.",
+            "The argument order is fixed by filter's type signature; filter marks (< 50) would try to use the list of Ints as a predicate and fail to type-check.",
+            "(< 50) returns a Bool, not a new mark — that is exactly what makes it filter's predicate rather than map's transformation."
+          ]
+        },
+        {
+          "question": "curved = map applyBonus. After curved marks, how many elements does the result have, and why?",
+          "options": [
+            "8 — the same as marks, because map always produces exactly one result per input element, regardless of what applyBonus computes",
+            "3 — the same as failing marks, because map and filter always agree on length",
+            "It depends on how many marks pass some threshold inside applyBonus",
+            "0, because applyBonus discards the original values"
+          ],
+          "correctIndex": 0,
+          "explanation": "map :: (a -> b) -> [a] -> [b] guarantees the output list has exactly the same length as the input list — one result attached per element consumed, unconditionally. applyBonus never decides to drop a mark; it only ever changes one.",
+          "optionFeedback": [
+            "Correct — map's definition (f x : map f xs) attaches one result per input element, with no mechanism for dropping any of them.",
+            "map and filter are unrelated in this respect: filter can shrink a list, map never does — the two lengths (8 and 3) are not linked.",
+            "applyBonus :: Int -> Int returns a plain number, not a Bool — there is no threshold decision inside it at all; it always produces a result.",
+            "applyBonus computes a new mark for its input; it does not discard anything, and map never removes elements regardless of what the function returns."
+          ]
+        },
+        {
+          "question": "Why are the filter step and the map step in this section described as separate, rather than one feeding into the other?",
+          "options": [
+            "Because both start from the same original marks list and ask two independent questions about it — who failed, and what does everyone's curved mark look like — neither result depends on the other",
+            "Because filter and map cannot be combined in the same program",
+            "Because failing marks is actually used as the input to curved marks",
+            "Because Haskell requires filter to run in a separate main from map"
+          ],
+          "correctIndex": 0,
+          "explanation": "failing marks and curved marks are computed independently from marks itself — the curve is applied to everyone, not just to those who passed the < 50 test, and the failing list is never fed into applyBonus. Section 6 (Combining them) shows what it looks like when a map and a filter genuinely are chained together.",
+          "optionFeedback": [
+            "Correct — curved reads directly from marks, not from failingMarks; the two are genuinely independent questions asked of the same original data.",
+            "They combine perfectly well, as section 6 (Combining them) shows directly with map (*2) (filter even [1..10]) — the point here is specifically that this example chooses not to chain them.",
+            "curved is defined as map applyBonus marks, reading directly from the original marks list — failingMarks is never mentioned in that definition.",
+            "Nothing about Haskell or main forces such a separation; both failingMarks and curvedMarks are computed and printed from the very same main block above."
+          ]
+        }
+      ]
+    },
+    "check-a-conditional-transform-is-still-a-map": {
+      "title": "Check: a conditional transform is still a map",
+      "questions": [
+        {
+          "question": "add uses a guard (even x, otherwise) to decide between two different results. Does this stop addAllMap = map add from being a valid use of map?",
+          "options": [
+            "Yes — map can only apply simple, unconditional functions like (*2)",
+            "No — map only requires one function of type a -> b applied to every element; nothing about that function's own internal logic, including guards, is map's concern",
+            "Yes — conditional logic requires filter, not map",
+            "No, but only because add happens to always return an Int"
+          ],
+          "correctIndex": 1,
+          "explanation": "map f xs applies f to each element and collects the results — f can be as simple as (*2) or as elaborate as a multi-guard function; map never inspects or cares how f decides its answer, only that f :: a -> b and it never drops an element.",
+          "optionFeedback": [
+            "map's own definition, map f (x:xs) = f x : map f xs, places no restriction on f beyond its type; add :: Int -> Int qualifies exactly like (*2) :: Int -> Int does.",
+            "Correct — map's contract is purely about type and about producing exactly one output per input; how that output is computed is entirely up to the function supplied.",
+            "filter decides whether to keep an element at all (dropping some); add never drops anything, it transforms every element, which is precisely what map does, guard or no guard.",
+            "The reason is general, not specific to Int — map add would work identically for any a -> b function, whatever type b happens to be."
+          ]
+        }
+      ]
+    },
+    "check-combining-map-and-filter": {
+      "title": "Check: combining map and filter",
+      "questions": [
+        {
+          "question": "map (*2) (filter even [1..10]) is [4,8,12,16,20]. Which operation actually runs first?",
+          "options": [
+            "filter even runs first, keeping [2,4,6,8,10]; then map (*2) doubles each one to give [4,8,12,16,20]",
+            "map (*2) runs first on [1..10], then filter even removes the odd results",
+            "Both run at the same time, and their results are merged",
+            "Neither runs — the whole expression is precomputed by GHC before the program starts"
+          ],
+          "correctIndex": 0,
+          "explanation": "Data flows left to right through the pipeline itself, even though the code map (*2) (filter even [1..10]) reads inside-out: filter even ... is the innermost call, so it is the one that actually runs first, producing the list map then consumes.",
+          "optionFeedback": [
+            "Correct — the innermost call is evaluated first to produce a value map can consume, exactly as the Mermaid diagram in this section traces it.",
+            "This reverses the nesting: filter is the innermost (and therefore first-run) call here, not map — map's argument is filter's result, not the other way round.",
+            "Function application is not concurrent; one call's result becomes the next call's argument, so they cannot run at the same time.",
+            "Nothing here is precomputed ahead of running the program — this is ordinary evaluation of nested function calls, ordinary and traceable by hand."
+          ]
+        },
+        {
+          "question": "The same result can also be written as [x * 2 | x <- [1..10], even x]. According to this lesson, when should you reach for a comprehension instead of map/filter, and vice versa?",
+          "options": [
+            "A comprehension often reads better when both a transformation and a filter are involved; a bare map or filter reads better when only one of the two is needed",
+            "Always use a comprehension — map and filter are considered obsolete once you know comprehensions",
+            "Always use map and filter — comprehensions are only for beginners",
+            "It depends on the list's length: comprehensions for short lists, map/filter for long ones"
+          ],
+          "correctIndex": 0,
+          "explanation": "The Callout directly above this quiz states both forms are equally correct, and gives the actual deciding factor: how many of the two jobs (transforming, filtering) a single expression is doing, not obsolescence, skill level, or list length.",
+          "optionFeedback": [
+            "Correct — this is exactly the rule of thumb this section gives: pick by how many jobs the expression is doing, not by a blanket preference for one syntax.",
+            "map and filter are used throughout the rest of this chapter and the course — nothing here suggests retiring them in favour of comprehensions.",
+            "Comprehensions are an ordinary, equally valid tool used throughout this course, not a beginner-only shortcut.",
+            "List length plays no role in this lesson's guidance; the choice is about readability given how many operations (map-like, filter-like) are combined."
+          ]
+        }
+      ]
+    },
+    "check-yourself-takewhile-dropwhile-and-zipwith": {
+      "title": "Check yourself: takeWhile, dropWhile, and zipWith",
+      "questions": [
+        {
+          "question": "takeWhile (<5) [1,2,3,7,1,2] and filter (<5) [1,2,3,7,1,2] start out looking the same. What are the two results?",
+          "options": [
+            "takeWhile gives [1,2,3]; filter gives [1,2,3,1,2]",
+            "Both give [1,2,3]",
+            "Both give [1,2,3,1,2]",
+            "takeWhile gives [1,2,3,1,2]; filter gives [1,2,3]"
+          ],
+          "correctIndex": 0,
+          "explanation": "takeWhile stops permanently at the first element that fails the test — 7 fails <5 — and never looks further, giving [1,2,3]. filter examines every element regardless of earlier failures, so it also keeps the later 1 and 2, giving [1,2,3,1,2].",
+          "optionFeedback": [
+            "Correct — takeWhile stops at 7 for good; filter keeps scanning past it and picks up the trailing 1, 2 as well.",
+            "That's takeWhile's answer for both — but filter has no 'stop early' behaviour; it must examine every element, including the 1 and 2 after the 7.",
+            "That's filter's whole-list answer for both — but takeWhile stops permanently the moment 7 fails, so it never reaches the trailing 1, 2.",
+            "The two are swapped here — takeWhile is the one that stops early and gives the shorter [1,2,3]."
+          ]
+        },
+        {
+          "question": "zipWith (+) [1,2,3] [10,20]. What happens, and why?",
+          "options": [
+            "[11,22] — zipWith stops as soon as the shorter list runs out",
+            "A runtime error, because the lists have different lengths",
+            "[11,22,3] — the leftover element from the longer list passes through unchanged",
+            "[11,22,33] — zipWith pads the shorter list with 0"
+          ],
+          "correctIndex": 0,
+          "explanation": "zipWith walks both lists together, applying its function pairwise. Once the second list runs out after two elements, there is nothing left to pair the first list's third element with, so zipWith simply stops there.",
+          "optionFeedback": [
+            "Correct — zipWith produces a result exactly as long as the shorter list, with no error and no complaint.",
+            "Unequal lengths are not an error for zipWith; it silently stops instead of raising an exception.",
+            "zipWith never carries an unpaired element through unchanged — an element with nothing to pair against is simply left out of the result.",
+            "zipWith never invents a padding value such as 0; it strictly needs a genuine element from each list at every position it produces."
+          ]
+        },
+        {
+          "question": "zipWith (\\n s -> s ++ show n) [1,2,3] [\"a\",\"b\",\"c\"] mixes an Integer and a String into one String. Could this combining function have been written as a plain operator section instead?",
+          "options": [
+            "No — it needs two operations (show, then ++) on two different types, which a single-operator section cannot express",
+            "Yes — (++ show) would do exactly the same thing",
+            "Yes — zipWith always requires a section, never a lambda",
+            "No — zipWith cannot accept lambdas at all, only named functions"
+          ],
+          "correctIndex": 0,
+          "explanation": "A section fixes one operand of a single operator. This rule first converts n to a String with show, then combines it with s using ++ — two different operations across two different types, exactly the situation that calls for a lambda instead of a section.",
+          "optionFeedback": [
+            "Correct — show has to run before ++ can combine the results, and a section cannot sequence two operations like that.",
+            "(++ show) does not even type-check as written: show still needs to be applied to n before ++ can combine the two Strings.",
+            "zipWith has no such requirement — it accepts any two-argument function, whether that's a named function, a lambda, or (where the shape allows) a section.",
+            "zipWith accepts lambdas freely, exactly as shown in this example — there is no restriction against them."
+          ]
+        }
+      ]
+    }
+  }
+}

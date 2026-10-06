@@ -1,0 +1,171 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-getline-as-an-action": {
+      "title": "Check: getLine as an action",
+      "questions": [
+        {
+          "question": "Why does getLine's type mention IO at all, instead of simply being String?",
+          "options": [
+            "IO is just a naming convention with no real meaning",
+            "getLine cannot know what text it will produce until a real user types something at a real keyboard — that dependency on the outside world is exactly what IO marks in the type",
+            "IO String means the same thing as String, just written more formally",
+            "getLine :: IO String means it returns a list of Strings"
+          ],
+          "correctIndex": 1,
+          "explanation": "A pure Haskell value like a String literal is fixed once and for all by the source code. getLine cannot be like that — its result depends on what the user types, which varies at run time and involves the outside world. IO in the type is the signal that the value is obtained through an effect, not computed purely.",
+          "optionFeedback": [
+            "IO carries real meaning: it marks a type as describing an action that interacts with the world outside the program, as distinct from a pure value.",
+            "",
+            "IO String and String are different types entirely — an IO String is an action that can produce a String, not a String itself. That distinction is the whole point of this section.",
+            "IO String is one action producing one String result; it is unrelated to list types such as [String]."
+          ]
+        }
+      ]
+    },
+    "check-versus-let": {
+      "title": "Check: <- versus let",
+      "questions": [
+        {
+          "question": "A student writes `doubled <- number * 2` inside a do block. What is wrong, precisely?",
+          "options": [
+            "Nothing; <- and let are interchangeable in a do block",
+            "number * 2 is a pure Integer expression, not an IO action, and <- requires its right side to be an action to perform — this needs let instead",
+            "doubled is not a valid variable name",
+            "number was never defined, so the line is meaningless regardless of <- or let"
+          ],
+          "correctIndex": 1,
+          "explanation": "<- is specifically for performing an IO action and capturing its result. number * 2 does not describe any interaction with the outside world — it is a pure calculation that already has a definite value. The correct form is let doubled = number * 2.",
+          "optionFeedback": [
+            "They are not interchangeable: <- performs an IO action, let names a pure expression. Using the wrong one for the wrong side is a type error.",
+            "",
+            "doubled is a perfectly ordinary identifier; the problem is the choice of <- rather than let, not the name itself.",
+            "This question is about the syntax choice between <- and let assuming number is already bound; that is a separate, real issue but not the one being tested here."
+          ]
+        },
+        {
+          "question": "After `let number = 4` and then `let doubled = number * 2`, what does `number` refer to?",
+          "options": [
+            "8, because doubled's definition changed it",
+            "Still 4 — let creates a new named binding (doubled) without modifying the existing one (number)",
+            "It becomes undefined once doubled is created",
+            "It depends on which line runs last in the program"
+          ],
+          "correctIndex": 1,
+          "explanation": "Haskell bindings are immutable. let doubled = number * 2 reads the current value of number to compute a brand new value and gives that new value its own name, doubled. It has no mechanism for reaching back and changing what number means.",
+          "optionFeedback": [
+            "number is never modified by defining doubled; only doubled receives the new value 8.",
+            "",
+            "number remains a valid, unchanged binding for as long as it is in scope — defining another name never invalidates it.",
+            "Binding order matters for what is in scope, but once number is bound to 4, no later let can change that binding — Haskell has no reassignment."
+          ]
+        }
+      ]
+    },
+    "check-what-do-actually-desugars-to": {
+      "title": "Check: what do actually desugars to",
+      "questions": [
+        {
+          "question": "In getLine >>= \\inputText -> restOfBlock, what exactly is restOfBlock?",
+          "options": [
+            "A completely separate program that happens to run afterward",
+            "The remainder of the do block, written as the body of a function whose one parameter is the name to the left of the arrow, inputText",
+            "A comment describing what getLine does",
+            "An error-handling fallback in case getLine fails"
+          ],
+          "correctIndex": 1,
+          "explanation": "That is precisely what the desugaring shows: everything after inputText <- getLine in the original do block becomes the body of the lambda \\inputText -> .... inputText is that function's parameter, which is exactly why every line after the <- can use it, and no line before it could.",
+          "optionFeedback": [
+            "It is not separate at all — it is nested inside the >>= call, as the function that receives getLine's result.",
+            "Correct. This is the entire mechanism: each later statement becomes the body of a function taking the earlier binding as its parameter.",
+            "Nothing here is a comment; -- and {- -} are the only comment forms, and this is ordinary, executable desugared code.",
+            "This particular pattern is about sequencing and naming a result, not about error handling; >>= does not catch failures here."
+          ]
+        },
+        {
+          "question": "Why can the final putStrLn in the DoubleNumber program use doubled, number, AND inputText all at once, but inputText <- getLine could never have used doubled?",
+          "options": [
+            "Because Haskell allows any binding to be used anywhere in the same file, regardless of order",
+            "Because each binding opens a new, deeper level of nesting that everything written afterward sits inside of; a name can only be seen by code nested inside the point where it was introduced, never by code written before it",
+            "Because doubled happens to be a shorter name than inputText",
+            "Because putStrLn has special permission to see every binding in the program"
+          ],
+          "correctIndex": 1,
+          "explanation": "The nesting diagram above shows exactly this: each statement is the body of a function nested inside the previous one. Being nested inside a scope is what makes a name visible; inputText <- getLine is not nested inside doubled's let, so it cannot see doubled — the nesting only goes one direction.",
+          "optionFeedback": [
+            "Order matters a great deal — that is the entire point of the nesting structure; nothing here is a whole-file free-for-all.",
+            "Correct. This is the general rule stated directly: visibility follows nesting, and nesting only goes one direction — inward, not backward.",
+            "Name length has no bearing on scope; a one-letter name and a thirty-letter name follow exactly the same nesting rule.",
+            "putStrLn is an entirely ordinary function; it has no special scope privileges. It can see doubled only because the line calling it is textually nested inside doubled's let, like every other line in this block."
+          ]
+        }
+      ]
+    },
+    "check-read-and-type-annotations": {
+      "title": "Check: read and type annotations",
+      "questions": [
+        {
+          "question": "Why does `read \"4\"` need the annotation `:: Integer` (or `:: Double`) to be usable, rather than Haskell just picking a type on its own?",
+          "options": [
+            "Because \"4\" is not valid input for read without an annotation",
+            "Because read's result type is determined by what the caller asks for; the same text \"4\" could validly become an Integer, a Double, or another Read type, so the annotation resolves that ambiguity",
+            "Because :: Integer changes the string \"4\" into the character '4'",
+            "The annotation is purely optional style and never changes the result"
+          ],
+          "correctIndex": 1,
+          "explanation": "read :: Read a => String -> a is polymorphic in its result type — nothing about the string \"4\" by itself says whether the intended result is 4 :: Integer or 4.0 :: Double. Without other context forcing a specific type, GHC needs the annotation to know which Read instance to use.",
+          "optionFeedback": [
+            "\"4\" is valid input for read; the issue is not validity but which result type to parse it as.",
+            "",
+            "The annotation affects only the type of the Haskell value produced by read, not the string being parsed — read \"4\" always starts from the same three characters.",
+            "The annotation is exactly what determines the result here — try read \"4\" :: Integer versus read \"4\" :: Double and compare the two outputs shown above."
+          ]
+        }
+      ]
+    },
+    "check-tracing-the-pipeline": {
+      "title": "Check: tracing the pipeline",
+      "questions": [
+        {
+          "question": "In the trace above, step 5 says the original binding number still refers to 4 even after doubled is computed. Why is this true?",
+          "options": [
+            "Because let bindings in Haskell are immutable — computing doubled reads number's value but cannot change what number itself is bound to",
+            "Because number and doubled are actually the same binding under two names",
+            "It is only true because the user entered a small number; larger numbers would change number",
+            "Because doubled is computed before number in the actual execution order"
+          ],
+          "correctIndex": 0,
+          "explanation": "Every let in this program introduces a brand-new, separate, immutable binding. number = 4 and doubled = number * 2 are two independent names; computing the second reads the first's value without any ability to alter it. This is the same immutability point made earlier in the lesson, now shown inside a full execution trace.",
+          "optionFeedback": [
+            "",
+            "They are two distinct bindings with two distinct values (4 and 8) — number and doubled are not aliases for the same thing.",
+            "The size of the number entered has no bearing on whether number can be mutated; Haskell bindings are immutable regardless of the value.",
+            "The do block's statements run in the written order: number is bound (step 4) strictly before doubled is computed (step 5)."
+          ]
+        }
+      ]
+    },
+    "check-four-meanings-of-store": {
+      "title": "Check: four meanings of store",
+      "questions": [
+        {
+          "question": "A student says: \"the program stores the doubled number so I can use it later, even after the program exits.\" Which meaning of \"store\" does `let doubled = number * 2` actually provide, and does it satisfy that claim?",
+          "options": [
+            "It provides persistent external storage, so the claim is correct",
+            "It provides only an immutable binding, which exists solely while the program is running; the claim is false — nothing here survives after the program exits",
+            "It provides a data structure, which is why it survives",
+            "It provides a source file, since the binding is written inside DoubleNumber.hs"
+          ],
+          "correctIndex": 1,
+          "explanation": "let doubled = number * 2 is an immutable binding: a name meaningful only within the running program's current scope. It vanishes the moment the program ends. Surviving the program's exit requires the fourth meaning — persistent external storage, using IO to write to a file or similar — which this lesson does not yet do.",
+          "optionFeedback": [
+            "Persistent external storage requires an explicit IO write to something outside the process, such as a file; a let binding does no such thing.",
+            "",
+            "doubled is a single Integer value bound by let, not a data structure like a list or tuple, and even a data structure would not survive the program ending on its own.",
+            "The binding lives inside the running program's memory, not as text in the source file — the source file's persistence (as saved text) is a different meaning from the binding's lifetime while running."
+          ]
+        }
+      ]
+    }
+  }
+}

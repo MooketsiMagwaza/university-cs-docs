@@ -1,0 +1,144 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-eq": {
+      "title": "Check: Eq",
+      "questions": [
+        {
+          "question": "Why does Haskell reject `(+) == (*)`?",
+          "options": [
+            "+ and * have different types",
+            "Functions have no Eq instance, because there is no general way to decide whether two functions compute the same results",
+            "== only works on numbers",
+            "+ and * are not defined for the same types"
+          ],
+          "correctIndex": 1,
+          "explanation": "Both (+) and (*) have type Num a => a -> a -> a — the types match. The rejection is that function types are simply not members of Eq at all: deciding function equality in general is not computable, so no instance is (or could be) provided.",
+          "optionFeedback": [
+            "Both are Num a => a -> a -> a; the types line up exactly, so a type mismatch is not the issue.",
+            "Correct — there is no Eq instance for function types at all, for any two functions, regardless of what they compute.",
+            "== is overloaded across many non-numeric types too — Bool, Char, String, custom types — so this is not a numbers-only restriction.",
+            "Num a => a -> a -> a is shared by both; the rejection has nothing to do with whether their types line up."
+          ]
+        }
+      ]
+    },
+    "check-ord": {
+      "title": "Check: Ord",
+      "questions": [
+        {
+          "question": "Given `data Result = Pass | Fail deriving (Ord)`, why is `Pass < Fail` True?",
+          "options": [
+            "Pass is alphabetically before Fail",
+            "A derived Ord ranks constructors by their declaration order, and Pass is declared first",
+            "Ord always ranks the first-listed value as larger",
+            "It is arbitrary and could change between runs"
+          ],
+          "correctIndex": 1,
+          "explanation": "A derived Ord instance ranks constructors purely by the order they appear in the data declaration — first declared is smallest. Pass appears before Fail, so Pass < Fail.",
+          "optionFeedback": [
+            "Alphabetically, F comes before P — that is not the rule in force here, or Fail would be smaller.",
+            "Correct — deriving Ord ranks constructors by declaration order; Pass was written first, so it compares as smaller.",
+            "The opposite is true: the first-declared constructor ranks smallest, not largest.",
+            "It is fixed by the source file's declaration order and is identical on every run — nothing about it is arbitrary."
+          ]
+        },
+        {
+          "question": "Why does `compare (1, \"a\") (2, \"a\")` return LT without ever comparing the strings?",
+          "options": [
+            "Tuples only ever compare their first component",
+            "Tuple comparison inspects components left to right and stops as soon as one pair disagrees; the first components (1 and 2) already disagree",
+            "\"a\" cannot be compared to itself",
+            "GHC evaluates tuples right to left"
+          ],
+          "correctIndex": 1,
+          "explanation": "Tuple Ord compares component by component from the left, moving to the next component only when the current ones are equal. Since 1 and 2 already differ, the result is settled immediately and the second components are never examined.",
+          "optionFeedback": [
+            "The earlier example, compare (1, \"b\") (1, \"a\"), shows the second component deciding the result when the first components tie — so later components do matter.",
+            "Correct — comparison proceeds left to right and short-circuits at the first disagreement, exactly as list comparison does.",
+            "Comparing a value to an equal copy of itself is perfectly well defined and would report EQ; that is not why it is skipped here.",
+            "Tuple fields are logically compared left to right, matching how they are written and read, not right to left."
+          ]
+        }
+      ]
+    },
+    "check-show-and-read": {
+      "title": "Check: Show and Read",
+      "questions": [
+        {
+          "question": "For the Student example, why does read (show k) :: Student round-trip back to a value equal to k?",
+          "options": [
+            "Because Student derives Eq, which automatically fixes any mismatch between show and read",
+            "Because a derived Show and a derived Read for the same type are genuine inverses — the exact text a derived Show produces is exactly the text a derived Read for that type can parse back",
+            "Because Student has only two fields, and round-tripping only works for small records",
+            "It is a coincidence specific to this one value of Student"
+          ],
+          "correctIndex": 1,
+          "explanation": "Show and Read are deliberately designed as a matched pair when both are derived: show's textual format is precisely what read for that type expects to parse. Eq only lets you check the round trip afterwards — it does not cause the round trip to succeed.",
+          "optionFeedback": [
+            "Eq only supplies == so the round trip can be checked after the fact; it plays no role in making show's output parseable by read in the first place.",
+            "Correct — deriving both gives you an inverse pair by construction, which is exactly why read (show k) reproduces k.",
+            "Nothing about the round trip depends on field count; the same guarantee holds for a record with many more fields.",
+            "The same round trip holds for any value of any type that derives both Show and Read — it is a general property of the derived instances, not a one-off."
+          ]
+        },
+        {
+          "question": "print (read \"42\") on its own is rejected as an ambiguous type variable, but read \"42\" + (1 :: Integer) is not. Why?",
+          "options": [
+            "read always needs an annotation, with no exceptions",
+            "In the second expression, + forces read's result to be the same type as 1 :: Integer, so the context already pins down which Read instance to use; the first expression has nothing else that fixes the type",
+            "print cannot accept the result of read under any circumstances",
+            "\"42\" is only valid input for read when it appears next to +"
+          ],
+          "correctIndex": 1,
+          "explanation": "read's ambiguity comes from having no way to tell, from the text alone, which type was intended. Whenever the surrounding expression already pins that type down — here, addition with an Integer — no separate annotation is needed; otherwise, one must be added by hand.",
+          "optionFeedback": [
+            "The + example is the counterexample: read needs an annotation only when nothing else in the expression already determines the target type.",
+            "Correct — the addition with (1 :: Integer) supplies exactly the missing type information that print (read \"42\") lacks on its own.",
+            "print works perfectly well on the result of read once that result's type is determined some other way, as the + example shows.",
+            "The text \"42\" is unrelated to why annotation is or isn't needed; the deciding factor is whether the surrounding expression fixes the result type."
+          ]
+        }
+      ]
+    },
+    "check-numeric-conversions": {
+      "title": "Check: numeric conversions",
+      "questions": [
+        {
+          "question": "Why does `average xs = sum xs / length xs` fail to compile for `average :: [Double] -> Double`?",
+          "options": [
+            "sum xs has type [Double], not Double",
+            "length xs always has type Int, but / requires both operands to share one Fractional type, and Int is not Fractional",
+            "/ cannot appear inside a function body",
+            "average needs a type class constraint on its own signature"
+          ],
+          "correctIndex": 1,
+          "explanation": "sum xs is a Double, matching the signature — the mismatch is entirely on the other side of /. length always returns Int, and / demands both arguments be the same Fractional type, which Int never is.",
+          "optionFeedback": [
+            "sum :: Num a => [a] -> a applied to a [Double] correctly gives a Double; that side of the division is fine.",
+            "Correct — length xs :: Int cannot be given directly to /, which needs a Fractional argument; fromIntegral bridges the gap.",
+            "/ is an ordinary function and may appear anywhere an expression is expected, including inside average's body.",
+            "average's signature, [Double] -> Double, is already fully concrete; no class constraint is needed on it at all — the problem is internal to the body."
+          ]
+        },
+        {
+          "question": "What does round 2.5 evaluate to in Haskell, and why?",
+          "options": [
+            "3, because round always rounds halfway values up",
+            "2, because round breaks exact ties by rounding to the nearest even integer",
+            "2, because round always rounds down",
+            "It is an error, because 2.5 is ambiguous"
+          ],
+          "correctIndex": 1,
+          "explanation": "Haskell's round uses round-half-to-even: an exact tie rounds to whichever neighbouring integer is even. 2.5 is exactly halfway between 2 and 3, and 2 is even, so it rounds to 2.",
+          "optionFeedback": [
+            "This is the 'round half up' rule used by some other languages and tools, but it is not what Haskell's round does for an exact tie.",
+            "Correct — round-half-to-even sends the exact tie 2.5 to 2, the nearest even integer, not to 3.",
+            "round does not always round down — round 2.7 gives 3, rounding up, as the program above shows; only exact ties use the even rule.",
+            "2.5 :: Double is a perfectly well-defined value; round has a fixed, documented rule for it and does not error."
+          ]
+        }
+      ]
+    }
+  }
+}

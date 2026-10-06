@@ -1,0 +1,137 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-counting-calls-vs-reading-output": {
+      "title": "Check: counting calls vs. reading output",
+      "questions": [
+        {
+          "question": "length' [10, 20, 30, 40, 50] prints 5. Does that output tell you anything about how many recursive calls were made to get it?",
+          "options": [
+            "Yes — the output 5 directly means 5 calls were made",
+            "No — the output is just the final value; the table above shows 6 calls were needed (one per element, plus the base case), and nothing about the printed 5 reveals that count",
+            "Yes — Haskell always prints the call count alongside the result",
+            "No, because length' does not actually use recursion"
+          ],
+          "correctIndex": 1,
+          "explanation": "The value produced and the work done to produce it are two entirely separate things. print only ever shows the value. Counting calls requires reasoning about the definition itself, exactly as Section 1's table does — reading printed output can never substitute for that reasoning.",
+          "optionFeedback": [
+            "This conflates the answer with the cost of computing it — two different numbers that happen to be close for this particular n, but are not the same fact.",
+            "Correct. This is precisely the point: cost is a property of the definition and how it recurses, not something a printed value ever exposes on its own.",
+            "Nothing in Haskell's IO output includes a call count automatically; that information exists only in your own reasoning about the definition.",
+            "length' is defined recursively right above — length' (_:xs) = 1 + length' xs is a self-referential definition, the textbook shape of recursion."
+          ]
+        }
+      ]
+    },
+    "check-recomputation-not-recursion-is-the-fault": {
+      "title": "Check: recomputation, not recursion, is the fault",
+      "questions": [
+        {
+          "question": "fibFast is also defined recursively (go calls itself). Why is it fast while naive fib is unusably slow for even moderate n?",
+          "options": [
+            "fibFast is not really recursive; it only looks that way",
+            "fibFast's go makes exactly one recursive call per step and carries the two values it needs forward as arguments, so nothing is ever recomputed; naive fib makes two calls per step and recomputes the same overlapping subproblems many times over",
+            "fibFast uses a different, non-recursive language feature that fib does not have access to",
+            "fibFast is fast only for small n, and becomes exponential for large n just like fib"
+          ],
+          "correctIndex": 1,
+          "explanation": "This is the callout's exact point, now shown as running code: recursion itself is not what makes naive fib slow. fibFast is recursive too — go k a b = go (k-1) b (a+b) calls itself — but each call carries forward everything needed and never revisits a subproblem, giving it linear, not exponential, cost.",
+          "optionFeedback": [
+            "go (k - 1) b (a + b) is a genuine recursive call — fibFast is exactly as recursive as fib, just structured differently.",
+            "Correct. One call per step with values carried forward, versus two calls per step with massive overlap — same tool (recursion), radically different cost from a different shape of definition.",
+            "Both fib and fibFast use nothing beyond ordinary Haskell pattern-matching recursion — there is no special non-recursive trick in fibFast.",
+            "fibFast stays linear for arbitrarily large n — that is exactly the point of carrying an accumulator, and fibFast 40 above returns instantly precisely because it never becomes exponential."
+          ]
+        }
+      ]
+    },
+    "check-consing-versus-appending": {
+      "title": "Check: consing versus appending",
+      "questions": [
+        {
+          "question": "myReverse and fastReverse print identical results above. Why is myReverse still O(n^2) while fastReverse is O(n)?",
+          "options": [
+            "They aren't actually different costs; the table only applies to sorting functions",
+            "myReverse's ++ [x] rebuilds the entire reversed tail at each of n steps (n + (n-1) + ... + 1 work); fastReverse's go conses onto the accumulator with :, an O(1) operation, at each of n steps",
+            "fastReverse is faster only because it uses a where clause",
+            "myReverse is slower only because it is defined with two equations instead of one"
+          ],
+          "correctIndex": 1,
+          "explanation": "The cost difference traces to a single operation choice: ++ walks and rebuilds its left argument every time it's used, and myReverse calls it once per recursive step on a tail that keeps growing, giving quadratic total work. : always costs O(1) regardless of how large the accumulator already is, so fastReverse's total cost stays linear in n.",
+          "optionFeedback": [
+            "The table lists costs for ordinary list operations generally, not only sort — head, :, length, ++, and reverse all have their own entries, exactly as used here.",
+            "Correct — this is precisely 'consing is cheap; appending is not' applied to the two reverse definitions: O(1) per step versus an O(n)-and-growing rebuild per step.",
+            "where is just a syntactic way to introduce a local helper (go); it has no effect on cost by itself — the cost comes from which list operation go uses inside its own body.",
+            "Both definitions use exactly one equation per case (two total) in the style used throughout this course; equation count is unrelated to the cost of the operation each equation performs."
+          ]
+        }
+      ]
+    },
+    "check-spotting-a-length-in-a-loop-trap": {
+      "title": "Check: spotting a length-in-a-loop trap",
+      "questions": [
+        {
+          "question": "slow xs = [x | x <- xs, length xs > 3] and fast xs = if length xs > 3 then xs else [] produce identical results on the same input. Why is slow still worse?",
+          "options": [
+            "It isn't worse; identical output means identical cost",
+            "The list comprehension re-evaluates length xs on every single element it checks — an O(n) operation repeated up to n times, giving O(n^2) — while fast calls length xs exactly once regardless of how long xs is",
+            "slow is worse only because list comprehensions are always slower than if expressions",
+            "fast is actually wrong because it does not filter individual elements"
+          ],
+          "correctIndex": 1,
+          "explanation": "length xs does not depend on which element x is currently being checked — it is the same value every single time inside the comprehension, yet slow's structure recomputes it once per element anyway. fast asks the question exactly once, outside any per-element loop, keeping it linear.",
+          "optionFeedback": [
+            "Identical output was the whole point of the demonstration — it proves cost and correctness are separate facts; this example is specifically chosen to make that separation visible.",
+            "Correct. This is precisely the O(n^2)-inside-a-comprehension trap the lesson names: the same length computed redundantly, once per element, rather than once overall.",
+            "The comprehension form itself is not inherently slow; the problem is specifically calling length once per element inside it — a comprehension that does O(1) work per element stays linear.",
+            "fast's specification here is deliberately about the whole list at once (return it entirely or return nothing), matching what length xs > 3 tests — it is answering a different, but equally valid, question from slow's per-element filter, and the example is chosen so both happen to agree on this input."
+          ]
+        }
+      ]
+    },
+    "check-laziness-and-infinite-lists": {
+      "title": "Check: laziness and infinite lists",
+      "questions": [
+        {
+          "question": "take 4 (filter even [1..]) terminates and prints [2,4,6,8]. Why doesn't Haskell need to build the whole infinite list first?",
+          "options": [
+            "[1..] secretly stops at some large finite number under the hood",
+            "Evaluation only happens when a value is actually demanded — take asks filter for one element at a time, and filter only inspects as many elements of [1..] as it needs to produce each one, so nothing beyond the 4 answers required is ever forced",
+            "filter always pre-computes exactly as many elements as its second argument will need",
+            "This only works because even is a cheap function to evaluate"
+          ],
+          "correctIndex": 1,
+          "explanation": "Laziness means each stage of the pipeline is driven by demand from the stage after it. take 4 demands a 4th element, which makes filter keep pulling from [1..] just far enough to find it, which makes [1..] produce just enough of itself — none of the three ever computes further ahead than what is actually needed.",
+          "optionFeedback": [
+            "[1..] is a genuinely infinite range with no built-in stopping point; if fully forced it would never finish. The termination comes from take limiting how much of it is ever demanded, not from any hidden cutoff.",
+            "Correct — this is the thunk mechanism in action: nothing is evaluated without a reason, and take's demand for 4 results is the only reason anything gets evaluated at all.",
+            "filter has no way to know in advance how many elements a later take will ask for; it simply produces (or skips) one element at a time as it is pulled, which happens to be exactly what makes this lazy chaining safe.",
+            "The cost of even is irrelevant to why this terminates — the same laziness argument would apply to any predicate, cheap or expensive; termination is about how many elements are forced, not how expensive each one is to check."
+          ]
+        }
+      ]
+    },
+    "check-what-laziness-actually-delays": {
+      "title": "Check: what laziness actually delays",
+      "questions": [
+        {
+          "question": "constant \"ready\" undefined prints \"ready\" without crashing, even though undefined would crash the program if it were ever evaluated. Why doesn't it crash here?",
+          "options": [
+            "Haskell silently converts undefined into a harmless placeholder value",
+            "constant x _ = x never inspects its second argument at all — the pattern _ discards it without forcing it — so undefined's crash-on-evaluation is simply never triggered",
+            "undefined only crashes inside GHCi, not inside a compiled or loaded program",
+            "This is a coincidence specific to the string \"ready\""
+          ],
+          "correctIndex": 1,
+          "explanation": "Laziness means an expression is only evaluated when something actually demands its value. constant's definition, x _ = x, returns x and never looks at the second parameter at all — matching it with _ is Haskell's way of saying 'bind this argument to nothing, never examine it.' Since it's never examined, undefined's crash — which only happens on evaluation, not on being passed as an argument — never has a reason to fire.",
+          "optionFeedback": [
+            "undefined is not converted into anything; it remains a value that crashes the moment it is forced — the point is that this call never forces it.",
+            "Correct. This is the sharpest version of 'unused arguments cost nothing': an argument guaranteed to crash on evaluation is still perfectly safe to pass, as long as nothing ever evaluates it.",
+            "undefined crashes identically whether run in GHCi or as a compiled program, the moment its value is actually demanded — the safety here comes from laziness, not from which environment is running it.",
+            "Nothing about this behaviour depends on the string \"ready\" specifically — any first argument would be returned the same way, with the second argument just as unexamined."
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-your-understanding-reading-a-branching-trace": {
+      "title": "Check Your Understanding: Reading a Branching Trace",
+      "questions": [
+        {
+          "question": "In the fib 5 trace above, what does each pair of parentheses in a line like `(fib 3 + fib 2) + (fib 2 + fib 1)` correspond to?",
+          "options": [
+            "One branching call in the call-tree diagram, waiting on its two children",
+            "A syntax requirement of GHCi with no deeper meaning",
+            "A separate, unrelated dry run running alongside the main one",
+            "A mistake — a correct trace should have no parentheses at all"
+          ],
+          "correctIndex": 0,
+          "explanation": "Every parenthesised group is one fib call that has split into its two recursive sub-calls and is waiting for both to resolve before it can add them — exactly the node-with-two-children shape drawn in the call-tree diagram in the previous lesson.",
+          "optionFeedback": [
+            "Correct — the nesting is meaningful, not decorative.",
+            "The parentheses are not a GHCi requirement; they are how this written trace preserves the branching structure of the actual calls being made.",
+            "There is only one dry run here, of fib 5. The parenthesised groups are all part of that same single computation.",
+            "Parentheses are expected and necessary here. fib branches into two calls per step, unlike fac's single chain, so the trace needs them to show which additions are still pending."
+          ]
+        },
+        {
+          "question": "Why does `fib 5` make more total calls than `fac 5`, even though both start from a similarly small input?",
+          "options": [
+            "fib branches into two recursive calls per step and recomputes repeated sub-results like fib 2 from scratch each time; fac makes one recursive call per step with no repetition",
+            "fib is defined incorrectly",
+            "fac only works for even numbers, so it needs fewer calls",
+            "GHCi evaluates fib and fac using different rules"
+          ],
+          "correctIndex": 0,
+          "explanation": "fac n = n * fac (n - 1) makes exactly one recursive call per step, so fac 5 makes 5 calls. fib n = fib (n-1) + fib (n-2) makes two calls per step, and because nothing is cached, identical sub-calls such as fib 2 are redone every time they reappear in the tree — fib 5 alone makes 15 calls.",
+          "optionFeedback": [
+            "Correct — branching plus recomputing shared sub-results is exactly what inflates the call count.",
+            "fib 5 = 5 is the right answer, matching the sequence table; the definition is not wrong, just more expensive to evaluate than fac.",
+            "fac works for every non-negative Integer, not just even ones. Domain has nothing to do with this difference.",
+            "Both are evaluated by the same reduction rules — substitute, then simplify. The difference in call count comes from how many recursive calls each definition's recursive step makes, not from different evaluation rules."
+          ]
+        }
+      ]
+    },
+    "check-tracing-a-wrong-answer": {
+      "title": "Check: tracing a wrong answer",
+      "questions": [
+        {
+          "question": "The buggy fac 0 = 0 still terminates and produces an answer for every input. Why is dry running still useful here, given that nothing hangs or crashes?",
+          "options": [
+            "It isn't useful here — dry running only helps diagnose non-terminating functions, not wrong-but-terminating ones",
+            "Because the trace shows exactly where the wrong value enters the computation — the base-case substitution — rather than leaving you only with a mysteriously wrong final number and no way to find the fault",
+            "Because dry running automatically fixes the base case once the fault is found",
+            "Because the type checker would have caught this bug if the programmer had just recompiled"
+          ],
+          "correctIndex": 1,
+          "explanation": "fac 3 with the bug terminates and gives 0 — plausible-looking output, not an obvious crash. The trace, though, shows precisely which substitution introduced the wrong value: the line where fac 0 is replaced by 0 instead of 1. Comparing that one line against the specification (fac 0 = 1) pinpoints the fault immediately, which staring at the final wrong answer alone could not do.",
+          "optionFeedback": [
+            "This lesson uses dry running for both purposes: Section 5 diagnoses a non-terminating fault, and this section uses the exact same technique to diagnose a wrong-answer fault instead.",
+            "Correct — the trace isolates the fault to a specific line, the base-case substitution, rather than leaving only a wrong final number to explain.",
+            "A dry run is a diagnostic technique performed by a person reading the trace — it identifies the fault; it does not edit the source code.",
+            "fac n = 0 typechecks perfectly fine — 0 :: Integer matches the declared return type exactly. The type checker has no way to know 0 is the wrong value; that is a specification error, not a type error."
+          ]
+        },
+        {
+          "question": "Trace fac 2 using the buggy definition fac 0 = 0; fac n = n * fac (n - 1). What is the final value, and at which line does the fault first appear?",
+          "options": [
+            "The final value is 2, and the fault first appears at the very last line",
+            "The final value is 0, and the fault first appears at the line where fac 0 is substituted with 0 instead of the correct 1",
+            "The final value is 1, matching the correct definition, since fac 2 doesn't reach the base case",
+            "The trace never reaches a base case, so it does not terminate"
+          ],
+          "correctIndex": 1,
+          "explanation": "fac 2 = 2 * fac 1 = 2 * (1 * fac 0) = 2 * (1 * 0) = 2 * 0 = 0. The base case is reached at 2 * (1 * fac 0), and the very next line substitutes fac 0 with 0 — that substitution is exactly where the bug enters; every line after it is otherwise ordinary arithmetic that simply propagates the wrong value forward.",
+          "optionFeedback": [
+            "2 would be the answer under the correct definition (fac 2 = 2), but this trace uses the buggy fac 0 = 0, which changes the final answer to 0.",
+            "Correct — the base case is reached and substituted with 0 (the bug) rather than 1, and that single substitution determines the final wrong answer.",
+            "fac 2 does reach the base case fac 0 after two unwinding steps, exactly like the correctly-defined version — the bug is in what value the base case returns, not in whether it's reached.",
+            "The base case fac 0 does match and terminate the recursion — the fault is that it returns the wrong value, not that it fails to fire at all."
+          ]
+        }
+      ]
+    },
+    "check-your-understanding-tail-recursion-and-accumulators": {
+      "title": "Check Your Understanding: Tail Recursion and Accumulators",
+      "questions": [
+        {
+          "question": "At the deepest point of unwinding `fac' 4` via facAcc — the line `facAcc 24 1` — what pending arithmetic is still waiting to be performed once the base case is reached?",
+          "options": [
+            "None — acc already holds the fully computed running product",
+            "One multiplication: 24 * 1",
+            "Four multiplications, one for each call made so far",
+            "The whole expression 4 * (3 * (2 * (1 * 1)))"
+          ],
+          "correctIndex": 0,
+          "explanation": "Every call to facAcc performs its multiplication immediately, before recursing, so acc is always a plain, fully-evaluated number. By facAcc 24 1, the value 24 already accounts for 4 * 3 * 2, computed one step at a time. Nothing is left pending for a later rewinding phase.",
+          "optionFeedback": [
+            "Correct — the accumulator is always fully evaluated; there is nothing left over to compute later.",
+            "That multiplication was already performed in the step before this one (facAcc (24 * 1) 0 reduces to facAcc 24 0). By the time you reach facAcc 24 1 as a starting point, no multiplication for this step is still pending — it happens as this line is produced, not after.",
+            "That count describes the naive fac trace's pending multiplications, not facAcc's. facAcc never accumulates a backlog of waiting operations.",
+            "That nested expression is what the naive fac trace builds up, not what facAcc produces. facAcc's intermediate values are always flat numbers like 24, never nested pending expressions."
+          ]
+        },
+        {
+          "question": "Why is `fac' n = facAcc 1 n` seeded with `1` rather than `0`?",
+          "options": [
+            "1 is the multiplicative identity, so starting the running product there leaves it unchanged until real factors are multiplied in",
+            "0 would cause a division-by-zero error inside facAcc",
+            "It doesn't matter — either seed produces the same answer",
+            "1 marks the base case so facAcc knows when to stop recursing"
+          ],
+          "correctIndex": 0,
+          "explanation": "The accumulator carries a running product. Multiplying by 1 changes nothing, so seeding it there means the first real multiplication (by n) produces the correct partial answer. Seeding with 0 would zero out every product regardless of n, since anything times 0 is 0.",
+          "optionFeedback": [
+            "Correct — 1 is the identity for multiplication, exactly like the empty-product convention behind product' [] = 1 in Chapter 6.",
+            "facAcc never divides anything; it only multiplies and subtracts 1 from the countdown argument. Division-by-zero cannot arise here.",
+            "It matters a great deal: seeding with 0 would make every recursive call multiply the running product by 0, so fac' n would incorrectly return 0 for every n.",
+            "The base case is triggered by the second argument reaching 0 (facAcc acc 0 = acc), which is a completely separate parameter from what acc starts at."
+          ]
+        }
+      ]
+    }
+  }
+}

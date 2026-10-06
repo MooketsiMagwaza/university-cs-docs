@@ -1,0 +1,183 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-import-basics": {
+      "title": "Check: import basics",
+      "questions": [
+        {
+          "question": "A file has `import Data.List` written after a helper function's definition. What happens?",
+          "options": [
+            "A parse error — imports must appear before any function definition, so they belong at the top of the file",
+            "It compiles fine; Haskell scans the whole file for imports before running anything",
+            "Only the functions defined after the import can use Data.List; earlier ones cannot",
+            "It works, but GHC prints a style warning"
+          ],
+          "correctIndex": 0,
+          "explanation": "This lesson states the rule directly: imports must appear before any function definition, so in practice they go at the top of the file. Writing one after a definition triggers a parse error, not a warning or a partial success.",
+          "optionFeedback": [
+            "Correct — this is exactly the placement rule this lesson gives, and violating it is a parse error, listed again in this page's Common Errors table.",
+            "There is no such whole-file prescan; the placement rule is fixed and a misplaced import is rejected as a parse error.",
+            "Haskell import scope is not divided by position within the file relative to individual function definitions in this way — the real outcome is a parse error before any function runs at all.",
+            "This is a hard error, not a style warning — the file fails to compile at all until every import is moved above the definitions."
+          ]
+        },
+        {
+          "question": "import MyCalculator, with no parentheses and no hiding. What does this bring into scope?",
+          "options": [
+            "Everything MyCalculator exports",
+            "Only the function named MyCalculator",
+            "Nothing, until a specific name is also written",
+            "Only the names MyCalculator shares with Prelude"
+          ],
+          "correctIndex": 0,
+          "explanation": "The plain form import ModuleName brings in everything the module exports — no parentheses to select particular names, no hiding to exclude any. Selective and hiding forms are separate syntax covered later in this lesson.",
+          "optionFeedback": [
+            "Correct — the basic, unqualified, unrestricted form brings in the module's whole export list.",
+            "MyCalculator is the module's name, not a function inside it; this form imports everything the module exports, not a single same-named function.",
+            "Nothing extra needs to be written for the basic form to work; it is complete as written, unlike a selective import which does require naming what you want.",
+            "This form has nothing to do with what Prelude happens to export; it brings in everything MyCalculator itself exports, full stop."
+          ]
+        }
+      ]
+    },
+    "selective-import": {
+      "title": "Selective import",
+      "questions": [
+        {
+          "question": "After `import Data.Char (toLower, toUpper)`, is `isDigit` available?",
+          "options": [
+            "Yes, because it is imported alongside toLower and toUpper automatically",
+            "No — only the names listed in parentheses are brought into scope",
+            "Yes, because Data.Char is imported as a whole",
+            "It depends on whether Prelude also exports isDigit"
+          ],
+          "correctIndex": 1,
+          "explanation": "A selective import brings in exactly the names listed and nothing else. isDigit would need its own entry in the parentheses, or a separate unqualified import of Data.Char, to be usable.",
+          "optionFeedback": [
+            "Selective imports do not pull in related functions automatically — only the exact names written in the parentheses come into scope.",
+            "Correct — import Data.Char (toLower, toUpper) brings in only toLower and toUpper. isDigit is not in scope without being listed too.",
+            "The whole module is not imported here — only the two names inside the parentheses were selected.",
+            "Whether Prelude happens to export something with the same name is a separate question; the issue is that isDigit was never selected from Data.Char."
+          ]
+        }
+      ]
+    },
+    "hiding": {
+      "title": "Hiding",
+      "questions": [
+        {
+          "question": "What does `import Data.List hiding (nub, sort)` bring into scope?",
+          "options": [
+            "Only nub and sort",
+            "Nothing — hiding excludes everything",
+            "Everything Data.List exports except nub and sort",
+            "Everything, including nub and sort, with a warning"
+          ],
+          "correctIndex": 2,
+          "explanation": "hiding excludes exactly the names listed and imports everything else the module exports unqualified. Here, every Data.List function except nub and sort becomes available.",
+          "optionFeedback": [
+            "That is the opposite of hiding's effect — a selective import (f, g) would bring in only those names; hiding excludes them instead.",
+            "hiding does not exclude the whole module — only the listed names are left out; everything else still comes in.",
+            "Correct — hiding (nub, sort) imports the rest of Data.List's exports, leaving out exactly the two named functions.",
+            "Excluded names are genuinely out of scope, not just discouraged with a warning; using nub afterwards would be a 'Variable not in scope' error."
+          ]
+        },
+        {
+          "question": "You have written your own `nub`. Which import lets you use it alongside the rest of Data.List?",
+          "options": [
+            "import Data.List (nub)",
+            "import Data.List hiding (nub)",
+            "import Data.List as nub",
+            "import hiding Data.List (nub)"
+          ],
+          "correctIndex": 1,
+          "explanation": "hiding (nub) imports everything from Data.List except nub, leaving your own nub as the only one in scope under that name — with the rest of Data.List still available unqualified.",
+          "optionFeedback": [
+            "This imports Data.List's nub specifically, which would clash with your own definition of the same name.",
+            "Correct — hiding (nub) excludes only Data.List's nub, so your own definition is the one that resolves.",
+            "as introduces an alias for the whole module (covered next), not a selection or exclusion of one name; this is not valid for this purpose.",
+            "hiding is written after the module name, not before it: import Data.List hiding (nub) is the correct order."
+          ]
+        }
+      ]
+    },
+    "qualified-imports-and-aliases": {
+      "title": "Qualified imports and aliases",
+      "questions": [
+        {
+          "question": "Both Data.Map and Prelude define a function called filter. What happens with `import qualified Data.Map as Map` alongside the automatic Prelude import?",
+          "options": [
+            "A compile error, because filter is ambiguous",
+            "Map.filter refers to Data.Map's version; filter alone still refers to Prelude's",
+            "Prelude's filter is silently replaced",
+            "Both filters merge into one overloaded function"
+          ],
+          "correctIndex": 1,
+          "explanation": "Because Data.Map was imported qualified, none of its names enter scope unprefixed — only Map.filter, Map.insert, and so on do. filter written alone is therefore unambiguous: it can only mean Prelude's, since Data.Map's filter was never brought into scope under that bare name.",
+          "optionFeedback": [
+            "There is no ambiguity here precisely because the import was qualified — Data.Map's names all require the Map. prefix, so the bare name filter has only one meaning.",
+            "Correct — qualified imports never introduce their names unprefixed, so filter unprefixed still means Prelude's, while Map.filter reaches Data.Map's.",
+            "Prelude's filter remains exactly as it was; qualified importing does not touch or shadow it.",
+            "Haskell has no mechanism that merges two same-named functions into one; you always call one specific version, selected by whether you use the prefix."
+          ]
+        },
+        {
+          "question": "`import qualified Data.Map as Map` and `import qualified Data.Set as Map` appear in the same file. What happens?",
+          "options": [
+            "Both are accepted; Map. resolves based on argument types",
+            "An error, because the alias Map cannot name two different modules at once",
+            "The second import silently overrides the first",
+            "Haskell merges Data.Map and Data.Set into one namespace called Map"
+          ],
+          "correctIndex": 1,
+          "explanation": "Rule from this lesson: several modules may share an alias only 'as long as there are no conflicting items.' Data.Map and Data.Set both export names like insert and empty, so aliasing both to Map creates exactly the conflict the rule warns about, and GHC rejects it.",
+          "optionFeedback": [
+            "Haskell does not resolve names by argument type at the module level; an alias names one module (or a compatible group with no clashes), not a type-directed dispatcher.",
+            "Correct — Data.Map and Data.Set both export overlapping names such as insert, so sharing the alias Map produces an ambiguous-name conflict.",
+            "Both import statements are processed; neither silently disappears — the conflict is reported instead.",
+            "The two modules remain entirely separate; only the shared alias text is affected, and it is exactly that sharing which causes the error here."
+          ]
+        }
+      ]
+    },
+    "the-standard-library-modules": {
+      "title": "The standard library modules",
+      "questions": [
+        {
+          "question": "Why is `Map.lookup \"Sipho\" marks` written with the `Map.` prefix rather than plain `lookup`?",
+          "options": [
+            "Map.lookup and lookup are different operations entirely",
+            "Data.Map was imported qualified, so its names are only reachable through the Map. prefix",
+            "lookup does not exist in Data.Map",
+            "The prefix is optional style, not a requirement"
+          ],
+          "correctIndex": 1,
+          "explanation": "import qualified Data.Map as Map brings in every Data.Map name, but only accessible via Map.name. Prelude's own lookup :: Eq a => a -> [(a, b)] -> Maybe b works on association lists, a different data structure, so keeping the two separate under different names is exactly the point of the qualified import.",
+          "optionFeedback": [
+            "They serve a closely related purpose (looking a key up) — Data.Map's version is simply written for the Map type instead of an association list, and both return Maybe.",
+            "Correct — a qualified import never introduces its names unprefixed, so Map.lookup is the only way to reach Data.Map's version.",
+            "Data.Map does export a function named lookup; it is simply not usable as bare lookup once imported qualified.",
+            "It is required here, not optional — without the prefix, GHC would look for an unqualified lookup, which Prelude's own version already claims."
+          ]
+        },
+        {
+          "question": "After `Map.insert \"Sipho\" 55 marks`, what is `marks` itself?",
+          "options": [
+            "The original map, unchanged, with two entries",
+            "The updated map, now with three entries",
+            "Nothing — marks is deleted after the insert",
+            "An error, because marks was already defined"
+          ],
+          "correctIndex": 0,
+          "explanation": "Map.insert, like every Haskell update, returns a new map and leaves its argument untouched. Unless the result is given a new name and used, marks keeps its original two entries — the same immutability already seen with record update syntax.",
+          "optionFeedback": [
+            "Correct — marks is never mutated. Map.insert produces a new map value; marks itself still has only Kago and Naledi.",
+            "That describes the return value of the expression, not marks itself. To keep the three-entry map you would bind the result to a new name.",
+            "Nothing is deleted; marks continues to exist exactly as it was defined.",
+            "Calling Map.insert with marks as an argument is completely ordinary and does not conflict with marks's earlier definition."
+          ]
+        }
+      ]
+    }
+  }
+}
