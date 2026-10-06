@@ -183,6 +183,106 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-types-inference-and-reading-errors": {
+      "title": "Deeper reasoning: types, inference, and reading errors",
+      "questions": [
+        {
+          "question": "GHC rejects the definition below, reporting that it expected Double but found Integer at the argument a. A student protests: \"The signature says the result is a Double, so Haskell should convert the answer for me.\" Which diagnosis and repair is the most complete?",
+          "code": [
+            "-- This version does not compile",
+            "average :: Integer -> Integer -> Double",
+            "average a b = (a + b) / 2"
+          ],
+          "options": [
+            "Haskell would convert the result automatically, but only if the module imports Data.Ratio; the error is a missing import rather than a type problem.",
+            "The / operator needs both of its operands and its result to be the same fractional type. The signature makes the result a Double, so (a + b) must also be a Double, but a and b are Integer values. A conversion such as fromIntegral (a + b) / 2 fixes it, as would taking Double arguments.",
+            "Replace / with div. div always returns a Double, so the signature will then be satisfied without any conversion.",
+            "The literal 2 is an Integer and is the only conflicting piece; writing 2.0 instead of 2 repairs the definition."
+          ],
+          "correctIndex": 1,
+          "explanation": "A signature is a contract about the whole expression, and it also constrains the pieces inside it. Because / produces a Double here, its operands must be Double too. Haskell never silently converts between Integer and Double; fromIntegral is the explicit conversion. Changing the argument types in the signature is the other honest repair.",
+          "optionFeedback": [
+            "No import changes how Haskell treats Integer and Double. Haskell does not insert numeric conversions automatically, so the fix has to appear in the code.",
+            "Correct. The error is blamed on a, the first operand that cannot be a Double, and the repair either converts it explicitly or changes the declared types.",
+            "div is for whole-number division and returns an integral type, not a Double. Using it here would produce a different type error, and 7 `div` 2 would also discard the fractional part.",
+            "The literal 2 is not the problem: a numeric literal such as 2 can already be read as a Double. The conflict is with a and b, which the signature fixes as Integer."
+          ]
+        },
+        {
+          "question": "A classmate says the script below cannot work: \"Haskell is statically typed, so every function must declare its type, and main must be written as main :: IO ().\" A second classmate says: \"GHC just guesses the types and hopes for the best.\" Which statement best describes what actually happens, and what is given up by leaving signatures out?",
+          "code": [
+            "double x = x * 2",
+            "isLarge x = x > 5",
+            "",
+            "main = do",
+            "  print (map double [1..6])",
+            "  print (filter isLarge [1..10])"
+          ],
+          "options": [
+            "The first classmate is right, and GHC refuses to load the file because the signatures are missing.",
+            "The second classmate is right: GHC defaults every unannotated function to Int and checks nothing else.",
+            "GHC infers each type from how the definition uses its values: double is Num a => a -> a, isLarge is (Ord a, Num a) => a -> Bool, and main is IO (). This is deduction from constraints, not guessing. What is lost by omitting signatures is a written contract, so a mistake is reported where it is used rather than where it was made.",
+            "Types are not checked at all in a file without signatures; they are checked while the program runs, as in a dynamically typed language."
+          ],
+          "correctIndex": 2,
+          "explanation": "Type inference collects constraints from the operators and functions used in each body and picks the most general type that satisfies them. The file is fully type checked before it runs. Signatures remain good practice because they document intent and move errors closer to their cause, which is why this course asks for them.",
+          "optionFeedback": [
+            "Signatures are optional. The file loads and runs, and GHC reports the same types that you could have written yourself.",
+            "There is no default of Int for functions. GHC infers the most general type that fits, which here is a type class constraint rather than any single concrete type.",
+            "Correct. Inference is a systematic deduction, and the cost of dropping signatures is clarity and error locality, not safety.",
+            "Haskell checks types before the program runs, whether or not signatures are written. A type error prevents evaluation entirely."
+          ]
+        },
+        {
+          "question": "A student expects both print lines below to show the same number, \"because the brackets only add decoration.\" Which evaluation of the program is correct, and what rule explains it?",
+          "code": [
+            "square :: Integer -> Integer",
+            "square number = number * number",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (square 3 + 4)",
+            "  print (square (3 + 4))"
+          ],
+          "options": [
+            "Both lines print 49, because Haskell always evaluates the whole line before applying a function.",
+            "The first line is a type error, because + cannot be used on the result of a function without brackets.",
+            "Both lines print 13, because brackets are ignored by Haskell when they surround numbers.",
+            "The first line prints 13 and the second prints 49. Function application binds more tightly than any operator, so square 3 + 4 is (square 3) + 4 = 9 + 4, while the brackets in the second line force 3 + 4 to be computed first, giving square 7 = 49."
+          ],
+          "correctIndex": 3,
+          "explanation": "Function application, written with a space, has the highest precedence. Brackets are the tool for overriding it: they change which subexpression becomes the argument. They are never decoration in Haskell.",
+          "optionFeedback": [
+            "Haskell does not evaluate a whole line first. Application binds to the nearest argument, so square takes only 3 in the first line.",
+            "square 3 produces an Integer, and + accepts Integers, so the first line is well typed. The only question is what square receives.",
+            "Brackets change meaning. Without them square receives 3 only; with them it receives 7.",
+            "Correct. The two lines differ exactly where the brackets change the argument to square."
+          ]
+        },
+        {
+          "question": "GHC prints the message below when this file is loaded. A student says: \"It says Integer and [Char], so the whole line is wrong and I should rewrite the function from scratch.\" Which reading of the message is the most useful, and what repair question should follow?",
+          "code": [
+            "-- This version does not compile",
+            "addBonus :: Integer -> Integer",
+            "addBonus n = n + \"5\""
+          ],
+          "options": [
+            "The message points at a specific place: line 3, column 19, the argument \"5\" in the second position of (+). It needs an Integer there but found text. The repair question is what \"5\" should have been, which is almost certainly the number 5 rather than the string.",
+            "The message means that + cannot be used inside a function that has a signature, so the signature should be deleted.",
+            "The message means n is the wrong type, so the type of n should be changed to String in the signature, which makes the + legal.",
+            "The message is too general to act on; the only reliable approach is to try random changes until the file loads."
+          ],
+          "correctIndex": 0,
+          "explanation": "GHC's message names the file, line and column, then the two types in conflict, then the smallest expression involved. Reading it from the top down narrows the search to one subexpression. GHC diagnoses; the programmer decides which side of the conflict was the mistake.",
+          "optionFeedback": [
+            "Correct. The location, the expected and actual types, and the named argument together isolate the fault to a single token.",
+            "The signature is not the problem and + works perfectly well in functions with signatures. Deleting the signature would only change where a mistake is reported.",
+            "Changing the signature to accept a String would make + fail even more, since strings do not support +. The conflict is about the literal, not about n.",
+            "The message is precise. Random edits ignore all the information it provides."
+          ]
+        }
+      ]
     }
   }
 }

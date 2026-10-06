@@ -178,6 +178,90 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-choosing-the-right-form-of-import": {
+      "title": "Deeper reasoning: choosing the right form of import",
+      "questions": [
+        {
+          "question": "A student imports Data.Map and then wonders whether lookup in their program means the Prelude's list lookup or the map's lookup. A classmate suggests a qualified import. Which explanation of the two lookups in the program below, and of why the qualified form is the right tool, is the most accurate?",
+          "code": [
+            "import qualified Data.Map as Map",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  let table = Map.insert 1 \"one\" Map.empty",
+            "  print (Map.lookup 1 table)",
+            "  print (lookup 1 [(1, \"uno\")])"
+          ],
+          "options": [
+            "The two lookups are the same function, so the qualification is only decoration, and the program prints Just \"one\" twice.",
+            "A qualified import requires every name from that module to carry its module prefix, so Map.lookup is unambiguously the map's version and plain lookup is still the Prelude's. The program prints Just \"one\" and Just \"uno\". Without qualifying, importing Data.Map would bring in a second lookup and make the unqualified name ambiguous. The alias Map is just a shorter prefix for the module, and as does not by itself change what is imported.",
+            "The program does not compile, because Haskell allows only one function named lookup in a program.",
+            "The first line prints Nothing, because maps start out empty and Map.insert does not change them."
+          ],
+          "correctIndex": 1,
+          "explanation": "Qualified imports keep the origin of every name visible. They are the standard remedy when two modules export the same name, and an alias keeps the prefix short.",
+          "optionFeedback": [
+            "The two functions work on different structures and have different types. They give different results here.",
+            "Correct. The prefix says exactly which module each name comes from, and the alias is a convenience.",
+            "Different modules may define functions with the same name. Qualified names keep them apart.",
+            "Map.insert returns a new map containing the key, so the lookup finds it. Maps are immutable, but the inserted version is the one that is used."
+          ]
+        },
+        {
+          "question": "A student writes tally with a selective import and later adds a call to nub inside it, which GHC reports as not in scope. They protest: \"I imported Data.List, so everything in it should be available.\" Which explanation is correct, and which repair best fits the intention?",
+          "code": [
+            "import Data.List (sort, group)",
+            "",
+            "tally :: Ord a => [a] -> [(a, Int)]",
+            "tally xs = map (\\g -> (head g, length g)) (group (sort xs))",
+            "",
+            "main :: IO ()",
+            "main = print (tally \"mississippi\")"
+          ],
+          "options": [
+            "Selective imports are ignored by GHC, so nub must have been spelled incorrectly.",
+            "A selective import brings in only the names in its list, here sort and group, so nub is not in scope. That is the point of the form: it documents exactly what the module depends on and prevents unexpected clashes. The repair is to add nub to the list, or to import the module in full if most of it is needed. An import cannot combine a list of wanted names with a hiding clause; it is either one or the other.",
+            "The repair is to write nub twice, because every imported name must be listed twice.",
+            "The repair is to put the import after the definition of tally, because imports are read from the bottom of the file."
+          ],
+          "correctIndex": 1,
+          "explanation": "The list in a selective import is a complete statement of what is imported. Anything not listed is absent, which is helpful when reading the file and when avoiding clashes, but it means each new dependency must be listed.",
+          "optionFeedback": [
+            "GHC honours the list exactly, which is why the unlisted name is missing.",
+            "Correct. The cost and the benefit of a selective import come from the same property: only what is listed is visible.",
+            "There is no need to repeat names in an import list.",
+            "Imports must come before the definitions in a file, not after them."
+          ]
+        },
+        {
+          "question": "A student has written their own nub and also wants the rest of Data.List. They write the first version below and it works. A classmate removes the hiding clause and the program stops compiling with an ambiguity error. Which explanation is correct?",
+          "code": [
+            "import Data.List hiding (nub)",
+            "",
+            "nub :: Eq a => [a] -> [a]",
+            "nub [] = []",
+            "nub (x:xs) = x : nub (filter (/= x) xs)",
+            "",
+            "main :: IO ()",
+            "main = print (nub [1, 2, 1, 3, 2 :: Int])"
+          ],
+          "options": [
+            "Removing hiding fixes a warning, so the program compiles and prints [1,2,3] in both versions.",
+            "Without hiding, the import brings in Data.List's own nub, so the name nub refers to two different functions, the library one and the local definition, and GHC reports an ambiguous occurrence where it is used. hiding (nub) imports everything else from the module but not that name, which removes the clash. It applies to functions and values, not to types, and it cannot be combined with a selective list in the same import.",
+            "The ambiguity arises because Data.List is imported twice, so removing one import fixes it.",
+            "The ambiguity arises because hiding is required for every import that comes before a function definition."
+          ],
+          "correctIndex": 1,
+          "explanation": "Two different entities with the same name in scope make an unqualified use ambiguous. hiding is one remedy, selective import is another, and qualified import is a third, depending on how much of the module is wanted.",
+          "optionFeedback": [
+            "The version without hiding does not compile. GHC treats the clash as an error at the point of use.",
+            "Correct. The clash is between an imported and a local name, and hiding removes the imported one.",
+            "The module is imported only once in either version. The clash is about the name nub.",
+            "hiding is not required in general. It is only needed when a name would otherwise clash."
+          ]
+        }
+      ]
     }
   }
 }

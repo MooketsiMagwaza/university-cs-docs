@@ -234,6 +234,104 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-specifications-preconditions-and-what-correctness-claims": {
+      "title": "Deeper reasoning: specifications, preconditions and what correctness claims",
+      "questions": [
+        {
+          "question": "Two students submit a function with the same type signature for the specification \"report whether c is one of the decimal digits, with postcondition result = ('0' <= c <= '9')\". Both versions compile and both are Char -> Bool. The student with the second version argues: \"The signature is the specification, and mine matches it.\" Which assessment is the most accurate?",
+          "code": [
+            "isDigit' :: Char -> Bool",
+            "isDigit' c = ('0' <= c) && (c <= '9')",
+            "",
+            "isDigitWrong :: Char -> Bool",
+            "isDigitWrong c = ('0' <= c) || (c <= '9')",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (map isDigit' \"5/09:a\")",
+            "  print (map isDigitWrong \"5a\")"
+          ],
+          "options": [
+            "The student is right: any function with the signature Char -> Bool meets a specification that mentions only characters and Booleans.",
+            "The signature states only the types of the argument and result. The specification also has a purpose, a precondition and a postcondition, and only the postcondition distinguishes the two functions: isDigit' returns False for 'a', while isDigitWrong returns True for it, because '0' <= 'a' alone is enough for ||. Correctness is a claim that the implementation satisfies the postcondition whenever the precondition holds, so it has to be checked against that statement, not against the type.",
+            "The signature and the postcondition are the same thing written in two notations.",
+            "The second function is correct, because || is the usual way of combining two comparisons."
+          ],
+          "correctIndex": 1,
+          "explanation": "Types are a weak specification. Many different functions share one signature, and the compiler cannot tell which one the author intended. The postcondition is the independent standard against which an implementation, and any tests, are judged.",
+          "optionFeedback": [
+            "Type-correct functions need not be correct. Both functions here have the same type and give different answers.",
+            "Correct. The specification is more than the signature, and the postcondition is what separates the two implementations.",
+            "The signature records the argument and result types only. The postcondition records what is true of the result for each argument.",
+            "|| accepts a character if either comparison holds, which includes every character above '0'. The specification needs both to hold."
+          ]
+        },
+        {
+          "question": "A library has to provide factorial for use by many callers, some of whom may pass a negative number by mistake. Three designs are shown. A colleague says: \"Using error is always right, because it is the simplest.\" Which assessment of the three choices is the most accurate?",
+          "code": [
+            "fac :: Integer -> Integer",
+            "fac n",
+            "  | n < 0            = error \"fac: only defined for non-negative integers\"",
+            "  | n >= 0 && n <= 1 = 1",
+            "  | otherwise        = n * fac (n - 1)",
+            "",
+            "facMaybe :: Integer -> Maybe Integer",
+            "facMaybe n",
+            "  | n < 0     = Nothing",
+            "  | n <= 1    = Just 1",
+            "  | otherwise = fmap (n *) (facMaybe (n - 1))",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (facMaybe 5)",
+            "  print (facMaybe (-1))"
+          ],
+          "options": [
+            "error is always the best choice, because a function should never return a value for an invalid input.",
+            "There are three ways to treat inputs outside the precondition, and each has a cost. Rejecting with error stops the program with a message and cannot be recovered from. Defining the case gives it a documented answer, but only if a sensible answer exists. Reporting it with Maybe makes the failure visible in the type, so every caller is forced to handle it, which is the strongest choice when callers may reasonably pass bad input; here it prints Just 120 and Nothing. The right choice depends on the callers and on what a sensible answer would be.",
+            "Maybe is always the best choice, because it never needs error.",
+            "The three choices are equivalent, because a precondition is only documentation and does not change behaviour."
+          ],
+          "correctIndex": 1,
+          "explanation": "A precondition tells callers what they must guarantee. What the function does when they break it is a separate design decision, and the three options trade simplicity against safety and against how much work they push onto the caller.",
+          "optionFeedback": [
+            "error is simple but it is not recoverable, and it turns a data problem into a crash. It is not always the right choice.",
+            "Correct. The decision is a trade-off, and the example output shows how Maybe exposes the failure in the type.",
+            "Maybe adds a burden for every caller, including those who know the input is valid. It is not always the best choice either.",
+            "The options behave very differently: one stops the program, one returns a value, and one returns a value that must be unpacked."
+          ]
+        },
+        {
+          "question": "A student reasons: \"A call factInt 25 satisfies the precondition n >= 0, so by the specification the result must be a valid output.\" The program below prints two very different numbers. Which assessment of the student's reasoning is correct?",
+          "code": [
+            "factInt :: Int -> Int",
+            "factInt n = product [1 .. n]",
+            "",
+            "factInteger :: Integer -> Integer",
+            "factInteger n = product [1 .. n]",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (factInt 25)",
+            "  print (factInteger 25)"
+          ],
+          "options": [
+            "The reasoning is correct: if the precondition holds, the output is always valid, whatever the implementation does.",
+            "The reasoning is wrong. A specification only promises the postcondition when the implementation is correct. An implementation can still produce an erroneous output from a valid input, through a coding fault, an overflow or an unguarded division. Here Int has a fixed width, so factInt 25 overflows and prints 7034535277573963776, which is not 25!. factInteger has no such bound and prints 15511210043330985984000000. Checking the types against the range of valid results is part of showing that an implementation meets its specification.",
+            "The reasoning is wrong because 25 is not a valid input for a factorial.",
+            "The reasoning is correct, and the larger number is wrong only because print is misformatting it."
+          ],
+          "correctIndex": 1,
+          "explanation": "The partition of inputs and outputs into valid and erroneous sets applies to implementations as well as to specifications. A valid input promises a valid output only when the function is correct, and the type chosen for the result is part of that correctness.",
+          "optionFeedback": [
+            "A precondition is a condition on the input, not a guarantee about the implementation. Valid input can still produce an erroneous output.",
+            "Correct. The two outputs show the same specification being met by one implementation and violated by the other, for a reason that no test of small inputs would reveal.",
+            "25 satisfies the precondition. The fault is in the implementation's choice of type.",
+            "print shows the value it was given. The number really is the overflowed Int."
+          ]
+        }
+      ]
     }
   }
 }

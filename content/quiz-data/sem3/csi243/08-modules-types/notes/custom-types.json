@@ -273,6 +273,113 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-designing-with-data-constructors-and-newtype": {
+      "title": "Deeper reasoning: designing with data, constructors and newtype",
+      "questions": [
+        {
+          "question": "A student reads the program output below and says: \"Pass < Fail printing True must be a bug, because passing is better than failing.\" They also ask why print needed the deriving clause at all. Which explanation of both points is the most accurate?",
+          "code": [
+            "data Result = Pass | Fail",
+            "  deriving (Show, Eq, Ord, Enum, Bounded)",
+            "",
+            "classify :: Int -> Result",
+            "classify mark",
+            "  | mark >= 50 = Pass",
+            "  | otherwise  = Fail",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (classify 64)",
+            "  print (Pass < Fail)",
+            "  print [Pass ..]",
+            "  print (succ Pass)"
+          ],
+          "options": [
+            "It is a bug in GHC: Ord should rank constructors by how good they sound, so Pass < Fail should be False.",
+            "Derived Ord compares constructors by the order in which they are declared, and Pass is declared first, so Pass < Fail is True; it says nothing about which result is better. The same order drives [Pass ..], which prints [Pass,Fail], and succ Pass, which prints Fail. deriving is needed because GHC does not know how to display or compare a type you invented, and without Show the call to print is rejected for lack of a Show instance.",
+            "Pass < Fail prints True because Pass is shorter than Fail alphabetically, and deriving is optional for every type.",
+            "Pass < Fail prints True only because the program also derives Bounded; without it the comparison would be False."
+          ],
+          "correctIndex": 1,
+          "explanation": "The comparison and enumeration of constructors are mechanical consequences of declaration order. If the meaning matters, the declaration order must be chosen deliberately, or a separate function should express the ranking.",
+          "optionFeedback": [
+            "GHC cannot know what the constructor names mean. It uses the order of the declaration, which is documented and predictable.",
+            "Correct. The order is a property of the declaration, and each derived class unlocks specific operations that are otherwise unavailable.",
+            "The comparison does not look at the names of the constructors, only at their position in the declaration.",
+            "Bounded provides minBound and maxBound. It has no influence on how Ord compares values."
+          ]
+        },
+        {
+          "question": "A student says: \"Rectangle takes two Floats, so Rectangle 3.0 on its own must be an error because an argument is missing.\" The program below runs. Which explanation is the most precise about what Rectangle is and what the program shows?",
+          "code": [
+            "data Shape = Circle Float | Rectangle Float Float",
+            "  deriving (Show)",
+            "",
+            "area :: Shape -> Float",
+            "area (Circle r)      = pi * r * r",
+            "area (Rectangle w l) = w * l",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  let shapes = map (Rectangle 3.0) [1.0, 2.0]",
+            "  print shapes",
+            "  print (map area shapes)"
+          ],
+          "options": [
+            "The student is right, and the program fails to compile because Rectangle 3.0 is incomplete.",
+            "A constructor with arguments is an ordinary curried function: Rectangle has type Float -> Float -> Shape. Rectangle 3.0 is a partial application with type Float -> Shape, which map can apply to each length. The output is [Rectangle 3.0 1.0,Rectangle 3.0 2.0] and then [3.0,6.0]. In patterns such as area (Rectangle w l), the constructor appears in brackets because function application would otherwise group differently.",
+            "Rectangle 3.0 is a Shape with only one dimension, and area treats the missing length as 0.",
+            "The program prints [3.0,6.0] only, because print cannot display a list of Shape values."
+          ],
+          "correctIndex": 1,
+          "explanation": "Constructors with fields are functions that build values of the type, and everything learned about currying applies to them. That is why partial application of a constructor is valid and often useful.",
+          "optionFeedback": [
+            "The program compiles. Partial application of a constructor is as legal as partial application of any other function.",
+            "Correct. Treating the constructor as a function explains the type, the partial application and the bracketed pattern.",
+            "There is no Shape value with a missing field. Rectangle 3.0 is a function, not a shape.",
+            "deriving (Show) lets print display Shape values, which is why the first line prints the list of rectangles."
+          ]
+        },
+        {
+          "question": "A team has used type synonyms for Metres and Feet, and a newtype alternative is proposed. The code below shows both. Which evaluation of the two designs is the most accurate?",
+          "code": [
+            "type MetresT = Double",
+            "type FeetT   = Double",
+            "",
+            "distanceT :: MetresT",
+            "distanceT = 100",
+            "",
+            "heightT :: FeetT",
+            "heightT = 30",
+            "",
+            "newtype Metres = Metres Double deriving (Show, Eq, Ord)",
+            "newtype Feet   = Feet Double   deriving (Show, Eq, Ord)",
+            "",
+            "addMetres :: Metres -> Metres -> Metres",
+            "addMetres (Metres a) (Metres b) = Metres (a + b)",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (distanceT + heightT)",
+            "  print (addMetres (Metres 100) (Metres 30))"
+          ],
+          "options": [
+            "Both designs reject distanceT + heightT, because the names differ.",
+            "A synonym is only another name for Double, so distanceT + heightT is accepted and prints 130.0 even though it adds metres to feet. With the newtype versions, Metres and Feet are distinct types, so addMetres (Metres 100) (Feet 30) would be rejected at compile time. newtype gives that protection with no run-time cost, because the wrapper is erased, but it allows only one constructor with one field; a type with alternatives needs data.",
+            "newtype is slower than a synonym at run time, because every value has to be wrapped in a box.",
+            "Both designs accept mixing metres and feet, so the choice between them is only about naming."
+          ],
+          "correctIndex": 1,
+          "explanation": "Type synonyms document intent but are expanded before type checking, so they cannot enforce it. A newtype creates a genuinely new type for the checker and is removed afterwards, which is why it adds safety at no run-time cost.",
+          "optionFeedback": [
+            "A synonym provides no protection. distanceT + heightT is simply Double plus Double.",
+            "Correct. The two features are different tools: documentation versus enforcement.",
+            "The newtype wrapper exists only while GHC checks the program. At run time it has the same representation as the wrapped value.",
+            "The newtype versions are distinct types, so mixing them is rejected."
+          ]
+        }
+      ]
     }
   }
 }

@@ -273,6 +273,88 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-building-lists-and-handling-partial-functions": {
+      "title": "Deeper reasoning: building lists and handling partial functions",
+      "questions": [
+        {
+          "question": "A student wants addAtEnd to put a new item at the end of a list and writes the definition below. GHC rejects it. The student says: \"Cons adds an element to a list, so it must be able to add to the end as well.\" Which explanation and repair is the most accurate?",
+          "code": [
+            "-- This version does not compile",
+            "addAtEnd :: [Int] -> Int -> [Int]",
+            "addAtEnd items newItem = items : newItem"
+          ],
+          "options": [
+            "The definition is correct in principle; only the argument types are in the wrong order, so swapping them makes it compile.",
+            "The : operator takes an element on its left and a list on its right, and always puts the element at the front. Here the left operand is a list and the right operand is a single Int, which is the wrong way round. To place an item at the end, join two lists with ++, as in items ++ [newItem]. That rebuilds the cells of the first list, whereas consing onto the front reuses the existing list unchanged.",
+            "The problem is that Int values cannot be placed inside lists, so newItem must first be converted to a String.",
+            "The definition compiles in GHCi but not in a file, because : is only available at the prompt."
+          ],
+          "correctIndex": 1,
+          "explanation": "Cons builds a list one cell at a time at the front. Appending to the end is a different operation, joining two lists, and it needs both operands to be lists. Recognising what is on each side of the operator decides which one to use.",
+          "optionFeedback": [
+            "Swapping the arguments in the signature would not change what : does. The operator itself requires an element on the left and a list on the right.",
+            "Correct. Cons is for the front, ++ is for joining lists, and the second one has a cost proportional to the length of the left list.",
+            "Int values can be elements of lists. The error concerns which side of : each operand is on, not the element type.",
+            ": is a normal operator in files and in GHCi alike."
+          ]
+        },
+        {
+          "question": "A student argues that firstScore is safe because \"its type, [Int] -> Int, promises an Int for every list\". The program below is run. Which assessment is most accurate about what the type promises and what actually happens?",
+          "code": [
+            "average :: [Double] -> Double",
+            "average xs = sum xs / fromIntegral (length xs)",
+            "",
+            "firstScore :: [Int] -> Int",
+            "firstScore scores = head scores",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (average [70, 80, 90])",
+            "  print (average [])",
+            "  print (firstScore [])"
+          ],
+          "options": [
+            "Everything prints a number: average [] prints 0.0 and firstScore [] prints 0, because Haskell supplies a default for an empty list.",
+            "The type promises a result for every list, but head is a partial function: it has no element to return for [], so the program prints 80.0, then NaN for average [] (zero divided by zero), and then stops with an exception complaining about an empty list. The type system accepts the gap between the type and the domain. The remedy is to deal with the empty case explicitly, for example by testing null before calling head, or by matching on [] and (x:_) in a pattern.",
+            "The program does not compile, because head cannot be applied to a list of Int.",
+            "Both average [] and firstScore [] stop the program with the same exception, because dividing by zero and taking the head of an empty list are the same kind of failure."
+          ],
+          "correctIndex": 1,
+          "explanation": "Partial functions are defined for fewer inputs than their types allow. The compiler does not know that [] is a problem, so the failure appears at run time. Floating-point division by zero is different again: it produces NaN rather than an exception.",
+          "optionFeedback": [
+            "Haskell never invents a default value. Without a result to return, head fails.",
+            "Correct. The three outputs show three behaviours, and the repair makes the empty case a deliberate part of the design.",
+            "head works on lists of any type, including Int. The problem is the empty list, not the element type.",
+            "The two failures are not the same: floating-point division of zero by zero gives NaN, while head [] raises an exception."
+          ]
+        },
+        {
+          "question": "A student predicts the first line of the output below to be [10,9,8,7,6,5,4,3,2,1], because \"a range goes from the first number to the second\". Which explanation of all four lines is correct?",
+          "code": [
+            "main :: IO ()",
+            "main = do",
+            "  print [10 .. 1]",
+            "  print [10, 9 .. 1]",
+            "  print (take 5 [1 ..])",
+            "  print [1, 3 .. 10]"
+          ],
+          "options": [
+            "The output is [10,9,8,7,6,5,4,3,2,1], then the same list again, then [1,2,3,4,5], then [1,3,5,7,9,10].",
+            "The output is [], then [10,9,8,7,6,5,4,3,2,1], then [1,2,3,4,5], then [1,3,5,7,9]. A range steps upwards by one unless a second element sets the step, so [10 .. 1] is empty, and counting down needs [10, 9 .. 1]. The infinite range [1 ..] is safe only because take asks for a finite part of it, and the step of [1, 3 .. 10] stops before exceeding 10.",
+            "The first line raises an exception, because the start of a range may not exceed its end.",
+            "The output is [], then [], then [1,2,3,4,5], then [1,3,5,7,9], because ranges can only increase."
+          ],
+          "correctIndex": 1,
+          "explanation": "The default step is +1. Giving the first two elements defines the step, positive or negative. Laziness makes the infinite range usable as long as only a finite prefix is demanded.",
+          "optionFeedback": [
+            "The default step does not count down, so [10 .. 1] is not the descending list. And the last range stops at 9, not 10.",
+            "Correct. Each line follows from the step rule and from laziness.",
+            "A range whose start exceeds its end is simply empty. No exception is raised.",
+            "A step of -1 is possible: [10, 9 .. 1] counts down, so the second line is not empty."
+          ]
+        }
+      ]
     }
   }
 }

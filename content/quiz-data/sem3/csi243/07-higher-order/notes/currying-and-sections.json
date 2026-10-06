@@ -190,6 +190,91 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-argument-order-sections-and-interfaces": {
+      "title": "Deeper reasoning: argument order, sections and interfaces",
+      "questions": [
+        {
+          "question": "A shop wants one function that applies a discount rate to many prices. One student writes applyDiscount with the rate first, and a second student writes applyDiscount' with the price first. Both compile. Which assessment of the two designs, and of what happens when the second one is used in the same way, is the most accurate?",
+          "code": [
+            "applyDiscount :: Double -> Double -> Double",
+            "applyDiscount rate price = price - price * rate",
+            "",
+            "applyDiscount' :: Double -> Double -> Double",
+            "applyDiscount' price rate = price - price * rate",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  let tenPercentOff = applyDiscount 0.10",
+            "  print (map tenPercentOff [100, 250, 80])",
+            "  print (map (applyDiscount' 0.10) [100, 250, 80])"
+          ],
+          "options": [
+            "The two lines print the same list, because multiplication is commutative and so the order of the arguments does not matter.",
+            "The first line prints [90.0,225.0,72.0]. The second compiles, because both arguments are Double, but 0.10 is now the price and each element of the list is treated as a rate, so the results are wrong without any warning. Partial application fixes the first argument, so the argument that varies least should come first. Here that is the rate, which is why applyDiscount is the better design.",
+            "The second line fails to compile, because a function cannot be partially applied on its first argument if the second is a Double.",
+            "The first line fails to compile, because tenPercentOff has no type signature."
+          ],
+          "correctIndex": 1,
+          "explanation": "Currying fixes arguments from left to right. A type-correct but misordered signature makes partial application silently do the wrong thing, since both arguments have the same type. Choosing the argument order for the staged use is part of the design.",
+          "optionFeedback": [
+            "The subtraction price - price * rate is not symmetric in the two arguments, so swapping them changes the result.",
+            "Correct. Same types make the mistake invisible to the compiler, and the argument order is what makes the first design usable.",
+            "Partial application on the first argument is allowed whatever the types are. The second line compiles and produces unintended results.",
+            "GHC infers the type of tenPercentOff as Double -> Double. A signature is not required."
+          ]
+        },
+        {
+          "question": "A student expects map (-3) [10, 20] to subtract 3 from every element, and is shown the lines below. Which explanation of the three working lines, and of why the fourth idea fails, is the most accurate?",
+          "code": [
+            "main :: IO ()",
+            "main = do",
+            "  print (map (subtract 3) [10, 20])",
+            "  print (map (\\x -> x - 3) [10, 20])",
+            "  print (map (3 -) [10, 20])",
+            "  -- map (-3) [10, 20] is rejected by GHC"
+          ],
+          "options": [
+            "(-3) is the section \"subtract 3\", and it fails only because 10 and 20 are Integers instead of Doubles.",
+            "(-3) is read as the number negative three, not as a section, so it is not a function and map cannot apply it. To subtract 3 you can use subtract 3 or a lambda, giving [7,17] twice. The section (3 -) fixes the left operand, so it computes 3 - x for each element and gives [-7,-17]. Minus is the one operator whose bracketed form with the operand on the right does not work as a section.",
+            "(3 -) and subtract 3 are the same function, so the third line prints [7,17].",
+            "Sections cannot be written with minus at all, so the third line is also rejected."
+          ],
+          "correctIndex": 1,
+          "explanation": "A leading minus in brackets is parsed as negation. The library function subtract is provided exactly for this case. A section that fixes the left operand, such as (3 -), is valid but means something different from subtracting 3.",
+          "optionFeedback": [
+            "The element type is not the problem. (-3) is a number, and numbers are not functions.",
+            "Correct. The three working lines show the two valid ways to subtract 3 and the section that subtracts from 3 instead.",
+            "(3 -) computes 3 minus the element, whereas subtract 3 computes the element minus 3. They give opposite signs here.",
+            "(3 -) is a valid section and prints [-7,-17], as the program shows."
+          ]
+        },
+        {
+          "question": "A student predicts that map (2 `div`) [1, 2, 3] halves each element, because \"the section has a 2 and div, so it divides by 2\". Which explanation of all four lines is correct?",
+          "code": [
+            "main :: IO ()",
+            "main = do",
+            "  print (map (`div` 2) [10, 15, 21])",
+            "  print (map (2 `div`) [1, 2, 3])",
+            "  print (map (^ 2) [1, 2, 3])",
+            "  print (map (2 ^) [1, 2, 3])"
+          ],
+          "options": [
+            "All four lines halve or double the elements, since sections always apply the number to the element.",
+            "Which side of the operator is already filled in decides the meaning. (`div` 2) fixes the right operand, so it computes x `div` 2 and gives [5,7,10]. (2 `div`) fixes the left operand, so it computes 2 `div` x and gives [2,1,0]. The same reasoning gives [1,4,9] for (^ 2), squaring each element, and [2,4,8] for (2 ^), which raises 2 to each element.",
+            "The second line is a type error, because a section can only be written with the operand on the right.",
+            "The second and fourth lines print the same lists as the first and third, because the operators are written in the same way."
+          ],
+          "correctIndex": 1,
+          "explanation": "A section is an operator with one operand supplied. The missing operand is the one the function will receive. Putting the supplied value on the left or on the right gives two different functions, unless the operator is commutative.",
+          "optionFeedback": [
+            "Sections never decide on a fixed role for the number. It is the position of the supplied operand that decides.",
+            "Correct. Each result follows from asking which operand is left open.",
+            "Sections can be written on either side. Only the special case of minus behaves differently.",
+            "div and ^ are not commutative, so swapping the supplied operand changes the answers."
+          ]
+        }
+      ]
     }
   }
 }

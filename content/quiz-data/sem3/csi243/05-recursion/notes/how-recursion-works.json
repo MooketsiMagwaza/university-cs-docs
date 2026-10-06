@@ -117,6 +117,86 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-termination-and-the-shape-of-recursion": {
+      "title": "Deeper reasoning: termination and the shape of recursion",
+      "questions": [
+        {
+          "question": "A student defines factorial as below and says: \"The argument shrinks on every call and the base case fac 0 = 1 is written, so this must terminate.\" Calling fac 3 never finishes. Which diagnosis is the most complete?",
+          "code": [
+            "fac :: Integer -> Integer",
+            "fac n = n * fac (n - 1)",
+            "fac 0 = 1"
+          ],
+          "options": [
+            "The argument does not shrink: fac (n - 1) is evaluated with the same value of n, so the recursion goes round in circles.",
+            "A recursive definition needs two base cases, so one is not enough even though it is written.",
+            "Termination needs two conditions: the argument must move towards the base case, and the base case must be reachable. Here the argument does shrink, but the first equation uses a variable pattern that matches every Integer, including 0, so the equation fac 0 = 1 is never reached. The chain runs through 3, 2, 1, 0, -1, -2 and onwards without end. Moving the literal base case above the general equation repairs it.",
+            "The program cannot work because Integer values cannot be negative, so fac (-1) raises an exception immediately."
+          ],
+          "correctIndex": 2,
+          "explanation": "Both conditions matter. The argument does decrease, but the equations are tried from the top, and a variable pattern placed first intercepts every call. GHC warns that the later equation is redundant, but it compiles the file, which is why the fault shows up as a hang rather than an error.",
+          "optionFeedback": [
+            "The argument does shrink: the recursive call is fac (n - 1), which is one less than n. The fault is not in the step.",
+            "The number of base cases depends on how far back the step reaches. A step that subtracts one needs a single base case, provided it can be reached.",
+            "Correct. Order of equations is part of the meaning, and a base case that cannot match is as bad as a missing one.",
+            "Integer has negative values, which is exactly why the chain continues past 0 and never stops."
+          ]
+        },
+        {
+          "question": "A student defines fib with only one base case, arguing: \"The recursion always counts down, so it will eventually reach 0 and stop.\" Which evaluation of this claim is correct, and what general rule does it illustrate?",
+          "code": [
+            "fib :: Integer -> Integer",
+            "fib 0 = 0",
+            "fib n = fib (n - 1) + fib (n - 2)"
+          ],
+          "options": [
+            "The claim is correct, because the argument keeps decreasing until it equals 0.",
+            "The claim is correct for fib 0 only; for every other input the function returns 0.",
+            "The claim is wrong. The step reaches back two positions, so fib 1 asks for fib 0 and fib (-1). The call on -1 skips past the base case and continues through -2, -3 and so on without end, so any argument greater than zero fails to terminate. The general rule is that the base cases must cover every place the recursive step can reach, so a step that looks back k places needs k base cases.",
+            "The claim is wrong because fib needs a base case for every positive integer, which is impossible, so Haskell cannot define it recursively."
+          ],
+          "correctIndex": 2,
+          "explanation": "Counting down does not guarantee landing on the base case. With a step of two, the argument can jump over 0. The call tree for fib shows why: every node waits for two children, and some of them are values that lie below the base case.",
+          "optionFeedback": [
+            "The argument decreases, but it does not stop on 0: fib (n - 2) can jump from 1 to -1.",
+            "Only fib 0 is defined by the first equation. Any other input recurses and never returns a value.",
+            "Correct. Reasoning about how far back the step reaches determines how many base cases are needed.",
+            "Two base cases, fib 0 and fib 1, are enough. A recursive definition never needs a base case for every number, only for the smallest inputs the step can reach."
+          ]
+        },
+        {
+          "question": "A student changes isOdd in the mutually recursive pair below so that it passes its argument to isEven unchanged, and predicts that the program will hang. They run it and are surprised that it finishes, though some answers are wrong. Which explanation covers both observations?",
+          "code": [
+            "isEven :: Integer -> Bool",
+            "isEven 0 = True",
+            "isEven n = isOdd (n - 1)",
+            "",
+            "isOdd :: Integer -> Bool",
+            "isOdd 0 = False",
+            "isOdd n = isEven n",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (isEven 3)",
+            "  print (isEven 4)"
+          ],
+          "options": [
+            "It finishes because Haskell stops any recursion after a fixed number of calls and returns False.",
+            "It finishes because isEven still subtracts one on every cycle, so across the whole cycle of calls the argument shrinks and reaches 0. The change does not hang, but it breaks the meaning: isOdd no longer counts down, so isEven 4 reaches isOdd 0 and prints False instead of True. Termination has to be checked across the whole cycle of calls, and a program that terminates can still be wrong.",
+            "It finishes because isOdd is never called when the argument is greater than 0, so the unchanged argument has no effect.",
+            "It finishes because Haskell evaluates isEven and isOdd in parallel, so one of them always reaches 0."
+          ],
+          "correctIndex": 1,
+          "explanation": "A hang needs a cycle of calls that never reduces the argument. Here every trip through isEven subtracts one, so the argument still reaches 0. The result is wrong because the parity alternation was lost, which only a trace or a test at an even input reveals.",
+          "optionFeedback": [
+            "Haskell has no automatic limit that substitutes a value. A genuinely non-terminating program keeps running or overflows the stack.",
+            "Correct. Both parts of the lesson apply: termination is a property of the whole cycle, and termination alone does not prove correctness.",
+            "isOdd is called whenever isEven handles a non-zero argument, so its unchanged hand-off is exercised on every step.",
+            "Evaluation here is sequential and deterministic; no parallelism is involved."
+          ]
+        }
+      ]
     }
   }
 }

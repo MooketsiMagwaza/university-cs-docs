@@ -61,6 +61,71 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-module-boundaries-and-file-names": {
+      "title": "Deeper reasoning: module boundaries and file names",
+      "questions": [
+        {
+          "question": "A student saves a file called Wrong.hs that begins with module MyCalculator where. Loading Wrong.hs in GHCi succeeds and the functions work, so the student concludes that file names do not matter. Later a second file that says import MyCalculator fails to load with a message that MyCalculator cannot be found. Which explanation accounts for both observations?",
+          "options": [
+            "The first load should also have failed, so the success was a bug that has since been fixed.",
+            "Loading a single file directly does not require its name to match its module, so the first step succeeds. When another module imports MyCalculator, GHC looks for a file called MyCalculator.hs in its search path, and the module in Wrong.hs is not found under that name. The convention of one module per file, with the file named after the module, becomes a hard requirement the moment another module imports it, and the error appears in the importing file even though the module exists.",
+            "The import failed because module names are case-insensitive, so MyCalculator and mycalculator clash.",
+            "The import failed because a module can only be imported once per session, and Wrong.hs had already used the name."
+          ],
+          "correctIndex": 1,
+          "explanation": "The mismatch is silent until a lookup by module name is needed. This is why the error is reported far from the cause, and why matching the names from the start saves time.",
+          "optionFeedback": [
+            "GHC deliberately accepts a single file whose name differs from its module, so the first load is not a bug.",
+            "Correct. The cause and the symptom are in different files, which is what makes the problem confusing.",
+            "Module names are case-sensitive, and the mismatch here is between a file name and a module name, not a capitalisation clash.",
+            "A module can be imported by any number of other modules. The failure is about locating it."
+          ]
+        },
+        {
+          "question": "A teammate defines the module below and then writes a main file with import Temperature that calls both celsiusToFahrenheit 100 and freezingPoint. GHC accepts the first call and reports a variable not in scope for the second. The teammate asks whether the importer or the module is at fault. Which assessment is the most accurate?",
+          "code": [
+            "module Temperature (celsiusToFahrenheit) where",
+            "",
+            "celsiusToFahrenheit :: Double -> Double",
+            "celsiusToFahrenheit c = c * 9 / 5 + 32",
+            "",
+            "freezingPoint :: Double",
+            "freezingPoint = 0"
+          ],
+          "options": [
+            "The importer is at fault: import Temperature should always bring in every name defined in the file.",
+            "GHC is at fault, because freezingPoint is defined in the module and so it must be visible everywhere.",
+            "Neither is at fault. The export list (celsiusToFahrenheit) makes the module's interface only that one name, and freezingPoint is private. If importers need it, it must be added to the export list. Keeping the exported set small is deliberate: whatever is exported is something other code may come to depend on, so hiding the rest leaves the module free to change its internals without breaking callers.",
+            "The error appears because freezingPoint has the wrong type; a Double cannot be exported."
+          ],
+          "correctIndex": 2,
+          "explanation": "An export list is a statement about the module's public interface. Names outside it are internal, and an importer that tries to use them gets a scope error, which is the intended behaviour.",
+          "optionFeedback": [
+            "Without an export list a module exports everything, but this module has one, so only the listed name is imported.",
+            "Visibility in a module is controlled by the export list, not by whether a name is defined. GHC is following the declaration.",
+            "Correct. The error reflects a design decision rather than a mistake, and the repair depends on whether the name should be public.",
+            "Double values can be exported like any other. Visibility, not type, is the issue."
+          ]
+        },
+        {
+          "question": "A student argues: \"Splitting a program into modules is only a way to make files shorter, and it changes nothing about how I test my code.\" Which reply best describes what modularity gives, and how a module can be tested?",
+          "options": [
+            "The student is right: modules have no practical effect except for the length of each file.",
+            "Modules help because they group related definitions with a clear purpose, can be loosely coupled so they are reusable elsewhere, and make a program easier to manage. A module can also be checked on its own: load it in GHCi with :load, call its functions at the prompt, and confirm they work before any program uses it. A fault found there is in that module alone, which makes it far easier to locate.",
+            "Modules matter only because Haskell requires at least two of them in every program.",
+            "Modules make testing impossible, because their functions cannot be called outside the main module."
+          ],
+          "correctIndex": 1,
+          "explanation": "The advantages of modules are about organisation, reuse and isolation. Isolated testing is the practical payoff: a module with a small interface can be exercised completely without the programs that depend on it.",
+          "optionFeedback": [
+            "The benefits go beyond line counts: reuse, loose coupling and the ability to test a unit in isolation.",
+            "Correct. The three advantages and the testing workflow all come from the module being self-contained.",
+            "A program can consist of a single module, and in fact many small ones do. Modularity is optional, though useful.",
+            "Functions exported from a module can be called from any other module, and from the GHCi prompt after :load."
+          ]
+        }
+      ]
     }
   }
 }

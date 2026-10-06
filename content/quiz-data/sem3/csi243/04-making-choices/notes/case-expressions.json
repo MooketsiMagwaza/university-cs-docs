@@ -166,6 +166,98 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-when-case-is-the-right-form": {
+      "title": "Deeper reasoning: when case is the right form",
+      "questions": [
+        {
+          "question": "A student wants to avoid case and rewrite parity using only equation-level patterns on the argument n, so that no helper is needed. Which statement best explains why that rewrite is not a direct translation, and what the realistic alternatives are?",
+          "code": [
+            "parity :: Int -> String",
+            "parity n =",
+            "  case n `mod` 2 of",
+            "    0 -> \"even\"",
+            "    _ -> \"odd\"",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (map parity [4, 7])"
+          ],
+          "options": [
+            "A rewrite is easy: parity 0 = \"even\" and parity _ = \"odd\" behave the same for every Int.",
+            "Equation-level patterns can only inspect the argument as it arrives, whereas this case inspects a calculated value, n `mod` 2. Writing parity 0 = ... would test whether n itself is zero, which classifies 4 and 7 as \"odd\". The realistic alternatives are guards such as | even n = ... or a helper that computes the remainder first; case keeps the calculation inside the expression.",
+            "case is mandatory for any function that uses mod, because patterns cannot call functions.",
+            "The two forms differ only in whether the result is evaluated lazily or strictly."
+          ],
+          "correctIndex": 1,
+          "explanation": "Patterns match on the shape or value of what is given. A case scrutinises any expression, including one that is computed on the spot. This is the property that makes case the right tool when the decision depends on a derived value.",
+          "optionFeedback": [
+            "parity 0 = \"even\" would test the argument against 0, not its remainder, so 4 would be called odd. The two definitions are not equivalent.",
+            "Correct. The difference is what is being inspected, and guards or case are the natural ways to inspect a computed value.",
+            "Patterns do not call functions, but that does not make case mandatory; guards and helper functions can also express the same decision.",
+            "Laziness is not the distinction. The difference is the expression that is examined."
+          ]
+        },
+        {
+          "question": "A student explains the code below as: \"case has to be the first thing in a function body, so a case cannot be inside a string concatenation.\" A friend changes the GT branch to return the number 1 instead of text and is surprised by the result. Which statement explains both observations?",
+          "code": [
+            "report :: Int -> String",
+            "report n = \"The number is \" ++ case compare n 0 of",
+            "  LT -> \"negative\"",
+            "  EQ -> \"zero\"",
+            "  GT -> \"positive\"",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (map report [-4, 0, 9])"
+          ],
+          "options": [
+            "The student is right, and the friend's change prints The number is 1, because numbers are converted to text by ++.",
+            "A case is an expression with a value and a type, so it can appear anywhere a value is expected, including as the right operand of ++. Every alternative must produce the same type, here String, so the friend's change makes GHC reject the program with a type error rather than printing anything.",
+            "The student is right about the position, and the friend's change is accepted because a case may return different types in different alternatives.",
+            "Both observations are wrong: a case can only appear inside a do block, and its alternatives are never type checked."
+          ],
+          "correctIndex": 1,
+          "explanation": "case follows the same rules as if: it is an expression, so it has one type and can be nested inside larger expressions. All alternatives must agree. That also explains why equation-level patterns cannot do this: they select a whole equation, not a fragment of one.",
+          "optionFeedback": [
+            "++ does not convert numbers to text, and the position claim is also incorrect. The friend's version does not compile.",
+            "Correct. The expression nature of case accounts for both its flexible position and its single-type rule.",
+            "The alternatives of one case must share a type, just as the two branches of an if must. Otherwise the whole expression would have no single type.",
+            "case is used in pure code as well as in IO code, and its alternatives are type checked like every other expression."
+          ]
+        },
+        {
+          "question": "A student expects the call classifyHead [7] to crash, because the only alternative for a non-empty list has guards, and neither guard accepts a positive head. Which assessment of that prediction is correct?",
+          "code": [
+            "classifyHead :: [Int] -> String",
+            "classifyHead xs =",
+            "  case xs of",
+            "    []    -> \"empty list\"",
+            "    (y:_)",
+            "      | y < 0     -> \"starts negative\"",
+            "      | y == 0    -> \"starts at zero\"",
+            "    _ -> \"starts positive\"",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (map classifyHead [[], [-3], [0], [7]])"
+          ],
+          "options": [
+            "The prediction is correct: when the guards of an alternative all fail, the case expression fails with an exception.",
+            "The prediction is wrong. If every guard under an alternative fails, matching continues with the next alternative, here the wildcard, which returns \"starts positive\". The output is [\"empty list\",\"starts negative\",\"starts at zero\",\"starts positive\"]. A crash would only occur if no remaining alternative could match.",
+            "The prediction is wrong, because case alternatives are tried from the bottom to the top.",
+            "The prediction is wrong because the wildcard _ is matched first, before any other alternative."
+          ],
+          "correctIndex": 1,
+          "explanation": "Guards inside a case alternative behave like guards in an equation: failing guards send the match on to the next alternative. The alternatives are always tried from the top, and the wildcard must therefore be last.",
+          "optionFeedback": [
+            "Failing guards do not make the whole case fail; they only reject that particular alternative.",
+            "Correct. The fall-through rule is the same one that guards follow in ordinary equations.",
+            "Alternatives are tried top to bottom, exactly like equations.",
+            "The wildcard matches anything, which is why it is placed last. If it came first it would capture every value and the other alternatives would never run."
+          ]
+        }
+      ]
     }
   }
 }

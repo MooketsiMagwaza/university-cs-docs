@@ -178,6 +178,95 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-ordering-coverage-and-structure": {
+      "title": "Deeper reasoning: ordering, coverage and structure",
+      "questions": [
+        {
+          "question": "A student writes the program below and is puzzled. Both calls print \"Not a day number\", and GHC printed a warning that did not stop the program from running. Which explanation of the behaviour and which repair is the most complete?",
+          "code": [
+            "describeDay :: Int -> String",
+            "describeDay n = \"Not a day number\"",
+            "describeDay 1 = \"Monday\"",
+            "describeDay 2 = \"Tuesday\"",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (describeDay 1)",
+            "  print (describeDay 2)"
+          ],
+          "options": [
+            "GHC should have rejected the file; the program runs only because warnings are errors in GHCi.",
+            "Haskell tries equations from top to bottom and commits to the first match. The first equation uses a variable pattern, which matches every Int, so the equations below it can never be reached. GHC reports them as redundant but still compiles the file. The repair is to put the specific literal patterns first and the general catch-all last.",
+            "The literal patterns are ignored, because a function can have only one equation for each type of argument.",
+            "describeDay 1 and describeDay 2 fail, because Int literals cannot be used as patterns."
+          ],
+          "correctIndex": 1,
+          "explanation": "A variable pattern is the most general pattern possible, so any equation placed after it is dead code. GHC treats this as a warning (overlapping patterns) rather than an error, which is why the mistake is easy to overlook. Ordering equations from most specific to most general fixes the behaviour.",
+          "optionFeedback": [
+            "A warning does not stop compilation, in GHCi or in compiled programs. The danger is exactly that the file still runs.",
+            "Correct. The first match wins, and a variable matches everything, so the order of the equations is the entire fault.",
+            "A function may have any number of equations. Haskell picks the first one whose patterns match.",
+            "Literals are valid patterns. They would work as intended if they appeared before the variable pattern."
+          ]
+        },
+        {
+          "question": "The program below compiles. A student claims: \"GHC would have stopped me if there were a missing case, so the second call is safe.\" Which assessment is correct about when and how the failure appears?",
+          "code": [
+            "secondElement :: [a] -> a",
+            "secondElement (_:x:_) = x",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (secondElement [10, 20, 30 :: Int])",
+            "  print (secondElement [5 :: Int])"
+          ],
+          "options": [
+            "The claim is correct: GHC rejects every function that does not cover all possible lists, so the file never runs.",
+            "The claim is wrong. The first call prints 20, but the second list has only one element and matches no equation, so the program stops with a non-exhaustive patterns exception while it is running. Turning on -Wincomplete-patterns would print a compile-time warning that names the gap, but it would not prevent the crash. The safe repair is a final catch-all equation, for example one that calls error with a clear message.",
+            "The second call prints 5, because Haskell returns the nearest available element when a list is too short.",
+            "The second call prints an empty value, because a missing pattern defaults to a wildcard."
+          ],
+          "correctIndex": 1,
+          "explanation": "Exhaustiveness is checked at run time by default. The pattern (_:x:_) needs at least two elements, so a one-element list falls through every equation. The warning flag only reports the gap while compiling; adding the missing equation is the programmer's job.",
+          "optionFeedback": [
+            "GHC accepts incomplete patterns by default. The failure occurs only if an unmatched argument actually arrives.",
+            "Correct. The program prints 20 and then crashes, and the fix is a catch-all that makes the failure explicit.",
+            "Haskell never substitutes a different element. If no equation matches, the call fails.",
+            "There is no implicit wildcard. A missing case is simply missing, and reaching it raises an exception."
+          ]
+        },
+        {
+          "question": "A student predicts the output of the calls below. They are confident about the tuple but unsure about the list pattern, and guess that stW \"boat\" is True \"because it starts with b\". Which explanation of the actual results is the most precise?",
+          "code": [
+            "stW :: [Char] -> Bool",
+            "stW ['b', _, _] = True",
+            "stW _ = False",
+            "",
+            "swap :: (a, b) -> (b, a)",
+            "swap (x, y) = (y, x)",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (map stW [\"bat\", \"boat\", \"ba\", \"bxx\"])",
+            "  print (swap (1 :: Int, \"one\"))"
+          ],
+          "options": [
+            "The first line prints [True,True,False,True] and the second prints (1,\"one\"), because a list pattern only checks the first element.",
+            "The first line prints [True,False,False,True]. The pattern ['b', _, _] describes a list of exactly three elements whose first is 'b', so \"boat\" fails on length and \"ba\" fails on length, while \"bat\" and \"bxx\" match. The second line prints (\"one\",1), because the tuple pattern (x, y) names both components and the result puts them in the opposite order.",
+            "The first line prints [True,False,False,True] and the second line prints (1,\"one\"), because tuple patterns never reorder anything.",
+            "Both lines fail to compile, because list patterns and tuple patterns cannot appear in the same module."
+          ],
+          "correctIndex": 1,
+          "explanation": "A list pattern fixes both the length and the content of each position. Tuples are matched by position too, and the right-hand side is free to rearrange the named parts. Evaluating a pattern means checking structure first and values second.",
+          "optionFeedback": [
+            "A list pattern constrains the length as well as the first element, so \"boat\" is not matched.",
+            "Correct. The length requirement explains the second and third results, and the swap shows that patterns bind names which the result may reorder.",
+            "The list result is right, but swap does reorder the components, as its signature (a, b) -> (b, a) says.",
+            "Different pattern forms can appear freely in the same module and even in the same function."
+          ]
+        }
+      ]
     }
   }
 }

@@ -139,6 +139,92 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-specifications-tests-and-function-design": {
+      "title": "Deeper reasoning: specifications, tests, and function design",
+      "questions": [
+        {
+          "question": "The specification says: \"isPass returns True when a mark is 50 or more.\" A student writes the program below, runs it, sees True and False, and reports: \"Both tests pass, so the function is correct and the testing is finished.\" Which critique is the most accurate?",
+          "code": [
+            "isPass :: Integer -> Bool",
+            "isPass mark = mark > 50",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (isPass 72)",
+            "  print (isPass 30)"
+          ],
+          "options": [
+            "The critique is unfair: two passing tests are enough for any function that compiles, because the type signature already guarantees correctness.",
+            "The tests only use inputs far from the decision boundary, so they cannot distinguish > from >=. The specification says 50 passes, but isPass 50 would return False. The process step on domain and edge cases should have produced tests at 49, 50 and 51 before any implementation.",
+            "The function is wrong only because it is not written with an if expression; a comparison cannot return a Bool by itself.",
+            "The tests are fine, but the specification is wrong: a mark of exactly 50 should not count as a pass, so the code is correct as written."
+          ],
+          "correctIndex": 1,
+          "explanation": "A compiler proves that the types agree, not that the formula matches the problem. Comparisons that are off by one are among the most common faults, and they only show up at the boundary. Writing the examples and edge cases first, as the six-part process requires, makes the boundary tests obvious.",
+          "optionFeedback": [
+            "The signature promises a Bool, not the right Bool. Both mark > 50 and mark >= 50 satisfy it, and only tests reveal which one the specification wanted.",
+            "Correct. 72 and 30 sit far from the boundary, so a wrong comparison operator survives them. The decisive test is isPass 50, which returns False here although the specification says it should be True.",
+            "A comparison such as mark > 50 is already an expression of type Bool; wrapping it in if would add nothing. The fault is the choice of operator.",
+            "The specification is the fixed starting point in this scenario. Changing the specification to match the code is the opposite of the process, which checks code against the specification."
+          ]
+        },
+        {
+          "question": "A team must greet every name in a list with the same greeting. They are choosing between two designs for the greeting function. Which evaluation of the designs is the most accurate?",
+          "code": [
+            "greet :: String -> String -> String",
+            "greet greeting name = greeting ++ \", \" ++ name ++ \"!\"",
+            "",
+            "greetPair :: (String, String) -> String",
+            "greetPair (greeting, name) = greeting ++ \", \" ++ name ++ \"!\"",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  let sayHello = greet \"Hello\"",
+            "  print (map sayHello [\"Ada\", \"Grace\"])"
+          ],
+          "options": [
+            "greetPair is the better design, because grouping both inputs in one tuple makes it impossible to forget an argument, and it can be given to map directly.",
+            "The two designs are interchangeable: GHC converts a tuple into two curried arguments automatically whenever one is needed.",
+            "greet is the better design for this job. Because it is curried, supplying only the greeting produces a new one-argument function, sayHello, which map can use directly. With greetPair the team would have to wrap each call, for example with a lambda that builds the pair, so the tupled form fits better when the two values naturally arrive together.",
+            "greet is better only because curried functions run faster than tupled ones, so a program that maps over a long list finishes sooner."
+          ],
+          "correctIndex": 2,
+          "explanation": "Currying turns a multi-argument function into a chain of one-argument functions, so fixing the first argument yields a reusable function. A tupled function takes exactly one argument, the whole pair, so nothing can be fixed in advance. Neither form is wrong; the choice depends on how the data arrives.",
+          "optionFeedback": [
+            "A tuple does not stop mistakes more effectively, and greetPair cannot be passed to map with the greeting fixed, because it expects the pair as a single argument.",
+            "Haskell never converts between the two shapes automatically. Mixing them is a type error that names the mismatch.",
+            "Correct. The deciding factor is partial application, which the curried signature makes possible and the tupled signature rules out.",
+            "Performance is not the reason, and the lesson makes no such claim. The advantage is expressiveness: one function can serve many calls once its first argument is fixed."
+          ]
+        },
+        {
+          "question": "A student's classify function is meant to return \"negative\", \"zero\" or \"positive\". They test classify (-5) and classify 8, see \"negative\" and \"positive\", and submit. Which analysis best explains what the tests missed and how the six-part process would have caught it?",
+          "code": [
+            "classify :: Integer -> String",
+            "classify n =",
+            "  if n <= 0",
+            "    then \"negative\"",
+            "    else if n == 0",
+            "      then \"zero\"",
+            "      else \"positive\""
+          ],
+          "options": [
+            "Nothing was missed: the zero branch is correct, because n == 0 is checked after n <= 0 and is therefore always reached for zero.",
+            "The function is wrong for every input, because an if expression cannot be nested inside the else branch of another.",
+            "The condition n <= 0 is also True for 0, so the zero branch can never be reached and classify 0 returns \"negative\". Both tests avoided the one input the function distinguishes by its own branch. Listing the domain and edge cases (below zero, exactly zero, above zero) before implementing would have put 0 among the examples, and a dry run of classify 0 would have exposed the unreachable branch.",
+            "The fault is in the signature: classify should return a Bool for the zero case to be reachable."
+          ],
+          "correctIndex": 2,
+          "explanation": "Branches are tried in order, and the first condition that is True wins. Because n <= 0 includes zero, the later n == 0 test is dead code. A boundary example, and a hand trace of that example, are the cheapest ways to find that kind of mistake.",
+          "optionFeedback": [
+            "The order is the problem, not the solution: zero already satisfies n <= 0, so execution never reaches the n == 0 test.",
+            "Nested if expressions are perfectly legal as long as every branch has a result; this function type-checks and runs. The fault is logical, not syntactic.",
+            "Correct. The code compiles and passes two ordinary tests, which is exactly why edge-case examples and a dry run belong before and after implementation.",
+            "The signature correctly says the function returns one of three labels as a String. Changing it to Bool would remove the information the specification asks for."
+          ]
+        }
+      ]
     }
   }
 }

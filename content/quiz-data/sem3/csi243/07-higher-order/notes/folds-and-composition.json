@@ -207,6 +207,92 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-folds-evaluation-order-and-composition": {
+      "title": "Deeper reasoning: folds, evaluation order and composition",
+      "questions": [
+        {
+          "question": "A student expects foldr and foldl to give the same answer for every operator, because both \"just combine the list\". The program below proves otherwise. Which explanation, using the substitution picture, accounts for all four results?",
+          "code": [
+            "main :: IO ()",
+            "main = do",
+            "  print (foldr (-) 0 [1, 2, 3])",
+            "  print (foldl (-) 0 [1, 2, 3])",
+            "  print (foldr (+) 0 [1, 2, 3])",
+            "  print (foldl (+) 0 [1, 2, 3])"
+          ],
+          "options": [
+            "The results are 2, 2, 6 and 6, because subtraction is evaluated in the same order by both folds.",
+            "The results are 2, -6, 6 and 6. foldr replaces each : with the operator and the final [] with the starting value, giving 1 - (2 - (3 - 0)) = 2, whereas foldl nests the other way, giving ((0 - 1) - 2) - 3 = -6. Addition is associative, so both nestings give 6, but subtraction is not, so the folds disagree. Writing out the substitution picture is the reliable way to predict the result.",
+            "The results are -6, 2, 6 and 6, because foldr starts from the left of the list.",
+            "The results are 2, -6, 6 and 0, because foldl with addition ignores the starting value."
+          ],
+          "correctIndex": 1,
+          "explanation": "The folds differ in how the operator is nested. When the operator is associative the nesting does not matter, which is why sum and product can use either. For operators such as subtraction the grouping changes the value.",
+          "optionFeedback": [
+            "The folds nest the operations in opposite directions, so subtraction gives different results.",
+            "Correct. The two nestings are written out and evaluated, and the agreement for addition is explained by associativity.",
+            "foldr starts combining at the right-hand end, and its result for subtraction is 2, not -6.",
+            "foldl (+) 0 [1, 2, 3] is ((0 + 1) + 2) + 3 = 6. The starting value is used."
+          ]
+        },
+        {
+          "question": "A student is told that foldr can work with an infinite list while foldl cannot, and objects: \"Both of them look at every element, so neither could finish.\" Which explanation of the two calls best resolves the objection?",
+          "code": [
+            "-- foldr can produce the first element before looking at the rest.",
+            "works :: [Integer]",
+            "works = take 3 (foldr (:) [] [1 ..])            -- [1,2,3]",
+            "",
+            "-- foldl must reach the end of the list before it can return anything,",
+            "-- so evaluating this definition never finishes.",
+            "neverFinishes :: [Integer]",
+            "neverFinishes = take 3 (foldl (\\acc x -> x : acc) [] [1 ..])"
+          ],
+          "options": [
+            "Both calls finish with [1,2,3], because take limits the work of every function it is applied to.",
+            "Both calls never finish, because an infinite list can only be used with functions written without recursion.",
+            "foldr (:) [] [1 ..] can produce 1 : (foldr (:) [] [2 ..]) without evaluating the rest of that expression, so the result can be consumed lazily and take 3 asks for only three cells. foldl has to build its whole accumulated expression by walking to the end of the list before it can return its first piece, so on an infinite list it never returns. That is why foldr is the default and why combining operators that can stop early, such as (:) or (&&), suit it.",
+            "foldr works because it is faster, and foldl does not work because it is slower."
+          ],
+          "correctIndex": 2,
+          "explanation": "The difference is about when the work happens, not about how much work there is in total. foldr can hand back a first piece of its result and leave the remainder as an unevaluated expression, while foldl cannot return until the end of the input has been reached.",
+          "optionFeedback": [
+            "take can only ask for a small part of a lazily produced result. If the function cannot produce anything until it has seen the whole list, take cannot help.",
+            "Recursion is not the issue. foldr is recursive and works on the infinite list, because it can return a part of its result early.",
+            "Correct. The laziness of the combining function and the position of the recursive call are what separate the two folds.",
+            "The difference is about evaluation order, not speed. foldl does not finish at all on an infinite list."
+          ]
+        },
+        {
+          "question": "A student reads the definitions below and says: \"composition is just multiplication of functions, so the order does not matter.\" Which explanation of the two results, using right-to-left reading, corrects this?",
+          "code": [
+            "stepA :: Integer -> Integer",
+            "stepA = subtract 1 . (* 2)",
+            "",
+            "stepB :: Integer -> Integer",
+            "stepB = (* 2) . subtract 1",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (stepA 5)",
+            "  print (stepB 5)"
+          ],
+          "options": [
+            "Both print 9, because the order of composed functions never changes the result.",
+            "Both print 8, because composition always applies the left-hand function first.",
+            "stepA 5 prints 9 and stepB 5 prints 8. (f . g) x means f (g x), so the right-hand function runs first: stepA doubles 5 to get 10 and then subtracts 1, while stepB subtracts 1 to get 4 and then doubles. Function composition is not commutative, so the order of the pieces in a pipeline is part of its meaning.",
+            "stepA 5 prints 8 and stepB 5 prints 9, because the left-hand function always runs first."
+          ],
+          "correctIndex": 2,
+          "explanation": "Reading a composed pipeline from right to left, one function at a time, gives the order of the computation. Unrolling stepA 5 to subtract 1 ((* 2) 5) makes the same point in prefix notation.",
+          "optionFeedback": [
+            "The two pipelines apply the same functions in opposite orders and give different results.",
+            "The right-hand function is applied first, not the left-hand one.",
+            "Correct. Each result is found by applying the functions in the order they are read from right to left.",
+            "This swaps the two results. The right-hand function is applied first, so stepA gives 9."
+          ]
+        }
+      ]
     }
   }
 }

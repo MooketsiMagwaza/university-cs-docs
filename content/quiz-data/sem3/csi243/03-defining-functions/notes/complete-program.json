@@ -66,6 +66,91 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-values-actions-and-a-complete-program": {
+      "title": "Deeper reasoning: values, actions, and a complete program",
+      "questions": [
+        {
+          "question": "GHC rejects the program below, reporting that it expected IO a0 but found Integer in the do block. The student says: \"cube 4 is a perfectly good calculation, so the compiler is being unreasonable.\" Which explanation and repair is the most complete?",
+          "code": [
+            "-- This version does not compile",
+            "cube :: Integer -> Integer",
+            "cube x = x * x * x",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"Cubing 4 and 5:\"",
+            "  cube 4",
+            "  print (cube 5)"
+          ],
+          "options": [
+            "The compiler is wrong: a do block may contain any expression, and cube 4 should simply be ignored because its value is not used.",
+            "cube must be redeclared as cube :: Integer -> IO Integer so that it can appear inside main.",
+            "Every statement in a do block must be an action to perform. cube 4 is a pure Integer, a value, not an action, so it has nothing to do. The repair is to give the value to an action, for example print (cube 4), exactly as the next line does for cube 5.",
+            "The error appears because a do block can contain at most two statements, so the third line must be removed."
+          ],
+          "correctIndex": 2,
+          "explanation": "The do block describes a sequence of actions. A pure value on its own is not an action, so it has no place in the sequence unless something such as print turns it into one. The pure function cube stays pure; only the line that displays its result is an effect.",
+          "optionFeedback": [
+            "Haskell does not ignore values in statement position; it checks that each one is an action, and an Integer is not.",
+            "Making cube return an IO value would give a pure calculation an effect type for no reason and would make it harder to test. The usual repair is to keep cube pure and pass its result to print.",
+            "Correct. The mismatch is between a value and an action, and the repair is the same pattern that the working line already uses.",
+            "A do block can contain any number of statements. The line count is irrelevant to this error."
+          ]
+        },
+        {
+          "question": "A student predicts the output of the program below. They say: \"Haskell evaluates strictly top to bottom, so cube 1000000 is computed before Second is printed, and the order on screen proves it.\" Which statement about this claim is the most accurate?",
+          "code": [
+            "cube :: Integer -> Integer",
+            "cube x = x * x * x",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"First\"",
+            "  let result = cube 1000000",
+            "  putStrLn \"Second\"",
+            "  print result"
+          ],
+          "options": [
+            "The claim is right: the screen shows First, then the large number, then Second, because each line is evaluated the moment it is reached.",
+            "The screen shows First, Second, and then the number. That order only proves the order in which the IO actions run. Haskell is lazy, so cube 1000000 is evaluated when its value is first needed, which is during print, not at the let line. The visible output cannot distinguish early from late evaluation here, so it cannot prove the claim.",
+            "The program prints nothing, because let bindings are never evaluated unless they are used in a pure function.",
+            "The program fails to compile, because result is bound before it is used by a later action."
+          ],
+          "correctIndex": 1,
+          "explanation": "Action order and evaluation order are different things. The do block fixes the order of the effects; it does not force every pure expression to be computed at the line where it is written. For a pure, side-effect-free calculation the difference is invisible on screen, which is why it is easy to mistake one for the other.",
+          "optionFeedback": [
+            "The claimed output order is wrong, and the reasoning is the misconception the lesson's callout warns about. Binding a name does not force its evaluation.",
+            "Correct. Output order shows the actions' order only. Laziness means the calculation happens when print demands the value.",
+            "print result does use the value, so it is evaluated and displayed, and the program prints three lines.",
+            "A name bound earlier in a do block is available to every later statement. Using result in print is the normal pattern."
+          ]
+        },
+        {
+          "question": "A reviewer says the script below is not a \"complete program\" because main has no type signature, double has no signature, and there is no do block around the print line. Which evaluation is correct?",
+          "code": [
+            "double x = x * 2",
+            "",
+            "main = do",
+            "  print (double 21)",
+            "  putStrLn \"done\""
+          ],
+          "options": [
+            "The reviewer is right on all three counts, so GHC will refuse to compile the file.",
+            "The program is complete and valid. A signature on main is optional: GHC infers main :: IO () from its last statement, and double is inferred as Num a => a -> a. Writing main :: IO () is still good practice, because it documents the entry point and makes GHC reject a main whose final statement returns something unexpected.",
+            "The program compiles, but it prints nothing, because main is only executed when its signature is written out.",
+            "The program is complete only if putStrLn is moved above print, since an output action with a string must always come first."
+          ],
+          "correctIndex": 1,
+          "explanation": "Type signatures are optional because GHC can infer them. What is mandatory is that the module defines main and that main is an IO action. The do block here is present, so the sequence of two actions is valid, and the result is an IO () action.",
+          "optionFeedback": [
+            "None of the three objections holds: signatures are optional, and the do block is present and aligned. GHC loads the file and runs it.",
+            "Correct. The signature adds documentation and a safety check, but its absence does not stop the program from running.",
+            "main runs regardless of whether its signature is written. Execution depends on the definition of main, not on an annotation.",
+            "The order of actions is up to the programmer. print followed by putStrLn is perfectly valid and prints 42 and then done."
+          ]
+        }
+      ]
     }
   }
 }

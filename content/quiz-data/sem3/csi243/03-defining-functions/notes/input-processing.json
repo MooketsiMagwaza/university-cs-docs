@@ -166,6 +166,87 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-input-binding-and-conversion": {
+      "title": "Deeper reasoning: input, binding, and conversion",
+      "questions": [
+        {
+          "question": "GHC rejects the program below with the message that there is no instance for Num String arising from a use of +. The student believes the problem is the let keyword and tries replacing it with <-. Which diagnosis is the most accurate, and what is the correct repair?",
+          "code": [
+            "-- This version does not compile",
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"Enter your age:\"",
+            "  ageText <- getLine",
+            "  let nextYear = ageText + 1",
+            "  putStrLn (\"Next year: \" ++ show nextYear)"
+          ],
+          "options": [
+            "let is the wrong form here; replacing it with <- fixes the problem because + is an IO operation.",
+            "ageText is a String, because getLine always produces text, even when the user types digits. + needs a numeric type, and String has no Num instance. The repair is to parse the text first, for example let age = read ageText :: Integer and then let nextYear = age + 1. let is still the correct form, because both lines are pure calculations.",
+            "The problem is the show in the last line, which cannot convert numbers to text.",
+            "getLine should be replaced by read, because read both waits for input and produces a number."
+          ],
+          "correctIndex": 1,
+          "explanation": "Input arrives as text. Arithmetic needs numbers. The step between them is conversion, and read performs it, with the result type chosen by an annotation. Neither <- nor a change to show helps, because the error is about the type of ageText.",
+          "optionFeedback": [
+            "<- requires an IO action on its right, and ageText + 1 is a pure calculation. Using it here would produce a different error and would not address the real problem.",
+            "Correct. The message is about the type of ageText: text cannot be added to a number. Converting with read, then calculating with let, is the pipeline the lesson builds.",
+            "show correctly converts the finished number to text for ++. The error occurs one line earlier and is about adding to a String.",
+            "read does not wait for input or perform any action. It only converts text that already exists, so it cannot replace getLine."
+          ]
+        },
+        {
+          "question": "A classmate studies the program below and says: \"greeting is computed from name, which came from the keyboard, so it must also be bound with <-.\" Which reply best explains which operator belongs on each line and why?",
+          "code": [
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"Name?\"",
+            "  name <- getLine",
+            "  let greeting = \"Hello, \" ++ name",
+            "  putStrLn greeting"
+          ],
+          "options": [
+            "The classmate is right: anything that depends on keyboard input is itself an IO result, so every later binding must use <-.",
+            "Both operators are interchangeable here, so the choice is purely a matter of taste.",
+            "<- is used on the getLine line because getLine is an IO action to perform and its result must be captured. The greeting line is a pure calculation on a String that already exists, so it only needs a name, which let provides. Where a value came from does not change whether the later calculation is pure.",
+            "let should be used for name as well, because a let binding can capture the result of any action."
+          ],
+          "correctIndex": 2,
+          "explanation": "<- performs an action and binds its result. let names the value of a pure expression. The question to ask on each line is what is on the right-hand side: an action to run, or an expression to evaluate. Once the text exists, joining strings is an ordinary calculation.",
+          "optionFeedback": [
+            "Dependence on earlier input does not turn a later calculation into an action. ++ never touches the outside world, so there is nothing to perform.",
+            "They are not interchangeable. Each one has a precondition about its right-hand side, and violating it is a type error.",
+            "Correct. The two lines show the two forms side by side: performing an action, then naming a pure value computed from its result.",
+            "let name = getLine would bind the action itself, not the text it produces, so name would have type IO String and could not be joined to a String."
+          ]
+        },
+        {
+          "question": "A program asks for a whole number, and the user types four instead of 4. The program stops with an exception whose message contains Prelude.read: no parse. A student concludes: \"getLine is broken\" and a second student suggests changing the annotation to :: Double. Which assessment is correct?",
+          "code": [
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"Enter a whole number:\"",
+            "  inputText <- getLine",
+            "  let number = read inputText :: Integer",
+            "  print (number * 2)"
+          ],
+          "options": [
+            "Both students are right: getLine cannot read words, and Double accepts spelled-out numbers.",
+            "Neither is right. getLine did its job and produced the text four. read could not interpret those characters as an Integer, and it has no way to recover, so the program stops. Changing the type to Double does not help, because four is not a valid Double either. Handling invalid text needs input validation, which this lesson defers until the required types have been taught.",
+            "The first student is right: getLine should reject non-numeric text before it returns.",
+            "The second student is right: read accepts any word if the annotation names a type with decimals."
+          ],
+          "correctIndex": 1,
+          "explanation": "getLine only obtains a line of text, whatever it contains. Interpreting the text is read's job, and read assumes the text is valid for the requested type. Failure at that point is a run-time exception, not a type error, because the type of the program is perfectly correct.",
+          "optionFeedback": [
+            "Neither claim holds: getLine returns any text without judging it, and no numeric type reads spelled-out words.",
+            "Correct. The fault is in the data, the conversion cannot recover, and the safer design is a separate validation step.",
+            "getLine has no idea what the text will be used for, so it cannot reject non-numeric characters. Checking belongs to a later step.",
+            "A different numeric type still needs digits. The word four is not valid for Integer, Double or any other numeric Read instance."
+          ]
+        }
+      ]
     }
   }
 }

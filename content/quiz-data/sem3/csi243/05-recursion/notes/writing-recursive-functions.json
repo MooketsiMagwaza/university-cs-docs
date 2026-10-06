@@ -156,6 +156,89 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-designing-recursive-definitions": {
+      "title": "Deeper reasoning: designing recursive definitions",
+      "questions": [
+        {
+          "question": "A student simplifies rangeSum by deleting the m > n guard, reasoning that the specification only describes the case m <= n. Their tests rangeSum 3 5 (12) and rangeSum 4 4 (4) both pass. A tester then calls rangeSum 9 6. Which prediction and explanation is correct?",
+          "code": [
+            "rangeSum :: Integer -> Integer -> Integer",
+            "rangeSum m n",
+            "  | m == n    = m",
+            "  | otherwise = m + rangeSum (m + 1) n"
+          ],
+          "options": [
+            "rangeSum 9 6 returns 0, because the sum of an empty range is zero by convention.",
+            "rangeSum 9 6 returns 15, because Haskell swaps the arguments when the first exceeds the second.",
+            "rangeSum 9 6 never finishes. The recursive step moves m upwards to close the gap, but when m starts above n the gap widens on every call, so m == n is never reached. The guard m > n is not an optional extra: it is the base case that gives a reversed range a defined answer, and the specification should say what that answer is.",
+            "rangeSum 9 6 raises an error at compile time, because the guard list does not cover every input."
+          ],
+          "correctIndex": 2,
+          "explanation": "The step is only a step towards the base case for part of the input space. A recursion over two arguments has to say what happens when they start on the wrong side of each other. The student's tests all lie in the region where the function works, which is a reminder to test the boundaries of the domain.",
+          "optionFeedback": [
+            "Returning 0 for an empty range is the right design, and it is what the original m > n guard does. Without that guard there is no such rule.",
+            "Haskell never reorders arguments. The function does exactly what its equations say.",
+            "Correct. The argument moves away from the base case, so the recursion cannot end.",
+            "Guards that do not cover every input are not checked at compile time by default. The failure happens at run time, or in this case never ends."
+          ]
+        },
+        {
+          "question": "A student writes rangeProduct, which should multiply every integer from m to n inclusive, and gets 0 for rangeProduct 3 5 instead of 60. They conclude that the recursive step m * rangeProduct (m + 1) n is wrong. Which analysis is the most accurate?",
+          "code": [
+            "rangeProduct :: Integer -> Integer -> Integer",
+            "rangeProduct m n",
+            "  | m > n     = 0",
+            "  | otherwise = m * rangeProduct (m + 1) n",
+            "",
+            "main :: IO ()",
+            "main = print (rangeProduct 3 5)"
+          ],
+          "options": [
+            "The step is wrong: multiplication cannot be used in a recursive step, only addition.",
+            "The step is correct; the fault is the base case. The empty range returns 0, and 0 absorbs every multiplication, so the unwinding 3 * (4 * (5 * 0)) collapses to 0. The base value for a product must be the identity of multiplication, which is 1. The same lesson applies to sums, where the identity is 0, which is why sumFac needed the base value to be fac 0 = 1 rather than 0.",
+            "The base case guard should be m == n instead of m > n, which would make the answer 60 without any other change.",
+            "The function is correct, and the expected value of 60 is a mistake, because 3 * 4 * 5 is 0 in Haskell."
+          ],
+          "correctIndex": 1,
+          "explanation": "A dry run pins the fault to one line: the value that the base case injects. Choosing the base value from the operation (identity for the operator) rather than from habit avoids this family of mistakes.",
+          "optionFeedback": [
+            "Any operator can appear in a recursive step. The requirement is that the base value suits the operator.",
+            "Correct. The trace shows 0 absorbing the product, and the repair is a single changed value.",
+            "Changing the guard to m == n with a base value of n would give 60 for 3 to 5, but it would still leave the reversed-range case undefined. The core fault in this version is the base value.",
+            "3 * 4 * 5 is 60 in Haskell, as in arithmetic. The result 0 comes from the base case."
+          ]
+        },
+        {
+          "question": "A student rewrites the helper in evensUpTo with a small change, testing only evensUpTo 7 and evensUpTo 1, both of which give the expected lists. The marker says the function is wrong. Which analysis identifies the fault and the test that would have exposed it?",
+          "code": [
+            "evensFrom :: Integer -> Integer -> [Integer]",
+            "evensFrom k n",
+            "  | k >= n    = []",
+            "  | otherwise = k : evensFrom (k + 2) n",
+            "",
+            "evensUpTo :: Integer -> [Integer]",
+            "evensUpTo n = evensFrom 2 n",
+            "",
+            "main :: IO ()",
+            "main = print (map evensUpTo [1, 2, 7, 8])"
+          ],
+          "options": [
+            "The function is correct, because for an upper bound that is even the list is allowed to stop one value early.",
+            "The fault is the type signature, which should return a single Integer.",
+            "The guard k >= n stops one step too early when n itself is even. It returns [] for evensUpTo 2 instead of [2] and [2,4,6] for evensUpTo 8 instead of [2,4,6,8]. The student's two tests used an odd bound and a bound below 2, which are the two cases where >= and > agree. A boundary test at an even n, which is the case the specification says is included, would have shown the difference immediately.",
+            "The fault is that the list is built in descending order; the recursion should count down from n."
+          ],
+          "correctIndex": 2,
+          "explanation": "Off-by-one errors in recursion bounds are caught by testing where the condition changes truth value. Here that means an even bound equal to the running value. The same principle applied to the boundaries of isDigitChar in the first chapter of functions.",
+          "optionFeedback": [
+            "The specification says the list runs up to and including n when n is even, so stopping early is a fault.",
+            "The signature correctly promises a list of Integers. The fault is in the logic of the guard.",
+            "Correct. The analysis names the exact comparison, the inputs where it matters, and the test that would have revealed it.",
+            "The list is built in ascending order, as specified. The direction is not the fault."
+          ]
+        }
+      ]
     }
   }
 }

@@ -373,6 +373,83 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-structural-recursion-on-lists": {
+      "title": "Deeper reasoning: structural recursion on lists",
+      "questions": [
+        {
+          "question": "A student writes doubleAll without the [] equation, because \"the question never mentions an empty list\". The file loads without errors and the student is confident. Which assessment of what happens when doubleAll [1, 2, 3] is run is the most accurate?",
+          "code": [
+            "doubleAll :: [Integer] -> [Integer]",
+            "doubleAll (x:xs) = (x * 2) : doubleAll xs",
+            "",
+            "main :: IO ()",
+            "main = print (doubleAll [1, 2, 3])"
+          ],
+          "options": [
+            "It prints [2,4,6], because Haskell treats the missing [] case as returning [] by default.",
+            "It stops with a non-exhaustive patterns exception. The recursion removes one element per call, so after three steps it reaches [], which no equation matches. The [] equation is what stops the recursion, so it is needed even when the problem statement says nothing about empty lists. GHC accepts the file because incomplete patterns are not an error by default, which is why -Wincomplete-patterns is worth switching on.",
+            "It never finishes, because without a base case the recursion carries on forever with longer and longer lists.",
+            "It does not compile, because every recursive function must contain the empty list pattern."
+          ],
+          "correctIndex": 1,
+          "explanation": "Every list recursion ends at the empty list, so the base case is part of the algorithm and not an optional extra. The list gets shorter on each call, so the recursion terminates, but in a crash rather than a result.",
+          "optionFeedback": [
+            "Haskell never supplies a missing equation. If nothing matches, the call fails.",
+            "Correct. The argument shrinks as required, but the end of the list is a case that must be handled.",
+            "The list gets shorter, not longer, so the recursion does end. It ends with an exception.",
+            "GHC accepts incomplete patterns by default, so the file compiles. The failure appears when the missing case is reached."
+          ]
+        },
+        {
+          "question": "A student writes largerY to keep the elements larger than y. Running largerY [7, 3, 10] 4 gives [7] instead of [7,10]. Which analysis identifies the fault and the general rule it breaks?",
+          "code": [
+            "largerY :: [Integer] -> Integer -> [Integer]",
+            "largerY [] _ = []",
+            "largerY (x:xs) y",
+            "  | x > y     = x : largerY xs y",
+            "  | otherwise = []"
+          ],
+          "options": [
+            "The fault is the first guard: x : largerY xs y should be largerY xs y so that the head is not duplicated.",
+            "The fault is the base case, which should return the original list instead of [].",
+            "When an element fails the test, the skipping branch must still recurse on the tail, as in largerY xs y. Returning [] there ends the whole result at the first rejected element, so everything after 3 is lost, including 10. In a filter, both branches recurse on xs; only the kept branch conses the head onto the result.",
+            "The function is correct, and the expected answer for the classmate's input is [7]."
+          ],
+          "correctIndex": 2,
+          "explanation": "The structure of a recursive filter has two branches that differ in one detail: whether the head is consed on. Both branches continue with the tail. A branch that returns [] turns a filter into a take-while.",
+          "optionFeedback": [
+            "The kept branch is correct: it conses the head onto the filtered tail. Removing the cons would drop the elements that should be kept.",
+            "The empty list is the correct base case. Returning the original list would keep elements that should be filtered out.",
+            "Correct. The hand trace of [7, 3, 10] shows the result being cut off at 3.",
+            "The specification keeps every element larger than y, so 10 belongs in the result."
+          ]
+        },
+        {
+          "question": "A student implements isSorted with only two equations, reasoning that the one-element case is \"obviously sorted and does not need its own line\". Their test isSorted [3, 1, 5] returns False as expected, so they submit it. Which analysis predicts what actually happens for a genuinely sorted input such as [5, 3, 1]?",
+          "code": [
+            "isSorted :: [Integer] -> Bool",
+            "isSorted [] = True",
+            "isSorted (x:y:rest)",
+            "  | x >= y    = isSorted (y:rest)",
+            "  | otherwise = False"
+          ],
+          "options": [
+            "isSorted [5, 3, 1] returns True, because the recursion ends at the empty list.",
+            "isSorted [5, 3, 1] returns False, because a single element is treated as unsorted.",
+            "isSorted [5, 3, 1] crashes. The recursion passes through isSorted [3, 1] and then isSorted [1], and the list [1] has one element, which matches neither [] nor (x:y:rest). A sorted input is exactly the kind that reaches the one-element case, whereas an unsorted input such as [3, 1, 5] stops early with False and never gets there. The test chosen could not reveal the gap, and the missing equation isSorted [_] = True is required.",
+            "isSorted [5, 3, 1] crashes only if the list contains a negative number."
+          ],
+          "correctIndex": 2,
+          "explanation": "A pattern that looks at two elements at a time needs a case for lists that are too short, and the recursion shrinks its input by one each time, so it will always arrive there on a sorted list. Testing only an unsorted input hides the crash.",
+          "optionFeedback": [
+            "The list never becomes empty on this path: the recursion removes one element at a time and stops at a list with one element.",
+            "Haskell does not treat the one-element list specially. With no matching equation, the call fails.",
+            "Correct. The failing path is only exercised by sorted inputs, so a test set should include both sorted and unsorted lists, and lists of length 0, 1 and 2.",
+            "The values in the list make no difference to which equation is chosen. The shape of the list does."
+          ]
+        }
+      ]
     }
   }
 }

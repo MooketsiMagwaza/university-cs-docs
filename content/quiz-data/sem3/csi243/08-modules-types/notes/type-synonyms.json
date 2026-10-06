@@ -139,6 +139,94 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-what-a-type-synonym-does-and-does-not-do": {
+      "title": "Deeper reasoning: what a type synonym does and does not do",
+      "questions": [
+        {
+          "question": "A student passes a plain list of (String, Int) pairs to passed, whose signature mentions ClassList, and is surprised that GHC accepts it. They conclude: \"The compiler is ignoring my types.\" Which explanation of the behaviour and of what the synonyms are good for is the most accurate?",
+          "code": [
+            "type Name = String",
+            "type Mark = Int",
+            "type Student = (Name, Mark)",
+            "type ClassList = [Student]",
+            "",
+            "passed :: ClassList -> [Name]",
+            "passed cs = [n | (n, m) <- cs, m >= 50]",
+            "",
+            "main :: IO ()",
+            "main = print (passed [(\"Kago\", 72), (\"Naledi\", 40)])"
+          ],
+          "options": [
+            "The compiler ignores the signature of passed, and the output [\"Kago\"] is a coincidence.",
+            "A type synonym is only another name for an existing type, and GHC expands every synonym before checking. ClassList is exactly [(String, Int)], so the plain list is the right type and the call is accepted, printing [\"Kago\"]. The synonyms are not checked as separate types; their value is that the signature ClassList -> [Name] tells a reader what the function consumes and produces, even though it says nothing extra to the compiler.",
+            "The call is accepted because ClassList is a newtype, which converts plain lists automatically.",
+            "The call should be rejected, and GHC accepts it only because the function has a list comprehension in its body."
+          ],
+          "correctIndex": 1,
+          "explanation": "Synonyms improve documentation and readability, not checking. Two names for the same type are interchangeable everywhere, which is also why a synonym cannot protect against mixing related quantities.",
+          "optionFeedback": [
+            "The signature is used in full. It is simply identical to [(String, Int)] -> [String] after expansion.",
+            "Correct. The behaviour follows from what a synonym is, and the benefit is for the human reader.",
+            "ClassList is declared with type, not newtype, and nothing is converted. The two types are the same.",
+            "The body of the function has no bearing on whether the argument has the right type."
+          ]
+        },
+        {
+          "question": "A student reads lookUp and asks three things: why the result is Maybe, why the signature says Eq k =>, and what the two parameters of Assoc do. Which answer addresses all three most accurately?",
+          "code": [
+            "type Assoc k v = [(k, v)]",
+            "",
+            "marks :: Assoc String Int",
+            "marks = [(\"Kago\", 72), (\"Naledi\", 68)]",
+            "",
+            "lookUp :: Eq k => k -> Assoc k v -> Maybe v",
+            "lookUp key table = case [v | (k, v) <- table, k == key] of",
+            "  (v:_) -> Just v",
+            "  []    -> Nothing",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (lookUp \"Kago\" marks)",
+            "  print (lookUp \"Sipho\" marks)"
+          ],
+          "options": [
+            "Maybe is needed because strings cannot be returned directly, Eq k is needed to print the result, and the parameters give the synonym a default value.",
+            "The result is Maybe v because a key may be absent and there may be no value to return; this is the standard way to express a possibly missing answer without calling error, and it prints Just 72 and Nothing. Eq k is needed because the function compares keys with ==, which only works for types that support equality. The parameters k and v are type variables, so Assoc String Int and Assoc Int Bool are both instances of the same synonym describing a table of key-value pairs.",
+            "Maybe means the function may run more than once, Eq k means all keys must be equal, and k and v must both be Int.",
+            "None of the three is necessary: lookUp could return a plain value, compare keys without any constraint, and use a synonym with no parameters."
+          ],
+          "correctIndex": 1,
+          "explanation": "Each part of the signature carries a design decision: the possibility of absence, the capability needed from the key type, and the generality of the table type. Parameterised synonyms give the abbreviation the same flexibility as the type it abbreviates.",
+          "optionFeedback": [
+            "Strings can be returned directly. The reasons for the three parts are different from the ones suggested here.",
+            "Correct. Each of the three questions has its own specific answer, and together they explain the whole signature.",
+            "Maybe does not count repetitions, Eq k does not require all keys to be equal, and the type variables can be any types.",
+            "A plain return value would have nothing to give when the key is missing, and == cannot be used on a type without an equality instance."
+          ]
+        },
+        {
+          "question": "A student wants a family tree as a synonym, writes the declaration below, and is told that GHC reports a cycle in type synonym declarations. They ask what to do instead. Which explanation and repair is the most accurate?",
+          "code": [
+            "-- This version does not compile",
+            "type Tree = (Int, [Tree])"
+          ],
+          "options": [
+            "Add a second synonym, type Forest = [Tree], so the two names can refer to each other.",
+            "A synonym is expanded before checking, and Tree would expand to a tuple that contains Tree, which never stops expanding, so a synonym cannot be recursive. A recursive structure needs a genuinely new type, declared with data, for example data Tree = Node Int [Tree], whose constructor gives the recursion a finite shape.",
+            "Wrap the declaration in a module with an export list, which makes recursion legal.",
+            "Replace type with newtype and keep the same declaration; newtype allows any number of recursive fields."
+          ],
+          "correctIndex": 1,
+          "explanation": "Synonyms are abbreviations and must expand to a finite type. Recursive types need a constructor, which is a point where the structure can stop, and that is what data provides.",
+          "optionFeedback": [
+            "Adding a second synonym makes the cycle longer, not shorter. Neither synonym can be expanded.",
+            "Correct. The rule about recursive synonyms points directly to data as the tool for recursive types.",
+            "Export lists have no effect on whether a declaration is legal.",
+            "A newtype with a single field can be recursive, but this declaration is not a newtype declaration, and the tuple in it would need to be replaced by a constructor."
+          ]
+        }
+      ]
     }
   }
 }

@@ -166,6 +166,83 @@
           ]
         }
       ]
+    },
+    "deeper-reasoning-pure-cores-and-effectful-boundaries": {
+      "title": "Deeper reasoning: pure cores and effectful boundaries",
+      "questions": [
+        {
+          "question": "A classmate reviews the program below and says: \"Because this program prints, everything in it is impure, so I can only test scoreLabel by running the whole program and reading the terminal.\" Which reply gives the most accurate account of where the effect is and how scoreLabel can be checked?",
+          "code": [
+            "scoreLabel :: Integer -> String",
+            "scoreLabel s = if s >= 50 then \"Pass\" else \"Fail\"",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  let marks = [72, 45, 50]",
+            "  print (map scoreLabel marks)"
+          ],
+          "options": [
+            "The classmate is right. Once a program contains a main, every function it calls becomes effectful, so the only reliable test is to run main and compare the printed line.",
+            "scoreLabel is pure only because it has a type signature. If the signature were deleted, scoreLabel would silently become effectful and would have to be tested through main.",
+            "Only the call to print performs an effect. scoreLabel's result depends solely on its argument, so it can be evaluated on its own at the GHCi prompt, for example scoreLabel 50, without running main; even map scoreLabel marks is a pure calculation until print displays it.",
+            "The line let marks = [72, 45, 50] is the real effect, because it creates data that the rest of the program depends on, so scoreLabel cannot be separated from it."
+          ],
+          "correctIndex": 2,
+          "explanation": "Purity is a property of each function's own definition, not of the program that happens to call it. scoreLabel reads nothing and writes nothing, so GHCi can evaluate scoreLabel 50 directly and show \"Pass\". The only boundary-crossing step is print, which turns the already-computed list into terminal output.",
+          "optionFeedback": [
+            "This treats effects as contagious in the wrong direction. A pure function stays pure when an effectful main calls it; scoreLabel behaves identically whether or not main exists.",
+            "Type signatures document and check a function; they do not decide whether it is pure. Deleting scoreLabel's signature changes nothing about its behaviour, and GHC would infer a numeric-comparison type for it instead.",
+            "Correct. The effect sits at the boundary (print), the calculation sits in the pure core (scoreLabel and map), and the pure part can be tested without the boundary.",
+            "A let binding in a do block just names a value; it reads from nothing outside the program and writes nothing. It is not an effect, and scoreLabel does not depend on it at all."
+          ]
+        },
+        {
+          "question": "A teammate argues: \"Haskell values can never change, so a Haskell program could never track something like a bank balance that goes up and down as deposits arrive.\" Which response best separates what immutability forbids from what it still allows?",
+          "options": [
+            "Immutability forbids silently overwriting an existing value in place. It does not forbid new information: a deposit produces a new balance value, for example newBalance = addDeposit oldBalance 200, and the old value is still available for checking or undoing.",
+            "The teammate is right. Haskell can only model constants, so any changing quantity has to be handled by a program written in another language.",
+            "Immutability applies only to numbers. A balance stored in a list or a record can be changed in place, so the teammate's concern does not arise for structured data.",
+            "Haskell avoids the issue by treating every deposit as an effect, which means no calculation involving a balance can ever be pure."
+          ],
+          "correctIndex": 0,
+          "explanation": "Immutability is about not secretly altering an existing pure value. Change over time is modelled by producing a new value from the old one. The program can still receive new information from the outside world; what it cannot do is have a value that was already bound quietly turn into a different one.",
+          "optionFeedback": [
+            "Correct. The balance \"changing\" is really a new value derived from the previous one, which also makes the history easy to inspect, test, and reason about.",
+            "Haskell programs routinely model counters, balances, and game states; they do it by passing new values forward instead of overwriting old ones.",
+            "Immutability applies to Haskell values in general, including lists and records; there is no special in-place exception for structured data.",
+            "Reading a new deposit amount from the user is an effect, but computing a new balance from two known numbers is an ordinary pure calculation, so the two jobs stay separate."
+          ]
+        },
+        {
+          "question": "Both designs below print the same line. A lecturer says the report text must now also be written to a file and checked automatically against an expected string. Which evaluation of the two designs is most accurate?",
+          "code": [
+            "-- Design A",
+            "report :: String -> Integer -> IO ()",
+            "report name mark = putStrLn (name ++ \" scored \" ++ show mark)",
+            "",
+            "-- Design B",
+            "reportText :: String -> Integer -> String",
+            "reportText name mark = name ++ \" scored \" ++ show mark",
+            "",
+            "main :: IO ()",
+            "main = putStrLn (reportText \"Naledi\" 82)"
+          ],
+          "options": [
+            "Design A is easier to extend, because putStrLn is inside the function and everything about the report lives in one place.",
+            "The two designs are equivalent: any function that returns a value can be turned into one that prints with no loss of testability, because tests can always read the terminal.",
+            "Design B is better, but only because it is shorter; length is the real reason pure code is easier to maintain.",
+            "Design B is better, because it keeps building the text pure. The same String can be handed to putStrLn, to writeFile, or compared with an expected value in a test, whereas Design A fuses construction and display, so its text can only be observed by running terminal output."
+          ],
+          "correctIndex": 3,
+          "explanation": "Design A returns IO (), an action with no usable result, so the text it built is locked inside the print. Design B returns the String itself, a value that any later step can display, store, or test. Separating the pure calculation from the effect is what makes the new requirements cheap.",
+          "optionFeedback": [
+            "Having everything in one place is convenient, but it is exactly what couples the text to the terminal. A function that returns IO () gives the new file-writing and testing requirements nothing to work with.",
+            "The designs are not equivalent. A String can be compared with an expected String in one line of code; an IO () action can only be run, with its output captured elsewhere.",
+            "Length has nothing to do with it. The advantage comes from the type: reportText returns a value that can be reused, while report returns only an action.",
+            "Correct. The benefit is reuse and testability, and it comes directly from keeping the calculation pure and the effect at the boundary."
+          ]
+        }
+      ]
     }
   }
 }
