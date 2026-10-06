@@ -5,29 +5,70 @@ description: "Know what Eq, Ord, Show, Read, Num, Integral, Fractional, Enum, an
 
 
 
-This lesson is a reference. When GHC reports “No instance for (X)”, this table tells you what `X` wanted.
+This lesson is a reference. When GHC reports “No instance for (X)”, this table tells you what `X` wanted — what it provides, why that shape was chosen, when to reach for it, and what it does not guarantee.
 
 ## 1. `Eq` — equality
 
-Provides `==` and `/=`.
+**What.** Provides `==` and `/=`.
 
 ```haskell
 (==) :: Eq a => a -> a -> Bool
 (/=) :: Eq a => a -> a -> Bool
 ```
 
-```text
-ghci> 3 == 3
-True
-ghci> "cs" /= "sc"
-True
+**Why.** Membership testing, deduplication, counting occurrences, and "has anything changed" all reduce to one question — "are these the same value" — and `Eq` is the minimal class that answers it, with no ordering or arithmetic assumed on top.
+
+**When.** Reach for `Eq` whenever a type has a sensible, decidable notion of sameness — almost every concrete type in this course. **Not** for function types: there is no general way to decide whether two functions compute the same thing (this would require solving the halting problem in general), so `(+) == (*)` is rejected outright, and functions have no `Eq` instance at all.
+
+```haskell
+data Result = Pass | Fail deriving (Eq, Show)
+
+main :: IO ()
+main = do
+  print (3 == 3)
+  print ("cs" /= "sc")
+  print (Pass == Fail)
+  print (0.1 + 0.2 == (0.3 :: Double))
 ```
 
-Almost every basic type is an instance. Functions are **not**: there is no general way to decide whether two functions are equal, so `(+) == (*)` is rejected.
+```text
+True
+True
+False
+False
+```
+
+That last line is not a bug in the program or in Haskell — it is a property of `Double` (and of every language's IEEE-754 floating-point numbers). `0.1` and `0.2` cannot be represented exactly in binary, so `0.1 + 0.2` lands a hair away from the closest `Double` to `0.3`, and `==` reports the honest, bit-for-bit truth: they differ.
+
+<CommonMistake title="Eq compiles for Double; that does not make == the right tool">
+`Double` and `Float` are `Eq` instances, so `x == y` always type-checks. But after any arithmetic, rounding error means the "obviously equal" answer is often not bit-for-bit equal. Compare with a tolerance instead: `abs (x - y) < 0.0001`, not `x == y`.
+</CommonMistake>
+
+**Properties.** `Eq` guarantees that `==` and `/=` exist and type-check for the instance. It does **not** guarantee that `==` behaves like mathematical equality — reflexive (`x == x`), symmetric (`x == y` implies `y == x`), and consistent with every other function's treatment of the value. A *derived* `Eq` instance does behave this way, because it compares every constructor and every field structurally. A *hand-written* instance might not; Lesson 4 of this chapter writes one on purpose that deliberately treats unequal-looking values as equal, and discusses exactly what that costs you.
+
+<Quiz title="Check: Eq" questions={[
+  {
+    question: "Why does Haskell reject `(+) == (*)`?",
+    options: [
+      "+ and * have different types",
+      "Functions have no Eq instance, because there is no general way to decide whether two functions compute the same results",
+      "== only works on numbers",
+      "+ and * are not defined for the same types"
+    ],
+    correctIndex: 1,
+    explanation: "Both (+) and (*) have type Num a => a -> a -> a — the types match. The rejection is that function types are simply not members of Eq at all: deciding function equality in general is not computable, so no instance is (or could be) provided.",
+    optionFeedback: [
+      "Both are Num a => a -> a -> a; the types line up exactly, so a type mismatch is not the issue.",
+      "Correct — there is no Eq instance for function types at all, for any two functions, regardless of what they compute.",
+      "== is overloaded across many non-numeric types too — Bool, Char, String, custom types — so this is not a numbers-only restriction.",
+      "Num a => a -> a -> a is shared by both; the rejection has nothing to do with whether their types line up."
+    ]
+  }
+]} />
 
 ## 2. `Ord` — ordering
 
-Provides `<`, `<=`, `>`, `>=`, `compare`, `max`, and `min`. Requires `Eq`.
+**What.** Provides `<`, `<=`, `>`, `>=`, `compare`, `max`, and `min`. Requires `Eq`.
 
 ```haskell
 compare :: Ord a => a -> a -> Ordering
@@ -64,9 +105,66 @@ ghci> [1,2,3] < [1,3]
 True
 ```
 
+Tuples extend the same idea structurally rather than sequentially — compare the first components; only if those tie, look at the second:
+
+```haskell
+main :: IO ()
+main = do
+  print (compare (1, "b") (1, "a"))
+  print (compare (1, "a") (2, "a"))
+```
+
+```text
+GT
+LT
+```
+
+`(1, "b")` and `(1, "a")` agree on the first component, so the comparison falls through to the second, where `"b" > "a"`. `(1, "a")` and `(2, "a")` disagree on the first component alone, so the second is never even inspected.
+
+**When.** Use `Ord` whenever "which one comes first" matters, not just "are they the same" — sorting, finding a maximum or minimum, range checks. **Not** appropriate for a type with no natural order and no sensible one to invent (comparing two arbitrary `Shape`s by, say, memory address would be meaningless and misleading).
+
+**Properties.** A derived `Ord` instance is a genuine total order — every pair of values compares as exactly one of `LT`, `EQ`, `GT`, consistently, and it agrees with the derived `Eq` (`compare x y == EQ` exactly when `x == y`). A *hand-written* `Ord` instance is not automatically consistent with a separately hand-written `Eq` — keeping the two in step is the programmer's job, not the compiler's; Lesson 4 revisits this.
+
+<Quiz title="Check: Ord" questions={[
+  {
+    question: "Given `data Result = Pass | Fail deriving (Ord)`, why is `Pass < Fail` True?",
+    options: [
+      "Pass is alphabetically before Fail",
+      "A derived Ord ranks constructors by their declaration order, and Pass is declared first",
+      "Ord always ranks the first-listed value as larger",
+      "It is arbitrary and could change between runs"
+    ],
+    correctIndex: 1,
+    explanation: "A derived Ord instance ranks constructors purely by the order they appear in the data declaration — first declared is smallest. Pass appears before Fail, so Pass < Fail.",
+    optionFeedback: [
+      "Alphabetically, F comes before P — that is not the rule in force here, or Fail would be smaller.",
+      "Correct — deriving Ord ranks constructors by declaration order; Pass was written first, so it compares as smaller.",
+      "The opposite is true: the first-declared constructor ranks smallest, not largest.",
+      "It is fixed by the source file's declaration order and is identical on every run — nothing about it is arbitrary."
+    ]
+  },
+  {
+    question: "Why does `compare (1, \"a\") (2, \"a\")` return LT without ever comparing the strings?",
+    options: [
+      "Tuples only ever compare their first component",
+      "Tuple comparison inspects components left to right and stops as soon as one pair disagrees; the first components (1 and 2) already disagree",
+      "\"a\" cannot be compared to itself",
+      "GHC evaluates tuples right to left"
+    ],
+    correctIndex: 1,
+    explanation: "Tuple Ord compares component by component from the left, moving to the next component only when the current ones are equal. Since 1 and 2 already differ, the result is settled immediately and the second components are never examined.",
+    optionFeedback: [
+      "The earlier example, compare (1, \"b\") (1, \"a\"), shows the second component deciding the result when the first components tie — so later components do matter.",
+      "Correct — comparison proceeds left to right and short-circuits at the first disagreement, exactly as list comparison does.",
+      "Comparing a value to an equal copy of itself is perfectly well defined and would report EQ; that is not why it is skipped here.",
+      "Tuple fields are logically compared left to right, matching how they are written and read, not right to left."
+    ]
+  }
+]} />
+
 ## 3. `Show` and `Read` — text conversion
 
-`Show` provides `show`, converting a value to a `String`. `Read` provides `read`, converting a `String` to a value.
+**What.** `Show` provides `show`, converting a value to a `String`. `Read` provides `read`, converting a `String` to a value.
 
 ```haskell
 show :: Show a => a -> String
@@ -90,13 +188,82 @@ They are opposites, and `read` is the reason a type annotation is so often neede
 print :: Show a => a -> IO ()
 ```
 
+**Why this shape.** Separating "convert to text" (`Show`) from "print that text" (`print`) means the text form is available for anything else you might want to do with it — write it to a file, compare it, embed it in a larger message — not only for immediate display.
+
+**How they round-trip.** Deriving both on the same type gives you a genuine inverse pair: the text a derived `Show` produces is exactly the text a derived `Read` for the same type can parse back.
+
+```haskell
+data Student = Student { name :: String, mark :: Int }
+  deriving (Show, Read, Eq)
+
+main :: IO ()
+main = do
+  let k = Student { name = "Kago", mark = 72 }
+  print k
+  let parsed = read (show k) :: Student
+  print (parsed == k)
+```
+
+```text
+Student {name = "Kago", mark = 72}
+True
+```
+
+`show k` produces the record's textual form; `read` parses that exact text back into a `Student`; and `Eq` (also derived) confirms the round trip lost nothing.
+
 <Callout type="warn" title="read is partial">
 `read "four" :: Integer` fails at run time with a parse error. This is the same partiality warned about in Chapter 3.
 </Callout>
 
+<RecognitionStrategy title="When does read need a type annotation?">
+Ask whether the surrounding context already pins the result type down elsewhere. `read "42" + (1 :: Integer)` needs no annotation — the `+` forces the type. `print (read "42")` on its own does need one, because nothing else in the expression says which `Read` instance to use. When in doubt, add `:: Type` and let GHC confirm whether it was actually needed.
+</RecognitionStrategy>
+
+<Quiz title="Check: Show and Read" questions={[
+  {
+    question: "For the Student example, why does read (show k) :: Student round-trip back to a value equal to k?",
+    options: [
+      "Because Student derives Eq, which automatically fixes any mismatch between show and read",
+      "Because a derived Show and a derived Read for the same type are genuine inverses — the exact text a derived Show produces is exactly the text a derived Read for that type can parse back",
+      "Because Student has only two fields, and round-tripping only works for small records",
+      "It is a coincidence specific to this one value of Student"
+    ],
+    correctIndex: 1,
+    explanation: "Show and Read are deliberately designed as a matched pair when both are derived: show's textual format is precisely what read for that type expects to parse. Eq only lets you check the round trip afterwards — it does not cause the round trip to succeed.",
+    optionFeedback: [
+      "Eq only supplies == so the round trip can be checked after the fact; it plays no role in making show's output parseable by read in the first place.",
+      "Correct — deriving both gives you an inverse pair by construction, which is exactly why read (show k) reproduces k.",
+      "Nothing about the round trip depends on field count; the same guarantee holds for a record with many more fields.",
+      "The same round trip holds for any value of any type that derives both Show and Read — it is a general property of the derived instances, not a one-off."
+    ]
+  },
+  {
+    question: "print (read \"42\") on its own is rejected as an ambiguous type variable, but read \"42\" + (1 :: Integer) is not. Why?",
+    options: [
+      "read always needs an annotation, with no exceptions",
+      "In the second expression, + forces read's result to be the same type as 1 :: Integer, so the context already pins down which Read instance to use; the first expression has nothing else that fixes the type",
+      "print cannot accept the result of read under any circumstances",
+      "\"42\" is only valid input for read when it appears next to +"
+    ],
+    correctIndex: 1,
+    explanation: "read's ambiguity comes from having no way to tell, from the text alone, which type was intended. Whenever the surrounding expression already pins that type down — here, addition with an Integer — no separate annotation is needed; otherwise, one must be added by hand.",
+    optionFeedback: [
+      "The + example is the counterexample: read needs an annotation only when nothing else in the expression already determines the target type.",
+      "Correct — the addition with (1 :: Integer) supplies exactly the missing type information that print (read \"42\") lacks on its own.",
+      "print works perfectly well on the result of read once that result's type is determined some other way, as the + example shows.",
+      "The text \"42\" is unrelated to why annotation is or isn't needed; the deciding factor is whether the surrounding expression fixes the result type."
+    ]
+  }
+]} />
+
 ## 4. The numeric classes
 
 Numbers form a small hierarchy, which is why `div` and `/` have different constraints.
+
+<Mermaid chart={`flowchart TD
+  Num --> Integral
+  Num --> Fractional
+  Fractional --> Floating`} caption="Integral and Fractional are separate, non-overlapping extensions of Num — no ordinary numeric type is both, which is exactly why div and / are never interchangeable. Floating extends Fractional further, adding sqrt, sin, pi and friends." />
 
 | Class | Provides | Instances include |
 |---|---|---|
@@ -126,16 +293,25 @@ Because the classes are separate, you sometimes need an explicit conversion:
 | `ceiling` | `(RealFrac a, Integral b) => a -> b` | Closest integer greater than or equal |
 | `truncate` | `(RealFrac a, Integral b) => a -> b` | Discard the fractional part |
 
-```text
-ghci> ceiling 2.3
-3
-ghci> floor 2.3
-2
-ghci> round 2.7
-3
-ghci> round 2.2
-2
+**In plain English:** each of these four signatures names *two* independent type variables, each with its own constraint — read exactly as [decoding a signature](/docs/sem3/csi243/decoding-questions) teaches: constraint(s) first, then the arrows. `round :: (RealFrac a, Integral b) => a -> b` says "for any fractional type `a` and any whole-number type `b`, take one value of the fractional type and give back the nearest value of the whole-number type." `fromIntegral` reads the same way in reverse — whole number in, any numeric type out.
+
+```haskell
+main :: IO ()
+main = do
+  print (map ceiling  [2.3, 2.5, -2.3 :: Double] :: [Integer])
+  print (map floor    [2.3, 2.5, -2.3 :: Double] :: [Integer])
+  print (map round    [2.2, 2.5, 2.7  :: Double] :: [Integer])
+  print (map truncate [2.7, -2.7      :: Double] :: [Integer])
 ```
+
+```text
+[3,3,-2]
+[2,2,-3]
+[2,2,3]
+[2,-2]
+```
+
+Look closely at `round 2.5`, which gives `2`, not `3`. Haskell's `round` breaks exact ties using **round-half-to-even** ("banker's rounding"): when a value sits precisely halfway between two integers, it rounds to whichever of the two is even. `2.5` rounds to `2`; `3.5` would round to `4`. `2.2` and `2.7` are nowhere near a tie, so they round the way you would expect.
 
 The classic need for `fromIntegral` is an average:
 
@@ -153,9 +329,64 @@ ghci> average [1,2,3,4]
 2.5
 ```
 
+<Quiz title="Check: numeric conversions" questions={[
+  {
+    question: "Why does `average xs = sum xs / length xs` fail to compile for `average :: [Double] -> Double`?",
+    options: [
+      "sum xs has type [Double], not Double",
+      "length xs always has type Int, but / requires both operands to share one Fractional type, and Int is not Fractional",
+      "/ cannot appear inside a function body",
+      "average needs a type class constraint on its own signature"
+    ],
+    correctIndex: 1,
+    explanation: "sum xs is a Double, matching the signature — the mismatch is entirely on the other side of /. length always returns Int, and / demands both arguments be the same Fractional type, which Int never is.",
+    optionFeedback: [
+      "sum :: Num a => [a] -> a applied to a [Double] correctly gives a Double; that side of the division is fine.",
+      "Correct — length xs :: Int cannot be given directly to /, which needs a Fractional argument; fromIntegral bridges the gap.",
+      "/ is an ordinary function and may appear anywhere an expression is expected, including inside average's body.",
+      "average's signature, [Double] -> Double, is already fully concrete; no class constraint is needed on it at all — the problem is internal to the body."
+    ]
+  },
+  {
+    question: "What does round 2.5 evaluate to in Haskell, and why?",
+    options: [
+      "3, because round always rounds halfway values up",
+      "2, because round breaks exact ties by rounding to the nearest even integer",
+      "2, because round always rounds down",
+      "It is an error, because 2.5 is ambiguous"
+    ],
+    correctIndex: 1,
+    explanation: "Haskell's round uses round-half-to-even: an exact tie rounds to whichever neighbouring integer is even. 2.5 is exactly halfway between 2 and 3, and 2 is even, so it rounds to 2.",
+    optionFeedback: [
+      "This is the 'round half up' rule used by some other languages and tools, but it is not what Haskell's round does for an exact tie.",
+      "Correct — round-half-to-even sends the exact tie 2.5 to 2, the nearest even integer, not to 3.",
+      "round does not always round down — round 2.7 gives 3, rounding up, as the program above shows; only exact ties use the even rule.",
+      "2.5 :: Double is a perfectly well-defined value; round has a fixed, documented rule for it and does not error."
+    ]
+  }
+]} />
+
 ## 5. `Enum` and `Bounded`
 
-`Enum` provides `succ`, `pred`, and range notation. It is what makes `[1..5]` and `['a'..'f']` work.
+**What.** `Enum` provides `succ`, `pred`, and range notation (`[x..y]`, `[x,y..z]`). `Bounded` provides `minBound` and `maxBound`.
+
+**Why.** Both exist to give a type a notion of "next", "previous", or "extreme value" without requiring full arithmetic — useful for types like `Char` or an enumeration, which are not `Num` at all but still have an obvious sequence.
+
+```haskell
+main :: IO ()
+main = do
+  print ['a' .. 'f']
+  print [10, 8 .. 0]
+  print (minBound :: Int, maxBound :: Int)
+```
+
+```text
+"abcdef"
+[10,8,6,4,2,0]
+(-9223372036854775808,9223372036854775807)
+```
+
+`['a'..'f']` and `[10,8..0]` both need only `Enum`; the `Int` bounds need only `Bounded`. `succ`, `pred`, and range syntax read the type's own declared or built-in ordering:
 
 ```text
 ghci> succ 'a'
@@ -166,16 +397,33 @@ ghci> [Red ..]
 
 That last line requires `deriving (Show, Enum)` on the `TLights` type from Chapter 8.
 
-`Bounded` provides `minBound` and `maxBound`:
+**When.** Reach for `Enum` whenever you want "the next/previous value" or a range over a type with a natural, discrete sequence — including your own enumerations, once you derive it. Reach for `Bounded` when a type has a definite smallest and largest value to name.
+
+**Properties.** `Bounded` is only meaningful for types with **finitely many values and a fixed minimum and maximum**. `Integer` has neither — it is arbitrary-precision and grows until memory is exhausted — so it has no `Bounded` instance and none could be written honestly. `Int` is fixed-width and does have both.
 
 ```text
 ghci> maxBound :: Int
 9223372036854775807
 ```
 
-This is the concrete meaning of the Chapter 2 claim that `Int` is bounded and `Integer` is not. `Integer` has no `Bounded` instance, because it has no maximum.
+This is the concrete meaning of the Chapter 2 claim that `Int` is bounded and `Integer` is not.
 
 ## 6. Which class does an operation need?
+
+<Mermaid chart={`flowchart TD
+  Q["What do you want to do with values of type a?"] --> C1{"Compare for equality only?"}
+  C1 -->|"Yes"| Eq1["Eq: ==, /="]
+  C1 -->|"No"| C2{"Compare for order — sort, maximum, <?"}
+  C2 -->|"Yes"| Ord1["Ord: <, compare, sort (implies Eq)"]
+  C2 -->|"No"| C3{"Convert to or from text?"}
+  C3 -->|"To text"| Show1["Show: show, print"]
+  C3 -->|"From text"| Read1["Read: read"]
+  C3 -->|"No"| C4{"Arithmetic?"}
+  C4 -->|"Whole numbers, div, mod"| Integral1["Integral (needs Num)"]
+  C4 -->|"Fractions, /"| Fractional1["Fractional (needs Num)"]
+  C4 -->|"No"| C5{"Next/previous value, or a bound?"}
+  C5 -->|"Ranges, succ, pred"| Enum1["Enum"]
+  C5 -->|"minBound, maxBound"| Bounded1["Bounded"]`} caption="The lookup table below, redrawn as the sequence of questions it actually answers — ask what the operation does, not just what it is called, and the class falls out." />
 
 The lookup table to memorise:
 
@@ -202,16 +450,20 @@ The lookup table to memorise:
 | `Ambiguous type variable` with `read` | The result type is undetermined | Annotate: `read s :: Integer` |
 | `No instance for (Eq (a -> b))` | Comparing functions | Not possible; compare results instead |
 | `[Red ..]` fails | The type has no `Enum` instance | Add `Enum` to the deriving clause |
+| `0.1 + 0.2 == 0.3` is `False` | Binary floating-point rounding, not a bug | Compare with a tolerance: `abs (x - y) < epsilon` |
+| `No instance for (Bounded Integer)` | `Integer` has no largest value to report | Use `Int` if a bound is genuinely needed |
 
 ## 8. Practice
 
 1. State which class each requires: `==`, `sort`, `print`, `div`, `/`, `sqrt`, `maxBound`.
 2. Explain why `7.5 \`div\` 2` is rejected but `7 \`div\` 2` is fine.
 3. Write `average :: [Double] -> Double` and explain why `fromIntegral` is needed.
-4. Predict `ceiling 2.3`, `floor 2.3`, `round 2.7`, `round 2.2`.
+4. Predict `ceiling 2.3`, `floor 2.3`, `round 2.7`, `round 2.5`, and `round 3.5`.
 5. Explain why `read "42"` on its own is ambiguous and how to fix it.
 6. Declare `TLights` deriving `Enum` and evaluate `[Red ..]`.
 7. Explain why `Integer` has no `Bounded` instance.
+8. Predict, and explain, the result of `0.1 + 0.2 == (0.3 :: Double)`.
+9. Write a record type deriving `(Show, Read, Eq)` and show that `read (show v) == v`.
 
 <Accordions>
 <Accordion title="Check questions 3 and 7">
@@ -228,16 +480,39 @@ average xs = sum xs / fromIntegral (length xs)
 **7.** `Bounded` provides `minBound` and `maxBound`, which presuppose a largest and smallest value. `Integer` is arbitrary-precision and grows as needed until memory is exhausted, so no maximum exists to report. `Int` is fixed-width and therefore does have one.
 
 </Accordion>
+<Accordion title="Check questions 4, 8, and 9">
+
+**4.** `ceiling 2.3 = 3`; `floor 2.3 = 2`; `round 2.7 = 3` (closer to 3, no tie); `round 2.5 = 2` and `round 3.5 = 4` (both exact ties, resolved to the nearest **even** integer — round-half-to-even).
+
+**8.** `False`. `0.1` and `0.2` have no exact finite binary representation, so `0.1 + 0.2` computes to a `Double` that is extremely close to, but not bit-for-bit identical to, the `Double` that the literal `0.3` parses to. This is a property of IEEE-754 floating-point arithmetic, not a defect in Haskell's `==`.
+
+**9.**
+
+```haskell
+data Result = Result { label :: String, score :: Int }
+  deriving (Show, Read, Eq)
+
+main :: IO ()
+main = do
+  let v = Result { label = "r1", score = 9 }
+  print (read (show v) == v)
+```
+
+`show v` produces the exact record text; `read` parses it back into an equal `Result`; the derived `Eq` confirms the round trip is lossless. This prints `True`.
+
+</Accordion>
 </Accordions>
 
 <Checklist title="Mastery check" rules={[
-  { type: 'must', text: 'I can name what Eq, Ord, Show, Read, Num, Integral, and Fractional each provide.' },
-  { type: 'must', text: 'I can say which class any given operation requires.' },
-  { type: 'must', text: 'I can explain why div and / carry different constraints.' },
+  { type: 'must', text: 'I can name what Eq, Ord, Show, Read, Num, Integral, Fractional, Enum, and Bounded each provide.' },
+  { type: 'must', text: 'I can say which class any given operation requires, including by working through the decision sequence rather than memorising in isolation.' },
+  { type: 'must', text: 'I can explain why div and / carry different constraints, and why no ordinary numeric type is both Integral and Fractional.' },
   { type: 'must', text: 'I can use fromIntegral to compute an average and say why it is needed.' },
-  { type: 'must', text: 'I can explain why read often needs a type annotation.' },
+  { type: 'must', text: 'I can explain why read often needs a type annotation, and recognise when the surrounding context already supplies one.' },
   { type: 'must', text: 'I can explain why Integer has no Bounded instance.' },
-  { type: 'note', text: 'A derived Ord orders values by the sequence the constructors were declared in.' }
+  { type: 'must', text: 'I can explain why 0.1 + 0.2 == 0.3 is False for Double, and why that is not a bug.' },
+  { type: 'note', text: 'A derived Ord orders values by the sequence the constructors were declared in, and tuples compare component by component, left to right.' },
+  { type: 'note', text: 'round uses round-half-to-even: an exact tie rounds to the nearest even integer.' }
 ]} />
 
 Continue with [Maybe and Writing Instances](/docs/sem3/csi243/09-polymorphism/notes/maybe-and-instances).

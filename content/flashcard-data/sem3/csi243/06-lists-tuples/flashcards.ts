@@ -63,4 +63,40 @@ export const flashcardData = [
     front: "When should you prefer recursion over a comprehension?",
     back: "When the result depends on more than one element at a time (isSorted), when elements combine into a single value (sum), or when the recursion is not over a list at all.",
   },
+  {
+    front: "How does `evensUpTo` generate a list from a plain number, with no input list to recurse on?",
+    back: "Its helper `go k` recurses on the gap between a counter k and the bound n: the base case k > n returns [], the recursive step conses k and calls go (k + 2). The base case is reached by counting past n, not by running out of list elements.",
+  },
+  {
+    front: "Why does `evensDown` (counting down from n and consing as it goes) return `[8,6,4,2]` instead of `[2,4,6,8]` for n = 8?",
+    back: "The first element consed on, at the earliest call, is 8 itself, and consing always places the new head at the front. Consing the largest survivor first puts it at the front of the result, reversing the intended order.",
+  },
+  {
+    front: "How does `contains` stop searching the moment it finds a match, with no explicit short-circuit code?",
+    back: "The matching guard `v == x = True` returns True directly with no recursive call in that branch. Because the deeper call is simply never made, the remaining tail is never inspected — Haskell's laziness does the rest.",
+  },
+  {
+    front: "`contains` and `linearSearch` compute the same search. What's the actual difference between them?",
+    back: "Only argument order: contains is `Eq a => a -> [a] -> Bool` (element first), linearSearch is `Eq a => [a] -> a -> Bool` (list first). Neither is more correct — what matters is that the signature, equations, and every call site agree with each other.",
+  },
+  {
+    front: "How do you read the signature `Eq a => [a] -> a -> Bool`?",
+    back: "Read the constraint first, in isolation: \"for any type a that supports ==\". Only then apply the ordinary arrow-by-arrow rule to what follows: takes a list of a, then one more a, gives back a Bool. The constraint is a precondition on a, not an argument itself.",
+  },
+  {
+    front: "Why does a search function using `==` need an `Eq a` constraint at all?",
+    back: "`==` is not defined for every possible type. Any function that compares values of type a with == must declare, in its own signature, that a is limited to types where == exists — otherwise GHC refuses to compile it.",
+  },
+  {
+    front: "What does `positionOf` return when the value is never found, and how does it decide that?",
+    back: "It returns -1, its \"not found\" sentinel. Its helper `go` increments a running position i on every non-match until the list is exhausted, at which point the base case `go [] _ = -1` fires, discarding whatever i had counted up to.",
+  },
+  {
+    front: "Why is `myReverse xs = myReverse xs' ++ [x]` (consing via `++`) worse than `myReverseFast`'s accumulator version?",
+    back: "`++` walks its entire left operand to find the end before attaching the right side, so appending once per element costs O(n²) overall. myReverseFast instead conses onto an accumulator (O(1) per step), making it O(n) — same answer, much less work.",
+  },
+  {
+    front: "Why does `isSorted` need three equations — `[]`, `[_]`, and `(x:y:rest)` — instead of the usual two?",
+    back: "A singleton is trivially sorted (nothing to compare it against) but doesn't match (x:y:rest), which needs at least two elements. It needs its own True case, separate from both [] and a genuine two-or-more-element list.",
+  },
 ];
