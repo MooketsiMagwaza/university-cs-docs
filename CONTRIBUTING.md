@@ -94,6 +94,8 @@ Do not prefix branches with an author, tool, or agent name. For example, use `fe
 
 Course content lives under `content/docs/sem<semester>/<course>/`. New Semester I–II topics follow this structure:
 
+See [docs/content-architecture.md](docs/content-architecture.md) for the repository-wide directory contract, interactive lesson pattern, runtime provenance rules, and current automated checks.
+
 ```text
 topic-name/
 ├── meta.json
@@ -131,6 +133,7 @@ If AI tools materially assisted a contribution, disclose that in the pull reques
 ## MDX rules
 
 - Every MDX file needs `title` and `description` frontmatter.
+- Frontmatter supplies the rendered H1. Begin authored headings at `##` instead of repeating the title with `#`.
 - Components registered in `components/mdx.tsx` are globally available; do not import them in MDX unless the data itself must be imported.
 - Do not place raw `<` or `>` characters in JSX text. Use `\lt`, `\gt`, `&lt;`, or `&gt;` as appropriate.
 - Put display mathematics in KaTeX-compatible delimiters and keep it out of string props.
@@ -169,13 +172,13 @@ See [CONTENT_POLICY.md](CONTENT_POLICY.md) for the full provenance and takedown 
 Run these before requesting review:
 
 ```bash
-npm run types:check
-npm run build
+npm run check
+npm run test:java-playground
 ```
 
 Also inspect changed pages locally. For UI changes, test keyboard interaction, a narrow viewport, and light and dark themes. For content changes, recalculate answers and verify internal links.
 
-The pull request CI repeats type checking and the production build. Dependency and CodeQL workflows provide additional automated review.
+The pull request CI audits learning data, CSI247 structure and Java examples, vendored runtime provenance, type generation, a real browser Java compile/run, and the production build. Dependency and CodeQL workflows provide additional automated review.
 
 ## Pull request expectations
 
