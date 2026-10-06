@@ -96,7 +96,9 @@ export function Quiz({ title = "Knowledge Check", questions }: QuizProps) {
               {qIndex + 1}. <RichText text={q.question} />
             </p>
             {q.code && (
-              <pre className="m-0 overflow-x-auto rounded-lg border border-l-[6px] border-fd-border border-l-[var(--university-concept)] bg-fd-background px-4 py-3 font-mono text-[13px] leading-6 text-fd-foreground"><code>{q.code}</code></pre>
+              <pre className="not-prose my-0 mb-3 overflow-x-auto rounded-lg border border-l-[6px] border-fd-border border-l-[var(--university-concept)] bg-fd-card px-4 py-3 font-mono text-[13px] leading-6 text-fd-foreground">
+                <code style={{ background: 'none', border: 0, padding: 0, borderRadius: 0, color: 'inherit', fontSize: 'inherit' }}>{q.code}</code>
+              </pre>
             )}
             <div className="space-y-2 pl-2">
               {q.options.map((option, optIndex) => {
