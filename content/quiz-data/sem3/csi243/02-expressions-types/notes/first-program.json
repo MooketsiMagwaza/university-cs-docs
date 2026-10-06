@@ -1,0 +1,144 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-load-and-run": {
+      "title": "Check: load and run",
+      "questions": [
+        {
+          "question": "You run ghci> :load Hello.hs and see 'Ok, one module loaded.' Has 'Hello, World!' been printed yet?",
+          "options": [
+            "Yes, :load runs main automatically",
+            "No — :load only checks and loads the definitions; main has to be typed and run separately",
+            "Yes, but only the first time the file is loaded",
+            "No, and it never will be printed because :load does not support IO actions"
+          ],
+          "correctIndex": 1,
+          "explanation": "Loading compiles and type-checks the file and makes its top-level definitions available at the prompt. It does not run anything. main only performs its action once you type main and press Enter.",
+          "optionFeedback": [
+            ":load's job stops at making the module's definitions available; it does not decide to run any of them, including main.",
+            "Correct. The lesson's four-step trace is explicit: 'You saved a definition... GHCi compiled and loaded it... You named the action... The effect became visible' — loading and running are two separate steps.",
+            "Whether it is the first load or a reload, :load never runs main by itself; you always have to name it.",
+            "main is loaded successfully and can absolutely be run afterwards — nothing about :load disables IO."
+          ]
+        }
+      ]
+    },
+    "check-three-ways-to-run-a-script": {
+      "title": "Check: three ways to run a script",
+      "questions": [
+        {
+          "question": "You want to hand a finished lab in as a program someone else can double-click or run without installing GHC's interactive tools every time. Which approach fits best?",
+          "options": [
+            ":load then main, inside GHCi",
+            "runhaskell Hello.hs",
+            "ghc -o hello Hello.hs, then run the resulting executable",
+            "Typing the whole program directly at the ghci> prompt"
+          ],
+          "correctIndex": 2,
+          "explanation": "Compiling with ghc -o produces a standalone executable — the only one of the three approaches that leaves behind a program runnable on its own, independent of GHCi or runhaskell being invoked again.",
+          "optionFeedback": [
+            ":load requires an interactive GHCi session every time; it leaves no standalone artefact for someone else to run.",
+            "runhaskell also recompiles and runs the script fresh each time; like :load, it leaves nothing behind that can be run independently.",
+            "Correct. This is the row in the table marked 'Yes' under 'Leaves an executable?' — exactly the property this scenario needs.",
+            "Individual expressions can be typed at the prompt, but a whole saved program is not meant to be retyped by hand, and nothing would be left behind afterwards either."
+          ]
+        }
+      ]
+    },
+    "check-module-names-and-filenames": {
+      "title": "Check: module names and filenames",
+      "questions": [
+        {
+          "question": "Wrong.hs contains module Test where and loads successfully on its own with :load Wrong.hs. A second file containing import Test is then loaded. What happens, and why?",
+          "options": [
+            "It loads fine, because Haskell locates modules by their declared name, not their filename",
+            "It fails with 'Could not find module Test', because GHC locates an imported module by looking for a file with that same name — Test.hs, not Wrong.hs",
+            "It fails only because Wrong.hs is an unusual filename to choose",
+            "Both files load, but calling any function from Test silently does nothing"
+          ],
+          "correctIndex": 1,
+          "explanation": "The callout gives this exact case: loading a mismatched file directly still works, but 'the rule bites as soon as another module imports it, because GHC locates a module by looking for a file of the same name.' Test is never found, because the file is not called Test.hs.",
+          "optionFeedback": [
+            "It is exactly the reverse: GHC's module search for an import looks for a matching filename, which is why the mismatch only causes a problem once an import is involved.",
+            "Correct — this is the precise failure shown in the callout's transcript: Could not find module 'Test', because import searches by filename.",
+            "Any filename would trigger the identical failure once its internal module name disagrees with it; 'Wrong.hs' is simply the name chosen for this example, not the cause.",
+            "The import fails to resolve at all, so nothing from Test becomes available to call — this is a load-time error, not a silent no-op at call time."
+          ]
+        }
+      ]
+    },
+    "deeper-reasoning-files-reloading-and-optional-signatures": {
+      "title": "Deeper reasoning: files, reloading, and optional signatures",
+      "questions": [
+        {
+          "question": "A student saves Hello.hs from Notepad, starts ghci, and runs :load Hello.hs. GHCi answers that Hello.hs is not a module name or a source file. The student concludes that the installation is broken and starts to reinstall GHC. Which evaluation of that plan is the most accurate?",
+          "options": [
+            "The plan is sound: this message means GHC itself failed to install correctly, so reinstalling is the only fix.",
+            "The plan is wasteful. GHCi started and answered, so the toolchain works. The message almost always means GHCi cannot find a file with exactly that name in its current directory, for example because it was started in a different folder or because Windows saved the file as Hello.hs.txt. Check the directory with :!cd, show file extensions in Explorer, and use :cd to move.",
+            "The plan is wrong because Haskell files must be saved with a .txt extension before GHCi can read them.",
+            "The plan is wrong because :load only works on files compiled beforehand with ghc, so the student should compile first."
+          ],
+          "correctIndex": 1,
+          "explanation": "A working prompt is itself evidence that GHC and GHCi are installed. File-not-found style messages are about location and naming. Windows hiding known extensions is a classic cause, and :!cd or :!pwd shows where GHCi is looking.",
+          "optionFeedback": [
+            "If GHC failed to install, ghci would not have started at all. The message is about the file, not the compiler.",
+            "Correct. The evidence points at the directory or the filename, and both are cheap to check before touching the installation.",
+            "Scripts must end in .hs. A .txt extension is exactly what prevents GHCi from loading the file.",
+            ":load interprets source files directly; no earlier compilation step is needed, and requiring one would defeat the point of an interactive session."
+          ]
+        },
+        {
+          "question": "A student has Hello.hs loaded and working in GHCi. They edit the file so that cube multiplies only two copies of x, save it, and type main again. The old, correct result still appears, and the student decides GHCi caches answers and must be restarted for every change. Which explanation and workflow is best?",
+          "code": [
+            "-- Hello.hs",
+            "cube :: Integer -> Integer",
+            "cube x = x * x * x",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"The cube of 4 is:\"",
+            "  print (cube 4)"
+          ],
+          "options": [
+            "GHCi has a long-term cache of answers, so every edit requires quitting GHCi and starting it again.",
+            "GHCi keeps working with the version it compiled at the last :load. Saving the file does not update the session; typing :reload recompiles the changed file, and the edit, save, :reload, test loop avoids restarting.",
+            "The new cube definition is rejected silently because the signature says Integer; the signature must be changed before the edit takes effect.",
+            "GHCi reloads automatically after a few seconds, so the student only needs to wait before typing main again."
+          ],
+          "correctIndex": 1,
+          "explanation": "A loaded module is a snapshot. Until GHCi is told to recompile, the old definitions remain in force. :reload checks the file again, reports any errors in the new version, and then replaces the old definitions.",
+          "optionFeedback": [
+            "There is no cache of answers. The old output appears because the old compiled definition is still loaded, and :reload fixes that without a restart.",
+            "Correct. The session and the file on disk are separate, and :reload is what connects them again.",
+            "The signature does not block edits. The new body would compile as long as it has type Integer, whatever its mathematical meaning.",
+            "GHCi does not watch files. Only an explicit :reload (or another :load) refreshes the definitions."
+          ]
+        },
+        {
+          "question": "A student reads the script below and says: \"This cannot run. There is no main :: IO (), double has no signature, and double 4 and double 2.5 would mix whole numbers with decimals.\" Evaluate that claim.",
+          "code": [
+            "double x = x * 2",
+            "",
+            "main = do",
+            "  print (double 4)",
+            "  print (double 2.5)"
+          ],
+          "options": [
+            "The claim is correct on all three counts, so GHC refuses to load the script.",
+            "The script runs and prints 8 and then 5.0. The signature of main is optional because GHC infers IO (). double is inferred as Num a => a -> a, so each call picks its own numeric type: 4 defaults to Integer and 2.5 to Double. Adding double :: Integer -> Integer would make double 2.5 a type error.",
+            "The script runs but prints 8 twice, because Haskell rounds every number to a whole number when the first call used a whole number.",
+            "The script loads, but running it fails, because print cannot be used without a signature on main."
+          ],
+          "correctIndex": 1,
+          "explanation": "Neither a signature on main nor one on double is mandatory. Inference gives double the general type Num a => a -> a, so it can be used at several numeric types in the same program. A signature would narrow it, which is sometimes exactly what you want and sometimes an unwanted restriction.",
+          "optionFeedback": [
+            "None of the three objections holds. Signatures are optional, and the general inferred type of double allows both calls.",
+            "Correct. The program is valid, the output is 8 and 5.0, and adding a narrower signature is what would create the type error.",
+            "Haskell never rounds numbers silently. Each call stands alone, and the second one shows 5.0.",
+            "print works with an inferred main exactly as it does with an explicit one. The signature on main only documents and checks what GHC already worked out."
+          ]
+        }
+      ]
+    }
+  }
+}

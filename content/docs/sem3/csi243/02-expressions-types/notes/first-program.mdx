@@ -124,20 +124,7 @@ That is the complete cycle. You wrote a definition, saved it, loaded it, and per
   </Step>
 </StepByStep>
 
-<Quiz title="Check: load and run" questions={[
-  {
-    question: "You run ghci> :load Hello.hs and see 'Ok, one module loaded.' Has 'Hello, World!' been printed yet?",
-    options: ["Yes, :load runs main automatically", "No — :load only checks and loads the definitions; main has to be typed and run separately", "Yes, but only the first time the file is loaded", "No, and it never will be printed because :load does not support IO actions"],
-    correctIndex: 1,
-    explanation: "Loading compiles and type-checks the file and makes its top-level definitions available at the prompt. It does not run anything. main only performs its action once you type main and press Enter.",
-    optionFeedback: [
-      ":load's job stops at making the module's definitions available; it does not decide to run any of them, including main.",
-      "Correct. The lesson's four-step trace is explicit: 'You saved a definition... GHCi compiled and loaded it... You named the action... The effect became visible' — loading and running are two separate steps.",
-      "Whether it is the first load or a reload, :load never runs main by itself; you always have to name it.",
-      "main is loaded successfully and can absolutely be run afterwards — nothing about :load disables IO."
-    ]
-  }
-]} />
+<QuizRef src="sem3/csi243/02-expressions-types/notes/first-program" id="check-load-and-run" />
 
 ## 5. Edit and reload
 
@@ -198,6 +185,85 @@ cube :: Integer -> Integer
 
 The `do` keyword introduces a sequence of actions. The lines inside it must be **aligned with each other** — Haskell uses indentation to decide which statements belong to the block. Chapter 3 explains `do`, `print`, and `show` in full.
 
+### What you can leave out: signatures and `main :: IO ()`
+
+Every example so far has a **type signature** on each definition, including `main :: IO ()`. Those signatures are good practice, but Haskell does not require them. GHC can work out the types from the definitions themselves; this is called **type inference**. Here is a complete, runnable script with *no* signatures at all:
+
+```haskell
+-- Practice.hs
+double x = x * 2
+isLarge x = x > 5
+
+main = do
+  print (map double [1..6])
+  print (filter isLarge [1..10])
+```
+
+```text
+ghci> :load Practice.hs
+Ok, one module loaded.
+ghci> main
+[2,4,6,8,10,12]
+[6,7,8,9,10]
+ghci> :type double
+double :: Num a => a -> a
+ghci> :type isLarge
+isLarge :: (Ord a, Num a) => a -> Bool
+ghci> :type main
+main :: IO ()
+```
+
+GHC reached three conclusions by itself:
+
+- `double` multiplies by `2`, so `x` must be a number: `Num a => a -> a`.
+- `isLarge` compares with `>` against the number `5`, so `x` must be both orderable and numeric: `(Ord a, Num a) => a -> Bool`.
+- `main` is a `do` block whose statements are `print` actions, so it is an `IO ()`. You never had to write that down.
+
+The same idea, with every signature written out, is the fully annotated style:
+
+```haskell
+-- Fruit.hs
+isThere :: String -> String -> Bool
+isThere c n = c == n
+
+goBackMachine :: [String] -> String -> [String]
+goBackMachine [] _ = ["Null?"]
+goBackMachine m n = filter (isThere n) m
+
+main :: IO ()
+main = do
+  let fruit = ["apple", "banana", "cherry", "apple"]
+  let choice = "banana"
+
+  print (goBackMachine fruit choice)
+```
+
+```text
+ghci> main
+["banana"]
+```
+
+Both styles are valid Haskell. They differ in what they tell the reader and what they let the compiler check:
+
+| | Signature written | Signature left out |
+|---|---|---|
+| **What GHC infers** | Nothing: it checks the definition *against* your signature | The most general type that fits the body |
+| **If you make a mistake** | The error points at the definition that broke its promise | The error may appear later, where the mistake is *used* |
+| **Type of `isThere`** | `String -> String -> Bool` (only text) | `Eq a => a -> a -> Bool` (any comparable type) |
+| **Best for** | Lab submissions, anything another person reads, anything with a pitfall | Quick experiments, one-off GHCi sessions, tiny helpers |
+
+A few precise points so the shortcut does not surprise you:
+
+1. **`main` itself is still required** to compile an executable. Only its *signature* is optional. In GHCi you can load a file that has no `main` at all and call its functions directly.
+2. **Leaving out `main :: IO ()` is safe, but writing it adds a check.** With the signature, GHC rejects a `main` whose last statement returns something other than `()`, which catches a forgotten `print` or a stray expression.
+3. **A signature can make a function *less* general on purpose.** `double :: Integer -> Integer` refuses `double 2.5`, whereas the inferred `Num a => a -> a` accepts it.
+4. **Numbers with no signature get a default type.** `[1..6]` above is a list of `Integer`, because GHC defaults an unconstrained numeric type to `Integer` (or `Double` when a fractional value is involved). The section on [type inference](/docs/sem3/csi243/02-expressions-types/notes/expressions-types) explains the defaulting rule.
+5. **Check your lab sheet.** Marking schemes normally expect a signature on every top-level function, because it documents the function's contract. Treat the signature-free style as a tool for experiments, not a licence to omit them in submitted work.
+
+<Callout type="info" title="A good habit while learning">
+Write the script without signatures, load it, and ask GHCi for each function's type with `:type`. Compare that answer with the signature you would have written. Where they differ, you have just learned something about how GHC reads your code.
+</Callout>
+
 ## 7. Run a script without loading it
 
 `runhaskell` compiles and runs a script in one step, without an interactive session:
@@ -254,20 +320,7 @@ Both are generated artefacts. They are safe to delete; `ghc` recreates them.
   highlightCol="use"
 />
 
-<Quiz title="Check: three ways to run a script" questions={[
-  {
-    question: "You want to hand a finished lab in as a program someone else can double-click or run without installing GHC's interactive tools every time. Which approach fits best?",
-    options: [":load then main, inside GHCi", "runhaskell Hello.hs", "ghc -o hello Hello.hs, then run the resulting executable", "Typing the whole program directly at the ghci> prompt"],
-    correctIndex: 2,
-    explanation: "Compiling with ghc -o produces a standalone executable — the only one of the three approaches that leaves behind a program runnable on its own, independent of GHCi or runhaskell being invoked again.",
-    optionFeedback: [
-      ":load requires an interactive GHCi session every time; it leaves no standalone artefact for someone else to run.",
-      "runhaskell also recompiles and runs the script fresh each time; like :load, it leaves nothing behind that can be run independently.",
-      "Correct. This is the row in the table marked 'Yes' under 'Leaves an executable?' — exactly the property this scenario needs.",
-      "Individual expressions can be typed at the prompt, but a whole saved program is not meant to be retyped by hand, and nothing would be left behind afterwards either."
-    ]
-  }
-]} />
+<QuizRef src="sem3/csi243/02-expressions-types/notes/first-program" id="check-three-ways-to-run-a-script" />
 
 ## 9. Modules and filenames
 
@@ -318,25 +371,7 @@ Compiling with `ghc -o` is also stricter: it needs a module named `Main`, and re
 
 Splitting code into modules pays off in three ways: a sufficiently generic module can be reused across many tasks; loosely coupled modules can be reused separately later; and dividing a program into parts with clear purposes makes it more manageable. Chapter 8 develops this.
 
-<Quiz title="Check: module names and filenames" questions={[
-  {
-    question: "Wrong.hs contains module Test where and loads successfully on its own with :load Wrong.hs. A second file containing import Test is then loaded. What happens, and why?",
-    options: [
-      "It loads fine, because Haskell locates modules by their declared name, not their filename",
-      "It fails with 'Could not find module Test', because GHC locates an imported module by looking for a file with that same name — Test.hs, not Wrong.hs",
-      "It fails only because Wrong.hs is an unusual filename to choose",
-      "Both files load, but calling any function from Test silently does nothing"
-    ],
-    correctIndex: 1,
-    explanation: "The callout gives this exact case: loading a mismatched file directly still works, but 'the rule bites as soon as another module imports it, because GHC locates a module by looking for a file of the same name.' Test is never found, because the file is not called Test.hs.",
-    optionFeedback: [
-      "It is exactly the reverse: GHC's module search for an import looks for a matching filename, which is why the mismatch only causes a problem once an import is involved.",
-      "Correct — this is the precise failure shown in the callout's transcript: Could not find module 'Test', because import searches by filename.",
-      "Any filename would trigger the identical failure once its internal module name disagrees with it; 'Wrong.hs' is simply the name chosen for this example, not the cause.",
-      "The import fails to resolve at all, so nothing from Test becomes available to call — this is a load-time error, not a silent no-op at call time."
-    ]
-  }
-]} />
+<QuizRef src="sem3/csi243/02-expressions-types/notes/first-program" id="check-module-names-and-filenames" />
 
 ## 10. Common failures
 
@@ -366,6 +401,8 @@ Splitting code into modules pays off in three ways: a sufficiently generic modul
 
 </Accordion>
 </Accordions>
+
+<QuizRef src="sem3/csi243/02-expressions-types/notes/first-program" id="deeper-reasoning-files-reloading-and-optional-signatures" />
 
 <Checklist title="Mastery check" rules={[
   { type: 'must', text: 'I can create a .hs file in a text editor and confirm its real extension.' },

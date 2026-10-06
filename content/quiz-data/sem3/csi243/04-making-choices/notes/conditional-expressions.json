@@ -1,0 +1,163 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-expression-not-statement": {
+      "title": "Check: expression, not statement",
+      "questions": [
+        {
+          "question": "Why does if n > 0 then \"positive\" else 0 get rejected, when both \"positive\" and 0 are perfectly valid Haskell values?",
+          "options": [
+            "0 is not a valid Haskell value",
+            "The whole if expression must have one single type, but \"positive\" is a String and 0 is a number — the two branches disagree on what type the expression as a whole would be",
+            "if expressions can only return Bool values",
+            "The condition n > 0 is invalid syntax"
+          ],
+          "correctIndex": 1,
+          "explanation": "Because if...then...else is an expression, it must reduce to exactly one value of exactly one type. If the then branch could produce a String and the else branch could produce an Int, the expression's type would be ambiguous — GHC refuses to accept a program where that could happen, catching the disagreement at compile time.",
+          "optionFeedback": [
+            "0 is a perfectly valid Haskell value (an Int, Integer, or another Num instance depending on context) — the problem is not that it is invalid, but that its type clashes with the other branch's type.",
+            "",
+            "if expressions can return any type at all, as long as both branches agree — resultLabel above returns String, for instance.",
+            "n > 0 is valid Bool-producing syntax; the type error is about the branches, not the condition."
+          ]
+        },
+        {
+          "question": "Why is `if 1 then \"a\" else \"b\"` rejected, given that many languages treat 1 as \"truthy\"?",
+          "options": [
+            "Because 1 is too small a number to use as a condition",
+            "Because Haskell requires the condition of an if to have type Bool specifically; it has no concept of numbers standing in for truth values",
+            "Because \"a\" and \"b\" are different strings",
+            "Because the then and else keywords are missing"
+          ],
+          "correctIndex": 1,
+          "explanation": "Haskell's if requires condition :: Bool, full stop. Unlike C, Python, or JavaScript, there is no implicit conversion from a number (or any other type) to Bool. You must write an actual comparison, such as n /= 0, to get a Bool.",
+          "optionFeedback": [
+            "Size is irrelevant — no numeric literal, large or small, is treated as a condition in Haskell.",
+            "",
+            "\"a\" and \"b\" are both Strings, so the two branches actually agree in type here; the rejection is about the condition's type, not the branches.",
+            "then and else are both present in this expression; the problem is the condition 1, which is not a Bool."
+          ]
+        }
+      ]
+    },
+    "check-tracing-nested-conditionals": {
+      "title": "Check: tracing nested conditionals",
+      "questions": [
+        {
+          "question": "Tracing getSign 42: which branches are actually examined, and which are skipped entirely?",
+          "options": [
+            "All three branches (-1, 1, and 0) are evaluated, and the last one to run wins",
+            "n < 0 is tested and found False, so evaluation moves to the else, which tests n > 0 and finds it True, returning 1; the innermost else (0) is never examined",
+            "Only n > 0 is tested; n < 0 is skipped because 42 is positive",
+            "getSign 42 does not evaluate any condition, since 42 is a literal"
+          ],
+          "correctIndex": 1,
+          "explanation": "Evaluation always starts at the outermost if. n < 0 is False for 42, so the outer else — itself a full nested if — is evaluated next. Its condition, n > 0, is True for 42, so its then branch, 1, is the result. The final else (0) is inside a branch that was never reached.",
+          "optionFeedback": [
+            "Haskell does not evaluate every branch and pick a winner — it evaluates the condition chain in order and stops at the first True, exactly as getSign (-7) did above.",
+            "",
+            "n < 0 is tested first because it is the outermost condition — it must be evaluated (and found False) before evaluation can even reach the else that contains n > 0.",
+            "42 is the argument bound to n, not a condition itself; the conditions n < 0 and n > 0 are still evaluated using that value."
+          ]
+        }
+      ]
+    },
+    "check-why-nesting-doesn-t-scale": {
+      "title": "Check: why nesting doesn't scale",
+      "questions": [
+        {
+          "question": "The lesson says the source code's \"shape\" no longer matches the decision's shape once if...then...else is nested three or four deep. What does that mean concretely?",
+          "options": [
+            "The code produces the wrong answer once nested more than twice",
+            "The decision is really a flat list of independent cases (>=90, >=80, >=70, otherwise), but nesting forces each later case to be physically indented inside the previous case's else, so the code no longer visually reads as a flat list",
+            "Nested if expressions are slower to run than a flat list of cases",
+            "GHC refuses to compile more than two levels of nested if"
+          ],
+          "correctIndex": 1,
+          "explanation": "Look at the grade example: conceptually, there are four independent, equally-important cases. But because each else has to contain the next if, the source code shows case 4 nested three levels deep inside case 1's else, case 2's else, and case 3's else. The code's visual structure (deep nesting) no longer matches the decision's real structure (a flat list of cases) — which is exactly what makes it hard to scan.",
+          "optionFeedback": [
+            "Correctness is not the issue — the nested version computes exactly the right answers, as the ghci transcript shows. The issue is purely readability and maintainability.",
+            "",
+            "This is not about runtime performance; both forms evaluate a similar number of comparisons. The problem is how the code reads to a human.",
+            "There is no such limit — Haskell will happily compile if expressions nested arbitrarily deep. The problem is that humans find deep nesting hard to read and edit."
+          ]
+        }
+      ]
+    },
+    "deeper-reasoning-if-as-an-expression": {
+      "title": "Deeper reasoning: if as an expression",
+      "questions": [
+        {
+          "question": "A student who is used to Java writes the function below and is surprised that GHC rejects it. Their reasoning is: \"If the number is not positive I do not want any text at all, so returning 0 there is harmless.\" Which explanation of the rejection, and which repair, is the most complete?",
+          "code": [
+            "-- This version does not compile",
+            "describe :: Int -> String",
+            "describe n = if n > 0 then \"positive\" else 0"
+          ],
+          "options": [
+            "Haskell rejects any if whose else branch is a number, because numbers cannot appear after else.",
+            "The whole if expression has exactly one type, and the signature says it is String. The then branch is a String but the else branch is the number 0, so the two branches disagree and no single type fits both. Both branches must produce a String. If there is genuinely nothing to say, return an explicit text such as the empty string \"\", or change the design so the result type can express absence.",
+            "The error is only about the missing parentheses; writing (0) instead of 0 makes the branches the same type.",
+            "The expression is rejected because if can only be used with Bool results, never with String results."
+          ],
+          "correctIndex": 1,
+          "explanation": "if is an expression, so it must have a single type no matter which branch is taken. A statement in Java can do nothing on one path, but an expression always has to yield a value of the declared type. GHC reports that it cannot use the number 0 where a String is required.",
+          "optionFeedback": [
+            "else can be followed by any expression. The rule is that its type must agree with the then branch, not that numbers are banned.",
+            "Correct. The fix follows from the expression rule: both branches produce the declared result type, even when that value means \"nothing to report\".",
+            "Parentheses do not change the type of a number. (0) is still a number, so the branches still disagree.",
+            "An if can produce a value of any type, String included. The condition must be a Bool, but the result may be anything, provided both branches match."
+          ]
+        },
+        {
+          "question": "A Java programmer reads the definition below and objects: \"An if cannot appear in the middle of an arithmetic expression, because it is a statement.\" Which reply is correct, and what does it show about how to think about conditionals in Haskell?",
+          "code": [
+            "bonus :: Int -> Int",
+            "bonus n = 10 + if n > 5 then 100 else 0",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (bonus 7)",
+            "  print (bonus 2)"
+          ],
+          "options": [
+            "The objection is right for Java but also for Haskell, so this program does not compile.",
+            "The program compiles only if the whole if is wrapped in a do block.",
+            "In Haskell an if is an expression: it has a value and a type, so it can be an operand anywhere a value is expected. Here bonus 7 evaluates 10 + 100 and prints 110, and bonus 2 evaluates 10 + 0 and prints 10. Thinking of if as \"a value chosen by a test\" rather than \"a command that branches\" explains every rule about it, including why else is compulsory.",
+            "The program compiles, but it prints 100 and 0, because the 10 is ignored when an if appears on the right of +."
+          ],
+          "correctIndex": 2,
+          "explanation": "The value-producing nature of if is the single idea behind the lesson. Because the whole if has a numeric type, it is a valid right operand of +, exactly like a literal or a function call. Both branches must produce numbers for that to work.",
+          "optionFeedback": [
+            "The objection is true of Java's statement if but not of Haskell's expression if. The program compiles and runs.",
+            "A do block is for sequencing IO actions. A pure arithmetic expression needs nothing of the kind.",
+            "Correct. Treating if as an expression makes the whole set of rules (mandatory else, matching branch types, any position) follow naturally.",
+            "The 10 is part of the sum. bonus 7 is 110 and bonus 2 is 10, as running the program shows."
+          ]
+        },
+        {
+          "question": "A student wants a three-way answer and writes the function below. GHC reports a parse error that points at the end of the definition, not at the line where the student thinks the mistake is. Which explanation of the error and which repair is the most accurate?",
+          "code": [
+            "-- This version does not compile",
+            "sign :: Integer -> Integer",
+            "sign n = if n > 0 then 1 else if n < 0 then -1"
+          ],
+          "options": [
+            "The outer if is missing its else. Adding else 0 after the first branch would fix it, because the inner if can then be dropped.",
+            "The inner if has no else of its own. An else belongs to the nearest if, so the outer else supplies the value for n <= 0, but the inner if then has no value when n < 0 is False. Every if needs its own else, so the repair is else 0 after the inner -1, which also gives the zero case a result.",
+            "The error is caused by the negative literal -1, which must be written (-1) everywhere in Haskell.",
+            "The error is caused by the second condition, because Haskell allows only one comparison per function."
+          ],
+          "correctIndex": 1,
+          "explanation": "Each if expression needs a result for both outcomes of its own condition. The inner if has no answer when n < 0 is False, which is exactly the case n == 0. The parse error shows up where the expression ends unexpectedly, which can be far from the intention that went missing.",
+          "optionFeedback": [
+            "The outer if has its else; it is the inner if that is incomplete. Removing the inner if would lose the distinction between negative and zero.",
+            "Correct. The repair gives each if its own else and, as a side effect, defines the result for zero.",
+            "-1 is a valid literal as the then-branch of an if; brackets are only required after an operator. The problem is the missing else.",
+            "A function may contain as many comparisons as it needs. Nested conditionals are legal; each one must be complete."
+          ]
+        }
+      ]
+    }
+  }
+}

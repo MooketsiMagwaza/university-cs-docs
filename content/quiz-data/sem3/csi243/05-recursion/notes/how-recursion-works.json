@@ -1,0 +1,202 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-your-understanding-why-order-matters": {
+      "title": "Check Your Understanding: Why Order Matters",
+      "questions": [
+        {
+          "question": "A student writes `fac n = n * fac (n - 1)` before `fac 0 = 1`. What happens when they call `fac 0`?",
+          "options": [
+            "It returns `1`, because Haskell checks all the equations and picks the most specific match",
+            "It never terminates, because the variable pattern `n` matches `0` first and the base case underneath it is never tried",
+            "GHC refuses to compile, reporting overlapping patterns",
+            "It returns `0`, because `n` is bound to `0` in the first equation"
+          ],
+          "correctIndex": 1,
+          "explanation": "Haskell matches equations top to bottom, using the first one that fits — not the most specific one. The pattern `n` matches literally any `Integer`, including `0`, so the first equation always fires, producing `0 * fac (-1)`, then `fac (-2)`, moving away from any base case forever.",
+          "optionFeedback": [
+            "Haskell does not search for the 'most specific' equation — it takes the first equation that matches, top to bottom. That top-to-bottom rule is exactly why the ordering matters here.",
+            "Right: the variable pattern `n` swallows `0` before the literal base case gets a chance to match, so the base case underneath it is unreachable.",
+            "This compiles without complaint. An unreachable equation is a semantic problem, not a syntax error GHC rejects — the program compiles and then loops.",
+            "The first equation does run with `n` bound to `0`, but it does not return `0` directly — it evaluates `0 * fac (-1)`, which recurses further instead of stopping."
+          ]
+        },
+        {
+          "question": "A function has one base case matching only `n = 0` and a recursive step for every other `n`. Which order is safe?",
+          "options": [
+            "Base case first, recursive step second",
+            "Recursive step first, base case second",
+            "Order never matters for Haskell function equations",
+            "It depends on whether the function uses `Int` or `Integer`"
+          ],
+          "correctIndex": 0,
+          "explanation": "List the most specific pattern — the literal base case — before the general variable pattern that would otherwise capture it. This is the same most-specific-first rule Chapter 4 gives for writing any multi-equation function.",
+          "optionFeedback": [
+            "Correct — the literal pattern must come first so it gets a chance to match before the general pattern captures everything.",
+            "That ordering is exactly the broken version from the previous question — the general pattern shadows the base case and the function never terminates.",
+            "Order matters a great deal for the equations of a single function; Haskell always tries them top to bottom and commits to the first match.",
+            "`Int` and `Integer` are both matched by a literal pattern the same way; the type does not change which equation is tried first."
+          ]
+        }
+      ]
+    },
+    "check-your-understanding-fibonacci-and-call-trees": {
+      "title": "Check Your Understanding: Fibonacci and Call Trees",
+      "questions": [
+        {
+          "question": "Why does the call tree for `fib n` branch into two children at every non-base node, while the trace for `fac n` is a single chain?",
+          "options": [
+            "Because `fib`'s recursive step calls `fib` twice — once for `n - 1` and once for `n - 2` — while `fac`'s recursive step calls `fac` only once",
+            "Because `fib` works on lists and `fac` works on numbers",
+            "Because `fib` has two base cases and `fac` has one",
+            "Because GHCi always draws Fibonacci calls as a tree for readability"
+          ],
+          "correctIndex": 0,
+          "explanation": "`fib n = fib (n - 1) + fib (n - 2)` makes two recursive calls per step, so each node in the trace has two children. `fac n = n * fac (n - 1)` makes only one recursive call per step, so its trace is a single chain. How many base cases a function has affects how many places the recursion can stop, not how many branches each step makes.",
+          "optionFeedback": [
+            "Correct — two calls per step is exactly what turns a chain into a tree.",
+            "Both `fib` and `fac` have type `Integer -> Integer`; neither works on lists. The branching comes from how many times the function calls itself per step, not from the type it operates on.",
+            "It's true `fib` needs two base cases and `fac` needs one, but that's a separate fact — it explains how many places the recursion can *stop*, not how many children each non-base call produces.",
+            "GHCi does not draw anything automatically. The tree is a picture of how many calls happen, worked out by hand from the definition."
+          ]
+        },
+        {
+          "question": "In the `fib 5` tree, `fib 2` is evaluated three separate times. What does this tell you about the naive `fib` definition?",
+          "options": [
+            "It recomputes the same sub-results from scratch every time they are needed, rather than reusing them",
+            "It has a bug that makes it loop forever on some inputs",
+            "`fib 2` is being memoized (cached) automatically by Haskell",
+            "The definition is wrong and gives incorrect answers for `n >= 5`"
+          ],
+          "correctIndex": 0,
+          "explanation": "Nothing in `fib`'s definition remembers a previously computed value. Each branch of the tree is evaluated completely independently, so identical sub-calls like `fib 2` are redone every time they occur. The answers are still correct — this is a performance concern, not a correctness one.",
+          "optionFeedback": [
+            "Correct — no result is cached anywhere, so identical calls get redone from scratch.",
+            "`fib 5` terminates fine and returns the right answer, `5`. Repeated work is a performance concern, not a termination bug.",
+            "Plain Haskell functions are not memoized automatically. Nothing caches `fib 2`'s result between the three times it is called here.",
+            "The tree checked out against the Fibonacci table (`F5 = 5`), so the answer is correct. Repeated calls cost time, not correctness."
+          ]
+        }
+      ]
+    },
+    "check-your-understanding-mutual-recursion": {
+      "title": "Check Your Understanding: Mutual Recursion",
+      "questions": [
+        {
+          "question": "Why is it fine that `isOdd` is defined after `isEven` in the source file, even though `isEven`'s body already refers to `isOdd`?",
+          "options": [
+            "Top-level function definitions in a module are all visible to each other regardless of the order they are written in; only the equations *within* one function are tried in order",
+            "GHC secretly reorders the file so that `isOdd` is compiled before `isEven`",
+            "It only works because both functions happen to have a base case for `0`",
+            "It is not actually fine — this example only works because `isEven` happens to get called first with an even number"
+          ],
+          "correctIndex": 0,
+          "explanation": "The 'order matters' rule from earlier in this chapter applies to the equations of one function, matched top to bottom. It says nothing about the order in which two different top-level functions are written in a file — all top-level names are in scope for each other throughout the module, which is exactly what makes mutual recursion possible.",
+          "optionFeedback": [
+            "Correct — the module is compiled as a whole, so both names are already visible everywhere in it.",
+            "GHC does not need to reorder anything; there is no hidden compilation pass that moves definitions around.",
+            "The base cases matter for termination, not for whether the definitions can reference each other. Two functions could reference each other with no base case at all and still compile — they just would not terminate.",
+            "Trace `isOdd 7` yourself: it hands off to `isEven 6`, `isOdd 5`, … down to `isEven 0`. It works regardless of which function is called first or whether the starting value is even or odd."
+          ]
+        },
+        {
+          "question": "Using the definitions above, what does `isOdd 4` evaluate to, and which base case does the chain of handoffs finally reach?",
+          "options": [
+            "`False` — the chain ends at `isOdd 0`",
+            "`True` — the chain ends at `isEven 0`",
+            "`False` — the chain ends at `isEven 0`",
+            "`True` — the chain ends at `isOdd 0`"
+          ],
+          "correctIndex": 0,
+          "explanation": "`isOdd 4 = isEven 3 = isOdd 2 = isEven 1 = isOdd 0 = False`. Four handoffs bring the argument down to `0`, and because `isOdd 4` started the chain, it lands on `isOdd 0`, not `isEven 0`. `isOdd 0` is defined as `False`, matching the fact that `4` is not odd.",
+          "optionFeedback": [
+            "Correct — four handoffs land on `isOdd 0`, which is `False`.",
+            "`isOdd 4` is `False`, not `True` — `4` is even, so it is not odd. Trace it: `isOdd 4 = isEven 3 = isOdd 2 = isEven 1 = isOdd 0`.",
+            "The value `False` is right, but check where the chain actually stops: `isOdd 4 = isEven 3 = isOdd 2 = isEven 1 = isOdd 0`. It is `isOdd 0` that fires, not `isEven 0`.",
+            "The chain does stop at `isOdd 0`, but `isOdd 0` is defined as `False`, not `True` — so `isOdd 4` is `False`, matching that `4` is not an odd number."
+          ]
+        }
+      ]
+    },
+    "deeper-reasoning-termination-and-the-shape-of-recursion": {
+      "title": "Deeper reasoning: termination and the shape of recursion",
+      "questions": [
+        {
+          "question": "A student defines factorial as below and says: \"The argument shrinks on every call and the base case fac 0 = 1 is written, so this must terminate.\" Calling fac 3 never finishes. Which diagnosis is the most complete?",
+          "code": [
+            "fac :: Integer -> Integer",
+            "fac n = n * fac (n - 1)",
+            "fac 0 = 1"
+          ],
+          "options": [
+            "The argument does not shrink: fac (n - 1) is evaluated with the same value of n, so the recursion goes round in circles.",
+            "A recursive definition needs two base cases, so one is not enough even though it is written.",
+            "Termination needs two conditions: the argument must move towards the base case, and the base case must be reachable. Here the argument does shrink, but the first equation uses a variable pattern that matches every Integer, including 0, so the equation fac 0 = 1 is never reached. The chain runs through 3, 2, 1, 0, -1, -2 and onwards without end. Moving the literal base case above the general equation repairs it.",
+            "The program cannot work because Integer values cannot be negative, so fac (-1) raises an exception immediately."
+          ],
+          "correctIndex": 2,
+          "explanation": "Both conditions matter. The argument does decrease, but the equations are tried from the top, and a variable pattern placed first intercepts every call. GHC warns that the later equation is redundant, but it compiles the file, which is why the fault shows up as a hang rather than an error.",
+          "optionFeedback": [
+            "The argument does shrink: the recursive call is fac (n - 1), which is one less than n. The fault is not in the step.",
+            "The number of base cases depends on how far back the step reaches. A step that subtracts one needs a single base case, provided it can be reached.",
+            "Correct. Order of equations is part of the meaning, and a base case that cannot match is as bad as a missing one.",
+            "Integer has negative values, which is exactly why the chain continues past 0 and never stops."
+          ]
+        },
+        {
+          "question": "A student defines fib with only one base case, arguing: \"The recursion always counts down, so it will eventually reach 0 and stop.\" Which evaluation of this claim is correct, and what general rule does it illustrate?",
+          "code": [
+            "fib :: Integer -> Integer",
+            "fib 0 = 0",
+            "fib n = fib (n - 1) + fib (n - 2)"
+          ],
+          "options": [
+            "The claim is correct, because the argument keeps decreasing until it equals 0.",
+            "The claim is correct for fib 0 only; for every other input the function returns 0.",
+            "The claim is wrong. The step reaches back two positions, so fib 1 asks for fib 0 and fib (-1). The call on -1 skips past the base case and continues through -2, -3 and so on without end, so any argument greater than zero fails to terminate. The general rule is that the base cases must cover every place the recursive step can reach, so a step that looks back k places needs k base cases.",
+            "The claim is wrong because fib needs a base case for every positive integer, which is impossible, so Haskell cannot define it recursively."
+          ],
+          "correctIndex": 2,
+          "explanation": "Counting down does not guarantee landing on the base case. With a step of two, the argument can jump over 0. The call tree for fib shows why: every node waits for two children, and some of them are values that lie below the base case.",
+          "optionFeedback": [
+            "The argument decreases, but it does not stop on 0: fib (n - 2) can jump from 1 to -1.",
+            "Only fib 0 is defined by the first equation. Any other input recurses and never returns a value.",
+            "Correct. Reasoning about how far back the step reaches determines how many base cases are needed.",
+            "Two base cases, fib 0 and fib 1, are enough. A recursive definition never needs a base case for every number, only for the smallest inputs the step can reach."
+          ]
+        },
+        {
+          "question": "A student changes isOdd in the mutually recursive pair below so that it passes its argument to isEven unchanged, and predicts that the program will hang. They run it and are surprised that it finishes, though some answers are wrong. Which explanation covers both observations?",
+          "code": [
+            "isEven :: Integer -> Bool",
+            "isEven 0 = True",
+            "isEven n = isOdd (n - 1)",
+            "",
+            "isOdd :: Integer -> Bool",
+            "isOdd 0 = False",
+            "isOdd n = isEven n",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (isEven 3)",
+            "  print (isEven 4)"
+          ],
+          "options": [
+            "It finishes because Haskell stops any recursion after a fixed number of calls and returns False.",
+            "It finishes because isEven still subtracts one on every cycle, so across the whole cycle of calls the argument shrinks and reaches 0. The change does not hang, but it breaks the meaning: isOdd no longer counts down, so isEven 4 reaches isOdd 0 and prints False instead of True. Termination has to be checked across the whole cycle of calls, and a program that terminates can still be wrong.",
+            "It finishes because isOdd is never called when the argument is greater than 0, so the unchanged argument has no effect.",
+            "It finishes because Haskell evaluates isEven and isOdd in parallel, so one of them always reaches 0."
+          ],
+          "correctIndex": 1,
+          "explanation": "A hang needs a cycle of calls that never reduces the argument. Here every trip through isEven subtracts one, so the argument still reaches 0. The result is wrong because the parity alternation was lost, which only a trace or a test at an even input reveals.",
+          "optionFeedback": [
+            "Haskell has no automatic limit that substitutes a value. A genuinely non-terminating program keeps running or overflows the stack.",
+            "Correct. Both parts of the lesson apply: termination is a property of the whole cycle, and termination alone does not prove correctness.",
+            "isOdd is called whenever isEven handles a non-zero argument, so its unchanged hand-off is exercised on every step.",
+            "Evaluation here is sequential and deterministic; no parallelism is involved."
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,230 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-the-six-part-process": {
+      "title": "Check: the six-part process",
+      "questions": [
+        {
+          "question": "Why does the process ask for examples before the signature and implementation?",
+          "options": [
+            "Because GHC requires examples to appear above a function in the source file",
+            "Because writing concrete input-output pairs forces the specification to be precise before any code is written, and implementation and verification then rely on that precision",
+            "Examples are optional style and only affect documentation, not correctness",
+            "Because examples double as the test suite, so writing them later would mean editing the file twice"
+          ],
+          "correctIndex": 1,
+          "explanation": "Examples are a precision check on the specification itself. If you cannot state what isDigitChar '0' should return, you do not yet know what the function does — no amount of implementation care fixes an unclear specification.",
+          "optionFeedback": [
+            "GHC has no such requirement; source order does not matter for compilation. The real reason is about specification precision, not compiler mechanics.",
+            "",
+            "Examples are load-bearing: they are exactly what step 6 (verification) checks the implementation against. A wrong implementation that still compiles is only caught because examples exist to compare it to.",
+            "That is a real side benefit, but not the main reason the process places examples second — the main reason is forcing precision in the specification before code is written."
+          ]
+        },
+        {
+          "question": "isDigitChar '/' and isDigitChar ':' are tested even though neither is a digit. What is the specific value of these two tests?",
+          "options": [
+            "They are redundant with isDigitChar 'A' and could be removed",
+            "They check the characters immediately outside the boundary, which catches an off-by-one mistake (such as using > instead of >=) that a test like isDigitChar '5' could never reveal",
+            "They test whether the function handles punctuation characters as a general category",
+            "They confirm that the function's type signature is Char -> Bool"
+          ],
+          "correctIndex": 1,
+          "explanation": "'/' is the character immediately before '0', and ':' is immediately after '9'. A boundary mistake — for example writing character > '0' instead of character >= '0' — would still pass isDigitChar '5' but would misclassify one of these two neighbours.",
+          "optionFeedback": [
+            "They are not redundant: 'A' sits far from the boundary and cannot detect an off-by-one comparison error the way '/' and ':' can.",
+            "",
+            "Punctuation in general is not the point — these two specific characters were chosen because of their position immediately adjacent to '0' and '9'.",
+            "The type signature is checked once by the compiler at load time; running these particular values tests the logic, not the type."
+          ]
+        }
+      ]
+    },
+    "check-curried-vs-tupled": {
+      "title": "Check: curried vs. tupled",
+      "questions": [
+        {
+          "question": "rectangleArea :: Double -> Double -> Double is called as rectangleArea (5.0, 3.0) — one tuple argument. What happens?",
+          "options": [
+            "It runs and returns 15.0, since Haskell treats a tuple the same as two arguments",
+            "A type error, because rectangleArea expects two separate Double arguments and (5.0, 3.0) is a single (Double, Double) value",
+            "It runs but returns a function instead of a Double",
+            "A runtime exception, not a type error, once the program is run"
+          ],
+          "correctIndex": 1,
+          "explanation": "rectangleArea's signature Double -> Double -> Double declares two curried arguments. Supplying one tuple gives it one argument of the wrong type, (Double, Double), which GHC rejects before the program ever runs.",
+          "optionFeedback": [
+            "Haskell never auto-converts a tuple into two curried arguments — that conflation is exactly the mistake this section warns about.",
+            "",
+            "It would return a function only if too few arguments of the right type were supplied. Here the single argument given is of the wrong type entirely, so type-checking fails immediately.",
+            "This is caught at compile time by the type checker, before the program runs — it is a type error, not a runtime exception."
+          ]
+        },
+        {
+          "question": "What specifically makes `greet \"Hello\"` valid on its own, while `greetPair (\"Hello\", \"Ada\")` cannot be split the same way?",
+          "options": [
+            "greet is defined earlier in the file, so GHCi allows partial calls to it",
+            "greet is curried, so each argument is supplied one at a time and giving just the first yields a new function; greetPair takes one pair as its single argument, so there is no second argument left to withhold",
+            "String arguments can always be supplied partially, unlike Double arguments",
+            "greetPair has a mistake in its definition that breaks partial application"
+          ],
+          "correctIndex": 1,
+          "explanation": "Currying means a multi-argument function is really a chain of one-argument functions: greet :: String -> String -> String is really String -> (String -> String), so giving one String yields a String -> String function. greetPair :: (String, String) -> String takes exactly one argument — the whole pair — so nothing can be withheld.",
+          "optionFeedback": [
+            "Definition order in the file has no effect on whether partial application is possible; it depends entirely on the function's type shape (curried vs. tupled).",
+            "",
+            "The argument type (String vs. Double) is irrelevant here; what matters is whether the function's type is curried or takes one combined argument like a tuple.",
+            "greetPair as shown is a perfectly correct definition — the limitation is inherent to taking a tuple as one argument, not a bug in this code."
+          ]
+        }
+      ]
+    },
+    "check-multiple-definitions-in-a-module": {
+      "title": "Check: multiple definitions in a module",
+      "questions": [
+        {
+          "question": "FunctionPractice.hs defines four functions: cube, isNegative, reciprocalValue, and resultLabel. After :load FunctionPractice.hs, what can you do with isNegative that you could not do if it were only used inside some other function's do block?",
+          "options": [
+            "Nothing changes; top-level definitions behave identically to locally-scoped ones",
+            "Call isNegative directly at the ghci> prompt with any argument, exactly like cube 4 or reciprocalValue 4, because every top-level definition in a loaded module becomes available at the prompt",
+            "isNegative would need its own separate main function to be testable",
+            "isNegative can only be tested by loading FunctionPractice.hs twice"
+          ],
+          "correctIndex": 1,
+          "explanation": "Because isNegative is defined at the top level of the module, loading the file makes it available at the prompt on its own, the same way cube 4, reciprocalValue 4, and resultLabel 49.5 are each called directly in the transcript above — none of them needed to run through a main action first.",
+          "optionFeedback": [
+            "A name hidden inside another function's local scope would not be callable at the prompt at all; being top-level is exactly what makes direct testing like isNegative 0 possible.",
+            "Correct. This is exactly what the transcript demonstrates for all four functions: each one is called directly, with no main and no do block involved.",
+            "None of the four functions in FunctionPractice.hs have a main; they are tested by calling them directly at the ghci> prompt.",
+            "Loading the file once is sufficient; reloading only matters after the source has changed, not for testing an already-loaded function."
+          ]
+        }
+      ]
+    },
+    "check-else-and-testing": {
+      "title": "Check: else and testing",
+      "questions": [
+        {
+          "question": "Why must every if in Haskell have an else, even when the then branch looks like it \"obviously\" covers the interesting case?",
+          "options": [
+            "It is a style convention recommended by the course but not enforced by GHC",
+            "if is an expression with a type and must always produce a value; when the condition is False there would be nothing to produce if else were missing",
+            "else is required only for functions with an Integer result type",
+            "Without else, the program would run but silently return 0"
+          ],
+          "correctIndex": 1,
+          "explanation": "Because if...then...else is an expression — it has a value and a type — Haskell must be able to determine a result for both the True and False cases before the program runs. Omitting else leaves the False case undefined, which GHC rejects as a parse error rather than allowing at compile time.",
+          "optionFeedback": [
+            "It is enforced by the parser, not a stylistic suggestion — omitting else is a compile error, not a lint warning.",
+            "",
+            "The requirement applies to if expressions of every result type — String, Bool, or anything else — not only Integer.",
+            "The program does not compile at all without else, so it never reaches a point where it could silently return anything."
+          ]
+        },
+        {
+          "question": "absoluteValue 0 is included as a boundary test. What makes 0 a meaningful boundary for this specific function, rather than an arbitrary extra test?",
+          "options": [
+            "0 is the value where the condition number < 0 switches from False to True, so it is the input closest to the branch decision",
+            "0 is required because every test suite in this course must include zero",
+            "0 tests whether the function's type signature accepts Integer",
+            "0 is chosen at random to pad out the test suite to three cases"
+          ],
+          "correctIndex": 0,
+          "explanation": "0 sits exactly on the boundary of the condition number < 0: it is the smallest input for which the condition is False. A mistaken condition such as number <= 0 would behave identically to number < 0 for every other integer but disagree exactly at 0 — making 0 the specific input that would expose that mistake.",
+          "optionFeedback": [
+            "",
+            "There is no blanket rule requiring zero in every test suite; zero matters here specifically because it sits on the condition's boundary.",
+            "The type signature is checked once at compile time; running a specific value like 0 tests the logic, not the type.",
+            "0 is chosen deliberately, not at random — it is exactly the point where the comparison number < 0 changes truth value."
+          ]
+        }
+      ]
+    },
+    "deeper-reasoning-specifications-tests-and-function-design": {
+      "title": "Deeper reasoning: specifications, tests, and function design",
+      "questions": [
+        {
+          "question": "The specification says: \"isPass returns True when a mark is 50 or more.\" A student writes the program below, runs it, sees True and False, and reports: \"Both tests pass, so the function is correct and the testing is finished.\" Which critique is the most accurate?",
+          "code": [
+            "isPass :: Integer -> Bool",
+            "isPass mark = mark > 50",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  print (isPass 72)",
+            "  print (isPass 30)"
+          ],
+          "options": [
+            "The critique is unfair: two passing tests are enough for any function that compiles, because the type signature already guarantees correctness.",
+            "The tests only use inputs far from the decision boundary, so they cannot distinguish > from >=. The specification says 50 passes, but isPass 50 would return False. The process step on domain and edge cases should have produced tests at 49, 50 and 51 before any implementation.",
+            "The function is wrong only because it is not written with an if expression; a comparison cannot return a Bool by itself.",
+            "The tests are fine, but the specification is wrong: a mark of exactly 50 should not count as a pass, so the code is correct as written."
+          ],
+          "correctIndex": 1,
+          "explanation": "A compiler proves that the types agree, not that the formula matches the problem. Comparisons that are off by one are among the most common faults, and they only show up at the boundary. Writing the examples and edge cases first, as the six-part process requires, makes the boundary tests obvious.",
+          "optionFeedback": [
+            "The signature promises a Bool, not the right Bool. Both mark > 50 and mark >= 50 satisfy it, and only tests reveal which one the specification wanted.",
+            "Correct. 72 and 30 sit far from the boundary, so a wrong comparison operator survives them. The decisive test is isPass 50, which returns False here although the specification says it should be True.",
+            "A comparison such as mark > 50 is already an expression of type Bool; wrapping it in if would add nothing. The fault is the choice of operator.",
+            "The specification is the fixed starting point in this scenario. Changing the specification to match the code is the opposite of the process, which checks code against the specification."
+          ]
+        },
+        {
+          "question": "A team must greet every name in a list with the same greeting. They are choosing between two designs for the greeting function. Which evaluation of the designs is the most accurate?",
+          "code": [
+            "greet :: String -> String -> String",
+            "greet greeting name = greeting ++ \", \" ++ name ++ \"!\"",
+            "",
+            "greetPair :: (String, String) -> String",
+            "greetPair (greeting, name) = greeting ++ \", \" ++ name ++ \"!\"",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  let sayHello = greet \"Hello\"",
+            "  print (map sayHello [\"Ada\", \"Grace\"])"
+          ],
+          "options": [
+            "greetPair is the better design, because grouping both inputs in one tuple makes it impossible to forget an argument, and it can be given to map directly.",
+            "The two designs are interchangeable: GHC converts a tuple into two curried arguments automatically whenever one is needed.",
+            "greet is the better design for this job. Because it is curried, supplying only the greeting produces a new one-argument function, sayHello, which map can use directly. With greetPair the team would have to wrap each call, for example with a lambda that builds the pair, so the tupled form fits better when the two values naturally arrive together.",
+            "greet is better only because curried functions run faster than tupled ones, so a program that maps over a long list finishes sooner."
+          ],
+          "correctIndex": 2,
+          "explanation": "Currying turns a multi-argument function into a chain of one-argument functions, so fixing the first argument yields a reusable function. A tupled function takes exactly one argument, the whole pair, so nothing can be fixed in advance. Neither form is wrong; the choice depends on how the data arrives.",
+          "optionFeedback": [
+            "A tuple does not stop mistakes more effectively, and greetPair cannot be passed to map with the greeting fixed, because it expects the pair as a single argument.",
+            "Haskell never converts between the two shapes automatically. Mixing them is a type error that names the mismatch.",
+            "Correct. The deciding factor is partial application, which the curried signature makes possible and the tupled signature rules out.",
+            "Performance is not the reason, and the lesson makes no such claim. The advantage is expressiveness: one function can serve many calls once its first argument is fixed."
+          ]
+        },
+        {
+          "question": "A student's classify function is meant to return \"negative\", \"zero\" or \"positive\". They test classify (-5) and classify 8, see \"negative\" and \"positive\", and submit. Which analysis best explains what the tests missed and how the six-part process would have caught it?",
+          "code": [
+            "classify :: Integer -> String",
+            "classify n =",
+            "  if n <= 0",
+            "    then \"negative\"",
+            "    else if n == 0",
+            "      then \"zero\"",
+            "      else \"positive\""
+          ],
+          "options": [
+            "Nothing was missed: the zero branch is correct, because n == 0 is checked after n <= 0 and is therefore always reached for zero.",
+            "The function is wrong for every input, because an if expression cannot be nested inside the else branch of another.",
+            "The condition n <= 0 is also True for 0, so the zero branch can never be reached and classify 0 returns \"negative\". Both tests avoided the one input the function distinguishes by its own branch. Listing the domain and edge cases (below zero, exactly zero, above zero) before implementing would have put 0 among the examples, and a dry run of classify 0 would have exposed the unreachable branch.",
+            "The fault is in the signature: classify should return a Bool for the zero case to be reachable."
+          ],
+          "correctIndex": 2,
+          "explanation": "Branches are tried in order, and the first condition that is True wins. Because n <= 0 includes zero, the later n == 0 test is dead code. A boundary example, and a hand trace of that example, are the cheapest ways to find that kind of mistake.",
+          "optionFeedback": [
+            "The order is the problem, not the solution: zero already satisfies n <= 0, so execution never reaches the n == 0 test.",
+            "Nested if expressions are perfectly legal as long as every branch has a result; this function type-checks and runs. The fault is logical, not syntactic.",
+            "Correct. The code compiles and passes two ordinary tests, which is exactly why edge-case examples and a dry run belong before and after implementation.",
+            "The signature correctly says the function returns one of three labels as a String. Changing it to Bool would remove the information the specification asks for."
+          ]
+        }
+      ]
+    }
+  }
+}

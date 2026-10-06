@@ -1,0 +1,156 @@
+{
+  "$schema": "../../../../quiz.schema.json",
+  "quizzes": {
+    "check-assembling-the-pieces": {
+      "title": "Check: assembling the pieces",
+      "questions": [
+        {
+          "question": "cube 4 appears inside print (cube 4). Which statement correctly separates what is a value from what is an action here?",
+          "options": [
+            "cube 4 is itself an IO action, because it appears inside main's do block",
+            "cube 4 is a pure Integer-producing expression; print (cube 4) is the IO () action that displays whatever cube 4 produces",
+            "print (cube 4) is a pure expression because cube is pure",
+            "Both cube 4 and print (cube 4) are IO actions, since both appear inside a do block"
+          ],
+          "correctIndex": 1,
+          "explanation": "cube :: Integer -> Integer is an entirely pure function — cube 4 is just a number, 64, with no notion of terminal output. Wrapping it in print is what turns that number into an IO () action capable of producing a visible effect. Being written inside a do block does not make a subexpression an action; only print (cube 4) as a whole is the action listed in that do block.",
+          "optionFeedback": [
+            "cube 4 by itself has type Integer, not IO anything — it is purely a calculation with no interaction with the outside world.",
+            "",
+            "print (cube 4) has type IO (), which marks it as an action, precisely because print turns a pure value into something that can affect the terminal.",
+            "Only print (cube 4) is the IO action; cube 4 is the pure Integer value passed into it. The do block lists actions, and cube 4 alone is not one of its listed lines."
+          ]
+        }
+      ]
+    },
+    "check-do-block-ordering": {
+      "title": "Check: do-block ordering",
+      "questions": [
+        {
+          "question": "The InteractiveStepper above lists \"Pure processing: cube 4 evaluates to 64\" as a step between the two IO actions. What does the callout say about taking that literally as strict, top-to-bottom evaluation?",
+          "options": [
+            "It confirms that is exactly correct: Haskell evaluates every expression the instant execution reaches that line",
+            "It warns that the steps describe the order IO actions run in, not a claim that every expression is evaluated strictly at that point — Haskell is lazy and only evaluates cube 4 when its value is actually needed",
+            "It says the stepper is completely wrong and should be ignored",
+            "It says cube 4 is evaluated before the program starts, at compile time"
+          ],
+          "correctIndex": 1,
+          "explanation": "The stepper is a useful simplification for understanding which IO actions happen in which order. But Haskell does not evaluate expressions strictly the instant control reaches them; it evaluates lazily, only when a value is actually demanded. For this simple program the visible behaviour is identical either way, but the mental model \"Haskell runs top to bottom evaluating as it goes\" is the wrong one to carry forward.",
+          "optionFeedback": [
+            "This is precisely the misconception the callout corrects — Haskell does not evaluate strictly top to bottom.",
+            "",
+            "The stepper is not wrong as a description of IO action order; it is only incomplete as a description of evaluation order, which the callout clarifies.",
+            "cube 4 depends on nothing but a literal, but in general Haskell values are computed lazily at run time when demanded, not ahead of time at compile time."
+          ]
+        }
+      ]
+    },
+    "check-diagnosing-print-cube-4": {
+      "title": "Check: diagnosing print cube 4",
+      "questions": [
+        {
+          "question": "print cube 4 is written intending to print the cube of 4. Given that function application groups to the left, what does Haskell actually try to do, and why is it wrong?",
+          "options": [
+            "It correctly computes cube 4 first, then prints the result, exactly as intended",
+            "It groups as (print cube) 4 — applying print to cube itself first, which is a type error, because print expects a displayable value, not a function",
+            "It prints the literal text \"cube 4\" without evaluating anything",
+            "It is a syntax error because print always needs parentheses around its argument"
+          ],
+          "correctIndex": 1,
+          "explanation": "Left-associative application means print cube 4 is (print cube) 4, not print (cube 4). print is applied to cube — a function, not a Show-able value — first, which fails to type-check before 4 is even considered. The repair in the table, print (cube 4), uses parentheses to force cube 4 to be computed first and handed to print as one argument.",
+          "optionFeedback": [
+            "That is what print (cube 4), with parentheses, achieves — not print cube 4 as written, which groups differently.",
+            "Correct. (print cube) 4 tries to print a function value first; print requires a Show instance, and functions do not have one, so this fails before evaluation gets anywhere near 4.",
+            "Nothing here is inside quotation marks, so no literal text is produced; cube and 4 are both treated as ordinary program elements, not string data.",
+            "print (cube 4) works and print 4 alone would also work; parentheses are not always mandatory — they are needed here specifically to override the default left-grouping."
+          ]
+        }
+      ]
+    },
+    "deeper-reasoning-values-actions-and-a-complete-program": {
+      "title": "Deeper reasoning: values, actions, and a complete program",
+      "questions": [
+        {
+          "question": "GHC rejects the program below, reporting that it expected IO a0 but found Integer in the do block. The student says: \"cube 4 is a perfectly good calculation, so the compiler is being unreasonable.\" Which explanation and repair is the most complete?",
+          "code": [
+            "-- This version does not compile",
+            "cube :: Integer -> Integer",
+            "cube x = x * x * x",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"Cubing 4 and 5:\"",
+            "  cube 4",
+            "  print (cube 5)"
+          ],
+          "options": [
+            "The compiler is wrong: a do block may contain any expression, and cube 4 should simply be ignored because its value is not used.",
+            "cube must be redeclared as cube :: Integer -> IO Integer so that it can appear inside main.",
+            "Every statement in a do block must be an action to perform. cube 4 is a pure Integer, a value, not an action, so it has nothing to do. The repair is to give the value to an action, for example print (cube 4), exactly as the next line does for cube 5.",
+            "The error appears because a do block can contain at most two statements, so the third line must be removed."
+          ],
+          "correctIndex": 2,
+          "explanation": "The do block describes a sequence of actions. A pure value on its own is not an action, so it has no place in the sequence unless something such as print turns it into one. The pure function cube stays pure; only the line that displays its result is an effect.",
+          "optionFeedback": [
+            "Haskell does not ignore values in statement position; it checks that each one is an action, and an Integer is not.",
+            "Making cube return an IO value would give a pure calculation an effect type for no reason and would make it harder to test. The usual repair is to keep cube pure and pass its result to print.",
+            "Correct. The mismatch is between a value and an action, and the repair is the same pattern that the working line already uses.",
+            "A do block can contain any number of statements. The line count is irrelevant to this error."
+          ]
+        },
+        {
+          "question": "A student predicts the output of the program below. They say: \"Haskell evaluates strictly top to bottom, so cube 1000000 is computed before Second is printed, and the order on screen proves it.\" Which statement about this claim is the most accurate?",
+          "code": [
+            "cube :: Integer -> Integer",
+            "cube x = x * x * x",
+            "",
+            "main :: IO ()",
+            "main = do",
+            "  putStrLn \"First\"",
+            "  let result = cube 1000000",
+            "  putStrLn \"Second\"",
+            "  print result"
+          ],
+          "options": [
+            "The claim is right: the screen shows First, then the large number, then Second, because each line is evaluated the moment it is reached.",
+            "The screen shows First, Second, and then the number. That order only proves the order in which the IO actions run. Haskell is lazy, so cube 1000000 is evaluated when its value is first needed, which is during print, not at the let line. The visible output cannot distinguish early from late evaluation here, so it cannot prove the claim.",
+            "The program prints nothing, because let bindings are never evaluated unless they are used in a pure function.",
+            "The program fails to compile, because result is bound before it is used by a later action."
+          ],
+          "correctIndex": 1,
+          "explanation": "Action order and evaluation order are different things. The do block fixes the order of the effects; it does not force every pure expression to be computed at the line where it is written. For a pure, side-effect-free calculation the difference is invisible on screen, which is why it is easy to mistake one for the other.",
+          "optionFeedback": [
+            "The claimed output order is wrong, and the reasoning is the misconception the lesson's callout warns about. Binding a name does not force its evaluation.",
+            "Correct. Output order shows the actions' order only. Laziness means the calculation happens when print demands the value.",
+            "print result does use the value, so it is evaluated and displayed, and the program prints three lines.",
+            "A name bound earlier in a do block is available to every later statement. Using result in print is the normal pattern."
+          ]
+        },
+        {
+          "question": "A reviewer says the script below is not a \"complete program\" because main has no type signature, double has no signature, and there is no do block around the print line. Which evaluation is correct?",
+          "code": [
+            "double x = x * 2",
+            "",
+            "main = do",
+            "  print (double 21)",
+            "  putStrLn \"done\""
+          ],
+          "options": [
+            "The reviewer is right on all three counts, so GHC will refuse to compile the file.",
+            "The program is complete and valid. A signature on main is optional: GHC infers main :: IO () from its last statement, and double is inferred as Num a => a -> a. Writing main :: IO () is still good practice, because it documents the entry point and makes GHC reject a main whose final statement returns something unexpected.",
+            "The program compiles, but it prints nothing, because main is only executed when its signature is written out.",
+            "The program is complete only if putStrLn is moved above print, since an output action with a string must always come first."
+          ],
+          "correctIndex": 1,
+          "explanation": "Type signatures are optional because GHC can infer them. What is mandatory is that the module defines main and that main is an IO action. The do block here is present, so the sequence of two actions is valid, and the result is an IO () action.",
+          "optionFeedback": [
+            "None of the three objections holds: signatures are optional, and the do block is present and aligned. GHC loads the file and runs it.",
+            "Correct. The signature adds documentation and a safety check, but its absence does not stop the program from running.",
+            "main runs regardless of whether its signature is written. Execution depends on the definition of main, not on an annotation.",
+            "The order of actions is up to the programmer. print followed by putStrLn is perfectly valid and prints 42 and then done."
+          ]
+        }
+      ]
+    }
+  }
+}

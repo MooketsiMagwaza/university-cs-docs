@@ -61,7 +61,7 @@ export const flashcardData = [
   },
   {
     front: "What happens if every guard in an equation fails?",
-    back: "Matching falls through to the next equation. Only if no equation applies does the program fail with a non-exhaustive guards exception.",
+    back: "Matching falls through to the next equation. Only if no equation applies does the program fail with a non-exhaustive patterns exception.",
   },
   {
     front: "What does GHC report when the two branches of an `if` disagree in type?",

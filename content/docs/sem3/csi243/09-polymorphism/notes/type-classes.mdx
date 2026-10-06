@@ -55,25 +55,7 @@ True
 
 The third line overloads three different symbols at once — `show` twice (once for `Int`, once for `Integer`) and `==` once (on the resulting `String`s) — and every one of them is resolved independently by the type of its own arguments.
 
-<Quiz title="Check: overloading and dispatch" questions={[
-  {
-    question: "When GHC type-checks `'a' == 'b'`, how does it decide which == to run?",
-    options: [
-      "It tries every available Eq instance at run time until one works",
-      "It infers the type of the operands at compile time (here Char) and uses that type's Eq instance",
-      "It always uses the Eq Integer instance and converts everything to a number first",
-      "== has one single global implementation shared by every type"
-    ],
-    correctIndex: 1,
-    explanation: "Dispatch happens once, at compile time, based on the inferred type of the arguments. 'a' and 'b' are Chars, so the Eq Char instance's == is the one compiled into the program — there is no run-time searching.",
-    optionFeedback: [
-      "There is no run-time trial-and-error; the type is known at compile time, and exactly one instance's implementation is selected then.",
-      "Correct — the type Char is inferred first, and the Eq Char instance supplies the specific == that gets compiled in.",
-      "Char values are not converted to Integer for comparison; each type has its own independent Eq instance and its own comparison logic.",
-      "This is precisely what overloading denies — == has a different implementation per instance, selected by type, not one shared implementation."
-    ]
-  }
-]} />
+<QuizRef src="sem3/csi243/09-polymorphism/notes/type-classes" id="check-overloading-and-dispatch" />
 
 ## 2. What a type class is
 
@@ -206,42 +188,7 @@ main = do
 3
 ```
 
-<Quiz title="Check: choosing the right generality" questions={[
-  {
-    question: "Why is countMatches3 :: a -> [a] -> Int (fully general, no constraint) not just 'too general' but actually impossible to write?",
-    options: [
-      "It would need to be much longer than the other two versions",
-      "Counting matches means comparing the target to each element with ==, and an unconstrained a supports no operations at all — the body cannot even type-check, let alone run",
-      "Int cannot be returned from a fully general function",
-      "It is possible, but only for list arguments of length 1"
-    ],
-    correctIndex: 1,
-    explanation: "This goes one step further than the usual 'too narrow / too general' trade-off: countMatches3's body has no way to compare v to an element of the list at all, because == requires Eq, which the signature never grants. It fails to compile for any input, not just some.",
-    optionFeedback: [
-      "Length has nothing to do with it — countMatches2's body, length . filter (== v), is no longer than a countMatches3 body would be if one could be written at all.",
-      "Correct — comparing v against each element needs ==, and Eq a => is the constraint that makes == available; without it, the comparison itself cannot be typed.",
-      "Returning Int is fine for any signature shape; the problem is entirely on the input side, not the result type.",
-      "The failure is a type error at compile time, for every input, regardless of the list's length — it is not a special case for short lists."
-    ]
-  },
-  {
-    question: "showAll :: (Show a, Ord a) => [a] -> String earns both of its constraints honestly. Which operation in its body needs which constraint?",
-    options: [
-      "maximum needs Show; the two show calls need Ord",
-      "maximum needs Ord (to compare elements and find the largest); the two show calls need Show (to convert values to text)",
-      "Both constraints are needed only for the ++ that joins the strings together",
-      "Neither constraint is actually required; they were added out of caution"
-    ],
-    correctIndex: 1,
-    explanation: "showAll xs = show (maximum xs) ++ \" is the largest of \" ++ show xs calls maximum, which requires Ord to compare elements, and show, which requires Show to produce text. Each constraint traces to a specific operation in the body, exactly as Section 5 describes GHC inferring them.",
-    optionFeedback: [
-      "This has the two constraints swapped — maximum is the one that compares elements (Ord), and show is the one that converts to text (Show).",
-      "Correct — maximum's comparison needs Ord, and both show calls need Show; the signature states exactly what the body actually uses, no more.",
-      "++ on String needs no class constraint at all; String already supports it unconditionally, so ++ contributes nothing to the tuple of constraints.",
-      "Both are load-bearing: drop either one and the corresponding operation (maximum or show) fails to type-check."
-    ]
-  }
-]} />
+<QuizRef src="sem3/csi243/09-polymorphism/notes/type-classes" id="check-choosing-the-right-generality" />
 
 ## 5. Where constraints come from
 
@@ -346,42 +293,7 @@ True
 `No instance for (Eq a) arising from a use of '=='` inside a function body means a **type variable** in your own signature is missing a constraint — add `Eq a =>` to that signature. `No instance for (Eq Direction) arising from a use of '=='` means a **specific, concrete type** was never given an `Eq` instance at all — add `deriving (Eq)` to that type's declaration, or write `instance Eq Direction where ...` by hand. Reading which one GHC named — a lowercase variable or an uppercase type — tells you immediately which repair applies.
 </CommonMistake>
 
-<Quiz title="Check: diagnosing 'No instance' errors" questions={[
-  {
-    question: "GHC reports `No instance for (Eq a) arising from a use of '=='` inside the body of a function you wrote. What is the repair?",
-    options: [
-      "Add deriving (Eq) to some data declaration",
-      "Add Eq a => to your function's own type signature",
-      "Rename the type variable from a to something else",
-      "Remove the == from the function body"
-    ],
-    correctIndex: 1,
-    explanation: "The class named in lowercase (a) is a type variable from your own signature, not a fixed type. The repair is to state, in that signature, that a must belong to Eq — exactly the countOf repair shown in this section.",
-    optionFeedback: [
-      "There is no concrete data type named here to add a deriving clause to — the problem is an unconstrained variable in a signature you wrote.",
-      "Correct — a is your function's own type variable; adding Eq a => to its signature states the requirement that == already relies on.",
-      "The variable's name is irrelevant; whatever it is called, it still needs the constraint added.",
-      "The == is exactly what the function is meant to do; removing it would just produce a different, wrong function."
-    ]
-  },
-  {
-    question: "GHC reports `No instance for (Eq Direction) arising from a use of '=='`, where Direction is a data type you declared with no deriving clause. What is the repair?",
-    options: [
-      "Add Eq a => to the signature of the function that used ==",
-      "Add deriving (Eq) to the Direction declaration, or write an Eq Direction instance by hand",
-      "Rename Direction to a lowercase name",
-      "Direction cannot be compared under any circumstances"
-    ],
-    correctIndex: 1,
-    explanation: "Direction is a concrete type, not a variable — there is no signature constraint to add. The instance itself is missing for this specific type, so it must be supplied, most easily by deriving it.",
-    optionFeedback: [
-      "There is no type variable here to constrain; Direction is already a fixed, concrete type named directly in the error.",
-      "Correct — the fix supplies the missing Eq Direction instance directly, either via deriving or a hand-written instance declaration.",
-      "Capitalisation marks Direction as a concrete type, not a variable; renaming it would not create the missing instance and would break every other use of the type.",
-      "It can be compared perfectly well once it has an Eq instance — deriving (Eq) is enough, as the corrected declaration shows."
-    ]
-  }
-]} />
+<QuizRef src="sem3/csi243/09-polymorphism/notes/type-classes" id="check-diagnosing-no-instance-errors" />
 
 ## 7. Class hierarchies
 
@@ -412,42 +324,7 @@ main = do
 
 `countMax`'s signature only ever wrote `Ord a =>`, yet its body freely uses `==`. That is exactly what the hierarchy diagram promises: `Ord` cannot exist for a type without `Eq` already existing for it, so the compiler lets you use `Eq`'s operations under an `Ord` constraint without asking for both.
 
-<Quiz title="Check: class hierarchies" questions={[
-  {
-    question: "Why does `countMax :: Ord a => [a] -> Int` type-check, even though its body uses ==, which belongs to Eq?",
-    options: [
-      "== is defined inside every class, not just Eq",
-      "Ord requires Eq as a superclass, so every Ord instance is guaranteed to already be an Eq instance",
-      "GHC silently adds Eq a => whenever it sees ==",
-      "countMax does not actually use == at compile time"
-    ],
-    correctIndex: 1,
-    explanation: "Because Ord's own class definition requires Eq, any type with an Ord instance is guaranteed to have an Eq instance too. The Ord a constraint already carries that guarantee, so == is available without writing Eq a separately.",
-    optionFeedback: [
-      "== belongs specifically to Eq; other classes such as Ord add their own new operations (<, compare, ...) on top of it, rather than redefining it.",
-      "Correct — the Eq -> Ord arrow in the hierarchy means Ord a already implies Eq a, so == is available for free.",
-      "Nothing is added silently; the guarantee comes from Ord's fixed definition (it requires Eq), not from any special-casing of ==.",
-      "filter (== maximum xs) xs genuinely calls == at run time on every element; it is a real, executed comparison, not something erased."
-    ]
-  },
-  {
-    question: "Why is writing `(Eq a, Ord a) => ...` considered redundant rather than merely allowed?",
-    options: [
-      "It is a syntax error in Haskell",
-      "Because Ord a already guarantees Eq a, so naming Eq a separately adds no new information",
-      "Because Eq and Ord are actually the same class under different names",
-      "Because a can only ever belong to one class at a time"
-    ],
-    correctIndex: 1,
-    explanation: "It compiles fine — it is just unnecessary. Ord's definition already requires Eq, so any type satisfying Ord a satisfies Eq a automatically; spelling out both says nothing the single Ord a did not already say.",
-    optionFeedback: [
-      "It is valid, if wordy, Haskell — GHC accepts it without complaint. The issue is that it says the same thing twice.",
-      "Correct — since Ord requires Eq as a superclass, Ord a on its own already entails Eq a, making the explicit Eq a superfluous.",
-      "They are distinct classes providing different operations (== and /= for Eq; <, compare, max, min for Ord, on top of Eq's operations).",
-      "A type may satisfy any number of classes simultaneously — Int alone is an instance of Eq, Ord, Num, Show, and more."
-    ]
-  }
-]} />
+<QuizRef src="sem3/csi243/09-polymorphism/notes/type-classes" id="check-class-hierarchies" />
 
 <RecognitionStrategy title="Spotting => versus ->, at a glance">
 Look at what sits immediately to the left. `Eq a =>` pairs a class name with a type variable and is always followed by more type — never by a value being applied. `Bool ->` or `a ->` names the type of an actual argument. A quick test: delete the segment together with its arrow; if what remains still reads as a complete, sensible function type, you deleted a constraint; if the arrows no longer line up, you deleted an argument type.
