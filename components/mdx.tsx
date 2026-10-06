@@ -22,6 +22,8 @@ import { Card } from './callouts/card';
 import { ResourceHub } from './interactive/resource-hub';
 import { HaskellPlayground } from './interactive/haskell-playground';
 import { HaskellTryIt } from './interactive/haskell-try-it';
+import { CodePlayground } from './interactive/code-playground';
+import { CodeTryIt } from './interactive/code-try-it';
 
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -91,6 +93,8 @@ export function getMDXComponents(components?: MDXComponents) {
     ResourceHub,
     HaskellPlayground,
     HaskellTryIt,
+    CodePlayground,
+    CodeTryIt,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,
