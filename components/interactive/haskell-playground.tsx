@@ -122,7 +122,7 @@ export function HaskellPlayground({
             <div className="flex flex-wrap items-center gap-2">
               <TerminalSquare className="h-5 w-5 text-fd-primary" aria-hidden="true" />
               <h3 className="m-0 text-xl font-semibold text-fd-foreground">{title}</h3>
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <span className="rounded-full border border-fd-border bg-fd-background px-2 py-0.5 text-xs font-medium text-fd-muted-foreground">
                 Course subset
               </span>
             </div>
@@ -167,13 +167,13 @@ export function HaskellPlayground({
               }
             }}
             spellCheck={false}
-            className="min-h-80 w-full resize-y bg-slate-950 p-4 font-mono text-[13px] leading-6 text-slate-100 outline-none focus:ring-2 focus:ring-inset focus:ring-fd-primary"
+            className="min-h-80 w-full resize-y bg-zinc-950 p-4 font-mono text-[13px] leading-6 text-zinc-100 outline-none focus:ring-2 focus:ring-inset focus:ring-fd-primary"
           />
           <div className="flex items-center gap-2 border-t border-fd-border bg-fd-muted/20 px-4 py-3">
             <button
               type="button"
               onClick={run}
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+              className="inline-flex items-center gap-2 rounded-lg bg-fd-primary px-4 py-2 text-sm font-semibold text-fd-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-primary"
             >
               <Play className="h-4 w-4" fill="currentColor" aria-hidden="true" />
               Run code
@@ -189,23 +189,23 @@ export function HaskellPlayground({
           </div>
         </div>
 
-        <div className="min-h-80 bg-slate-950 text-slate-100">
-          <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <div className="min-h-80 bg-zinc-950 text-zinc-100">
+          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
             <span>Output</span>
             {result && <span>{result.elapsedMs.toFixed(1)} ms</span>}
           </div>
           {!result && (
-            <div className="flex min-h-72 items-center justify-center px-6 text-center text-sm text-slate-400">
+            <div className="flex min-h-72 items-center justify-center px-6 text-center text-sm text-zinc-400">
               Run the program to see output or compiler-style feedback here.
             </div>
           )}
           {result?.ok && (
             <div className="p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-emerald-400">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-zinc-300">
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                 Program finished
               </div>
-              <pre className="m-0 whitespace-pre-wrap font-mono text-[13px] leading-6 text-slate-100">{result.output}</pre>
+              <pre className="m-0 whitespace-pre-wrap font-mono text-[13px] leading-6 text-zinc-100">{result.output}</pre>
             </div>
           )}
           {result && !result.ok && diagnostic && (
@@ -216,7 +216,7 @@ export function HaskellPlayground({
               </div>
               <pre className="m-0 whitespace-pre-wrap rounded-lg border border-red-500/30 bg-red-500/10 p-3 font-mono text-[13px] leading-6 text-red-100">{diagnostic.message}</pre>
               {diagnostic.hint && (
-                <p className="mb-0 mt-3 text-sm leading-6 text-amber-200">
+                <p className="mb-0 mt-3 text-sm leading-6 text-zinc-300">
                   <span className="font-semibold">Hint:</span> {diagnostic.hint}
                 </p>
               )}
