@@ -12,10 +12,8 @@ import {
   FileQuestion,
   Focus,
   GraduationCap,
-  HardHat,
   Layers3,
   Search,
-  Sparkles,
   Target,
   TimerReset,
 } from 'lucide-react';
@@ -24,7 +22,7 @@ const semesters = [
   {
     label: 'Semester I (WIP)',
     eyebrow: 'Foundations',
-    status: 'Work in progress',
+    status: 'In progress',
     href: '/docs/sem1',
     description: 'Discrete reasoning, Java fundamentals, computing systems, pre-calculus, and academic literacy.',
     courses: ['CSI131', 'CSI141', 'CSI161', 'MAT111', 'COM141'],
@@ -32,7 +30,7 @@ const semesters = [
   {
     label: 'Semester II (WIP)',
     eyebrow: 'Application',
-    status: 'Work in progress',
+    status: 'In progress',
     href: '/docs/sem2',
     description: 'Proof, object-oriented Java, calculus, probability, and academic writing.',
     courses: ['CSI132', 'CSI142', 'MAT122', 'STA122', 'COM142'],
@@ -59,7 +57,7 @@ export function DocsWelcome() {
   return <div className="docs-welcome">
     <section className="welcome-hero">
       <div className="welcome-hero-copy">
-        <div className="welcome-kicker"><Sparkles size={15} /> University of Botswana Computer Science study system</div>
+        <div className="welcome-kicker">University of Botswana Computer Science study system</div>
         <h1 id="welcome-to-university-docs"><span className="welcome-title-line">Learn the course.</span><span className="welcome-title-line welcome-title-muted">Prove you know it.</span></h1>
         <p>Complete notes, active-recall review, guided questions, difficult mock exams, and original lecture resources—organized into one dependable route from first contact to exam readiness.</p>
         <div className="welcome-actions">
@@ -89,7 +87,7 @@ export function DocsWelcome() {
       <div className="welcome-section-head"><div><span>Course library</span><h2>Choose where you are studying</h2></div><Layers3 size={21} /></div>
       <div className="semester-grid">
         {semesters.map((semester, index) => <Link key={semester.href} className={`semester-card ${semester.status ? 'semester-card-wip' : ''}`} href={semester.href}>
-          <div className="semester-card-top"><span>{semester.eyebrow}</span><div>{semester.status && <b className="semester-wip"><HardHat size={12} /> WIP · {semester.status}</b>}<em>0{index + 1}</em></div></div>
+          <div className="semester-card-top"><span>{semester.eyebrow}</span><div>{semester.status && <b className="semester-wip">{semester.status}</b>}<em>0{index + 1}</em></div></div>
           <h3>{semester.label}</h3>
           <p>{semester.description}</p>
           <div className="course-chips">{semester.courses.map((course) => <span key={course}>{course}</span>)}</div>
