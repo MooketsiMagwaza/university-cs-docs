@@ -12,7 +12,7 @@ This list records requested repository work, its verification target, and its cu
 | CSI243-04 | Include the requested partial-application search example | Explain why `filter (isThere wanted)` works and provide runnable code | Complete |
 | CSI243-05 | Include the requested `foldr` factorial program | Include the terminal-input version, a detailed trace, edge cases, and a browser-runnable equivalent | Complete |
 | CSI243-06 | Add a simulated in-page Haskell runner | Run the course subset locally in the browser and show parse, type, and runtime diagnostics | Complete |
-| CSI243-07 | Interleave W3Schools-style practice through the notes | Place compact “Try it yourself” examples directly after individual concepts, with Run and Reset in each opened editor | Complete |
+| CSI243-07 | Interleave W3Schools-style practice through the notes | Place compact “Try it yourself” examples directly after individual concepts, with Run and Reset in each opened editor | Reopened: only 22 embeds across 37 notes. See CSI243-22 and CSI243-23 |
 | CSI243-08 | Keep a standalone practice playground | Register a dedicated playground page with curated examples for longer experimentation | Complete |
 | CSI243-09 | Use a minimal visual palette | Use neutral surfaces and reserve strong colour for actions, state, and errors | Complete |
 | CSI243-10 | Fix the “The mental model” callout container | A description-only highlight card does not render an empty nested box | Complete |
@@ -24,6 +24,11 @@ This list records requested repository work, its verification target, and its cu
 | CSI243-16 | Merge the completed overhaul into `main` using the authorised admin bypass | Required repository checks pass; the pull request is merged and `origin/main` contains the work | Complete |
 | CSI243-17 | Explain functional languages, immutability, scope, and shadowing in depth | Contrast functional and imperative models and show why back-to-back `let x = 3` / `let x = 4` creates separate bindings rather than mutating one value | Complete |
 | CSI243-18 | Explain Haskell's typing and laziness precisely | Distinguish static type checking, type inference, lazy value evaluation, thunks, sharing, demand, and infinite-list consumption | Complete |
+| CSI243-19 | Restyle the docs home page to match the site theme | No gradients, rings or glass effects; reads the paper-and-ink tokens in light and dark; Mastery check is an interactive checklist with no emoji; scrollbars follow the theme | In review (PR 51) |
+| CSI243-20 | Keep quiz content out of MDX | Quizzes live in `content/quiz-data` JSON files referenced with `QuizRef`; migrated pages render unchanged; `npm run audit:quizzes` passes; quiz code blocks match the site theme | In review (PR 52) |
+| CSI243-21 | Add W3Schools-style playgrounds beyond Haskell | HTML and CSS, JavaScript, Python and SQL run in the browser with time limits, with examples and seed datasets in JSON; `npm run audit:playgrounds` passes | In review (PR 53) |
+| CSI243-22 | Extend the Haskell runner to the notes' main constructs | Multi-equation pattern definitions, guards, `where`, `case`, `let ... in` and simple `data` types run in the browser. A scan of the notes shows most examples that have a GHC transcript running and matching it (30 of 229 today; 182 fail to parse, mainly multi-equation definitions and guards) | Open |
+| CSI243-23 | Add data-driven Try it yourself examples next to every runnable example | Each example is a JSON entry referenced from the note, stores the GHC output shown in the note as its expected result, and an audit runs it in the simulator and compares. Depends on CSI243-22 | Open |
 
 ## Notes
 
