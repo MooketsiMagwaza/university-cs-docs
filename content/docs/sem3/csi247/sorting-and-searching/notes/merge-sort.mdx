@@ -1,0 +1,272 @@
+---
+title: "5. Merge Sort"
+description: "Follow merge sort's divide-and-conquer call tree, merge sorted runs, implement the recursive algorithm, and derive O(n log n) time and O(n) auxiliary space."
+---
+
+Merge sort replaces repeated local rearrangement with **divide and conquer**:
+
+1. divide the range into two halves;
+2. sort each half recursively;
+3. merge the two sorted halves.
+
+The base case is a range with zero or one element. Such a range is already sorted.
+
+## 1. The idea in plain language
+
+Merge sort has two different movements:
+
+1. **Split:** keep halving the index range. Splitting does not compare or move values.
+2. **Merge:** rebuild larger sorted runs by repeatedly taking the smaller front card.
+
+Think of eight exam papers. It is easy to sort two tiny piles, then combine those sorted piles. Merge sort keeps doing that until one sorted pile remains.
+
+The detail that makes the method work is easy to miss: **merge only works because both input runs are already sorted**.
+
+## 2. See the recursion go down and the merges come back
+
+<MergeSortStory />
+
+During recursion Java finishes the whole left half, then the right half, and only then runs the merge for their parent. That is why the merge-return table is depth-first rather than level-by-level.
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/merge-sort" id="check-the-merge" />
+
+## 3. Properties before code
+
+| Property | Merge sort | Why |
+|---|---|---|
+| Best, average, worst time | `O(n log n)` | About `log₂ n` merge levels; each level processes all `n` values |
+| Extra array space | `O(n)` | The merge needs temporary storage |
+| Call-stack space | `O(log n)` | The recursive split tree has logarithmic depth |
+| Stable | Yes, with left-first ties | Use `<=` when choosing between equal front values |
+| Adaptive | No, in the standard version | It still splits and merges already sorted input |
+| In place | No, in the taught version | Values are copied through a temporary array |
+
+## 4. Java implementation
+
+```java
+public static void mergeSort(int[] arr, int start, int end) {
+    if (start >= end) {
+        return;
+    }
+
+    int mid = start + (end - start) / 2;
+    mergeSort(arr, start, mid);
+    mergeSort(arr, mid + 1, end);
+    merge(arr, start, mid, end);
+}
+
+private static void merge(int[] arr, int start, int mid, int end) {
+    int[] temp = new int[end - start + 1];
+    int left = start;
+    int right = mid + 1;
+    int out = 0;
+
+    while (left <= mid && right <= end) {
+        if (arr[left] <= arr[right]) {
+            temp[out++] = arr[left++];
+        } else {
+            temp[out++] = arr[right++];
+        }
+    }
+
+    while (left <= mid) {
+        temp[out++] = arr[left++];
+    }
+    while (right <= end) {
+        temp[out++] = arr[right++];
+    }
+
+    for (int i = 0; i < temp.length; i++) {
+        arr[start + i] = temp[i];
+    }
+}
+```
+
+Call it with `mergeSort(values, 0, values.length - 1)`. For an empty array the initial range is `0..-1`, so the base case returns safely.
+
+### Complete runnable example
+
+```java
+import java.util.Arrays;
+
+public class MergeSortDemo {
+    public static void mergeSort(int[] arr, int start, int end) {
+        if (start >= end) return;
+        int mid = start + (end - start) / 2;
+        mergeSort(arr, start, mid);
+        mergeSort(arr, mid + 1, end);
+        merge(arr, start, mid, end);
+    }
+
+    private static void merge(int[] arr, int start, int mid, int end) {
+        int[] temp = new int[end - start + 1];
+        int left = start;
+        int right = mid + 1;
+        int out = 0;
+        while (left <= mid && right <= end) {
+            if (arr[left] <= arr[right]) temp[out++] = arr[left++];
+            else temp[out++] = arr[right++];
+        }
+        while (left <= mid) temp[out++] = arr[left++];
+        while (right <= end) temp[out++] = arr[right++];
+        for (int i = 0; i < temp.length; i++) arr[start + i] = temp[i];
+    }
+
+    public static void main(String[] args) {
+        int[] values = {63, 29, 72, 85, 18, 49, 3, 54};
+        mergeSort(values, 0, values.length - 1);
+        System.out.println(Arrays.toString(values));
+    }
+}
+```
+
+```text
+[3, 18, 29, 49, 54, 63, 72, 85]
+```
+
+<JavaTryIt example="merge-sort" title="Run merge sort in the browser" />
+
+## 5. The three ideas students often mix together
+
+Merge sort becomes easier when **division**, **recursion**, and **mutation** are kept separate.
+
+<ComparisonTable
+  columns={[
+    { header: 'Idea', key: 'idea' },
+    { header: 'What happens', key: 'happens' },
+    { header: 'Does the array move?', key: 'moves' }
+  ]}
+  rows={[
+    { idea: 'Divide', happens: 'Calculate mid and describe two index ranges', moves: 'No. Only left, mid, and right change.' },
+    { idea: 'Recursive calls', happens: 'Finish sorting the left range, then the right range', moves: 'Only when a deeper call reaches its merge.' },
+    { idea: 'Merge', happens: 'Compare the two front values and write a sorted temporary run back', moves: 'Yes. This is where values are copied and the range changes.' }
+  ]}
+/>
+
+<CommonMistake title="Drawing values moving during the split">
+The split phase does not rearrange the array. It creates smaller **index problems**. Draw brackets or ranges during division; move value cards only when a merge chooses and copies them.
+</CommonMistake>
+
+### Call order versus merge order
+
+For a four-value range `0..3`, Java follows depth-first call order. A parent cannot merge until both children have returned.
+
+| Event | Active range | Why it happens now |
+|---:|---|---|
+| 1 | call `sort(0, 3)` | Split at 1 |
+| 2 | call `sort(0, 1)` | Finish the whole left half first |
+| 3 | call `sort(0, 0)` | Base case returns immediately |
+| 4 | call `sort(1, 1)` | Base case returns immediately |
+| 5 | `merge(0, 0, 1)` | Both children of `0..1` are sorted |
+| 6 | call `sort(2, 3)` | Now begin the right half |
+| 7 | call `sort(2, 2)`, then `sort(3, 3)` | Both are base cases |
+| 8 | `merge(2, 2, 3)` | The right half becomes sorted |
+| 9 | `merge(0, 1, 3)` | Both large halves are finally ready |
+
+The calls travel **down** the recursion tree. Merges happen on the way **back up**.
+
+## 6. A merge condition with the actual values
+
+Assume the two input runs are already sorted:
+
+```text
+left  = [20, 36]
+right = [13, 54]
+```
+
+| Step | Java condition with values | Consequence | Temporary result |
+|---:|---|---|---|
+| 1 | `left[i] <= right[j]` → `20 <= 13` → false | Copy `13`; advance `j` | `[13]` |
+| 2 | `20 <= 54` → true | Copy `20`; advance `i` | `[13, 20]` |
+| 3 | `36 <= 54` → true | Copy `36`; advance `i` | `[13, 20, 36]` |
+| 4 | `i <= mid` is false | Left run is empty; leave the comparison loop | `[13, 20, 36]` |
+| 5 | Right run still has `54` | Copy the leftover; no key comparison is needed | `[13, 20, 36, 54]` |
+
+Two details matter:
+
+1. A pointer advances only in the run that supplied the copied value.
+2. When one run becomes empty, the other run is already sorted, so all of its leftovers can be copied directly.
+
+Using `<=` chooses the left card when values are equal. That is what preserves stability: an equal left-side record keeps its earlier relative position.
+
+## 7. Full trace on eight values
+
+The divide phase creates these leaves:
+
+```text
+[63] [29] [72] [85] [18] [49] [3] [54]
+```
+
+The merges occur as recursive calls return:
+
+| Merge | Left run | Right run | Result |
+|---:|---|---|---|
+| 1 | `[63]` | `[29]` | `[29, 63]` |
+| 2 | `[72]` | `[85]` | `[72, 85]` |
+| 3 | `[29, 63]` | `[72, 85]` | `[29, 63, 72, 85]` |
+| 4 | `[18]` | `[49]` | `[18, 49]` |
+| 5 | `[3]` | `[54]` | `[3, 54]` |
+| 6 | `[18, 49]` | `[3, 54]` | `[3, 18, 49, 54]` |
+| 7 | `[29, 63, 72, 85]` | `[3, 18, 49, 54]` | `[3, 18, 29, 49, 54, 63, 72, 85]` |
+
+The trace lists **seven merges**, one for each internal node in the split tree.
+
+## 8. Why the time is O(n log n)
+
+- There are about `log2(n)` levels of splitting before ranges reach size 1.
+- Across one merge level, every one of the `n` values is copied a constant number of times.
+- `n` work per level multiplied by `log n` levels gives `O(n log n)`.
+
+This remains true for already sorted and reverse-sorted arrays. Merge sort does not become linear merely because the input is nearly sorted.
+
+For arrays, the temporary merge storage totals `O(n)` auxiliary space at peak. The recursion depth adds `O(log n)` stack frames, which is smaller than the temporary array term.
+
+Think of the cost as a rectangle:
+
+```text
+about log2(n) merge levels
+×
+n copied values across each level
+=
+O(n log n) total work
+```
+
+For eight values, there are three split levels because `8 → 4 → 2 → 1`. Across each merge level, eight values are copied in total. That gives roughly `8 × 3 = 24` value-copy positions before constants and loop bookkeeping. Doubling from 8 to 16 values adds one level and doubles the width: approximately `16 × 4 = 64`, not `16² = 256`.
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/merge-sort" id="check-cost-and-calls" />
+
+## 9. Common errors
+
+| Attempt | What happens | Repair |
+|---|---|---|
+| No `start >= end` base case | Calls never stop shrinking | Return for zero- or one-element ranges |
+| Recurse on `start..mid` and `mid..end` | The midpoint can remain in both ranges forever | Right half begins at `mid + 1` |
+| Merge before recursively sorting both halves | The merge precondition is false | Sort left, sort right, then merge |
+| Stop after one run is exhausted | Remaining values disappear | Copy both possible leftovers |
+| Write into `arr` while still reading unprotected values | Unread input is overwritten | Merge into temporary storage, then copy back |
+| Use `<` rather than `<=` when choosing left | Equal right-run items can move ahead | Choose left first to preserve stability |
+
+## 10. Practice
+
+1. Draw the split tree for `[38, 27, 43, 3, 9]`.
+2. Merge `[2, 9]` with `[4, 5, 8]`, listing every comparison and leftover copy.
+3. List the method calls and merges for `[5, 2, 4, 1]`.
+4. Explain why an in-place claim would be false for this array implementation.
+
+<Accordions>
+<Accordion title="Check question 2">
+
+Compare `2` with `4` and copy `2`; compare `9` with `4` and copy `4`; compare `9` with `5` and copy `5`; compare `9` with `8` and copy `8`; then copy leftover `9`. The result is `[2, 4, 5, 8, 9]`: four key comparisons and one leftover copy.
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can state the divide, recursive-sort, and merge phases in order.' },
+  { type: 'must', text: 'I can draw the call tree and list merges in return order.' },
+  { type: 'must', text: 'I can trace two merge pointers and copy leftovers.' },
+  { type: 'must', text: 'I can derive O(n log n) time and O(n) auxiliary space for the array version.' },
+  { type: 'avoid', text: 'Do not call merge on halves that have not been sorted.' }
+]} />
+
+Continue with [Choosing an Algorithm](/docs/sem3/csi247/sorting-and-searching/notes/choosing-an-algorithm).

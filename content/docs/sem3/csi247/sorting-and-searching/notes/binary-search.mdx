@@ -1,0 +1,216 @@
+---
+title: "2. Binary Search"
+description: "Search a sorted array by halving the active range, trace low-mid-high updates, implement iterative and recursive versions, and avoid boundary errors."
+---
+
+Linear search learns almost nothing from a mismatch. **Binary search** uses sorted order to discard half of the remaining positions after each comparison.
+
+<Callout type="warn" title="The precondition is part of the algorithm">
+The searched range must be sorted in the same order assumed by the comparisons. Binary search can compile, run, and still return the wrong answer on an unsorted array.
+</Callout>
+
+## 1. The idea in plain language
+
+Binary search looks at the middle card of a **sorted** array. The middle value proves that one whole side cannot contain the key, so that side is crossed out. Repeat with the half that remains.
+
+## 2. Watch the possible range shrink
+
+This trace uses the same absent-key question as the past-paper material: search for `88` in `[2, 6, 12, 32, 50, 59, 76, 83, 90]`.
+
+<BinarySearchStory />
+
+## 3. Properties and the three indexes
+
+Three indexes describe the part of the array that may still contain the key:
+
+- `low`: first possible index;
+- `high`: last possible index;
+- `mid`: index probed in this iteration.
+
+For an ascending array:
+
+| Comparison | What it proves | Update |
+|---|---|---|
+| `arr[mid] == key` | The key is at `mid` | return `mid` |
+| `arr[mid] < key` | `mid` and everything left of it are too small | `low = mid + 1` |
+| `arr[mid] > key` | `mid` and everything right of it are too large | `high = mid - 1` |
+
+The `+ 1` and `- 1` matter: `mid` has already been checked, so it must leave the next range.
+
+| Property | Binary search |
+|---|---|
+| Required order | Sorted in the same direction as the comparisons |
+| Best-case time | `O(1)` - first midpoint matches |
+| Worst-case time | `O(log n)` - the range halves each iteration |
+| Iterative extra space | `O(1)` |
+| Recursive extra space | `O(log n)` call stack |
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/binary-search" id="check-the-bounds" />
+
+## 4. Iterative implementation
+
+```java
+public static int binarySearch(int[] arr, int key) {
+    int low = 0;
+    int high = arr.length - 1;
+
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+
+        if (arr[mid] < key) {
+            low = mid + 1;
+        } else if (arr[mid] > key) {
+            high = mid - 1;
+        } else {
+            return mid;
+        }
+    }
+    return -1;
+}
+```
+
+`low + (high - low) / 2` computes the same midpoint as `(low + high) / 2` for ordinary indexes, but avoids overflowing when two very large positive indexes are added.
+
+### Complete runnable example
+
+```java
+public class BinarySearchDemo {
+    public static int binarySearch(int[] arr, int key) {
+        int low = 0;
+        int high = arr.length - 1;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (arr[mid] < key) {
+                low = mid + 1;
+            } else if (arr[mid] > key) {
+                high = mid - 1;
+            } else {
+                return mid;
+            }
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+        int[] values = {8, 18, 23, 29, 34, 42, 54, 63, 72, 85};
+        System.out.println("18 -> " + binarySearch(values, 18));
+        System.out.println("31 -> " + binarySearch(values, 31));
+        System.out.println("85 -> " + binarySearch(values, 85));
+    }
+}
+```
+
+```text
+18 -> 1
+31 -> -1
+85 -> 9
+```
+
+<JavaTryIt example="binary-search" title="Trace binary search in the browser" />
+
+## 5. Why the time is logarithmic
+
+Each unsuccessful probe leaves at most half the previous candidates.
+
+```text
+n candidates -> n/2 -> n/4 -> n/8 -> ... -> 1 -> 0
+```
+
+The number of halvings needed to reach one item is proportional to `log2(n)`. Binary search therefore has:
+
+| Case | Time | Why |
+|---|---:|---|
+| Best | `O(1)` | The first midpoint is the key |
+| Average | `O(log n)` | Each probe discards about half |
+| Worst | `O(log n)` | The key is absent or found at the last remaining position |
+| Iterative auxiliary space | `O(1)` | Only indexes are stored |
+
+If the data is not already sorted, sorting it first costs extra. For one search, a linear scan may be cheaper than `O(n log n)` sorting followed by `O(log n)` searching. For many searches on data that stays sorted, the preparation cost can be worthwhile.
+
+## 6. Recursive version
+
+The recursive method makes the shrinking range explicit in its parameters.
+
+```java
+public static int binarySearchRecursive(
+        int[] arr, int key, int low, int high) {
+    if (low > high) {
+        return -1;
+    }
+
+    int mid = low + (high - low) / 2;
+    if (arr[mid] < key) {
+        return binarySearchRecursive(arr, key, mid + 1, high);
+    }
+    if (arr[mid] > key) {
+        return binarySearchRecursive(arr, key, low, mid - 1);
+    }
+    return mid;
+}
+```
+
+Call it with `binarySearchRecursive(values, key, 0, values.length - 1)`. The base case is an empty range, `low > high`. Its time remains `O(log n)`, but the recursive calls consume `O(log n)` stack space.
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/binary-search" id="check-complexity-and-recursion" />
+
+## 7. Descending arrays and duplicates
+
+For a descending array, the equality test stays the same but the direction tests reverse. If `arr[mid] < key`, the larger key lies to the **left**, not the right.
+
+Duplicates introduce a contract choice. The basic method may return any matching index. To find the first match, record a match and continue left:
+
+```java
+public static int firstIndexOf(int[] arr, int key) {
+    int low = 0;
+    int high = arr.length - 1;
+    int answer = -1;
+
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+        if (arr[mid] < key) {
+            low = mid + 1;
+        } else {
+            if (arr[mid] == key) {
+                answer = mid;
+            }
+            high = mid - 1;
+        }
+    }
+    return answer;
+}
+```
+
+## 8. Common errors
+
+| Attempt | What happens | Repair |
+|---|---|---|
+| Search unsorted data | A discarded half may contain the key | Sort first or use linear search |
+| Use `while (low < high)` | A one-element range may never be checked | Use `low <= high` for this contract |
+| Set `low = mid` or `high = mid` | The same midpoint can repeat forever | Exclude it with `mid + 1` or `mid - 1` |
+| Start `high` at `arr.length` | `mid` may become an invalid index | Use `arr.length - 1` for inclusive bounds |
+| Change comparisons for descending order incompletely | The search moves in the wrong direction | Write the order invariant before the code |
+
+## 9. Practice
+
+1. Trace a search for `72` in `[8, 18, 23, 29, 34, 42, 54, 63, 72, 85]`.
+2. Trace a search for `88` in `[2, 6, 12, 32, 50, 59, 76, 83, 90]`. Count the probes.
+3. Explain why `low <= high` is needed when only one candidate remains.
+4. Adapt the iterative method for a descending array.
+
+<Accordions>
+<Accordion title="Check question 2">
+
+The probes are `50` at index 4, `76` at index 6, `83` at index 7, and `90` at index 8. The search then becomes empty, so the result is `-1` after **four probes**.
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can state and check the sorted-order precondition.' },
+  { type: 'must', text: 'I can record low, mid, high, the probed value, and the next range.' },
+  { type: 'must', text: 'I can explain why excluding mid guarantees progress.' },
+  { type: 'must', text: 'I can justify O(log n) time from repeated halving.' },
+  { type: 'avoid', text: 'Do not sort solely to perform one search without accounting for the sorting cost.' }
+]} />
+
+Continue with [Bubble and Selection Sort](/docs/sem3/csi247/sorting-and-searching/notes/bubble-and-selection-sort).

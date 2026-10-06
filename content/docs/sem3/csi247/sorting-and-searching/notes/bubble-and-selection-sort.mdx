@@ -1,0 +1,208 @@
+---
+title: "3. Bubble and Selection Sort"
+description: "See, trace, compare, and implement bubble sort and selection sort with one visual scene and one dry-run row per pass."
+---
+
+Both methods arrange the same cards, but they make a different promise after one pass:
+
+- **Bubble sort:** compare neighbours; the largest unsorted value finishes at the right.
+- **Selection sort:** scan the unsorted part; the smallest remaining value finishes at the left.
+
+We will use `[4, 2, 5, 1, 3]` for both methods so the difference in movement is easy to see.
+
+## 1. Bubble sort: push the largest card right
+
+Imagine bubbles rising through water. During one left-to-right pass, a large value swaps with each smaller neighbour it meets. By the end of that pass, the largest unsorted value has reached its final position.
+
+<BubbleSortStory />
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/bubble-and-selection-sort" id="check-bubble-pass" />
+
+## 2. Selection sort: choose one card for the next position
+
+Selection sort does not keep swapping during its scan. It first searches the entire unsorted section for the smallest value. Only after the scan ends does it place that value into the next open position.
+
+<SelectionSortStory />
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/bubble-and-selection-sort" id="check-selection-pass" />
+
+## 3. Properties before code
+
+<ComparisonTable
+  columns={[
+    { header: 'Property', key: 'property' },
+    { header: 'Bubble sort', key: 'bubble' },
+    { header: 'Selection sort', key: 'selection' }
+  ]}
+  rows={[
+    { property: 'Main movement', bubble: 'Adjacent swaps', selection: 'One minimum placement per pass' },
+    { property: 'Best time', bubble: 'O(n) with early stop', selection: 'O(n²)' },
+    { property: 'Worst time', bubble: 'O(n²)', selection: 'O(n²)' },
+    { property: 'Extra space', bubble: 'O(1)', selection: 'O(1)' },
+    { property: 'Stable as written', bubble: 'Yes', selection: 'No' },
+    { property: 'Adaptive as written', bubble: 'Yes', selection: 'No' },
+    { property: 'Writes', bubble: 'May perform many swaps', selection: 'At most one swap per pass' }
+  ]}
+/>
+
+**Why bubble sort can stop early:** one complete pass with no swap proves that every adjacent pair is already in order.
+
+**Why selection sort cannot stop early:** even if the array looks sorted, it must scan the unsorted suffix to prove which value is smallest.
+
+**Why stability differs:** bubble sort swaps only strict inversions, so equal values do not cross. Selection sort may move a minimum across an equal record during a long-distance swap.
+
+<CommonMistake title="Same Big-O does not mean same behaviour">
+Both algorithms have `O(n²)` worst-case time, but that does not make them interchangeable. Bubble sort is adaptive and stable as written; selection sort usually performs fewer swaps.
+</CommonMistake>
+
+## 4. Java implementations
+
+### Bubble sort
+
+```java
+public static void bubbleSort(int[] arr) {
+    for (int pass = 0; pass < arr.length - 1; pass++) {
+        boolean swapped = false;
+
+        for (int j = 0; j < arr.length - 1 - pass; j++) {
+            if (arr[j] > arr[j + 1]) {
+                int temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+                swapped = true;
+            }
+        }
+
+        if (!swapped) return;
+    }
+}
+```
+
+The inner bound shortens because the green suffix is already final. `swapped` is reset once per pass, not once per comparison.
+
+<JavaTryIt example="bubble-sort" title="Run a bubble-sort trace" />
+
+### Selection sort
+
+```java
+public static void selectionSort(int[] arr) {
+    for (int i = 0; i < arr.length - 1; i++) {
+        int minIndex = i;
+
+        for (int j = i + 1; j < arr.length; j++) {
+            if (arr[j] < arr[minIndex]) {
+                minIndex = j;
+            }
+        }
+
+        if (minIndex != i) {
+            int temp = arr[i];
+            arr[i] = arr[minIndex];
+            arr[minIndex] = temp;
+        }
+    }
+}
+```
+
+The scan only changes `minIndex`. The swap happens after the entire suffix has been checked.
+
+<JavaTryIt example="selection-sort" title="Run a selection-sort trace" />
+
+### Complete runnable comparison
+
+```java
+import java.util.Arrays;
+
+public class SimpleSortsDemo {
+    public static void bubbleSort(int[] arr) {
+        for (int pass = 0; pass < arr.length - 1; pass++) {
+            boolean swapped = false;
+            for (int j = 0; j < arr.length - 1 - pass; j++) {
+                if (arr[j] > arr[j + 1]) {
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                    swapped = true;
+                }
+            }
+            if (!swapped) return;
+        }
+    }
+
+    public static void selectionSort(int[] arr) {
+        for (int i = 0; i < arr.length - 1; i++) {
+            int minIndex = i;
+            for (int j = i + 1; j < arr.length; j++) {
+                if (arr[j] < arr[minIndex]) minIndex = j;
+            }
+            if (minIndex != i) {
+                int temp = arr[i];
+                arr[i] = arr[minIndex];
+                arr[minIndex] = temp;
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] bubble = {4, 2, 5, 1, 3};
+        int[] selection = bubble.clone();
+        bubbleSort(bubble);
+        selectionSort(selection);
+        System.out.println("bubble:    " + Arrays.toString(bubble));
+        System.out.println("selection: " + Arrays.toString(selection));
+    }
+}
+```
+
+```text
+bubble:    [1, 2, 3, 4, 5]
+selection: [1, 2, 3, 4, 5]
+```
+
+## 5. Descending order
+
+The loops stay the same. Change only what counts as out of order:
+
+| Method | Ascending | Descending |
+|---|---|---|
+| Bubble sort | Swap when `left > right` | Swap when `left < right` |
+| Selection sort | Select the minimum | Select the maximum |
+
+State the requested order before tracing. An ascending trace is not a correct answer to a descending question.
+
+## 6. Common errors
+
+| Attempt | What happens | Repair |
+|---|---|---|
+| Bubble inner bound reaches `arr.length` | `arr[j + 1]` goes out of bounds | Stop before the sorted suffix |
+| Reset `swapped` inside the inner loop | Only the final comparison controls stopping | Reset once at the start of a pass |
+| Swap during selection's scan | The algorithm is no longer selection sort | Store `minIndex`; swap after scanning |
+| Start selection's scan at index 0 | Sorted positions are checked again | Start at `i + 1` |
+| Use `>=` in bubble sort | Equal records can cross | Swap only for `>` in ascending order |
+
+## 7. Practice
+
+1. Show the dry-run table for bubble sort on `[5, 1, 4, 2]`.
+2. Show the first two selection-sort passes on `[29, 10, 14, 37, 13]`.
+3. On `[1, 2, 3, 4]`, compare the number of comparisons made by optimized bubble sort and selection sort.
+4. Trace both algorithms in descending order on `[4, 1, 3, 2]`.
+
+<Accordions>
+<Accordion title="Check questions 2 and 3">
+
+**2.** Pass 1 selects `10`: `[10, 29, 14, 37, 13]`. Pass 2 selects `13`: `[10, 13, 14, 37, 29]`.
+
+**3.** Optimized bubble sort makes three comparisons in its first pass and stops. Selection sort makes `3 + 2 + 1 = 6` comparisons because it must prove which value is smallest in each suffix.
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can state what one pass guarantees for each algorithm.' },
+  { type: 'must', text: 'I can reproduce the dry-run table for every pass.' },
+  { type: 'must', text: 'I can explain why selection sort stays quadratic on sorted input.' },
+  { type: 'must', text: 'I can distinguish time, writes, stability, and adaptiveness.' },
+  { type: 'avoid', text: 'Do not swap during selection sort until the minimum scan is complete.' }
+]} />
+
+Continue with [Insertion Sort](/docs/sem3/csi247/sorting-and-searching/notes/insertion-sort).

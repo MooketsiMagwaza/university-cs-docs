@@ -1,0 +1,179 @@
+---
+title: "1. Linear Search"
+description: "Search any array from left to right, trace successful and unsuccessful cases, use an ordered early stop, and justify the O(n) worst case."
+---
+
+A **linear search** compares the search key with array elements one after another. It needs no preparation: the array may be sorted or unsorted.
+
+This lesson uses one contract throughout:
+
+```text
+linearSearch(arr, key) returns the first index whose value equals key.
+If no such index exists, it returns -1.
+```
+
+## 1. See the search before reading code
+
+Linear search is the simplest search: start at the left and ask each card, **"Are you the key?"** Stop at the first **yes**. If every card says no, return `-1`.
+
+<LinearSearchStory />
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/linear-search" id="check-the-trace" />
+
+## 2. Properties you should know
+
+| Property | Linear search | Why |
+|---|---|---|
+| Required order | None | Each value is checked directly |
+| Best-case time | `O(1)` | The first value matches |
+| Worst-case time | `O(n)` | The key is last or absent |
+| Extra space | `O(1)` | Only the loop index is stored |
+| Duplicates | Returns the first match | The method stops immediately |
+
+## 3. Iterative implementation
+
+The loop index is both the current position and the value returned when a match is found.
+
+```java
+public static int linearSearch(int[] arr, int key) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr[i] == key) {
+            return i;
+        }
+    }
+    return -1;
+}
+```
+
+Read it line by line:
+
+1. `i` starts at the first valid index, `0`.
+2. `i < arr.length` prevents an out-of-bounds access.
+3. Equality returns immediately, so duplicate keys produce the **first** matching index.
+4. Reaching the final `return -1` proves every valid index was checked without a match.
+
+### Complete runnable example
+
+```java
+import java.util.Arrays;
+
+public class LinearSearchDemo {
+    public static int linearSearch(int[] arr, int key) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == key) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+        int[] values = {63, 29, 85, 72, 18, 42, 23, 54, 8, 32};
+        System.out.println(Arrays.toString(values));
+        System.out.println("18 -> " + linearSearch(values, 18));
+        System.out.println("31 -> " + linearSearch(values, 31));
+    }
+}
+```
+
+```text
+[63, 29, 85, 72, 18, 42, 23, 54, 8, 32]
+18 -> 4
+31 -> -1
+```
+
+The program is deterministic: the shown output is the result of compiling and running this class.
+
+<JavaTryIt example="linear-search" title="Run and change linear search" />
+
+## 4. Using sorted order for an early stop
+
+Linear search does not *need* sorted data, but ascending order gives one extra fact. Once `arr[i]` is greater than the key, every later value is also too large.
+
+```java
+public static int orderedLinearSearch(int[] arr, int key) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr[i] == key) {
+            return i;
+        }
+        if (arr[i] > key) {
+            return -1;
+        }
+    }
+    return -1;
+}
+```
+
+On `[8, 18, 23, 29, 34, 42, 54, 63, 72, 85]`, a search for `31` checks `8`, `18`, `23`, `29`, then `34`. Because `34 > 31`, the method stops after five comparisons.
+
+<CommonMistake title="Using the early stop on unsorted data">
+The test `arr[i] > key` is valid only when the remaining values cannot become smaller again. On `[8, 40, 18]`, searching for `18` would stop incorrectly at `40`. Remove the early stop for unsorted data.
+</CommonMistake>
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/linear-search" id="check-ordered-search" />
+
+## 5. Cost and boundaries
+
+Let `n` be the number of elements in the array.
+
+| Case | Comparisons | Time |
+|---|---:|---:|
+| Key at index 0 | 1 | `O(1)` best case |
+| Key at index `k` | `k + 1` | `O(k + 1)` |
+| Key at the final index | `n` | `O(n)` worst case |
+| Key absent from an unsorted array | `n` | `O(n)` worst case |
+| Empty array | 0 | `O(1)` |
+
+The method uses only `i` in addition to its inputs, so its auxiliary space is `O(1)`.
+
+<ComparisonTable
+  columns={[
+    { header: 'Input', key: 'input' },
+    { header: 'Expected result', key: 'result' },
+    { header: 'Reason', key: 'reason' }
+  ]}
+  rows={[
+    { input: '[]; key 7', result: '-1', reason: 'The loop body never runs' },
+    { input: '[7]; key 7', result: '0', reason: 'The only element matches' },
+    { input: '[7]; key 9', result: '-1', reason: 'The only element differs' },
+    { input: '[4, 4, 4]; key 4', result: '0', reason: 'The first match returns immediately' },
+    { input: '[2, 6, 9]; key 9', result: '2', reason: 'The final valid index is checked' }
+  ]}
+/>
+
+## 6. Common errors
+
+| Attempt | What happens | Repair |
+|---|---|---|
+| `i <= arr.length` | The last iteration tries `arr[arr.length]` and throws `ArrayIndexOutOfBoundsException` | Use `i < arr.length` |
+| Return `-1` inside the loop after the first mismatch | Only index 0 is ever checked | Return `-1` after the loop |
+| Return the value instead of `i` | The caller cannot tell where the key was found | Return the index promised by the contract |
+| Use `==` to compare arbitrary objects | It compares references, not object content | Use an appropriate `equals` method |
+| Forget that duplicates exist | The method's result is underspecified | State that this version returns the first match |
+
+## 7. Practice
+
+1. Trace a search for `54` in `[63, 29, 85, 72, 18, 42, 23, 54, 8, 32]`. List every checked index.
+2. Trace an unsuccessful ordered search for `31` in `[8, 18, 23, 29, 34, 42, 54, 63, 72, 85]`.
+3. Change the contract so the method returns the **last** matching index. Which line must change, and why can the method no longer return immediately?
+4. Write a method that counts how many times a key occurs.
+
+<Accordions>
+<Accordion title="Check questions 1 and 3">
+
+**1.** Indices `0, 1, 2, 3, 4, 5, 6, 7` are checked. The value `54` is found at index `7`, after eight comparisons.
+
+**3.** Keep a variable such as `last = -1`; update it whenever `arr[i] == key`, but continue through the array. Returning immediately would prove only the first match, not the last.
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can state the method contract, including the result for an absent key and duplicate keys.' },
+  { type: 'must', text: 'I can trace the checked indices and count comparisons.' },
+  { type: 'must', text: 'I can explain why the worst case is O(n) and the extra space is O(1).' },
+  { type: 'must', text: 'I can explain when an ordered early stop is valid.' },
+  { type: 'avoid', text: 'Do not return -1 until every still-possible position has been ruled out.' }
+]} />
+
+Continue with [Binary Search](/docs/sem3/csi247/sorting-and-searching/notes/binary-search).

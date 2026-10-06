@@ -1,0 +1,148 @@
+---
+title: "3. Compiling, Running, and Debugging"
+description: "Compile packaged source into a class-output root, run a fully qualified main class, and diagnose package, symbol, access, and classpath failures."
+---
+
+Package code is easiest to understand when source files and compiled files are separated:
+
+```text
+project/
+  src/       <- .java source tree
+  classes/   <- compiler output and package folders
+```
+
+Run every command in this lesson from `project`, the parent directory of both folders.
+
+<PackageBuildStory />
+
+## 1. Compile the complete example
+
+With `A.java`, `B.java`, and `Tester.java` from the previous lesson:
+
+```text
+javac -d classes -sourcepath src src/pkg/A.java src/pkg/B.java src/app/Tester.java
+```
+
+| Part | Meaning |
+|---|---|
+| `javac` | Run the Java compiler |
+| `-d classes` | Put generated `.class` files under the `classes` root |
+| `-sourcepath src` | Look under `src` for package-structured source dependencies |
+| final arguments | Source files to compile |
+
+The output mirrors the declared packages:
+
+```text
+classes/
+  pkg/
+    A.class
+    B.class
+  app/
+    Tester.class
+```
+
+`-d` does not invent the package name. The `package` declaration determines the subdirectory; `-d` chooses its root.
+
+## 2. Run the main class
+
+```text
+java -cp classes app.Tester
+```
+
+```text
+42
+class B
+```
+
+`-cp classes` makes `classes` the **classpath root**. `app.Tester` is the fully qualified class name. Do not add `.class`, use a slash, or run `java Tester` from inside `classes/app`.
+
+The classpath root is the directory **above** the package folder. Java combines `classes` with `app.Tester`, translates the dot to a folder separator, and loads `classes/app/Tester.class`. Dependencies such as `pkg.A` are resolved from the same root.
+
+<QuizRef src="sem3/csi247/packages/notes/compiling-and-running" id="check-commands" />
+
+## 3. Compile one entry point and its dependencies
+
+Because `Tester.java` imports `pkg.A` and `pkg.B`, `javac` can locate their source through `-sourcepath`:
+
+```text
+javac -d classes -sourcepath src src/app/Tester.java
+```
+
+This compiles required source dependencies when they are found in the expected package paths. Listing all three files is more explicit for a first exercise; compiling the entry point demonstrates why correct structure matters.
+
+## 4. Diagnose errors by layer
+
+<ComparisonTable
+  columns={[
+    { header: 'Symptom', key: 'symptom' },
+    { header: 'Likely layer', key: 'layer' },
+    { header: 'First check', key: 'check' }
+  ]}
+  rows={[
+    { symptom: 'package pkg does not exist', layer: 'Compilation lookup', check: 'Package declaration, source path, and -sourcepath root' },
+    { symptom: 'cannot find symbol: class A', layer: 'Import or type name', check: 'Import spelling and public class name' },
+    { symptom: 'doubled() is not public', layer: 'Access control', check: 'Member modifier and package boundary' },
+    { symptom: 'Could not find or load main class app.Tester', layer: 'Runtime lookup', check: 'Classpath root and fully qualified name' },
+    { symptom: 'Main method not found', layer: 'Entry point', check: 'public static void main(String[] args)' }
+  ]}
+/>
+
+Use the error layer to avoid random fixes. An import change cannot repair a wrong runtime classpath; a classpath change cannot make a package-private method public.
+
+## 5. A deliberate classpath failure
+
+If the compiled file is `classes/app/Tester.class`, this command is wrong:
+
+```text
+java -cp classes/app Tester
+```
+
+It treats `classes/app` as the root and asks for a class in the unnamed package. But the bytecode says its name is `app.Tester`.
+
+Correct:
+
+```text
+java -cp classes app.Tester
+```
+
+<CommonMistake title="Running from the package directory">
+The filesystem location and the class's binary name are related but not interchangeable. Run from a classpath root and name the class with dots, including its package.
+</CommonMistake>
+
+<QuizRef src="sem3/csi247/packages/notes/compiling-and-running" id="check-diagnostics" />
+
+## 6. Platform notes
+
+- `/` works in the shown source paths on common shells and Java tooling; Windows also accepts its usual path conventions.
+- A classpath with several entries uses `;` on Windows and `:` on Linux/macOS.
+- `-cp` and `-classpath` are equivalent spellings.
+- Package names are case-sensitive even if a local filesystem sometimes hides the mistake.
+
+## 7. Practice
+
+1. Given `src/school/people/Student.java` and `src/school/app/Main.java`, write a compile command from the project root.
+2. Write the run command if `Main` declares `package school.app;`.
+3. A program compiles, but `java -cp classes Main` cannot find it. The class declares `package app;`. Repair the command.
+4. Explain the different jobs of an import, `-sourcepath`, and `-cp`.
+
+<Accordions>
+<Accordion title="Check questions 1, 2, and 4">
+
+**1.** `javac -d classes -sourcepath src src/school/app/Main.java` is sufficient when the dependency is referenced and correctly located. Listing both source files is also valid.
+
+**2.** `java -cp classes school.app.Main`.
+
+**4.** An import lets source use a short type name. `-sourcepath` tells the compiler where package-structured source may be found. `-cp` tells the compiler or runtime where compiled packages and classes begin.
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can explain what -d, -sourcepath, and -cp each control.' },
+  { type: 'must', text: 'I can predict the compiled folder tree from package declarations.' },
+  { type: 'must', text: 'I can run a main class by fully qualified name from the classpath root.' },
+  { type: 'must', text: 'I can classify a failure as lookup, import/name, access, classpath, or entry-point related.' },
+  { type: 'avoid', text: 'Do not add .class or filesystem slashes to the class name passed to java.' }
+]} />
+
+Use the [Packages Cheat Sheet](/docs/sem3/csi247/packages/cheat-sheet), then attempt the [Practice Questions](/docs/sem3/csi247/packages/questions).
