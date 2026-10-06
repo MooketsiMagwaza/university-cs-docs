@@ -1,0 +1,236 @@
+---
+title: "2. Creating a User-defined Package"
+description: "Build a complete A/B/Tester package, separate declaration identity from source lookup, and trace access across package boundaries."
+---
+
+A **user-defined package** is a namespace you give to your own related classes. The declaration `package pkg;` makes a class part of `pkg`. Source folders normally mirror that name so tools can locate it.
+
+<PackageFolderStory />
+
+## 1. Worked layouts and identities
+
+### Example A: the lecture's A, B and Tester
+
+A and B declare `pkg`. Tester declares `app` and uses their public APIs. The declarations determine their identities; the source layout below makes source-path lookup predictable.
+
+<Mermaid chart={`flowchart TD
+  A["src/pkg/A.java: package pkg;"] --> AI["Type identity: pkg.A"]
+  B["src/pkg/B.java: package pkg;"] --> BI["Type identity: pkg.B"]
+  T["src/app/Tester.java: package app;"] --> TI["Type identity: app.Tester"]
+  TI -->|"import pkg.A"| AI
+  TI -->|"import pkg.B"| BI`} caption="A and B share a package. Tester reaches them across a package boundary." />
+
+| File | Declared package | Fully qualified type | Output under `-d classes` |
+|---|---|---|---|
+| `src/pkg/A.java` | `pkg` | `pkg.A` | `classes/pkg/A.class` |
+| `src/pkg/B.java` | `pkg` | `pkg.B` | `classes/pkg/B.class` |
+| `src/app/Tester.java` | `app` | `app.Tester` | `classes/app/Tester.class` |
+
+### Example B: a nested name
+
+Package `school.people` becomes the source lookup path `school/people` below the chosen root. `school.app` is another package; being under the same `school` prefix does not give it package-private access.
+
+<Mermaid chart={`flowchart TD
+  ROOT["src: source root"] --> P["school/people"]
+  P --> S["Student.java: school.people.Student"]
+  P --> L["Lecturer.java: school.people.Lecturer"]
+  ROOT --> A["school/app"]
+  A --> M["Main.java: school.app.Main"]
+  M -. "public API only; different package" .-> S`} caption="Dots become path separators for lookup; related package spellings do not merge access boundaries." />
+
+### Example C: moving a file does not rename a type
+
+Suppose `A.java` declares `package pkg;` but is temporarily saved at `scratch/A.java`. Compiling that explicit file with `javac -d classes scratch/A.java` can still generate `classes/pkg/A.class`. However, a compiler searching `-sourcepath src` for `pkg.A` expects `src/pkg/A.java`. Keep the mirrored layout for normal dependency discovery.
+
+<Mermaid chart={`flowchart TD
+  D["Declaration: package pkg;"] --> I["Identity remains pkg.A"]
+  X["Explicit input scratch/A.java"] --> C["javac -d classes"]
+  C --> O["classes/pkg/A.class"]
+  SP["Lookup of pkg.A under -sourcepath src"] --> E["Expected source: src/pkg/A.java"]`} caption="Declaration identity and automatic source discovery are related, but different." />
+
+| Situation | Evaluated question | Result |
+|---|---|---|
+| `src/pkg/A.java` with `package pkg;` | Explicit identity pkg.A? yes; lookup path matches? yes | Normal course layout |
+| `scratch/A.java` with `package pkg;`, explicitly compiled | Declaration still pkg? yes | Still produces pkg.A |
+| Lookup only below `src` while file is in scratch | Expected `src/pkg/A.java` exists? no | Dependency discovery fails unless another valid source/class is available |
+| Folder `src/pkg` but no package declaration | Declaration says pkg? no | Class belongs to unnamed package |
+| Move source to `src/app` without changing declaration | Identity changes automatically? no | Still pkg.A; lookup layout is now misleading |
+
+<QuizRef src="sem3/csi247/packages/notes/creating-a-package" id="check-package-layout" />
+
+## 2. Worked access boundaries
+
+### Example D: public methods, private representation
+
+Tester may construct A and call its public doubled method. Tester cannot read A's private value field. An import helps name the type; it does not open its private representation.
+
+<Mermaid chart={`flowchart TD
+  subgraph PKG["Package pkg"]
+    A["A: private value; public doubled"]
+    B["B: another class in pkg"]
+  end
+  subgraph APP["Package app"]
+    T["Tester"]
+  end
+  T -->|"public constructor and doubled: allowed"| A
+  T -. "private value: denied" .-> A
+  B -. "private value: also denied" .-> A`} caption="For these separate top-level classes, private stays within A even for package peers." />
+
+### Example E: no modifier means package-private
+
+A's `tripled()` method below has no modifier. B can call it because B is in `pkg`. Tester cannot, even after `import pkg.A;`. Making the class public and making a member public are separate choices.
+
+<Mermaid chart={`flowchart TD
+  B["pkg.B"] -->|"same package: tripled allowed"| A["pkg.A: int tripled()"]
+  T["app.Tester"] -. "different package: tripled denied" .-> A
+  I["import pkg.A;"] --> N["Makes A usable as a short type name"]
+  N -. "does not grant member access" .-> A`} caption="Package-private access ends at the exact package boundary." />
+
+| Caller/access | Evaluation | Outcome |
+|---|---|---|
+| `app.Tester → new A(21)` | Class public? true; constructor public? true | Allowed |
+| `app.Tester → first.doubled()` | Method public? true | Returns 42 |
+| `app.Tester → first.value` | Caller inside A? false | Private access denied |
+| `pkg.B → a.tripled()` | Same exact package? true | Allowed; returns 63 for value 21 |
+| `app.Tester → first.tripled()` | Same exact package? false | Package-private access denied |
+| `school.app.Main → school.people.Student` member without modifier | Same package? false | Denied |
+
+### Example F: protected is not unrestricted external access
+
+A protected member is available to package peers. Outside the package, access is through a qualifying subclass; for instance members, the receiver restriction matters. A subclass cannot use protected access to inspect an arbitrary base-class object.
+
+<Mermaid chart={`flowchart TD
+  P["Protected member in pkg.Base"] --> S["Same-package peer: allowed"]
+  P --> C["other.Child extends Base"]
+  C --> T["this.member or Child receiver: allowed"]
+  C -. "arbitrary Base receiver: denied" .-> B["Base reference"]`} caption="External protected access follows inheritance rules, not merely an import." />
+
+## 3. Properties and conventions
+
+| Access | Inside declaring class | Other class in same package | Subclass elsewhere | Unrelated class elsewhere |
+|---|:---:|:---:|:---:|:---:|
+| `private` | yes | no | no | no |
+| No modifier | yes | yes | no | no |
+| `protected` | yes | yes | qualifying inherited access | no |
+| `public` | yes | yes | yes | yes |
+
+These entries describe member access after the referenced type's accessibility has been checked. A package-private top-level class cannot be named from another package. Nestmates have additional private-access rules; the course examples here use separate top-level classes.
+
+Package names conventionally use lowercase words, often a reversed domain plus project areas. Public top-level class filenames must match the class name and case. Use one top-level class per file for these exercises.
+
+<Mermaid chart={`flowchart TD
+  P["package declaration first"] --> I["imports next"]
+  I --> C["public class A in A.java"]
+  C --> M["fields, constructors, methods"]
+  D["Lowercase namespace: bw.ac.ub.csi247"] --> F["Mirrored directories for lookup"]`} caption="Source statement order is a language rule; lowercase names and one-class-per-file are conventions." />
+
+## 4. Fully commented complete Java
+
+`src/pkg/A.java`:
+
+```java
+package pkg; // This declaration gives A the identity pkg.A.
+
+public class A {
+    private final int value; // Hide the representation from other top-level classes.
+
+    public A(int value) {
+        this.value = value; // Public constructor is usable from app.Tester.
+    }
+
+    public int doubled() {
+        return value * 2; // Public accessor-like calculation; leaves the state unchanged.
+    }
+
+    int tripled() {
+        return value * 3; // No modifier: usable within pkg, not from app.
+    }
+}
+```
+
+`src/pkg/B.java`:
+
+```java
+package pkg; // B shares A's exact package; no import of pkg.A is needed here.
+
+public class B {
+    public String label() {
+        return "class B"; // Public method is visible from app.Tester.
+    }
+
+    public int inspectPackagePeer(A a) {
+        return a.tripled(); // Allowed because B and A are both in pkg.
+    }
+}
+```
+
+`src/app/Tester.java`:
+
+```java
+package app; // Package declaration must precede imports.
+
+import pkg.A; // Resolve the simple name A to public type pkg.A.
+import pkg.B; // Resolve B to pkg.B; this grants no extra member access.
+
+public class Tester {
+    public static void main(String[] args) {
+        A first = new A(21); // Public constructor creates one A with value 21.
+        B second = new B(); // Implicit public no-argument constructor.
+        System.out.println(first.doubled()); // Public method returns 42.
+        System.out.println(second.label()); // Public method returns class B.
+        // first.value and first.tripled() would fail access checks here.
+        // second.inspectPackagePeer(first) is legal and would return 63.
+    }
+}
+```
+
+```text
+42
+class B
+```
+
+## 5. Exam practice with marking cues
+
+1. Draw source and output trees for the full A/B/Tester example. [6]
+2. Draw a tree and write declarations for school.people.Student, school.people.Lecturer and school.app.Main. [6]
+3. Explain why moving A.java into an app folder does not turn pkg.A into app.A. [3]
+4. Explain why explicitly compiling scratch/A.java can work while sourcepath lookup of pkg.A fails. [4]
+5. Classify the five access rows in the trace table without looking at the answers. [5]
+6. Explain why making A public is insufficient if its constructor is package-private. [3]
+7. Repair a source file with imports before its package declaration and a public class A saved as ClassA.java. [4]
+8. Decide whether school.people and school.people.helpers share package-private access. [3]
+9. Write a public method in B that uses A's package-private tripled method. Explain why Tester can call B's wrapper. [5]
+10. Explain the extra restriction on an outside subclass's protected instance-member receiver. [4]
+
+<Accordions>
+<Accordion title="Answers and marking cues: layout and identity">
+
+**1:** src/pkg/A.java and B.java, src/app/Tester.java (3); classes/pkg/A.class and B.class, classes/app/Tester.class (3).
+
+**2:** src/school/people/Student.java and Lecturer.java, src/school/app/Main.java (3); matching package declarations (3).
+
+**3:** Declaration defines identity (2); moving a file only changes its path (1).
+
+**4:** Explicit input names the actual file (1); package declaration still says pkg (1); sourcepath lookup constructs src/pkg/A.java (1); that expected path is absent (1).
+
+**7:** Package before imports (2); rename to A.java or consistently change the public class and references (2).
+
+**8:** No (1); these are separate exact package names (1); nested spelling does not inherit access (1).
+
+</Accordion>
+<Accordion title="Answers and marking cues: access">
+
+**5:** Constructor allowed; doubled allowed; value denied; same-package tripled allowed; different-package tripled denied. One mark per outcome and reason.
+
+**6:** Type public (1) and constructor accessibility (1) are checked separately; make the constructor public if it belongs to the intended API (1).
+
+**9:** The inspectPackagePeer method above earns declaration/signature (2), call and return (1), same-package reason (1), public wrapper callable from app (1).
+
+**10:** External caller must be a qualifying subclass (1); inheritance context matters (1); this/Child receiver allowed (1); arbitrary Base receiver not allowed (1).
+
+</Accordion>
+</Accordions>
+
+<QuizRef src="sem3/csi247/packages/notes/creating-a-package" id="check-access" />
+
+Continue with [Compiling, Running, and Debugging](/docs/sem3/csi247/packages/notes/compiling-and-running).

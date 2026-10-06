@@ -1,0 +1,150 @@
+---
+title: "4. Generic Methods and Generic Interfaces"
+description: "Scope method type parameters, infer them from calls, and implement generic contracts without losing the chosen type."
+---
+
+A generic method introduces its own type parameter immediately before the return type. It can live in a generic or non-generic class.
+
+## 1. Generic method syntax
+
+~~~java
+public static <E> void printArray(E[] elements) {
+    for (E element : elements) {
+        System.out.print(element + " ");
+    }
+    System.out.println();
+}
+~~~
+
+<div className="not-prose my-6 grid gap-2 sm:grid-cols-4">
+  <div className="rounded-lg border border-fd-border p-3 text-center"><code>public static</code><small className="block">modifiers</small></div>
+  <div className="rounded-lg border-2 border-blue-500 p-3 text-center"><code>&lt;E&gt;</code><small className="block">method type parameter</small></div>
+  <div className="rounded-lg border border-fd-border p-3 text-center"><code>void</code><small className="block">return type</small></div>
+  <div className="rounded-lg border border-fd-border p-3 text-center"><code>printArray(E[])</code><small className="block">name and parameter</small></div>
+</div>
+
+Placing <code>&lt;E&gt;</code> after <code>void</code> is a syntax error. The compiler must learn E before reading its use in the return/parameter types.
+
+## 2. Type inference at calls
+
+~~~java
+Integer[] numbers = {2, 4, 5};
+String[] courses = {"CSI247", "CSI243"};
+
+printArray(numbers); // Infer E = Integer.
+printArray(courses); // Infer E = String.
+~~~
+
+| Call | Argument type | Inferred E | Effective parameter |
+|---|---|---|---|
+| <code>printArray(numbers)</code> | Integer[] | Integer | Integer[] |
+| <code>printArray(courses)</code> | String[] | String | String[] |
+
+One invocation has one consistent E. The next invocation may infer a different E.
+
+## 3. Returning the same inferred type
+
+~~~java
+public static <T> T first(T[] values) {
+    if (values.length == 0) {
+        return null;
+    }
+    return values[0];
+}
+~~~
+
+The relationship matters: a String[] call returns String; an Account[] call returns Account.
+
+## 4. Class T and method U have different scopes
+
+~~~java
+public class Box<T> {
+    private T value;
+
+    public <U> Pair<T, U> pairWith(U other) {
+        return new Pair<>(value, other);
+    }
+}
+~~~
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-2">
+  <div className="rounded-xl border border-blue-500 p-4"><strong>Class T</strong><p className="mb-0 mt-2 text-sm">Chosen for the Box object; visible across instance members.</p></div>
+  <div className="rounded-xl border border-emerald-600 p-4"><strong>Method U</strong><p className="mb-0 mt-2 text-sm">Chosen independently for each pairWith call; visible only in that method.</p></div>
+</div>
+
+For <code>Box&lt;String&gt;</code> calling <code>pairWith(87)</code>, T is String and U is Integer.
+
+## 5. Generic interfaces
+
+~~~java
+public interface Store<T> {
+    void put(T value);
+    T get();
+}
+
+public class SingleStore<T> implements Store<T> {
+    private T value;
+
+    @Override
+    public void put(T value) {
+        this.value = value;
+    }
+
+    @Override
+    public T get() {
+        return value;
+    }
+}
+~~~
+
+<Mermaid chart={`flowchart LR
+  I["Store<T><br/>put(T), get(): T"] --> C["SingleStore<T>"]
+  C --> S["SingleStore<String><br/>put(String), get(): String"]
+  C --> A["SingleStore<Account><br/>put(Account), get(): Account"]`} caption="The implementing class carries T through so the interface contract remains type-safe." />
+
+A non-generic implementation may choose one fixed argument:
+
+~~~java
+public class StringStore implements Store<String> {
+    private String value;
+    public void put(String value) { this.value = value; }
+    public String get() { return value; }
+}
+~~~
+
+## 6. Lecture-style complete program
+
+~~~java
+public class GenericDemo {
+    public static <E> void printArray(E[] elements) {
+        for (E element : elements) {
+            System.out.print(element + " ");
+        }
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        Integer[] numbers = {2, 4, 5, 7, 8};
+        Double[] rates = {1.0, 1.5, 2.5, 3.5};
+        Character[] grades = {'A', 'B', 'C'};
+        String[] courses = {"CSI247", "CSI243"};
+
+        printArray(numbers);
+        printArray(rates);
+        printArray(grades);
+        printArray(courses);
+    }
+}
+~~~
+
+## 7. Exam-style practice
+
+1. Label every token in a generic method header. [6]
+2. Infer E for four printArray calls and write the effective parameter type. [8]
+3. Trace class T and method U in <code>Box&lt;String&gt;.pairWith(87)</code>. [8]
+4. Implement Store&lt;T&gt; and a generic SingleStore&lt;T&gt;. [10]
+5. Implement one fixed StringStore and compare its flexibility. [6]
+
+<QuizRef src="sem3/csi247/generics/notes/generic-methods-and-interfaces" id="generic-methods-interfaces" />
+
+Continue with [Wildcards and Collection Variance](/docs/sem3/csi247/generics/notes/wildcards-and-variance).

@@ -16,6 +16,7 @@ import { Quiz } from '@/components/interactive/quiz';
 import { siteConfig } from '@/lib/site';
 import { flattenTree } from 'fumadocs-core/page-tree';
 import { Mat221SourceShell } from '@/features/courses/mat221/compat/source-shell';
+import { PageDownloadActions } from '@/components/learning/page-download-actions';
 import {
   Callout as Mat221SourceCallout,
   CheckpointQuiz as Mat221SourceCheckpointQuiz,
@@ -53,6 +54,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const canonicalUrl = new URL(page.url, siteConfig.url).toString();
   const imageUrl = new URL(getPageImage(page).url, siteConfig.url).toString();
   const isMat221 = page.url === '/docs/sem3/mat221' || page.url.startsWith('/docs/sem3/mat221/');
+  const isCsi247 = page.url === '/docs/sem3/csi247' || page.url.startsWith('/docs/sem3/csi247/');
   const hasCustomEntryHeader = page.url === '/docs' || page.url === '/docs/study-tools' || isMat221;
   const mdxComponents = getMDXComponents({
     Quiz,
@@ -105,6 +107,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
             markdownUrl={markdownUrl}
             githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
           />
+          {isCsi247 && <PageDownloadActions pageUrl={page.url} />}
         </div>
       </>}
       {isMat221 ? <Mat221SourceShell pageUrl={page.url}><MDX components={mdxComponents} /></Mat221SourceShell> : <DocsBody><MDX components={mdxComponents} /></DocsBody>}

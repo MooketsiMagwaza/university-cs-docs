@@ -1,21 +1,131 @@
 ---
-title: Notes
-description: Visual study map for pointer-based structures and traversals.
+title: Linked Lists and Traversal
+description: See nodes and references, then trace insertion, deletion, search, and doubly linked variants.
 ---
 
-# Linked Lists & Traversals
+A linked list stores each element inside a **node**. Nodes can live in different heap locations; references create their logical order.
 
-<span className="inline-flex items-center rounded-xl bg-fd-muted px-2.5 text-sm font-medium text-fd-muted-foreground ring-1 ring-inset ring-fd-border ">
-  Last Updated: July 11, 2026
-</span>
+## 1. One picture to replace the array model
 
-This comprehensive visual map covers Linked Lists and Traversals, including:
-- **List Variants:** Singly linked lists, Doubly linked lists, and Circular linked list architecture.
-- **Linear Traversals:** Techniques for navigating and manipulating linear list structures.
-- **Expression Evaluation:** Understanding Postfix and Infix expressions in the context of linear data structures.
+<div className="not-prose my-6 flex flex-wrap items-center justify-center gap-2 font-mono">
+  <div className="rounded-lg border-2 border-blue-500 p-3">head</div><span>→</span>
+  {[12,27,41].map((v) => <div key={v} className="flex items-stretch"><div className="rounded-l-lg border-2 border-emerald-600 p-3">{v}</div><div className="rounded-r-lg border-y-2 border-r-2 border-emerald-600 bg-emerald-500/10 p-3">next →</div></div>)}
+  <div className="rounded-lg border-2 border-dashed border-fd-border p-3">null</div>
+</div>
 
-<ExcalidrawCanvas 
-  src="/diagrams/sem3/csi247/canvases/linked-lists-traversals.excalidraw" 
-  title="Visual Study Map: Linked Lists & Traversals" 
-  expectedMB={18}
-/>
+There is no index calculation. To reach 41, begin at head and follow two links.
+
+## 2. Generic node and list
+
+~~~java
+public class Node<T> {
+    T data;
+    Node<T> next;
+
+    Node(T data, Node<T> next) {
+        this.data = data;
+        this.next = next;
+    }
+}
+
+public class SinglyLinkedList<T> {
+    private Node<T> head;
+    private int size;
+}
+~~~
+
+## 3. Insert at the front
+
+~~~java
+public void addFirst(T value) {
+    head = new Node<>(value, head);
+    size++;
+}
+~~~
+
+| Statement | head | new node's next | visible list |
+|---|---|---|---|
+| before | node 12 | — | 12 → 27 → null |
+| construct Node(5, head) | still node 12 | node 12 | 5 → 12 → 27 inside new chain |
+| assign to head | node 5 | node 12 | 5 → 12 → 27 → null |
+
+Order matters: preserve the old head reference inside the new node before replacing head.
+
+## 4. Traverse and search
+
+~~~java
+public boolean contains(T target) {
+    Node<T> current = head;
+
+    while (current != null) {
+        if (Objects.equals(current.data, target)) {
+            return true;
+        }
+        current = current.next;
+    }
+    return false;
+}
+~~~
+
+| iteration | current.data | comparison with 27 | next current |
+|---:|---:|---|---:|
+| 1 | 12 | false | 27 |
+| 2 | 27 | true | return |
+
+## 5. Remove the first occurrence
+
+Handle the head separately; otherwise keep both the node before the target and the current target.
+
+~~~java
+public boolean remove(T target) {
+    if (head == null) return false;
+    if (Objects.equals(head.data, target)) {
+        head = head.next;
+        size--;
+        return true;
+    }
+
+    Node<T> previous = head;
+    Node<T> current = head.next;
+    while (current != null) {
+        if (Objects.equals(current.data, target)) {
+            previous.next = current.next; // Bypass current.
+            size--;
+            return true;
+        }
+        previous = current;
+        current = current.next;
+    }
+    return false;
+}
+~~~
+
+<Mermaid chart={`flowchart LR
+  P["previous: 12"] -->|"next was 27"| X["current: 27"]
+  X --> N["next: 41"]
+  P -. "previous.next = current.next" .-> N`} caption="Deletion changes one link so the target node is bypassed." />
+
+## 6. Variants and cost
+
+| Variant | Extra links | Benefit |
+|---|---:|---|
+| singly linked | next | simplest forward traversal |
+| doubly linked | previous + next | movement/removal in either direction |
+| circular | tail links to head | natural repeated cycles; no terminal null |
+
+| Operation | With head only | With head and tail |
+|---|---:|---:|
+| add first | O(1) | O(1) |
+| remove first | O(1) | O(1) |
+| get by index | O(N) | O(N) |
+| add last | O(N) | O(1) |
+| search by value | O(N) | O(N) |
+
+## 7. Exam-style practice
+
+1. Draw heap nodes before and after addFirst, addLast, and middle deletion. [15]
+2. Trace previous/current references for present and absent targets. [10]
+3. Implement a generic count method and state its complexity. [8]
+4. Compare array and linked-list storage without claiming one is always better. [8]
+
+Continue with [Practice Questions](/docs/sem3/csi247/linked-lists-traversals/questions).

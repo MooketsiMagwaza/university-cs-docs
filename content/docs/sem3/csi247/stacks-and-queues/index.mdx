@@ -1,21 +1,106 @@
 ---
-title: Notes
-description: Visual study map for LIFO/FIFO structures and expression parsing.
+title: Stacks and Queues
+description: Learn LIFO and FIFO through visual state changes, array/linked implementations, and circular queue traces.
 ---
 
-# Stacks & Queues
+Stacks and queues restrict where data enters and leaves. Those restrictions make program behaviour easier to reason about.
 
-<span className="inline-flex items-center rounded-xl bg-fd-muted px-2.5 text-sm font-medium text-fd-muted-foreground ring-1 ring-inset ring-fd-border ">
-  Last Updated: July 11, 2026
-</span>
+## 1. Stack: last in, first out
 
-This comprehensive visual map covers Stacks and Queues, including:
-- **Core Implementations:** Building Stacks and Queues using both Arrays and Linked Lists.
-- **Circular Queues:** Architecture and wrapping logic for fixed-size circular buffers.
-- **Expression Parsing:** Utilizing Linked Lists and Stacks for Infix to Postfix conversion.
+<div className="not-prose my-6 mx-auto max-w-xs space-y-2 text-center font-mono">
+  <div className="rounded-lg border-2 border-red-500 bg-red-500/5 p-3">top → C</div>
+  <div className="rounded-lg border-2 border-blue-500 p-3">B</div>
+  <div className="rounded-lg border-2 border-blue-500 p-3">A</div>
+</div>
 
-<ExcalidrawCanvas 
-  src="/diagrams/sem3/csi247/canvases/stacks-and-queues.excalidraw" 
-  title="Visual Study Map: Stacks & Queues" 
-  expectedMB={12}
-/>
+| Operation | Meaning | Empty behaviour in Deque |
+|---|---|---|
+| <code>push(x)</code> | add at top | — |
+| <code>peek()</code> | inspect top | null |
+| <code>pop()</code> | remove top | throws; <code>poll()</code> can return null |
+
+~~~java
+Deque<String> undo = new ArrayDeque<>();
+undo.push("type A");
+undo.push("type B");
+String latest = undo.pop(); // type B
+~~~
+
+## 2. Queue: first in, first out
+
+<div className="not-prose my-6 flex flex-wrap items-center justify-center gap-2 font-mono">
+  <span className="text-emerald-700">remove ←</span>
+  {['A','B','C'].map((v,i) => <div key={v} className={`rounded-lg border-2 p-4 ${i===0?'border-red-500 bg-red-500/5':'border-blue-500'}`}>{v}</div>)}
+  <span className="text-blue-700">← add</span>
+</div>
+
+~~~java
+Queue<String> customers = new ArrayDeque<>();
+customers.offer("A");
+customers.offer("B");
+String served = customers.poll(); // A
+~~~
+
+## 3. Array stack trace
+
+Use <code>top</code> as the index of the current top; <code>-1</code> means empty.
+
+~~~java
+public void push(T value) {
+    if (top == data.length - 1) throw new IllegalStateException("full");
+    data[++top] = value;
+}
+
+public T pop() {
+    if (top == -1) throw new NoSuchElementException("empty");
+    T value = data[top];
+    data[top--] = null; // Release the reference, then move top down.
+    return value;
+}
+~~~
+
+| operation | top before | written/read cell | top after | logical stack |
+|---|---:|---:|---:|---|
+| push A | -1 | 0 | 0 | [A] |
+| push B | 0 | 1 | 1 | [A, B] |
+| pop | 1 | 1 (B) | 0 | [A] |
+
+## 4. Circular array queue
+
+A normal array queue wastes front cells after removals. A circular queue wraps indexes using modulo.
+
+~~~java
+rear = (rear + 1) % data.length;
+data[rear] = value;
+size++;
+~~~
+
+For capacity 5, incrementing rear from 4 gives <code>(4 + 1) % 5 = 0</code>.
+
+| operation | front | rear | size | occupied indexes |
+|---|---:|---:|---:|---|
+| start | 0 | -1 | 0 | — |
+| offer A | 0 | 0 | 1 | 0 |
+| offer B | 0 | 1 | 2 | 0,1 |
+| poll A | 1 | 1 | 1 | 1 |
+| offer C,D,E,F | 1 | 0 | 5 | 1,2,3,4,0 |
+
+Full and empty must be distinguished using <code>size</code> (or another explicit policy).
+
+## 5. Applications
+
+| Problem | Structure | Reason |
+|---|---|---|
+| undo / browser back | stack | newest action first |
+| balanced brackets | stack | most recent opener must close first |
+| printer/customer jobs | queue | earliest arrival first |
+| breadth-first traversal | queue | process one level before the next |
+
+## 6. Exam-style practice
+
+1. Trace every stack state for a bracket-checking input. [10]
+2. Implement push/pop with overflow and underflow checks. [12]
+3. Trace a circular queue through wrap-around and explain each modulo result. [12]
+4. Choose stack or queue for four scenarios and justify the removal order. [8]
+
+Continue with [Practice Questions](/docs/sem3/csi247/stacks-and-queues/questions).

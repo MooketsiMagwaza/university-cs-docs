@@ -18,6 +18,7 @@ import { Step, StepByStep, StepByStepTitle, StepTitle } from './interactive/step
 import { InteractiveStepper, StepperStep } from './interactive/interactive-stepper';
 import { Flashcard } from './interactive/flashcard';
 import { GraphViewer } from './visuals/graph-viewer';
+import { Mermaid } from './visuals/mermaid';
 import { SiteDiagram } from './visuals/site-diagram';
 import { Card } from './callouts/card';
 import { ResourceHub } from './interactive/resource-hub';
@@ -25,6 +26,14 @@ import { HaskellPlayground } from './interactive/haskell-playground';
 import { HaskellTryIt } from './interactive/haskell-try-it';
 import { CodePlayground } from './interactive/code-playground';
 import { CodeTryIt } from './interactive/code-try-it';
+import { JavaPlayground } from './interactive/java-playground';
+import { JavaTryIt } from './interactive/java-try-it';
+import { InsertionSortStory } from './interactive/insertion-sort-story';
+import { BinarySearchStory, LinearSearchStory } from './interactive/search-stories';
+import { BubbleSortStory, SelectionSortStory } from './interactive/simple-sort-stories';
+import { MergeSortStory } from './interactive/merge-sort-story';
+import { MergeComplexityFigure, MergeFrontWorkbench, MergeRecursionExplorer } from './interactive/merge-sort-deep-dive';
+import { PackageBuildStory, PackageFolderStory, PackageImportStory } from './interactive/package-stories';
 
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -83,6 +92,7 @@ export function getMDXComponents(components?: MDXComponents) {
     StepperStep,
     Flashcard,
     GraphViewer,
+    Mermaid,
     SiteDiagram,
     Callout,
     Tabs,
@@ -97,6 +107,20 @@ export function getMDXComponents(components?: MDXComponents) {
     HaskellTryIt,
     CodePlayground,
     CodeTryIt,
+    JavaPlayground,
+    JavaTryIt,
+    InsertionSortStory,
+    LinearSearchStory,
+    BinarySearchStory,
+    BubbleSortStory,
+    SelectionSortStory,
+    MergeSortStory,
+    MergeFrontWorkbench,
+    MergeRecursionExplorer,
+    MergeComplexityFigure,
+    PackageImportStory,
+    PackageFolderStory,
+    PackageBuildStory,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,

@@ -1,0 +1,566 @@
+---
+title: "3. Bubble and Selection Sort"
+description: "See, trace, compare, and implement bubble sort and selection sort with one visual scene and one dry-run row per pass."
+---
+
+Both methods arrange the same cards, but they make a different promise after one pass:
+
+- **Bubble sort:** compare neighbours; the largest unsorted value finishes at the right.
+- **Selection sort:** scan the unsorted part; the smallest remaining value finishes at the left.
+
+We will use `[4, 2, 5, 1, 3]` for both methods so the difference in movement is easy to see.
+
+## 1. Bubble sort: push the largest card right
+
+Imagine bubbles rising through water. During one left-to-right pass, a large value swaps with each smaller neighbour it meets. By the end of that pass, the largest unsorted value has reached its final position.
+
+<BubbleSortStory />
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/bubble-and-selection-sort" id="check-bubble-pass" />
+
+## 2. Selection sort: choose one card for the next position
+
+Selection sort does not keep swapping during its scan. It first searches the entire unsorted section for the smallest value. Only after the scan ends does it place that value into the next open position.
+
+<SelectionSortStory />
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/bubble-and-selection-sort" id="check-selection-pass" />
+
+## 3. Properties before code
+
+<ComparisonTable
+  columns={[
+    { header: 'Property', key: 'property' },
+    { header: 'Bubble sort', key: 'bubble' },
+    { header: 'Selection sort', key: 'selection' }
+  ]}
+  rows={[
+    { property: 'Main movement', bubble: 'Adjacent swaps', selection: 'One minimum placement per pass' },
+    { property: 'Best time', bubble: 'O(n) with early stop', selection: 'O(n²)' },
+    { property: 'Worst time', bubble: 'O(n²)', selection: 'O(n²)' },
+    { property: 'Extra space', bubble: 'O(1)', selection: 'O(1)' },
+    { property: 'Stable as written', bubble: 'Yes', selection: 'No' },
+    { property: 'Adaptive as written', bubble: 'Yes', selection: 'No' },
+    { property: 'Writes', bubble: 'May perform many swaps', selection: 'At most one swap per pass' }
+  ]}
+/>
+
+**Why bubble sort can stop early:** one complete pass with no swap proves that every adjacent pair is already in order.
+
+**Why selection sort cannot stop early:** even if the array looks sorted, it must scan the unsorted suffix to prove which value is smallest.
+
+**Why stability differs:** bubble sort swaps only strict inversions, so equal values do not cross. Selection sort may move a minimum across an equal record during a long-distance swap.
+
+<CommonMistake title="Same Big-O does not mean same behaviour">
+Both algorithms have `O(n²)` worst-case time, but that does not make them interchangeable. Bubble sort is adaptive and stable as written; selection sort usually performs fewer swaps.
+</CommonMistake>
+
+## 4. Java implementations
+
+### Bubble sort
+
+```java
+// Ascending, stable version: shrink the final suffix and stop after a no-swap pass.
+public static void bubbleSort(int[] arr) {
+    // Each completed pass fixes one more value at the right boundary.
+    for (int pass = 0; pass < arr.length - 1; pass++) {
+        // Reset once per pass; any swap in this pass must keep the flag true.
+        boolean swapped = false;
+
+        // Compare neighbours only before the suffix already fixed by earlier passes.
+        for (int j = 0; j < arr.length - 1 - pass; j++) {
+            // Swap only a strict inversion: equal records keep their relative order.
+            if (arr[j] > arr[j + 1]) {
+                // Save one value in a local variable before the two array cells are overwritten.
+                int temp = arr[j];
+                // Write this cell as part of the placement; the saved value prevents data loss.
+                arr[j] = arr[j + 1];
+                // Write this cell as part of the placement; the saved value prevents data loss.
+                arr[j + 1] = temp;
+                // Remember that this pass moved at least one adjacent pair.
+                swapped = true;
+            }
+        }
+
+        // A complete no-swap pass proves all remaining adjacent pairs are ordered.
+        if (!swapped) return;
+    }
+}
+```
+
+The inner bound shortens because the green suffix is already final. `swapped` is reset once per pass, not once per comparison.
+
+<JavaTryIt example="bubble-sort" title="Run a bubble-sort trace" />
+
+### Selection sort
+
+```java
+// Ascending version: scan for an index, then place that minimum once.
+public static void selectionSort(int[] arr) {
+    // Fill the next prefix position; the last value then falls into place.
+    for (int i = 0; i < arr.length - 1; i++) {
+        // Start by assuming the first unsorted cell contains the minimum.
+        int minIndex = i;
+
+        // Scan only the remaining unsorted suffix; update the candidate index.
+        for (int j = i + 1; j < arr.length; j++) {
+            // Compare values, but store the winning index rather than its value.
+            if (arr[j] < arr[minIndex]) {
+                // The candidate is an index; arr[minIndex] is its corresponding minimum value.
+                minIndex = j;
+            }
+        }
+
+        // Avoid an unnecessary self-swap after the minimum scan is complete.
+        if (minIndex != i) {
+            // Save one value in a local variable before the two array cells are overwritten.
+            int temp = arr[i];
+            // Write this cell as part of the placement; the saved value prevents data loss.
+            arr[i] = arr[minIndex];
+            // Write this cell as part of the placement; the saved value prevents data loss.
+            arr[minIndex] = temp;
+        }
+    }
+}
+```
+
+The scan only changes `minIndex`. The swap happens after the entire suffix has been checked.
+
+<JavaTryIt example="selection-sort" title="Run a selection-sort trace" />
+
+### Complete runnable comparison
+
+```java
+// Import the library type used by this complete example.
+import java.util.Arrays;
+
+public class SimpleSortsDemo {
+    // Ascending, stable version: shrink the final suffix and stop after a no-swap pass.
+    public static void bubbleSort(int[] arr) {
+        // Each completed pass fixes one more value at the right boundary.
+        for (int pass = 0; pass < arr.length - 1; pass++) {
+            // Reset once per pass; any swap in this pass must keep the flag true.
+            boolean swapped = false;
+            // Compare neighbours only before the suffix already fixed by earlier passes.
+            for (int j = 0; j < arr.length - 1 - pass; j++) {
+                // Swap only a strict inversion: equal records keep their relative order.
+                if (arr[j] > arr[j + 1]) {
+                    // Save one value in a local variable before the two array cells are overwritten.
+                    int temp = arr[j];
+                    // Write this cell as part of the placement; the saved value prevents data loss.
+                    arr[j] = arr[j + 1];
+                    // Write this cell as part of the placement; the saved value prevents data loss.
+                    arr[j + 1] = temp;
+                    // Remember that this pass moved at least one adjacent pair.
+                    swapped = true;
+                }
+            }
+            // A complete no-swap pass proves all remaining adjacent pairs are ordered.
+            if (!swapped) return;
+        }
+    }
+
+    // Ascending version: scan for an index, then place that minimum once.
+    public static void selectionSort(int[] arr) {
+        // Fill the next prefix position; the last value then falls into place.
+        for (int i = 0; i < arr.length - 1; i++) {
+            // Start by assuming the first unsorted cell contains the minimum.
+            int minIndex = i;
+            // Scan only the remaining unsorted suffix; update the candidate index.
+            for (int j = i + 1; j < arr.length; j++) {
+                // Compare values, but store the winning index rather than its value.
+                if (arr[j] < arr[minIndex]) minIndex = j;
+            }
+            // Avoid an unnecessary self-swap after the minimum scan is complete.
+            if (minIndex != i) {
+                // Save one value in a local variable before the two array cells are overwritten.
+                int temp = arr[i];
+                // Write this cell as part of the placement; the saved value prevents data loss.
+                arr[i] = arr[minIndex];
+                // Write this cell as part of the placement; the saved value prevents data loss.
+                arr[minIndex] = temp;
+            }
+        }
+    }
+
+    // Run fixed inputs so the displayed result can be reproduced.
+    public static void main(String[] args) {
+        // Keep this example's input independent so earlier sorting does not alter it.
+        int[] bubble = {4, 2, 5, 1, 3};
+        // Keep this example's input independent so earlier sorting does not alter it.
+        int[] selection = bubble.clone();
+        bubbleSort(bubble);
+        selectionSort(selection);
+        // Print the deterministic result for comparison with the output shown below.
+        System.out.println("bubble:    " + Arrays.toString(bubble));
+        // Print the deterministic result for comparison with the output shown below.
+        System.out.println("selection: " + Arrays.toString(selection));
+    }
+}
+```
+
+```text
+bubble:    [1, 2, 3, 4, 5]
+selection: [1, 2, 3, 4, 5]
+```
+
+## 5. Descending order
+
+The loops stay the same. Change only what counts as out of order:
+
+| Method | Ascending | Descending |
+|---|---|---|
+| Bubble sort | Swap when `left > right` | Swap when `left < right` |
+| Selection sort | Select the minimum | Select the maximum |
+
+State the requested order before tracing. An ascending trace is not a correct answer to a descending question.
+
+## 6. Common errors
+
+| Attempt | What happens | Repair |
+|---|---|---|
+| Bubble inner bound reaches `arr.length` | `arr[j + 1]` goes out of bounds | Stop before the sorted suffix |
+| Reset `swapped` inside the inner loop | Only the final comparison controls stopping | Reset once at the start of a pass |
+| Swap during selection's scan | The algorithm is no longer selection sort | Store `minIndex`; swap after scanning |
+| Start selection's scan at index 0 | Sorted positions are checked again | Start at `i + 1` |
+| Use `>=` in bubble sort | Equal records can cross | Swap only for `>` in ascending order |
+
+## 7. Practice
+
+1. Show the dry-run table for bubble sort on `[5, 1, 4, 2]`.
+2. Show the first two selection-sort passes on `[29, 10, 14, 37, 13]`.
+3. On `[1, 2, 3, 4]`, compare the number of comparisons made by optimized bubble sort and selection sort.
+4. Trace both algorithms in descending order on `[4, 1, 3, 2]`.
+
+<Accordions>
+<Accordion title="Check questions 2 and 3">
+
+**2.** Pass 1 selects `10`: `[10, 29, 14, 37, 13]`. Pass 2 selects `13`: `[10, 13, 14, 37, 29]`.
+
+**3.** Optimized bubble sort makes three comparisons in its first pass and stops. Selection sort makes `3 + 2 + 1 = 6` comparisons because it must prove which value is smallest in each suffix.
+
+</Accordion>
+</Accordions>
+
+
+## Which bubble-sort implementation is being counted?
+
+The current lecture's literal Java performs **n full passes**, each scanning n-1 pairs. The shorter implementation in this lesson adds two improvements. These are different programs with the same sorting goal.
+
+| Variant | Bounds / stopping rule | Five-value key comparisons | Best-case time |
+|---|---|---:|---|
+| Literal lecture | n passes; j < n-1 every time | 5 × 4 = **20** | O(n²) |
+| Shortened bound only | n-1 passes; exclude one more suffix cell | 4+3+2+1 = **10**, even if sorted | O(n²) |
+| Shortened bound + early stop | Stop after a complete pass has no swap | At most **10**; already sorted input uses **4** | O(n) |
+
+Count the code stated in the question. An early-stop flag cannot be assumed when it is absent from the given method.
+
+### Complete runnable variants and recursive descending subrange sort
+
+```java
+import java.util.Arrays;
+
+public class BubbleSortFormsDemo {
+    // Literal lecture version: n full passes, each with n-1 key comparisons.
+    public static int lectureBubble(int[] arr) {
+        int comparisons = 0; // Count key relations, excluding loop guards.
+        for (int pass = 0; pass < arr.length; pass++) {
+            for (int j = 0; j < arr.length - 1; j++) {
+                comparisons++; // One evaluated neighbour relation.
+                if (arr[j] > arr[j + 1]) {
+                    int temp = arr[j]; // Local save is not an array write.
+                    arr[j] = arr[j + 1]; // First array write.
+                    arr[j + 1] = temp; // Second array write: swap complete.
+                }
+            }
+        }
+        return comparisons; // For n=5, return 5*4=20 even on sorted data.
+    }
+
+    // Shortened bounds: sorted suffix is excluded, but no early-stop flag.
+    public static int shortenedBubble(int[] arr) {
+        int comparisons = 0;
+        for (int pass = 0; pass < arr.length - 1; pass++) {
+            for (int j = 0; j < arr.length - 1 - pass; j++) {
+                comparisons++; // Sum (n-1)+(n-2)+...+1.
+                if (arr[j] > arr[j + 1]) {
+                    int temp = arr[j]; // Save before overwriting either cell.
+                    arr[j] = arr[j + 1]; // Array write 1.
+                    arr[j + 1] = temp; // Array write 2.
+                }
+            }
+        }
+        return comparisons; // For n=5, always return 4+3+2+1=10.
+    }
+
+    // Ascending optimized version: shortening plus one flag per full pass.
+    public static int earlyStopBubble(int[] arr) {
+        int comparisons = 0;
+        for (int pass = 0; pass < arr.length - 1; pass++) {
+            boolean swapped = false; // Reset before, not during, the scan.
+            for (int j = 0; j < arr.length - 1 - pass; j++) {
+                comparisons++; // Exactly one key relation at each probe pair.
+                if (arr[j] > arr[j + 1]) {
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1]; // Move smaller neighbour left.
+                    arr[j + 1] = temp; // Move larger neighbour right.
+                    swapped = true; // Any swap blocks early exit.
+                }
+            }
+            if (!swapped) break; // All remaining adjacent pairs are ordered.
+        }
+        return comparisons; // Sorted n=5 input needs only four comparisons.
+    }
+
+    // Descending inclusive subrange: arr[x..y]; outside cells are untouched.
+    // Require valid indexes for a nonempty range; x>=y needs no work.
+    public static void descendingIterative(int[] arr, int x, int y) {
+        for (int end = y; end > x; end--) {
+            for (int j = x; j < end; j++) {
+                if (arr[j] < arr[j + 1]) { // Strict inversion for descending order.
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1]; // Larger value moves left.
+                    arr[j + 1] = temp; // Smallest remaining value moves right.
+                }
+            }
+        }
+    }
+
+    // January 2018 Q2(a): recurse over left-to-right passes on x..y.
+    public static void descendingRecursive(int[] arr, int x, int y) {
+        if (x >= y) return; // Empty or one-element range is already ordered.
+        descendingPass(arr, x, y); // Fix the smallest active value at y.
+        descendingRecursive(arr, x, y - 1); // Strictly shrink the active range.
+    }
+
+    // Recursive inner scan: visit neighbouring pairs from left to right.
+    private static void descendingPass(int[] arr, int j, int end) {
+        if (j >= end) return; // No pair remains; never read arr[end+1].
+        if (arr[j] < arr[j + 1]) {
+            int temp = arr[j]; // Save the left value before overwriting it.
+            arr[j] = arr[j + 1]; // Array write 1.
+            arr[j + 1] = temp; // Array write 2.
+        }
+        descendingPass(arr, j + 1, end); // Advance to the next pair.
+    }
+
+    public static void main(String[] args) {
+        // Fresh arrays prevent one variant's sorting from helping another.
+        System.out.println("literal=" + lectureBubble(new int[]{4, 2, 5, 1, 3}));
+        System.out.println("shortened=" + shortenedBubble(new int[]{4, 2, 5, 1, 3}));
+        System.out.println("sorted early=" + earlyStopBubble(new int[]{1, 2, 3, 4, 5}));
+        int[] recursive = {99, 4, 1, 3, 2, -99};
+        int[] iterative = recursive.clone(); // Independent copy of the same input.
+        descendingRecursive(recursive, 1, 4); // Sentinels at 0 and 5 must survive.
+        descendingIterative(iterative, 1, 4);
+        System.out.println("recursive=" + Arrays.toString(recursive));
+        System.out.println("iterative=" + Arrays.toString(iterative));
+    }
+}
+```
+
+```text
+literal=20
+shortened=10
+sorted early=4
+recursive=[99, 4, 3, 2, 1, -99]
+iterative=[99, 4, 3, 2, 1, -99]
+```
+
+### Recursive descending trace: x=1, y=4
+
+The January 2018 paper asks for descending bubble sort between inclusive indices x and y using recursion. With `[99,4,1,3,2,-99]`, the method leaves index 0 and index 5 unchanged. Each pass fixes the **smallest** active value at the right boundary.
+
+| Outer call | Recursive pair checks, with evaluated values | Array after pass |
+|---|---|---|
+| sort(1,4) | j=1: `4 < 1 → false`; j=2: `1 < 3 → true`; j=3: `1 < 2 → true`; j=4: `4 >= 4 → true`, return from pass | [99,4,3,2,1,-99] |
+| sort(1,3) | j=1: `4 < 3 → false`; j=2: `3 < 2 → false`; j=3: `3 >= 3 → true`, return from pass | [99,4,3,2,1,-99] |
+| sort(1,2) | j=1: `4 < 3 → false`; j=2: `2 >= 2 → true`, return from pass | [99,4,3,2,1,-99] |
+| sort(1,1) | `1 >= 1 → true`: outer base case | No work |
+
+The first pass's mutations are `[99,4,1,3,2,-99] → [99,4,3,1,2,-99] → [99,4,3,2,1,-99]`. For the first swap, temp=1, then arr[2]=3, then arr[3]=1.
+
+The stack first descends through pass(1,4), pass(2,4), pass(3,4), pass(4,4). Those helpers return in reverse order before sort(1,3) begins. The outer calls then remain pending until sort(1,1) returns: sort(1,1) → sort(1,2) → sort(1,3) → sort(1,4) → main. This is recursion over passes **and** pair checks.
+
+For active length m=4: six key comparisons, two swaps, four array writes; outer base-case guard runs four times, inner pass guard runs 4+3+2=9 times. General time is O(m²), stack space O(m). Each sort shrinks y-x; each helper shrinks end-j. Both measures reach zero. Empty and singleton active ranges return immediately.
+
+## Selection trace: minIndex is not minValue
+
+The existing visual's `min = 2` is shorthand for the **value** of the candidate. The Java variable is `minIndex`. Keep both visible when tracing the first ascending pass on `[4,2,5,1,3]`:
+
+| Step | Evaluated Java expression | minIndex after | arr[minIndex] after | Array |
+|---|---|---:|---:|---|
+| Initialize i=0 | `minIndex = 0` | 0 | 4 | [4,2,5,1,3] |
+| j=1 | `arr[1] < arr[0] → 2 < 4 → true` | 1 | 2 | Unchanged |
+| j=2 | `arr[2] < arr[1] → 5 < 2 → false` | 1 | 2 | Unchanged |
+| j=3 | `arr[3] < arr[1] → 1 < 2 → true` | 3 | 1 | Unchanged |
+| j=4 | `arr[4] < arr[3] → 3 < 1 → false` | 3 | 1 | Unchanged |
+| Scan ends | `5 < 5 → false; 3 != 0 → true` | 3 | 1 before swap | Unchanged |
+| Save | `temp = arr[0] → 4` | 3 | 1 | Unchanged |
+| Write 1 | `arr[0] = arr[3] → 1` | 3 | 1 | [1,2,5,1,3] |
+| Write 2 | `arr[3] = temp → 4` | 3 | 4 after swap | [1,2,5,4,3] |
+
+There were four key comparisons and **no array mutation during the minimum scan**. The candidate index stays 3 after swapping, but arr[3] now contains 4: a variable holding an index does not retain the old minimum value.
+
+### Complete descending selection sort
+
+```java
+import java.util.Arrays;
+
+public class SelectionDescendingDemo {
+    // Descending order: choose a maximum index, then swap once per pass.
+    public static void selectionDescending(int[] arr) {
+        for (int i = 0; i < arr.length - 1; i++) {
+            int maxIndex = i; // Candidate starts at the first unsorted cell.
+            for (int j = i + 1; j < arr.length; j++) {
+                if (arr[j] > arr[maxIndex]) {
+                    maxIndex = j; // Store an index, not the maximum value.
+                }
+            }
+            if (maxIndex != i) { // Avoid self-swaps, keeping write counts precise.
+                int temp = arr[i]; // Local save is not an array write.
+                arr[i] = arr[maxIndex]; // Maximum enters the next prefix position.
+                arr[maxIndex] = temp; // Displaced value returns to the suffix.
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] values = {4, 2, 5, 1, 3}; // Mixed ascending/descending relationships.
+        selectionDescending(values);
+        System.out.println(Arrays.toString(values)); // Deterministic descending result.
+    }
+}
+```
+
+```text
+[5, 4, 3, 2, 1]
+```
+
+| Pass / i | Evaluated candidate comparisons | maxIndex chosen | Array after placement |
+|---|---|---:|---|
+| 1 / 0 | `2>4 false; 5>4 true; 1>5 false; 3>5 false` | 2 | [5,2,4,1,3] |
+| 2 / 1 | `4>2 true; 1>4 false; 3>4 false` | 2 | [5,4,2,1,3] |
+| 3 / 2 | `1>2 false; 3>2 true` | 4 | [5,4,3,1,2] |
+| 4 / 3 | `2>1 true` | 4 | [5,4,3,2,1] |
+
+Ten key comparisons, four swaps, eight array writes. The same ascending input's ascending selection trace uses ten key comparisons, two swaps, four array writes.
+
+## Equal records: demonstrate stability rather than assume it
+
+A tag represents other data belonging to a record. In `[2A,2B,1C]`, A originally precedes B among equal keys.
+
+| Method | Evaluated decision / movement | Ascending result | Equal-key order |
+|---|---|---|---|
+| Bubble | `2A>2B false`; adjacent strict swaps move 1C left | [1C,2A,2B] | A before B |
+| Insertion | Shift both 2 records to insert 1C; never shift an equal predecessor | [1C,2A,2B] | A before B |
+| Selection | Swap 1C at index 2 with 2A at index 0 | [1C,2B,2A] | B before A: unstable |
+
+For descending order use `[1A,1B,2C]`. Strict bubble/insertion comparisons yield `[2C,1A,1B]`; maximum-selection swaps yield `[2C,1B,1A]`. Reversing the final ascending array would reverse equal-record groups too, so use the descending comparison in the algorithm.
+
+### Runnable tagged-record check
+
+```java
+import java.util.Arrays;
+
+public class TaggedSortStabilityDemo {
+    // Equal keys have distinct labels so their original order is observable.
+    static class Card {
+        final int key;
+        final String tag;
+        Card(int key, String tag) { this.key = key; this.tag = tag; }
+        public String toString() { return key + tag; } // Display both key and identity.
+    }
+
+    static void bubble(Card[] arr) {
+        for (int end = arr.length - 1; end > 0; end--) {
+            for (int j = 0; j < end; j++) {
+                if (arr[j].key > arr[j + 1].key) { // Strict: equal records never cross.
+                    Card temp = arr[j]; // Move whole records, including labels.
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                }
+            }
+        }
+    }
+
+    static void insertion(Card[] arr) {
+        for (int i = 1; i < arr.length; i++) {
+            Card current = arr[i]; // Preserve the whole key/tag pair.
+            int j = i - 1;
+            while (j >= 0 && arr[j].key > current.key) { // Equality stops shifting.
+                arr[j + 1] = arr[j]; // Copy the record reference right.
+                j--;
+            }
+            arr[j + 1] = current; // Insert after any equal-key predecessor.
+        }
+    }
+
+    static void selection(Card[] arr) {
+        for (int i = 0; i < arr.length - 1; i++) {
+            int minIndex = i;
+            for (int j = i + 1; j < arr.length; j++) {
+                if (arr[j].key < arr[minIndex].key) minIndex = j;
+            }
+            if (minIndex != i) {
+                Card temp = arr[i]; // A distant swap can jump over an equal record.
+                arr[i] = arr[minIndex];
+                arr[minIndex] = temp;
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Card[] input = {new Card(2, "A"), new Card(2, "B"), new Card(1, "C")};
+        // Each shallow clone is sufficient: sorting changes positions, not cards.
+        Card[] b = input.clone(), i = input.clone(), s = input.clone();
+        bubble(b);
+        insertion(i);
+        selection(s);
+        System.out.println("bubble=" + Arrays.toString(b));
+        System.out.println("insertion=" + Arrays.toString(i));
+        System.out.println("selection=" + Arrays.toString(s));
+    }
+}
+```
+
+```text
+bubble=[1C, 2A, 2B]
+insertion=[1C, 2A, 2B]
+selection=[1C, 2B, 2A]
+```
+
+A **swap** exchanges two cells and requires two array writes in these implementations. The local temp assignment is a variable assignment, not an array write. A **shift** copies one prefix value right and uses one array write. A **guard** such as `j < end` is a boundary test; do not silently add it to key-comparison totals.
+
+For the optimized ascending bubble trace on `[4,2,5,1,3]`, total 10 key comparisons, six swaps, twelve array writes. Pass 4 still checks `1>2 false` and proves the no-swap exit. Its inner loop guards total 5+4+3+2=14, the outer guard runs four times (early return skips a final test), and `!swapped` runs four times.
+
+## Exam practice with worked marking cues
+
+1. **[8 marks]** Write recursive descending bubble sort for inclusive x..y. Explain how it leaves other positions untouched and prove both recursions terminate.
+2. **[6 marks]** Trace the first ascending selection pass on `[4,2,5,1,3]`; include minIndex, candidate value, and every array write.
+3. **[4 marks]** What is selection sort's advantage over bubble sort? Distinguish asymptotic time from swaps and writes.
+4. **[5 marks]** Use tagged equal records to disprove selection sort's stability. Explain why changing bubble's strict comparison to `>=` breaks its guarantee.
+
+<Accordions>
+<Accordion title="Worked answers and marking cues">
+
+**1.** Use the two recursive methods above. Award outer base case (1), correct strict descending comparison (1), complete two-cell swap (1), left-to-right pair recursion and its base case (2), outer recursion to y-1 (1), touches only x..y (1), decreasing measures end-j and y-x (1). Test sentinels with `[99,4,1,3,2,-99]` and x=1,y=4.
+
+**2.** Candidate indexes 0 → 1 → 3; values 4 → 2 → 1. All four comparisons precede the swap. temp=4, arr[0]=1, arr[3]=4; result `[1,2,5,4,3]`. Award candidate tracking (2), evaluated comparisons (2), save and two writes (2).
+
+**3.** Both have O(n²) worst-case key comparisons; ordinary selection makes at most n-1 swaps, while bubble can make n(n-1)/2. Award same time class (1), swap bounds (2), selection may reduce expensive writes but is not automatically asymptotically faster (1). This addresses the 2018 paper's comparison without claiming a false Big-O improvement.
+
+**4.** Selection maps `[2A,2B,1C]` to `[1C,2B,2A]`. Award initial identities (1), distant swap (1), reversed equal order (1). A bubble comparison `2A>=2B` swaps these equals, violating the strict-inversion argument (2).
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can state what one pass guarantees for each algorithm.' },
+  { type: 'must', text: 'I can reproduce the dry-run table for every pass.' },
+  { type: 'must', text: 'I can explain why selection sort stays quadratic on sorted input.' },
+  { type: 'must', text: 'I can distinguish time, writes, stability, and adaptiveness.' },
+  { type: 'avoid', text: 'Do not swap during selection sort until the minimum scan is complete.' }
+]} />
+
+Continue with [Insertion Sort](/docs/sem3/csi247/sorting-and-searching/notes/insertion-sort).

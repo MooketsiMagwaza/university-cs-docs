@@ -1,0 +1,375 @@
+---
+title: "5. Merge Sort"
+description: "Understand merge sort visually: front-card merging, recursive calls and returns, exact traces, stability, ascending and descending code, and exam-style dry runs."
+---
+
+Merge sort uses **divide and conquer**: break one large sorting problem into smaller sorting problems, solve those, then combine their answers.
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-3">
+  <div className="rounded-2xl border-2 border-blue-500 bg-blue-500/5 p-4"><strong className="text-blue-700 dark:text-blue-300">1 · Divide</strong><p className="mb-0 mt-2 text-sm">Describe two smaller index ranges. No values move yet.</p></div>
+  <div className="rounded-2xl border-2 border-amber-500 bg-amber-500/5 p-4"><strong className="text-amber-700 dark:text-amber-300">2 · Sort each half</strong><p className="mb-0 mt-2 text-sm">Recursively solve the left range, then the right range.</p></div>
+  <div className="rounded-2xl border-2 border-emerald-600 bg-emerald-500/5 p-4"><strong className="text-emerald-700 dark:text-emerald-300">3 · Merge</strong><p className="mb-0 mt-2 text-sm">Rebuild one sorted run by taking the smaller front card.</p></div>
+</div>
+
+The stopping rule is simple: a range containing zero or one value is already sorted. That is the **base case**.
+
+## 1. First understand the merge
+
+If two runs are already sorted, their smallest remaining values must be at their fronts. Compare only those two cards, copy the smaller card to the output, and advance only the pointer that supplied it.
+
+<MergeFrontWorkbench />
+
+The diagram separates three counts:
+
+- a **key comparison** compares values, such as <code>9 &lt;= 5</code>;
+- a **guard check** asks whether a pointer remains inside a run;
+- a **write** copies a value to temporary output or back to the array.
+
+When one run is exhausted, its guard becomes false. The other run is already sorted, so its leftover cards are copied without more key comparisons.
+
+### Why equal cards come from the left first
+
+For ascending order, <code>left[i] &lt;= right[j]</code> chooses the left card when values are equal.
+
+<div className="not-prose my-6 overflow-hidden rounded-2xl border border-fd-border">
+  <div className="grid gap-4 bg-fd-muted/20 p-5 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+    <div><span className="text-xs font-bold uppercase text-fd-muted-foreground">Earlier left record</span><div className="mt-2 rounded-xl border-2 border-blue-500 bg-blue-500/10 p-3 text-center font-mono font-bold">2A</div></div>
+    <div className="text-center text-sm font-semibold"><code>2A &lt;= 2B</code> → true<br />take left first</div>
+    <div><span className="text-xs font-bold uppercase text-fd-muted-foreground">Later right record</span><div className="mt-2 rounded-xl border-2 border-fd-border p-3 text-center font-mono font-bold">2B</div></div>
+  </div>
+  <div className="border-t border-fd-border p-4 text-sm"><strong>Output:</strong> <code>[2A, 2B]</code>. Equal records keep their earlier order, so the merge is stable.</div>
+</div>
+
+For a stable **descending** merge, use <code>&gt;=</code> so an equal left-side record still wins the tie.
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/merge-sort" id="check-the-merge" />
+
+## 2. Then understand the recursive journey
+
+Splitting does **not** rearrange cards. It only changes the active <code>start</code>, <code>mid</code>, and <code>end</code> indexes. Java finishes the entire left recursive call, then the right call, then resumes the waiting parent and merges.
+
+<MergeRecursionExplorer />
+
+The parent frame stays on the call stack while its child runs. A base case returns immediately and does not call <code>merge</code>. A parent merges only after both children have returned sorted.
+
+<CommonMistake title="Drawing values moving while the range splits">
+During division, draw brackets, index ranges, or tree edges. Move value cards only during a merge write. A split describes two smaller problems; it does not copy values.
+</CommonMistake>
+
+### Compact call-and-return table for 0..3
+
+| Event | Active statement | Actual values | Consequence |
+|---:|---|---|---|
+| 1 | <code>sort(arr, 0, 3)</code> | <code>mid = 1</code> | Parent waits for 0..1 |
+| 2 | <code>sort(arr, 0, 1)</code> | <code>mid = 0</code> | Parent waits for 0..0 |
+| 3 | <code>sort(arr, 0, 0)</code> | <code>0 &gt;= 0</code> → true | Base case returns |
+| 4 | <code>sort(arr, 1, 1)</code> | <code>1 &gt;= 1</code> → true | Base case returns |
+| 5 | <code>merge(arr, 0, 0, 1)</code> | both children sorted | Range 0..1 returns |
+| 6 | <code>sort(arr, 2, 3)</code> | <code>mid = 2</code> | Same pattern on the right |
+| 7 | <code>merge(arr, 2, 2, 3)</code> | both children sorted | Range 2..3 returns |
+| 8 | <code>merge(arr, 0, 1, 3)</code> | both large halves sorted | Root returns |
+
+Calls travel **down** the tree. Sorted runs are built on the way **back up**.
+
+## 3. A full eight-value dry run
+
+For <code>[63, 29, 72, 85, 18, 49, 3, 54]</code>, division produces one-card leaves. This trace shows completed merges in exact depth-first return order.
+
+<MergeSortStory />
+
+| Return | Left sorted run | Right sorted run | Newly sorted parent run |
+|---:|---|---|---|
+| 1 | [63] | [29] | [29, 63] |
+| 2 | [72] | [85] | [72, 85] |
+| 3 | [29, 63] | [72, 85] | [29, 63, 72, 85] |
+| 4 | [18] | [49] | [18, 49] |
+| 5 | [3] | [54] | [3, 54] |
+| 6 | [18, 49] | [3, 54] | [3, 18, 49, 54] |
+| 7 | [29, 63, 72, 85] | [3, 18, 49, 54] | [3, 18, 29, 49, 54, 63, 72, 85] |
+
+Eight leaves create seven internal nodes, hence seven merge calls. This does **not** mean seven key comparisons: a merge can make several comparisons and writes.
+
+### Odd-length example: [38, 27, 43, 3, 9]
+
+Integer division makes <code>mid = start + (end - start) / 2</code>. Thus 0..4 divides into 0..2 and 3..4; unequal halves are normal.
+
+<div className="not-prose my-6 space-y-3 rounded-2xl border border-fd-border bg-fd-muted/15 p-5">
+  <div className="flex justify-center"><span className="rounded-lg border-2 border-blue-500 px-4 py-2 font-mono">[38, 27, 43, 3, 9] · 0..4</span></div>
+  <div className="text-center text-sm text-fd-muted-foreground">split at <code>mid = 2</code> ↓</div>
+  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-blue-500/60 bg-blue-500/5 p-3 text-center font-mono">[38, 27, 43] · 0..2</div><div className="rounded-xl border border-emerald-600/60 bg-emerald-500/5 p-3 text-center font-mono">[3, 9] · 3..4</div></div>
+  <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-fd-border p-3 text-center font-mono">returns [27, 38, 43]</div><div className="rounded-xl border border-fd-border p-3 text-center font-mono">returns [3, 9]</div></div>
+  <div className="text-center text-sm text-fd-muted-foreground">merge fronts ↓</div>
+  <div className="rounded-xl border-2 border-emerald-600 bg-emerald-500/10 p-3 text-center font-mono font-bold">[3, 9, 27, 38, 43]</div>
+</div>
+
+## 4. Properties after the mechanism
+
+| Property | Result | Visual reason |
+|---|---|---|
+| Best, average, worst time | O(n log n) | Every level processes all n values; about log₂ n levels |
+| Extra array space | O(n) | A merge temporarily stores the active range |
+| Call-stack space | O(log n) | Each child is roughly half its parent |
+| Stable | Yes, with left-first ties | Use ascending &lt;= or descending &gt;= |
+| Adaptive | No, standard version | It still divides and merges sorted input |
+| In place | No, taught version | Values pass through temporary storage |
+
+<MergeComplexityFigure />
+
+For eight values there are three merge levels and eight positions per level: roughly <code>8 × 3 = 24</code> copied positions. For sixteen values the shape is <code>16 × 4 = 64</code>, not <code>16² = 256</code>.
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/merge-sort" id="check-cost-and-calls" />
+
+## 5. Fully commented recursive Java
+
+Read this after the diagrams: the code is the same story expressed with indexes.
+
+~~~java
+public static void mergeSort(int[] arr, int start, int end) {
+    // Zero- and one-element ranges are already sorted.
+    // This also handles an empty initial range 0..-1.
+    if (start >= end) {
+        return;
+    }
+
+    // Find the last index of the left half without start + end overflow.
+    int mid = start + (end - start) / 2;
+
+    // Java completes the left child before it starts the right child.
+    mergeSort(arr, start, mid);
+    mergeSort(arr, mid + 1, end);
+
+    // Both halves are now sorted, so their fronts can be merged.
+    mergeAscending(arr, start, mid, end);
+}
+
+private static void mergeAscending(int[] arr, int start, int mid, int end) {
+    // Hold exactly the values belonging to this parent range.
+    int[] temp = new int[end - start + 1];
+
+    // Point to the front unconsumed card in each sorted run.
+    int left = start;
+    int right = mid + 1;
+    int out = 0; // Next empty position in temp.
+
+    // Compare fronts while BOTH runs still contain a card.
+    while (left <= mid && right <= end) {
+        // <= takes an equal left record first, preserving stability.
+        if (arr[left] <= arr[right]) {
+            temp[out] = arr[left];
+            left++; // Advance only the run that supplied the card.
+        } else {
+            temp[out] = arr[right];
+            right++;
+        }
+        out++;
+    }
+
+    // At most one loop copies values; the other run is empty.
+    while (left <= mid) {
+        temp[out] = arr[left];
+        left++;
+        out++;
+    }
+    while (right <= end) {
+        temp[out] = arr[right];
+        right++;
+        out++;
+    }
+
+    // Copy the completed sorted run back to its original array range.
+    for (int i = 0; i < temp.length; i++) {
+        arr[start + i] = temp[i];
+    }
+}
+~~~
+
+### Complete runnable example
+
+~~~java
+import java.util.Arrays;
+
+public class MergeSortDemo {
+    public static void mergeSort(int[] arr, int start, int end) {
+        // Stop when this call owns at most one value.
+        if (start >= end) {
+            return;
+        }
+
+        // Split into inclusive ranges start..mid and mid+1..end.
+        int mid = start + (end - start) / 2;
+        mergeSort(arr, start, mid);       // Sort the complete left half.
+        mergeSort(arr, mid + 1, end);     // Then sort the complete right half.
+        merge(arr, start, mid, end);      // Finally combine their answers.
+    }
+
+    private static void merge(int[] arr, int start, int mid, int end) {
+        int[] temp = new int[end - start + 1]; // Protected output buffer.
+        int left = start;                       // Front of left run.
+        int right = mid + 1;                    // Front of right run.
+        int out = 0;                            // Next output slot.
+
+        while (left <= mid && right <= end) {
+            if (arr[left] <= arr[right]) {      // Left-first ties are stable.
+                temp[out] = arr[left];
+                left++;
+            } else {
+                temp[out] = arr[right];
+                right++;
+            }
+            out++;
+        }
+
+        while (left <= mid) {                   // Possible left leftovers.
+            temp[out] = arr[left];
+            left++;
+            out++;
+        }
+        while (right <= end) {                  // Possible right leftovers.
+            temp[out] = arr[right];
+            right++;
+            out++;
+        }
+
+        for (int i = 0; i < temp.length; i++) { // Publish the parent run.
+            arr[start + i] = temp[i];
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] values = {63, 29, 72, 85, 18, 49, 3, 54};
+        mergeSort(values, 0, values.length - 1);
+        System.out.println(Arrays.toString(values));
+    }
+}
+~~~
+
+~~~text
+[3, 18, 29, 49, 54, 63, 72, 85]
+~~~
+
+<JavaTryIt example="merge-sort" title="Run and change merge sort in the browser" />
+
+## 6. Descending order
+
+Splitting is identical. Only the merge choice changes: take the **larger** front card. Use <code>&gt;=</code>, rather than <code>&gt;</code>, so equal left records remain first.
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
+  <div className="rounded-xl border border-fd-border p-3 text-center font-mono">left [9, 2]</div><div className="text-center font-bold">+</div><div className="rounded-xl border border-fd-border p-3 text-center font-mono">right [8, 5, 4]</div><div className="text-center text-sm font-bold">larger front →</div><div className="rounded-xl border-2 border-emerald-600 bg-emerald-500/10 p-3 text-center font-mono">[9, 8, 5, 4, 2]</div>
+</div>
+
+~~~java
+private static void mergeDescending(int[] arr, int start, int mid, int end) {
+    int[] temp = new int[end - start + 1];
+    int left = start;
+    int right = mid + 1;
+    int out = 0;
+
+    while (left <= mid && right <= end) {
+        // Choose the larger front. >= keeps equal left records first.
+        if (arr[left] >= arr[right]) {
+            temp[out] = arr[left];
+            left++;
+        } else {
+            temp[out] = arr[right];
+            right++;
+        }
+        out++;
+    }
+
+    // Copy whichever sorted run still contains values.
+    while (left <= mid) {
+        temp[out] = arr[left];
+        left++;
+        out++;
+    }
+    while (right <= end) {
+        temp[out] = arr[right];
+        right++;
+        out++;
+    }
+
+    // Replace only the active range with its descending result.
+    for (int i = 0; i < temp.length; i++) {
+        arr[start + i] = temp[i];
+    }
+}
+~~~
+
+## 7. Iterative bottom-up merge sort
+
+Recursion discovers runs by splitting down to size one. The iterative form starts with one-card runs directly, then merges neighbours of width 1, 2, 4, and so on.
+
+~~~text
+width 1: [63] [29] [72] [85] [18] [49] [3] [54]
+           ↓ merge neighbours
+width 2: [29,63] [72,85] [18,49] [3,54]
+           ↓ merge neighbours
+width 4: [29,63,72,85] [3,18,49,54]
+           ↓ merge neighbours
+width 8: [3,18,29,49,54,63,72,85]
+~~~
+
+Both forms use O(n log n) time and temporary array space. Bottom-up merge sort replaces recursive frames with width-controlled loops; it does not remove the merge buffer.
+
+## 8. Common errors
+
+| Broken idea | Visible symptom | Repair |
+|---|---|---|
+| No base case | Stack keeps growing on a tiny range | Return for zero or one value |
+| Right call starts at mid | Midpoint belongs to both children | Start right at mid + 1 |
+| Merge runs before both calls | Inputs are not guaranteed sorted | Sort left, sort right, then merge |
+| Stop when one run empties | Values disappear | Copy leftovers from either run |
+| Write over unread array values | Later comparisons read destroyed input | Use temp, then copy back |
+| Strict tie comparison | Equal right records can overtake | Use left-first &lt;= or &gt;= |
+
+## 9. Exam-style practice
+
+1. **Front-pointer trace (8 marks).** Merge [2, 9] and [4, 5, 8]. For every write, show i, j, evaluated condition, selected value, and temp.
+2. **Call trace (7 marks).** For [5, 2, 4, 1], list every call in execution order and every merge on return.
+3. **Odd length (6 marks).** Draw the range tree for indexes 0..4; state mid at each non-base node.
+4. **Debugging (6 marks).** Delete both leftover loops, give an input that loses a value, trace it, and repair it.
+5. **Stability (5 marks).** Merge [2A, 5C] and [2B, 4D]; show why left-first ties preserve order.
+6. **Descending (7 marks).** State the comparison and tie choice, then merge [9, 2] with [8, 5, 4].
+7. **Complexity (6 marks).** For n = 16, state merge levels, positions per level, and growth class.
+8. **Code writing (12 marks).** Write the method header, base case, safe midpoint, recursive calls, and merge call in exact order.
+
+<Accordions>
+<Accordion title="Worked answer · front-pointer trace">
+
+| Write | i | j | Evaluated statement | Selection | temp |
+|---:|---:|---:|---|---|---|
+| 1 | 0 | 0 | 2 &lt;= 4 → true | 2 left | [2] |
+| 2 | 1 | 0 | 9 &lt;= 4 → false | 4 right | [2, 4] |
+| 3 | 1 | 1 | 9 &lt;= 5 → false | 5 right | [2, 4, 5] |
+| 4 | 1 | 2 | 9 &lt;= 8 → false | 8 right | [2, 4, 5, 8] |
+| 5 | 1 | 3 | right guard 3 &lt; 3 → false | leftover 9 | [2, 4, 5, 8, 9] |
+
+Award four marks for correct key comparisons, two for pointer movement, one for the failed guard, and one for the leftover copy.
+
+</Accordion>
+<Accordion title="Worked answer · call trace">
+
+Calls: sort(0,3), sort(0,1), sort(0,0), sort(1,1), sort(2,3), sort(2,2), sort(3,3). Working returns: merge(0,0,1), merge(2,2,3), merge(0,1,3).
+
+Award four marks for depth-first call order and three for matching each merge to its returned parent.
+
+</Accordion>
+<Accordion title="Worked answer · debugging, stability, descending, and cost">
+
+- **Q4:** Merging [1, 4] with [2, 3] selects 1, 2, 3; the right run empties while 4 remains. Without the left-leftover loop, 4 disappears. Restore both leftover loops.
+- **Q5:** Left-first output is [2A, 2B, 4D, 5C]. With a strict comparison, 2B can precede 2A, breaking stability.
+- **Q6:** Use leftValue &gt;= rightValue; the result is [9, 8, 5, 4, 2]. Equality still selects left first.
+- **Q7:** log₂16 = 4 merge levels, 16 positions per level, about 16 × 4 position work, hence O(n log n).
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can show both front pointers, evaluated comparisons, every temp write, leftovers, and copy-back.' },
+  { type: 'must', text: 'I can draw the split tree and live call stack without moving values during division.' },
+  { type: 'must', text: 'I can trace odd-length input, tagged duplicates, and ascending or descending merge.' },
+  { type: 'must', text: 'I can explain O(n log n) as n positions across each of log n levels.' },
+  { type: 'avoid', text: 'Do not merge unsorted children or omit leftover copies.' }
+]} />
+
+Continue with [Choosing an Algorithm](/docs/sem3/csi247/sorting-and-searching/notes/choosing-an-algorithm).

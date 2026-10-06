@@ -130,6 +130,15 @@ scripts/                Audit and maintenance scripts
 docs/                   Migration notes and plans
 ```
 
+### Key features
+
+- **Interactive Homepage**: A responsive, parallax-driven landing page built with Framer Motion.
+- **Custom MDX Components**: A massive suite of React components designed for computer science notes, including interactive quizzes, step-by-step guides, mathematical proof environments, and function plotters.
+- **Browser Playgrounds**: Sandboxed HTML, JavaScript, Python, SQL, Haskell, and CSI247 Java practice environments.
+- **Visual Algorithm Labs**: Card-based searching and sorting traces with substituted conditions, active code lines, trace tables, recursion views, and complexity growth.
+- **Complete CSI247 Path**: The 2026 outline now runs from Java primitives/references, methods, classes, arrays, recursion, and Big-O through searching/sorting, packages, OOP, generics, Collections, and implemented lists, stacks, queues, hash tables, trees, and graphs.
+- **Resource Hub**: A centralized, searchable file browser for lecture slides, lab manuals, and supplementary PDFs.
+
 ## Writing content
 
 ### Pages
@@ -158,14 +167,30 @@ Custom components are registered once, in `components/mdx.tsx`, so MDX files nev
 
 The full component reference, with props and examples, is in [`components/README.md`](components/README.md).
 
+### CSI247 Standalone HTML and PDF Guides
+
+CSI247 searching, sorting, and package lessons each have a complete offline study guide. These are not snapshots of the current page: they are independently generated chapters with simplified explanations, immediate diagrams, synchronized trace players, fully commented Java, multiple worked cases, and exam-style answers. Screen HTML supports light and dark modes; printed and generated PDFs always use the light presentation.
+
+- Authoring and deterministic simulations: `features/courses/csi247/study-guides/`
+- Generated HTML/PDF artifacts and route manifest: `public/files/sem3/csi247/study-guides/`
+- Generator and verifier: `scripts/build-csi247-study-guides.mjs`
+
+```bash
+npm run build:csi247-study-guides   # regenerate all HTML/PDF guides and verify them
+npm run audit:csi247-study-guides   # reject stale generated artifacts
+npm run test:csi247-study-guides    # browser-check themes, traces, responsiveness, and print mode
+```
+
+The topic-page download controls resolve through the checked-in manifest. Bubble sort and selection sort therefore receive separate HTML/PDF artifacts even though they share one MDX route.
+
 ### Quizzes and flashcards
 
 Quiz questions and flashcards are stored as data files, not inline in the lesson text:
 
-- Quiz data goes in `content/quiz-data/<semester>/<course>/`, exports an array named `quizData`, and is rendered with `<Quiz title="..." questions={quizData} />`.
+- New quiz data goes in audited JSON under `content/quiz-data/<semester>/<course>/` and is rendered with `<QuizRef src="..." id="..." />`. Some older chapter reviews still import a typed `quizData` array into `<Quiz />` while they migrate.
 - Flashcard decks go in `content/flashcard-data/<semester>/<course>/`.
 
-Each quiz question has `question`, `options`, `correctIndex`, an `explanation`, and optionally `optionFeedback` with one entry per option.
+Each quiz question has `question`, `options`, `correctIndex`, an `explanation`, and optionally `optionFeedback` with one entry per option. `npm run audit:quizzes` rejects malformed data, broken references, duplicate options, and unreferenced JSON quizzes.
 
 ### Images and files
 
@@ -211,9 +236,14 @@ Before opening a pull request, run:
 
 ```bash
 npm run check
+npm run test:java-playground
+npm run test:csi247-study-guides
+npm run check:full
 ```
 
-GitHub Actions repeats the type check and production build, and also runs CodeQL and dependency review. Dependabot keeps dependencies current. See [CONTRIBUTING.md](CONTRIBUTING.md) for content structure, quality requirements, source provenance, accessibility and pull-request expectations.
+`npm run check` is the normal lean path: quiz references, CSI247 metadata and internal links, lesson Java, runtime provenance, type-checking, and a production build. GitHub Actions adds the focused browser smoke suite once. Generated-guide freshness, guide Java compilation, responsive/theme/print matrices, and every browser scenario remain available through `npm run check:full` for releases or large guide changes instead of slowing every pull request.
+
+CodeQL, dependency review, and Dependabot cover repository security and dependency maintenance. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/content-architecture.md](docs/content-architecture.md) for the complete authoring contract.
 
 `WORK_ORDERS.md` records requested repository work, its acceptance check and its delivery state.
 

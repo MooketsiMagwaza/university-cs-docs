@@ -1,0 +1,89 @@
+---
+title: Hash Tables
+description: Turn keys into bucket indexes, trace collisions, and connect equals/hashCode to correct lookup.
+---
+
+A hash table answers a practical question: “Can a key lead us near its value without scanning everything?” It uses a **hash function** to choose a bucket, then resolves collisions inside that bucket.
+
+## 1. From key to bucket
+
+<Mermaid chart={`flowchart LR
+  K["key: CSI247"] --> H["hashCode()"]
+  H --> I["index calculation"]
+  I --> B["bucket 3"]
+  B --> E["check equals()"]`} caption="A hash selects a region; equality confirms the exact key." />
+
+For a teaching table with 7 buckets and non-negative hash 31:
+
+<div className="not-prose my-6 rounded-2xl border border-fd-border p-5 text-center">
+  <div className="text-lg font-mono">31 % 7 = <strong className="text-blue-600">3</strong></div>
+  <div className="mt-5 grid grid-cols-7 gap-2">{[0,1,2,3,4,5,6].map((i) => <div key={i} className={`rounded-lg border-2 p-3 font-mono ${i===3?'border-blue-500 bg-blue-500/10':'border-fd-border'}`}><small>{i}</small><strong className="block">{i===3?'entry':'—'}</strong></div>)}</div>
+</div>
+
+Real Java HashMap uses an internal spread/indexing process; the modulo picture explains the core idea without pretending to reproduce every library detail.
+
+## 2. Collisions are normal
+
+Two unequal keys can choose the same bucket. Separate chaining keeps multiple entries at that bucket.
+
+<div className="not-prose my-6 flex flex-wrap items-center justify-center gap-2 font-mono">
+  <div className="rounded-lg border-2 border-blue-500 p-3">bucket 3</div><span>→</span><div className="rounded-lg border-2 border-emerald-600 p-3">CSI247 → Room 4</div><span>→</span><div className="rounded-lg border-2 border-emerald-600 p-3">MAT247 → Room 8</div>
+</div>
+
+Lookup hashes the key to bucket 3, then compares keys in that chain using <code>equals</code>.
+
+## 3. The equality contract
+
+If <code>a.equals(b)</code> is true, <code>a.hashCode() == b.hashCode()</code> must also be true. Unequal objects may share a hash.
+
+~~~java
+public final class StudentKey {
+    private final String number;
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof StudentKey)) return false;
+        StudentKey that = (StudentKey) other;
+        return number.equals(that.number);
+    }
+
+    @Override
+    public int hashCode() {
+        return number.hashCode();
+    }
+}
+~~~
+
+Keys should not mutate in a way that changes their equality/hash while stored. The map would search the new bucket while the entry remains in the old one.
+
+## 4. Load factor and resizing
+
+<code>load factor = number of entries / number of buckets</code>. As chains grow, lookup becomes slower. Resizing creates more buckets and redistributes entries using their hashes.
+
+| Situation | Expected lookup | Worst case |
+|---|---:|---:|
+| well-distributed hashes | O(1) | — |
+| many collisions in one chain | — | O(N) in the simple chained model |
+| resize | O(N) for that resize | amortised across many inserts |
+
+## 5. Put trace
+
+| Step | operation | bucket | result |
+|---:|---|---:|---|
+| 1 | put(A, 70) | 2 | new entry |
+| 2 | put(B, 80) | 2 | collision; append/check chain |
+| 3 | put(A, 75) | 2 | equals finds A; replace value |
+
+Map keys are unique; a later put with an equal key replaces the associated value.
+
+## 6. Exam-style practice
+
+1. Insert six keys into a seven-bucket table using supplied hashes and draw every chain. [12]
+2. Trace successful and unsuccessful lookup, showing hash, index, and equality checks. [10]
+3. Explain the equals/hashCode contract and the danger of mutable keys. [8]
+4. Calculate load factors before and after a resize. [6]
+
+Continue with [Practice Questions](/docs/sem3/csi247/hash-tables/questions).
+
+<QuizRef src="sem3/csi247/hash-tables/index" id="hash-tables" />

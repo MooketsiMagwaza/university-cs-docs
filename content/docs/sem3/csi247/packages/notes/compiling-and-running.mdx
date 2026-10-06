@@ -1,0 +1,223 @@
+---
+title: "3. Compiling, Running, and Debugging"
+description: "Trace source discovery, output paths and runtime class lookup through successful and failing packaged Java examples."
+---
+
+**Compiling** turns Java source into class files. **Running** asks Java to find a compiled class by its fully qualified name and invoke its main method. A **root** is the directory before the package path.
+
+<PackageBuildStory />
+
+## 1. Worked example A: compile and run A/B/Tester
+
+Run commands from `project`, the parent of `src` and `classes`. The previous lesson supplies fully commented A.java, B.java and Tester.java. Compiling all three explicitly makes the first build easy to follow.
+
+<Mermaid chart={`flowchart TD
+  A["src/pkg/A.java"] --> J["javac -d classes -sourcepath src"]
+  B["src/pkg/B.java"] --> J
+  T["src/app/Tester.java"] --> J
+  J --> CA["classes/pkg/A.class"]
+  J --> CB["classes/pkg/B.class"]
+  J --> CT["classes/app/Tester.class"]
+  CT --> R["java -cp classes app.Tester"]
+  CA --> R
+  CB --> R
+  R --> O["Output: 42 then class B"]`} caption="Three source files produce three class files under one output root." />
+
+```text
+javac -d classes -sourcepath src src/pkg/A.java src/pkg/B.java src/app/Tester.java
+java -cp classes app.Tester
+```
+
+| Stage | Evaluated lookup/action | Result |
+|---|---|---|
+| Compile A | Declaration = pkg; output root = classes | classes/pkg/A.class |
+| Compile B | Declaration = pkg; output root = classes | classes/pkg/B.class |
+| Compile Tester | Declaration = app; output root = classes | classes/app/Tester.class |
+| Load main | classes + app/Tester.class; exists? true | app.Tester loaded |
+| Construct A/B | classes + pkg/A.class and pkg/B.class; exist? true | Dependencies loaded |
+| Execute | Public static main found? true | Prints 42, then class B |
+
+The class name in the launcher is `app.Tester`, not a filename. With a directory classpath, Java maps that name to `app/Tester.class` below the root.
+
+<Mermaid chart={`flowchart TD
+  ROOT["Root: classes"] --> PATH["Append app/Tester.class"]
+  NAME["Binary name: app.Tester"] --> PATH
+  PATH --> FILE["classes/app/Tester.class"]
+  FILE --> M["public static void main(String[] args)"]`} caption="Classpath root plus binary name selects the compiled file." />
+
+<QuizRef src="sem3/csi247/packages/notes/compiling-and-running" id="check-commands" />
+
+## 2. Worked example B: let sourcepath find dependencies
+
+On a clean output directory, `javac -d classes -sourcepath src src/app/Tester.java` can discover A and B when their sources are correctly located. The imports establish source names; `-sourcepath` supplies places to find those names.
+
+<Mermaid chart={`flowchart TD
+  T["Explicit input: src/app/Tester.java"] --> A["Reference to pkg.A"]
+  T --> B["Reference to pkg.B"]
+  A --> AP["source root src + pkg/A.java"]
+  B --> BP["source root src + pkg/B.java"]
+  AP --> J["Compile required source dependencies"]
+  BP --> J`} caption="Dependency discovery uses the mirrored source tree." />
+
+| Needed type | Root | Constructed source path | Evaluated condition |
+|---|---|---|---|
+| pkg.A | src | src/pkg/A.java | Found? true → compile A |
+| pkg.B | src | src/pkg/B.java | Found? true → compile B |
+| pkg.A with source only in scratch | src | src/pkg/A.java | Found? false → look for another usable definition or report failure |
+
+Already compiled dependencies can instead be supplied through `-cp classes`. `-sourcepath` concerns source files; `-cp` concerns compiled definitions. A compiler classpath and a runtime classpath have separate invocations; setting one command does not configure the other.
+
+<Mermaid chart={`flowchart TD
+  S["-sourcepath src"] --> J["javac: find source dependencies"]
+  C["-cp classes"] --> J
+  C --> R["java: find compiled classes"]
+  J --> O["-d classes: write generated files"]`} caption="The compiler can use both source and compiled dependencies; the launcher uses compiled classes." />
+
+## 3. Worked example C: a different package root
+
+For `school.app.Main` importing `school.people.Student`, the root is still `src` for sources and `classes` for output. It is not `src/school` or `classes/school`.
+
+<Mermaid chart={`flowchart TD
+  S["src/school/app/Main.java"] --> C["javac -d classes -sourcepath src"]
+  C --> O["classes/school/app/Main.class"]
+  O --> R["java -cp classes school.app.Main"]`} caption="The full package path follows the root; no package component is removed." />
+
+```text
+javac -d classes -sourcepath src src/school/app/Main.java
+java -cp classes school.app.Main
+```
+
+## 4. Worked example D: trace failures before changing code
+
+With files under `classes/app` and `classes/pkg`, these launcher commands request different things.
+
+<Mermaid chart={`flowchart TD
+  GOOD["-cp classes app.Tester"] --> G["classes/app/Tester.class: correct identity"]
+  BADROOT["-cp classes/app app.Tester"] --> BR["classes/app/app/Tester.class: absent"]
+  BADNAME["-cp classes/app Tester"] --> BN["classes/app/Tester.class: found, but declares app.Tester"]
+  BN --> FAIL["Wrong binary name; cannot load as Tester"]`} caption="A file can be physically present yet have the wrong identity for the requested name." />
+
+| Command or diagnostic | Evaluated question | Diagnosis/repair |
+|---|---|---|
+| `java -cp classes app.Tester` | Correct file and binary name? true | Runs |
+| `java -cp classes/app app.Tester` | classes/app/app/Tester.class exists? false | Root should be classes |
+| `java -cp classes/app Tester` | Bytecode identity equals Tester? false | Root classes; name app.Tester |
+| `java -cp classes Tester` | classes/Tester.class exists? false | Include package in name |
+| `package pkg does not exist` | Compiler can locate required source/class? false | Check declaration, input roots and paths |
+| `doubled() is not public` | Class found? true; member access allowed? false | Fix intended API access, not classpath |
+| `Main method not found` | Class found? true; required entry point present? false | Check method signature and chosen target |
+
+Classify the layer first: parse source, resolve names, check access, load classes, then enter main. Import edits cannot repair the launcher's root, and a larger classpath cannot open a private member.
+
+<Mermaid chart={`flowchart TD
+  S["Source syntax and names"] --> A["Access checking"]
+  A --> B["Build succeeds"]
+  B --> L["Runtime class lookup"]
+  L --> M["Main entry point"]
+  M --> E["Program logic executes"]`} caption="Locate the failing stage before choosing a repair." />
+
+<QuizRef src="sem3/csi247/packages/notes/compiling-and-running" id="check-diagnostics" />
+
+## 5. Properties and platform rules
+
+| Item | Meaning |
+|---|---|
+| `-d classes` | Output root; javac creates subdirectories from declared packages |
+| `-sourcepath src` | Root(s) for automatic source dependency lookup |
+| `-cp classes` | Root(s) for compiled class lookup; valid on javac and java |
+| `-classpath` | Equivalent spelling of -cp |
+| Windows multiple entries | Separate with `;`: `classes;lib/example.jar` |
+| Linux/macOS multiple entries | Separate with `:`: `classes:lib/example.jar` |
+| Source paths | Paths identify files; forward slashes work in the shown Java commands |
+| Type names | Case-sensitive dotted names; do not append .class |
+
+A named package is determined by its declaration, not the working directory. An absolute classpath root also works when launching from another directory.
+
+<Mermaid chart={`flowchart TD
+  REL["From project: -cp classes"] --> O["Same classes root"]
+  ABS["From elsewhere: -cp absolute/path/to/classes"] --> O
+  O --> T["app.Tester remains the target name"]`} caption="Changing where the shell starts does not rename the class." />
+
+## 6. Fully commented Java to inspect identities
+
+The previous lesson's A/B/Tester is the complete build exercise. Save this additional entry point as `src/app/LookupCheck.java` to inspect the identities Java records.
+
+```java
+package app; // This entry point's binary name is app.LookupCheck.
+
+import pkg.A; // Name resolution in this source only.
+import pkg.B; // Both public dependency classes still live in pkg.
+
+public class LookupCheck {
+    public static void main(String[] args) {
+        // Class literals inspect identities without confusing them with paths.
+        System.out.println(A.class.getName()); // pkg.A
+        System.out.println(B.class.getName()); // pkg.B
+        System.out.println(LookupCheck.class.getName()); // app.LookupCheck
+        A value = new A(21); // Requires accessible class and public constructor.
+        System.out.println(value.doubled()); // Uses the public API; prints 42.
+    }
+}
+```
+
+```text
+javac -d classes -sourcepath src src/app/LookupCheck.java
+java -cp classes app.LookupCheck
+```
+
+```text
+pkg.A
+pkg.B
+app.LookupCheck
+42
+```
+
+## 7. Exam practice with marking cues
+
+1. Write an explicit compile command for A, B and Tester, then the run command. [7]
+2. Explain each of `-d`, `-sourcepath` and `-cp` without using the word "folder" alone as an explanation. [6]
+3. Predict output paths for three types in packages pkg, app and school.people. [3]
+4. Trace `java -cp classes/app app.Tester` and repair its root. [4]
+5. Explain why `java -cp classes/app Tester` can find a file but still fail. [4]
+6. Change the compile command so javac discovers A/B from only the Tester entry point. State the required source-layout assumption. [4]
+7. A program builds but cannot load its main class. Explain why adding an import is the wrong repair. [3]
+8. A class loads but has no main. Write the required declaration and distinguish this failure from missing class files. [4]
+9. Write a two-entry classpath for Windows and for Linux/macOS. [2]
+10. An access error says doubled is not public. What already succeeded, and what must be checked next? [3]
+11. Predict LookupCheck's four output lines and explain why they contain dots rather than slashes. [5]
+12. From another working directory, explain how to use an absolute classpath without changing app.Tester's name. [3]
+
+<Accordions>
+<Accordion title="Answers and marking cues: commands and paths">
+
+**1:** javac (1), -d classes (1), -sourcepath src (1), all three source paths (2), java -cp classes (1), app.Tester (1).
+
+**2:** Output destination (2), source dependency discovery (2), compiled-definition lookup for compiler/launcher (2).
+
+**3:** Append the full package path to the output root; one mark per correct path.
+
+**4:** Constructed path classes/app/app/Tester.class (2); wrong root (1); -cp classes (1).
+
+**5:** File path exists (1); requested name Tester (1) differs from app.Tester in bytecode (1); use -cp classes app.Tester (1).
+
+**6:** `javac -d classes -sourcepath src src/app/Tester.java` (3); A/B at src/pkg/A.java and B.java for discovery (1).
+
+**9:** `classes;lib/example.jar` on Windows (1); `classes:lib/example.jar` elsewhere (1).
+
+</Accordion>
+<Accordion title="Answers and marking cues: failures and identity">
+
+**7:** Imports resolved at compile time (1); launcher needs compiled root/name (1); repair -cp or binary name (1).
+
+**8:** Class was located (1); `public static void main(String[] args)` (2); missing class fails before entry-point lookup (1).
+
+**10:** Class/type name resolved (1); member rejected (1); check modifier and caller's package/access rights (1).
+
+**11:** pkg.A, pkg.B, app.LookupCheck, 42 (4); getName reports Java binary names, not filesystem paths (1).
+
+**12:** Absolute path points at classes root (1); root still precedes app (1); target remains app.Tester (1).
+
+</Accordion>
+</Accordions>
+
+Use the [Packages Cheat Sheet](/docs/sem3/csi247/packages/cheat-sheet), then attempt the [Practice Questions](/docs/sem3/csi247/packages/questions).

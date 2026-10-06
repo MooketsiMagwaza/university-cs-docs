@@ -1,0 +1,138 @@
+---
+title: "1. Why Generics, Wrappers and Type Safety"
+description: "See the failure of Object-based containers, then replace casts with a compile-time relationship between stored and returned types."
+---
+
+Generics solve a very specific problem: reusable code should work with different **reference types** without forgetting which type went in.
+
+## 1. The unsafe Object approach
+
+Every class ultimately extends <code>Object</code>, so a container of Object can accept almost anything.
+
+~~~java
+public class ObjectBox {
+    private Object value;
+
+    public void set(Object value) {
+        this.value = value;
+    }
+
+    public Object get() {
+        return value;
+    }
+}
+~~~
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+  <div className="rounded-xl border border-fd-border p-4 text-center"><code>set("CSI247")</code><p className="mb-0 mt-2 text-sm">String accepted as Object</p></div><div className="text-2xl">→</div><div className="rounded-xl border border-red-500 bg-red-500/5 p-4 text-center"><code>(Integer) box.get()</code><p className="mb-0 mt-2 text-sm">Compiles with cast, fails at runtime</p></div>
+</div>
+
+~~~java
+ObjectBox box = new ObjectBox();
+box.set("CSI247");
+Integer number = (Integer) box.get(); // ClassCastException at runtime.
+~~~
+
+The class lost the relationship “this box stores Strings and therefore returns Strings.”
+
+## 2. A type parameter preserves the relationship
+
+~~~java
+public class Box<T> {
+    private T value;
+
+    public void set(T value) {
+        this.value = value;
+    }
+
+    public T get() {
+        return value;
+    }
+}
+~~~
+
+<div className="not-prose my-6 rounded-2xl border border-fd-border p-5">
+  <div className="grid gap-3 sm:grid-cols-4">
+    <div className="rounded-lg border-2 border-blue-500 p-3 text-center"><code>Box&lt;String&gt;</code></div>
+    <div className="rounded-lg bg-blue-500/10 p-3 text-center"><code>T → String</code></div>
+    <div className="rounded-lg border border-fd-border p-3 text-center"><code>set(String)</code></div>
+    <div className="rounded-lg border border-emerald-600 p-3 text-center"><code>get(): String</code></div>
+  </div>
+</div>
+
+~~~java
+Box<String> course = new Box<>();
+course.set("CSI247");
+String text = course.get(); // No cast.
+
+// course.set(247); // Compile-time error: Integer is not String.
+~~~
+
+The error moves from a distant runtime cast to the exact incorrect call.
+
+## 3. Formal type parameter versus actual type argument
+
+| Location | Term | Example |
+|---|---|---|
+| generic declaration | formal type parameter | <code>class Box&lt;T&gt;</code> |
+| variable/construction use | actual type argument | <code>Box&lt;String&gt;</code> |
+
+<code>T</code> is not a concrete class and not an object. It is a placeholder name used consistently within the generic declaration.
+
+## 4. Why primitives need wrappers
+
+Type arguments must be reference types. Use wrappers for primitive values.
+
+| Primitive | Wrapper | Generic use |
+|---|---|---|
+| <code>int</code> | <code>Integer</code> | <code>Box&lt;Integer&gt;</code> |
+| <code>double</code> | <code>Double</code> | <code>List&lt;Double&gt;</code> |
+| <code>char</code> | <code>Character</code> | <code>Set&lt;Character&gt;</code> |
+| <code>boolean</code> | <code>Boolean</code> | <code>Box&lt;Boolean&gt;</code> |
+
+<Mermaid chart={`flowchart LR
+  P["primitive int 17"] -->|"autobox"| W["Integer object 17"]
+  W -->|"unbox"| P
+  W --> G["Box<Integer>"]`} caption="Boxing bridges a primitive value into a reference-type generic argument." />
+
+~~~java
+Box<Integer> count = new Box<>();
+count.set(17);            // Compiler inserts Integer.valueOf(17).
+int value = count.get();  // Compiler unboxes Integer to int.
+~~~
+
+<CommonMistake title="Unboxing a null wrapper">
+<code>Integer maybe = null; int value = maybe;</code> compiles, then throws <code>NullPointerException</code> while unboxing because no Integer object supplies a value.
+</CommonMistake>
+
+## 5. What type safety buys
+
+- wrong types are rejected during compilation;
+- returned values need no manual cast;
+- method signatures document the relationship;
+- one implementation is reused for many reference types.
+
+Generics do not prove that every value is logically valid. <code>Box&lt;Integer&gt;</code> prevents a String, but it does not automatically prevent a negative Integer.
+
+## 6. Raw types lose the guarantee
+
+~~~java
+Box raw = new Box();          // Raw type: compatibility mode; avoid it.
+raw.set("CSI247");
+Box<Integer> numbers = raw;   // Unchecked warning.
+Integer n = numbers.get();    // Runtime cast can fail.
+~~~
+
+Always supply type arguments unless maintaining old pre-generics code.
+
+## 7. Exam-style practice
+
+1. Trace the ObjectBox runtime failure and identify the earliest point a generic version rejects it. [8]
+2. Replace T with String in every Box member and state the resulting signatures. [6]
+3. Explain why Box&lt;int&gt; fails and trace boxing/unboxing for Box&lt;Integer&gt;. [8]
+4. Explain why a raw Box reintroduces runtime risk. [6]
+5. Distinguish type safety from domain validation. [4]
+
+<QuizRef src="sem3/csi247/generics/notes/why-generics" id="why-generics" />
+
+Continue with [Generic Classes: Reading T Visually](/docs/sem3/csi247/generics/notes/generic-classes).

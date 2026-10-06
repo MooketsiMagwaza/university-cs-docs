@@ -1,0 +1,154 @@
+---
+title: "5. Wildcards, Invariance and PECS"
+description: "Understand why generic types are invariant, then choose ?, ? extends, and ? super by following what the method needs to read or write."
+---
+
+This is the part of Generics that usually feels backwards. The key is to stop reading the angle brackets as decoration: they describe exactly what a container may safely accept and return.
+
+## 1. The surprising rule
+
+An <code>Integer</code> is a <code>Number</code>, but a <code>List&lt;Integer&gt;</code> is **not** a <code>List&lt;Number&gt;</code>.
+
+<div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
+  <div className="rounded-2xl border border-emerald-600 bg-emerald-500/5 p-5"><div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">LEGAL</div><div className="mt-3 font-mono">Number n = Integer.valueOf(7);</div><p className="mb-0 mt-3 text-sm">One Integer object can be viewed as a Number.</p></div>
+  <div className="rounded-2xl border border-red-500 bg-red-500/5 p-5"><div className="text-sm font-semibold text-red-700 dark:text-red-300">ILLEGAL</div><div className="mt-3 font-mono">List&lt;Number&gt; x = ints;</div><p className="mb-0 mt-3 text-sm">A whole List of Integer cannot become a writable List of Number.</p></div>
+</div>
+
+Why? If the assignment were allowed, this would corrupt the original list:
+
+~~~java
+List<Integer> integers = new ArrayList<>();
+
+// Imagine Java allowed this unsafe assignment:
+// List<Number> numbers = integers;
+// numbers.add(3.14); // A Double would enter a List<Integer>!
+~~~
+
+Therefore ordinary generic types are **invariant**: the type arguments must match exactly.
+
+## 2. The three wildcard shapes
+
+| Parameter type | Plain-language promise | Safe to read as | Safe non-null value to add |
+|---|---|---|---|
+| <code>List&lt;?&gt;</code> | a list of some unknown type | <code>Object</code> | none |
+| <code>List&lt;? extends Number&gt;</code> | a list of one unknown Number subtype | <code>Number</code> | none |
+| <code>List&lt;? super Integer&gt;</code> | a list whose type is Integer or one of its supertypes | <code>Object</code> | <code>Integer</code> |
+
+<Mermaid chart={`flowchart LR
+  A["Need values from the list?"] -->|yes| B["? extends T"]
+  A -->|no| C["Need to put T values in?"]
+  C -->|yes| D["? super T"]
+  C -->|no / only inspect| E["?"]`} caption="Choose a wildcard from the method's job, not from guesswork." />
+
+## 3. Producer Extends: read Number values
+
+~~~java
+public static double sum(List<? extends Number> values) {
+    double total = 0.0;
+
+    for (Number value : values) {
+        total += value.doubleValue();
+    }
+    return total;
+}
+~~~
+
+The list **produces** Number values for the method. It may actually be a <code>List&lt;Integer&gt;</code>, <code>List&lt;Double&gt;</code>, or another Number subtype.
+
+~~~java
+sum(List.of(2, 4, 6));       // List<Integer>
+sum(List.of(1.5, 2.5));      // List<Double>
+~~~
+
+The method must not add <code>3</code>. The hidden exact type might be <code>Double</code>, and an Integer would violate it.
+
+## 4. Consumer Super: write Integer values
+
+~~~java
+public static void addCountdown(List<? super Integer> destination) {
+    destination.add(3);
+    destination.add(2);
+    destination.add(1);
+}
+~~~
+
+The destination **consumes** Integers. It may be a <code>List&lt;Integer&gt;</code>, <code>List&lt;Number&gt;</code>, or <code>List&lt;Object&gt;</code>; every one can legally hold an Integer.
+
+<div className="not-prose my-6 rounded-2xl border border-fd-border p-5">
+  <div className="grid gap-3 sm:grid-cols-3">
+    {['List<Integer>','List<Number>','List<Object>'].map((label) => <div key={label} className="rounded-xl border-2 border-emerald-600 bg-emerald-500/5 p-4 text-center font-mono">{label}<small className="mt-2 block font-sans">can consume Integer</small></div>)}
+  </div>
+</div>
+
+Reading gives only <code>Object</code>, because the actual destination might be a List of Object.
+
+## 5. PECS as a memory rule
+
+**P**roducer → **E**xtends. **C**onsumer → **S**uper.
+
+| Method need | Parameter | Reason |
+|---|---|---|
+| read T values | <code>? extends T</code> | every element is at least a T |
+| insert T values | <code>? super T</code> | the destination is guaranteed to accept T |
+| both read and write exact T | <code>List&lt;T&gt;</code> | exact agreement is required |
+
+PECS is not a slogan replacing reasoning. Ask two concrete questions: “What type can come out?” and “What type may go in?”
+
+## 6. Trace a copy method
+
+~~~java
+public static <T> void copy(
+        List<? extends T> source,
+        List<? super T> destination) {
+
+    for (T item : source) {
+        destination.add(item);
+    }
+}
+~~~
+
+For <code>copy(List&lt;Integer&gt;, List&lt;Number&gt;)</code>:
+
+| Step | Statement | Known type | Why safe |
+|---:|---|---|---|
+| 1 | source returns an item | Integer, therefore T can be Number | Integer is a Number |
+| 2 | assign to <code>T item</code> | Number view | widening is safe |
+| 3 | destination accepts item | Number | destination is List&lt;Number&gt; |
+
+## 7. What plain <code>?</code> means
+
+~~~java
+public static void printAnything(List<?> values) {
+    for (Object value : values) {
+        System.out.println(value);
+    }
+}
+~~~
+
+The method neither needs a particular element subtype nor inserts values. It can inspect size, retrieve as Object, clear the list, or remove elements. It cannot add a meaningful value because the exact element type is unknown.
+
+## 8. Do not confuse a wildcard with a type parameter
+
+~~~java
+public static <T> T first(List<T> values) { // T names one type and returns it.
+    return values.get(0);
+}
+
+public static Object firstUnknown(List<?> values) { // ? is anonymous.
+    return values.get(0);
+}
+~~~
+
+Use <code>&lt;T&gt;</code> when multiple parts of the signature must share the same type. Use <code>?</code> when the exact type does not need a name.
+
+## 9. Exam-style practice
+
+1. Explain, using a possible <code>Double</code> insertion, why <code>List&lt;Integer&gt;</code> cannot be assigned to <code>List&lt;Number&gt;</code>. [6]
+2. State what may be read and written for <code>?</code>, <code>? extends Number</code>, and <code>? super Integer</code>. [9]
+3. Complete and trace a copy method using PECS. [10]
+4. Correct a method that unnecessarily accepts only <code>List&lt;Number&gt;</code> when it merely sums values. [6]
+5. Decide whether a named type parameter or wildcard is appropriate for two given method signatures. [6]
+
+<QuizRef src="sem3/csi247/generics/notes/wildcards-and-variance" id="wildcards" />
+
+Continue with [Generics Exam Practice](/docs/sem3/csi247/generics/questions).

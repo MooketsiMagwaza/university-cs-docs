@@ -1,0 +1,114 @@
+---
+title: "2. Overriding and Polymorphism"
+description: "Separate reference type from runtime object type, then trace dynamic dispatch across Shape, Circle, and Rectangle."
+---
+
+Polymorphism lets one superclass/interface reference refer to different compatible runtime objects. An overridden instance-method call is selected from the runtime object's class.
+
+## 1. Two types to track
+
+~~~java
+Shape item = new Circle("Blue", 2.0);
+~~~
+
+<div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
+  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/5 p-4"><strong>Reference type: Shape</strong><p className="mb-0 mt-2 text-sm">Controls which member names the compiler allows.</p></div>
+  <div className="rounded-xl border-2 border-emerald-600 bg-emerald-500/5 p-4"><strong>Runtime type: Circle</strong><p className="mb-0 mt-2 text-sm">Controls which overridden instance-method body runs.</p></div>
+</div>
+
+## 2. Override the same contract
+
+~~~java
+public class Circle extends Shape {
+    // ... radius and constructor ...
+
+    @Override
+    public double getArea() {
+        return Math.PI * radius * radius;
+    }
+}
+
+public class Rectangle extends Shape {
+    // ... width, height and constructor ...
+
+    @Override
+    public double getArea() {
+        return width * height;
+    }
+}
+~~~
+
+<Mermaid chart={`flowchart TD
+  C["call item.getArea()"] --> R{"runtime object type?"}
+  R -- Circle --> CA["Circle.getArea()<br/>πr²"]
+  R -- Rectangle --> RA["Rectangle.getArea()<br/>width × height"]`} caption="The same source-level call can dispatch to different overridden implementations." />
+
+## 3. Dynamic dispatch trace
+
+~~~java
+Shape[] shapes = {
+    new Circle("Blue", 2.0),
+    new Rectangle("Red", 3.0, 4.0)
+};
+
+for (Shape shape : shapes) {
+    System.out.println(shape.getArea());
+}
+~~~
+
+| Iteration | Reference type | Runtime type | Selected body | Result |
+|---:|---|---|---|---:|
+| 1 | Shape | Circle | <code>Circle.getArea</code> | about 12.57 |
+| 2 | Shape | Rectangle | <code>Rectangle.getArea</code> | 12.0 |
+
+No manual type test is needed; each object knows its behaviour.
+
+## 4. Overriding versus overloading
+
+| Feature | Overriding | Overloading |
+|---|---|---|
+| Relationship | subclass replaces inherited instance method | same class/name, different parameter lists |
+| Selection | runtime object type | compile-time argument types |
+| Signature | same compatible signature | different signatures |
+| Annotation | <code>@Override</code> recommended | no override annotation |
+| Common label | dynamic polymorphism | static/compile-time polymorphism |
+
+## 5. Upcasting and downcasting
+
+Assigning a Circle to Shape is an automatic upcast. A downcast asks Java to treat a general reference as a more specific type and can fail at runtime.
+
+~~~java
+Shape shape = new Circle("Blue", 2.0); // Safe upcast.
+
+if (shape instanceof Circle circle) {
+    System.out.println(circle.getRadius()); // Safe narrowed variable.
+}
+~~~
+
+Do not downcast merely to call behaviour that should be declared in the common abstraction.
+
+## 6. A polymorphic algorithm
+
+~~~java
+public static Shape larger(Shape first, Shape second) {
+    // Each call dispatches to the runtime object's getArea implementation.
+    if (first.getArea() >= second.getArea()) {
+        return first;
+    }
+    return second;
+}
+~~~
+
+The algorithm depends on the Shape contract, not on every concrete subclass. New Shape subclasses can participate without modifying this method.
+
+## 7. Exam-style practice
+
+1. For five declarations, label reference and runtime types. [10]
+2. Trace a Shape array and state the exact overridden method called. [8]
+3. Distinguish overloading and overriding using signatures and selection time. [6]
+4. Repair an unsafe cast with pattern matching <code>instanceof</code>. [6]
+5. Design a polymorphic <code>totalArea</code> method. [8]
+
+<QuizRef src="sem3/csi247/object-oriented-programming/notes/overriding-and-polymorphism" id="polymorphism" />
+
+Continue with [Encapsulation and Abstraction](/docs/sem3/csi247/object-oriented-programming/notes/encapsulation-and-abstraction).

@@ -1,0 +1,194 @@
+---
+title: "5. Arrays and Arrays of Objects"
+description: "Visualise array references, default values, indexes, mutation through methods, populated counts, two dimensions, and object arrays."
+---
+
+An array is a fixed-size object containing indexed cells of one declared component type. The array variable stores a reference; the cells store either primitive values or object references.
+
+## 1. Why arrays are needed
+
+A single variable repeatedly overwritten can remember only its newest value. To calculate an average and then revisit all 50 marks, the program must retain the whole collection.
+
+<div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
+  <div className="rounded-xl border border-red-500 bg-red-500/5 p-4"><strong>One variable</strong><p className="mt-2 font-mono">mark: 61 → 74 → 83</p><p className="mb-0 text-sm">Earlier marks disappear.</p></div>
+  <div className="rounded-xl border border-emerald-600 bg-emerald-500/5 p-4"><strong>Array</strong><p className="mt-2 font-mono">marks: [61, 74, 83]</p><p className="mb-0 text-sm">Every mark remains addressable.</p></div>
+</div>
+
+## 2. Array reference, cells, and indexes
+
+~~~java
+int[] numbers = new int[6];
+~~~
+
+<div className="not-prose my-6 flex flex-wrap items-center justify-center gap-4 rounded-2xl border border-fd-border p-5">
+  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/10 p-4 text-center font-mono">numbers<br/>ref 48</div><span className="text-2xl">→</span><div className="flex gap-2">{[0,0,0,0,0,0].map((value,index) => <div key={index} className="rounded-lg border-2 border-fd-border p-3 text-center font-mono"><strong>{value}</strong><small className="mt-1 block text-fd-muted-foreground">{index}</small></div>)}</div>
+</div>
+
+The length is 6, so valid indexes are 0 through 5. Index 6 is one cell beyond the object and throws <code>ArrayIndexOutOfBoundsException</code>.
+
+| Cell type | Default value after <code>new</code> |
+|---|---|
+| numeric primitive | 0 or 0.0 |
+| <code>char</code> | null character |
+| <code>boolean</code> | false |
+| reference type | null |
+
+## 3. Create, initialise, and mutate
+
+~~~java
+int[] values = {10, 6, -7, 9, 19};
+values[2] = 14; // Replace the value at index 2.
+~~~
+
+<div className="not-prose my-6 space-y-3 rounded-2xl border border-fd-border p-5">
+  <div className="flex flex-wrap justify-center gap-2">{[10,6,-7,9,19].map((value,index) => <div key={index} className={`rounded-lg border-2 p-3 text-center font-mono ${index===2?'border-red-500 bg-red-500/10':'border-fd-border'}`}><strong>{value}</strong><small className="block">{index}</small></div>)}</div>
+  <div className="text-center text-fd-muted-foreground">execute <code>values[2] = 14</code> ↓</div>
+  <div className="flex flex-wrap justify-center gap-2">{[10,6,14,9,19].map((value,index) => <div key={index} className={`rounded-lg border-2 p-3 text-center font-mono ${index===2?'border-emerald-600 bg-emerald-500/10':'border-fd-border'}`}><strong>{value}</strong><small className="block">{index}</small></div>)}</div>
+</div>
+
+Array <code>length</code> is a public field, so write <code>values.length</code>, not <code>values.length()</code>.
+
+## 4. Exact loop bounds
+
+~~~java
+for (int i = 0; i < values.length; i++) {
+    System.out.println(values[i]);
+}
+~~~
+
+<div className="not-prose my-6 rounded-2xl border border-fd-border p-5">
+  <div className="grid gap-2 sm:grid-cols-3">
+    <div className="rounded-lg bg-blue-500/10 p-3 text-center"><code>i = 0</code><small className="block">first valid cell</small></div>
+    <div className="rounded-lg bg-emerald-500/10 p-3 text-center"><code>i &lt; length</code><small className="block">continue while valid</small></div>
+    <div className="rounded-lg bg-red-500/10 p-3 text-center"><code>i = length</code><small className="block">guard false; never index</small></div>
+  </div>
+</div>
+
+Using <code>&lt;= values.length</code> eventually attempts the invalid index <code>length</code>.
+
+## 5. Arrays passed to methods
+
+The reference value is copied into the parameter. Mutating array cells affects the caller's object.
+
+~~~java
+public static void fill(int[] numbers, int value) {
+    for (int i = 0; i < numbers.length; i++) {
+        numbers[i] = value; // Follow the copied reference to shared cells.
+    }
+}
+~~~
+
+<Mermaid chart={`flowchart LR
+  C["caller variable<br/>ref 40"] --> A["shared int[] object"]
+  P["parameter numbers<br/>copied ref 40"] --> A
+  V["parameter value = 7"] --> W["each cell becomes 7"]`} caption="The reference variable is copied; the array object is not copied." />
+
+## 6. Common processing methods
+
+~~~java
+public static int indexOfMax(int[] numbers) {
+    if (numbers.length == 0) {
+        return -1; // No maximum exists.
+    }
+
+    int maxIndex = 0;
+    for (int i = 1; i < numbers.length; i++) {
+        if (numbers[i] > numbers[maxIndex]) {
+            maxIndex = i;
+        }
+    }
+    return maxIndex;
+}
+
+public static double average(int[] numbers) {
+    if (numbers.length == 0) {
+        return 0.0;
+    }
+
+    long sum = 0; // Wider accumulator reduces overflow risk for many ints.
+    for (int value : numbers) {
+        sum += value;
+    }
+    return (double) sum / numbers.length;
+}
+~~~
+
+### Trace indexOfMax on [5, 11, 4, 13, 8]
+
+| <code>i</code> | Evaluated comparison | <code>maxIndex</code> after | Maximum value |
+|---:|---|---:|---:|
+| initialise | assume index 0 | 0 | 5 |
+| 1 | <code>11 &gt; 5</code> true | 1 | 11 |
+| 2 | <code>4 &gt; 11</code> false | 1 | 11 |
+| 3 | <code>13 &gt; 11</code> true | 3 | 13 |
+| 4 | <code>8 &gt; 13</code> false | 3 | 13 |
+
+The method returns an **index**, not the largest value.
+
+## 7. Partially filled arrays
+
+A fixed array can have spare cells. Track how many cells are logically populated.
+
+<div className="not-prose my-6 rounded-2xl border border-fd-border p-5">
+  <div className="flex flex-wrap justify-center gap-2">{['Book A','Book B','null','null','null'].map((value,index) => <div key={index} className={`rounded-lg border-2 p-3 text-center font-mono text-sm ${index<2?'border-emerald-600 bg-emerald-500/10':'border-dashed border-fd-border text-fd-muted-foreground'}`}><strong>{value}</strong><small className="block">{index}</small></div>)}</div>
+  <p className="mb-0 mt-4 text-center"><code>count = 2</code>; process indexes <code>0 .. count-1</code>, not every capacity cell.</p>
+</div>
+
+~~~java
+Book[] books = new Book[50]; // Fifty null reference cells.
+int count = 0;
+
+if (count < books.length) {
+    books[count] = new Book("Algorithms", 120.50);
+    count++;
+}
+~~~
+
+## 8. Arrays of objects
+
+Creating <code>new Account[3]</code> creates one array containing three null references. It does **not** create three Accounts.
+
+<div className="not-prose my-6 space-y-4 rounded-2xl border border-fd-border p-5">
+  <div className="flex justify-center gap-2">{[0,1,2].map(index => <div key={index} className="rounded-lg border-2 border-dashed border-fd-border p-3 text-center font-mono"><strong>null</strong><small className="block">{index}</small></div>)}</div>
+  <div className="text-center"><code>accounts[0] = new Account(190, 450.0)</code></div>
+  <div className="flex items-center justify-center gap-3"><div className="rounded-lg border-2 border-blue-500 p-3 font-mono">cell 0 · ref 81</div><span>→</span><div className="rounded-lg border-2 border-emerald-600 p-3 font-mono">Account&#123;190,450.0&#125;</div></div>
+</div>
+
+## 9. Two-dimensional arrays
+
+Java represents a 2D array as an array whose cells contain references to row arrays. Rows can have different lengths.
+
+~~~java
+int[][] grid = {
+    {1, 2, 3},
+    {4, 5},
+    {6, 7, 8, 9}
+};
+~~~
+
+<div className="not-prose my-6 space-y-2 rounded-2xl border border-fd-border p-5">
+  {[[1,2,3],[4,5],[6,7,8,9]].map((row,r) => <div key={r} className="flex items-center justify-center gap-2"><span className="w-16 font-mono text-sm">row {r} →</span>{row.map((value,c) => <span key={c} className="grid h-10 w-10 place-items-center rounded border border-fd-border font-mono">{value}</span>)}</div>)}
+</div>
+
+Use <code>grid.length</code> for row count and <code>grid[row].length</code> for that row's column count.
+
+## 10. Exam-style practice
+
+1. Draw memory for a primitive array and an Account array immediately after allocation. [8]
+2. Trace the lecture's generated-values loop and show every array state. [8]
+3. Write and test <code>indexOfMax</code> for empty, singleton, duplicate-maximum, and negative arrays. [10]
+4. Explain precisely why an array method can mutate caller-visible cells. [6]
+5. Read Book objects into a 50-cell array using a populated count and EOF guard. [12]
+6. Trace a ragged 2D array with nested loops. [8]
+
+<Accordions>
+<Accordion title="Marking guidance">
+
+Memory answers must distinguish the array reference from its cells. Object-array answers must show null cells before each object is constructed. Method answers receive full credit only when pass-by-value of the reference is stated. Partially filled arrays require both a capacity guard and a populated count.
+
+</Accordion>
+</Accordions>
+
+<QuizRef src="sem3/csi247/java-fundamentals/notes/arrays-and-objects" id="arrays-and-objects" />
+
+Continue with [Recursion](/docs/sem3/csi247/recursion).

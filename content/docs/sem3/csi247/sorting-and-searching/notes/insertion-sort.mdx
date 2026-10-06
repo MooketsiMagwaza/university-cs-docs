@@ -1,0 +1,342 @@
+---
+title: "4. Insertion Sort"
+description: "Grow a sorted prefix by shifting larger values, trace ascending and descending passes, implement insertion sort, and explain its adaptive behaviour."
+---
+
+Insertion sort grows one sorted section from left to right. On every pass it picks up the next value, shifts larger values one place to the right, and inserts the saved value into the gap.
+
+Think of arranging playing cards in your hand. The cards already in your left hand stay sorted; you pick up one new card and slide it into the correct position among them.
+
+## 1. What moves during a pass?
+
+We will use the same array for the whole explanation:
+
+```text
+start  [4, 2, 5, 1, 3]
+goal   [1, 2, 3, 4, 5]
+```
+
+Four ideas must stay separate:
+
+| Term | What it means |
+|---|---|
+| **Sorted section** | The left prefix that is already in order |
+| **Key** | The card picked up for this pass and stored in a variable |
+| **Shift** | Copy a larger card one position to the right |
+| **Insertion** | Drop the saved key into the final gap |
+
+A shift is **not** a swap. The key stays safely in a variable while the gap travels left through the sorted section.
+
+## 2. The full visual trace
+
+Use **Next** slowly and predict the sorted prefix after each complete pass. The visual groups key comparisons and shifts by pass; the mutation table later in this lesson expands one pass into exact Java statements, saved values, and intermediate array cells.
+
+<InsertionSortStory />
+
+The important invariant is now visible: at the start of pass `i`, `arr[0..i-1]` is sorted. When the key fills the gap, `arr[0..i]` is sorted. The green section therefore grows by exactly one card after each pass.
+
+<Callout title="Why the key must be saved first">
+When the first larger value shifts right, it overwrites the key's original array cell. `int key = arr[i]` protects that value before any shifting begins.
+</Callout>
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/insertion-sort" id="check-one-pass" />
+
+## 3. Properties you should know
+
+| Property | Insertion sort | Why |
+|---|---|---|
+| Best-case time | `O(n)` | A sorted array needs one failed key comparison per pass and no shifts |
+| Average-case time | `O(n²)` | Keys usually move through part of the sorted section |
+| Worst-case time | `O(n²)` | A reverse-sorted array makes each key cross the whole sorted section |
+| Extra space | `O(1)` | Only the key and indexes are stored |
+| Stable | Yes | Equal values do not cross when the condition uses `>` |
+| Adaptive | Yes | Nearly sorted input causes only a few local shifts |
+
+The cost is controlled by **how far each key travels**. This is why insertion sort can feel almost linear on nearly sorted data but becomes quadratic on reverse-sorted data.
+
+## 4. Read the Java after the movement makes sense
+
+```java
+// Ascending, stable version: grow a sorted prefix by shifting strict inversions.
+public static void insertionSort(int[] arr) {
+    // Visit each valid position; never read the cell at index length.
+    for (int i = 1; i < arr.length; i++) {
+        // Save the key before any shift overwrites its original array cell.
+        int current = arr[i];
+        // Start at the rightmost cell of the already sorted prefix.
+        int j = i - 1;
+
+        // Check the boundary first: && skips arr[j] when j is negative.
+        while (j >= 0 && arr[j] > current) {
+            // One array write shifts the prefix value right; this is not a swap.
+            arr[j + 1] = arr[j];
+            // Move left so the next guard checks the preceding prefix cell.
+            j--;
+        }
+
+        // j ended just left of the gap; one final array write inserts the saved key.
+        arr[j + 1] = current;
+    }
+}
+```
+
+Java evaluates `&&` from left to right and short-circuits. The boundary test `j >= 0` must come first; when it is false, `arr[j]` is not evaluated.
+
+### Complete runnable example
+
+```java
+// Import the library type used by this complete example.
+import java.util.Arrays;
+
+public class InsertionSortDemo {
+    // Ascending, stable version: grow a sorted prefix by shifting strict inversions.
+    public static void insertionSort(int[] arr) {
+        // Visit each valid position; never read the cell at index length.
+        for (int i = 1; i < arr.length; i++) {
+            // Save the key before any shift overwrites its original array cell.
+            int current = arr[i];
+            // Start at the rightmost cell of the already sorted prefix.
+            int j = i - 1;
+            // Check the boundary first: && skips arr[j] when j is negative.
+            while (j >= 0 && arr[j] > current) {
+                // One array write shifts the prefix value right; this is not a swap.
+                arr[j + 1] = arr[j];
+                // Move left so the next guard checks the preceding prefix cell.
+                j--;
+            }
+            // j ended just left of the gap; one final array write inserts the saved key.
+            arr[j + 1] = current;
+        }
+    }
+
+    // Run fixed inputs so the displayed result can be reproduced.
+    public static void main(String[] args) {
+        // Keep this example's input independent so earlier sorting does not alter it.
+        int[] values = {8, 3, 5, 1};
+        insertionSort(values);
+        // Print the deterministic result for comparison with the output shown below.
+        System.out.println(Arrays.toString(values));
+    }
+}
+```
+
+```text
+[1, 3, 5, 8]
+```
+
+<JavaTryIt example="insertion-sort" title="Run an insertion-sort trace" />
+
+## 5. Ascending and descending order
+
+The algorithm stays the same. Only the question asked by the `while` condition changes:
+
+| Required order | Shift when | Meaning |
+|---|---|---|
+| Ascending | `arr[j] > current` | Move larger values right |
+| Descending | `arr[j] < current` | Move smaller values right |
+
+For descending order, shift values that are **smaller** than `current`:
+
+```java
+// Check the boundary first: && skips arr[j] when j is negative.
+while (j >= 0 && arr[j] < current) {
+    // One array write shifts the prefix value right; this is not a swap.
+    arr[j + 1] = arr[j];
+    // Move left so the next guard checks the preceding prefix cell.
+    j--;
+}
+```
+
+### Exam-style dry run
+
+Sort `[50, 83, 76, 6, 32, 90, 12, 2, 59]` in descending order. A complete answer shows the array at the end of **every** pass, including passes where nothing moves.
+
+| Pass | Key | Operation | Array at the end of the pass |
+|---:|---:|---|---|
+| Start | - | The first value is the initial sorted section | `[50, 83, 76, 6, 32, 90, 12, 2, 59]` |
+| 1 | 83 | `50 < 83`; shift 50, insert 83 | `[83, 50, 76, 6, 32, 90, 12, 2, 59]` |
+| 2 | 76 | `50 < 76`; shift 50, insert 76 after 83 | `[83, 76, 50, 6, 32, 90, 12, 2, 59]` |
+| 3 | 6 | `50 < 6` is false; no shift | `[83, 76, 50, 6, 32, 90, 12, 2, 59]` |
+| 4 | 32 | `6 < 32`; shift 6, insert 32 after 50 | `[83, 76, 50, 32, 6, 90, 12, 2, 59]` |
+| 5 | 90 | Shift `6, 32, 50, 76, 83`; insert 90 at the front | `[90, 83, 76, 50, 32, 6, 12, 2, 59]` |
+| 6 | 12 | `6 < 12`; shift 6, insert 12 after 32 | `[90, 83, 76, 50, 32, 12, 6, 2, 59]` |
+| 7 | 2 | `6 < 2` is false; no shift | `[90, 83, 76, 50, 32, 12, 6, 2, 59]` |
+| 8 | 59 | Shift `2, 6, 12, 32, 50`; insert 59 after 76 | `[90, 83, 76, 59, 50, 32, 12, 6, 2]` |
+
+The pass number is the key's original index. Nine values therefore produce eight passes.
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/insertion-sort" id="check-order-and-cost" />
+
+## 6. Shifting is not repeated swapping
+
+Some explanations describe an insertion as repeated adjacent swaps. That can produce the same final array, but the implementation above does something more precise:
+
+1. save `current` once;
+2. copy each larger value one cell right;
+3. write `current` once into the final gap.
+
+This distinction matters when counting writes. State the convention used by a question before comparing algorithms.
+
+<CommonMistake title="Overwriting the value being inserted">
+If the code shifts `arr[i - 1]` into `arr[i]` before saving `arr[i]`, the original current value is lost. Always assign `current = arr[i]` before the first shift.
+</CommonMistake>
+
+## 7. Common errors
+
+| Attempt | What happens | Repair |
+|---|---|---|
+| Start `i` at 0 | There is no previous sorted prefix; `j` begins at -1 | Start at `i = 1` |
+| Test `arr[j]` before `j >= 0` | A value smaller than all earlier values causes an invalid access | Put the boundary check first |
+| Write to `arr[j]` after shifting | `j` has moved one position left of the gap | Insert at `arr[j + 1]` |
+| Use `>=` for ascending order | Equal records can reverse order | Use `>` to preserve stability |
+| Compare with `arr[i]` during shifts | `arr[i]` may have been overwritten | Compare with saved `current` |
+
+## 8. Practice
+
+1. Trace ascending insertion sort on `[9, 4, 7, 2]`, showing the array after each pass.
+2. On `[2, 4, 5, 1, 3]`, count shifts during the pass that inserts `1`.
+3. Explain why sorted input produces linear time.
+4. Change the complete method to descending order and test it on duplicates.
+
+<Accordions>
+<Accordion title="Check questions 1 and 2">
+
+**1.** Insert `4`: `[4, 9, 7, 2]`. Insert `7`: `[4, 7, 9, 2]`. Insert `2`: `[2, 4, 7, 9]`.
+
+**2.** The value `1` shifts `5`, `4`, and `2`: three shifts. It is then stored at index 0, producing `[1, 2, 4, 5, 3]`.
+
+</Accordion>
+</Accordions>
+
+
+## Inside a pass: the saved key and moving gap
+
+The compact visual shows pass boundaries. To dry-run actual Java, include each mutation and the last failed guard. Ascending pass i=3 starts from `[2,4,5,1,3]`; `current=1` and `j=2`. The key is held in the local variable while its original cell is overwritten.
+
+| Step | Evaluated statement | j after | Saved current | Array after |
+|---:|---|---:|---:|---|
+| Save | `current = arr[3] → 1; j = 3-1 → 2` | 2 | 1 | [2,4,5,1,3] |
+| Guard 1 | `2 >= 0 true; arr[2] > current → 5 > 1 true` | 2 | 1 | Unchanged |
+| Shift 1 | `arr[3] = arr[2] → 5; j--` | 1 | 1 | [2,4,5,5,3] |
+| Guard 2 | `1 >= 0 true; arr[1] > current → 4 > 1 true` | 1 | 1 | Unchanged |
+| Shift 2 | `arr[2] = arr[1] → 4; j--` | 0 | 1 | [2,4,4,5,3] |
+| Guard 3 | `0 >= 0 true; arr[0] > current → 2 > 1 true` | 0 | 1 | Unchanged |
+| Shift 3 | `arr[1] = arr[0] → 2; j--` | -1 | 1 | [2,2,4,5,3] |
+| Guard 4 | `-1 >= 0 false`; `arr[-1] > current` is skipped | -1 | 1 | Unchanged |
+| Insert | `arr[j+1] = current → arr[0] = 1` | -1 | 1 | [1,2,4,5,3] |
+
+The temporary duplicate values in array cells are expected. They represent shifted copies and a conceptual gap, not lost data; the saved key completes the permutation when inserted.
+
+### Complete descending method and evaluated passes
+
+```java
+import java.util.Arrays;
+
+public class InsertionDescendingDemo {
+    // Descending stable order: larger keys enter the left prefix.
+    public static void insertionDescending(int[] arr) {
+        for (int i = 1; i < arr.length; i++) {
+            int current = arr[i]; // Save before a shift overwrites arr[i].
+            int j = i - 1; // Rightmost position in the already sorted prefix.
+            while (j >= 0 && arr[j] < current) {
+                // Boundary first: arr[-1] is never evaluated.
+                arr[j + 1] = arr[j]; // One shift, one array write.
+                j--; // The gap and the scan move one cell left.
+            }
+            arr[j + 1] = current; // One insertion write, including a no-shift pass.
+        }
+    }
+
+    public static void main(String[] args) {
+        // Independent fixtures check direction, duplicates, and boundaries.
+        int[] mixed = {4, 2, 5, 1, 3};
+        int[] duplicate = {2, 2, 1, 3};
+        int[] empty = {};
+        int[] singleton = {7};
+        insertionDescending(mixed);
+        insertionDescending(duplicate);
+        insertionDescending(empty);
+        insertionDescending(singleton);
+        // Print every fixture so the displayed output is directly verifiable.
+        System.out.println("mixed=" + Arrays.toString(mixed));
+        System.out.println("duplicates=" + Arrays.toString(duplicate));
+        System.out.println("empty=" + Arrays.toString(empty));
+        System.out.println("singleton=" + Arrays.toString(singleton));
+    }
+}
+```
+
+```text
+mixed=[5, 4, 3, 2, 1]
+duplicates=[3, 2, 2, 1]
+empty=[]
+singleton=[7]
+```
+
+| i / current | Evaluated key comparisons | Final boundary / j | Array after insertion |
+|---|---|---|---|
+| 1 / 2 | `4 < 2 false` | j=0, boundary true | [4,2,5,1,3] |
+| 2 / 5 | `2 < 5 true; 4 < 5 true` | j=-1; boundary false, key test skipped | [5,4,2,1,3] |
+| 3 / 1 | `2 < 1 false` | j=2, boundary true | [5,4,2,1,3] |
+| 4 / 3 | `1 < 3 true; 2 < 3 true; 4 < 3 false` | j=1, boundary true | [5,4,3,2,1] |
+
+Totals: seven key comparisons, eight `j>=0` boundary tests, four shifts, four insertion writes, eight array writes. The outer `i < arr.length` loop guard is a separate five evaluations.
+
+## Equal records and exact cost conventions
+
+In ascending `[2A,2B,1C]`, pass 1 evaluates `2A > 2B → false` and keeps A before B. Pass 2 saves 1C, shifts 2B then 2A, and inserts at index 0: `[1C,2A,2B]`. For descending `[1A,1B,2C]`, `1A < 1B → false` likewise preserves A before B; inserting 2C gives `[2C,1A,1B]`. The runnable tagged-record example in [Bubble and Selection Sort](/docs/sem3/csi247/sorting-and-searching/notes/bubble-and-selection-sort) verifies this identity-preserving ascending trace.
+
+Using `>=` for ascending order would shift A over B at an equal-key comparison. Stability depends on a **strict** condition. Swapping or shifting just the numeric key without its associated data corrupts records even if the keys become sorted.
+
+A **shift** is one array assignment `arr[j+1]=arr[j]`. An **insertion write** is the final `arr[j+1]=current`, even when the key stays in its own cell. Saving `current` is a local-variable assignment; it is not an array write. There are no swaps in this implementation.
+
+For the ascending visual's `[4,2,5,1,3]`:
+
+| Pass | Key comparisons | Boundary tests j>=0 | Shifts | Insertion writes | Total array writes |
+|---:|---:|---:|---:|---:|---:|
+| 1, key 2 | 1 | 2 | 1 | 1 | 2 |
+| 2, key 5 | 1 | 1 | 0 | 1 | 1 |
+| 3, key 1 | 3 | 4 | 3 | 1 | 4 |
+| 4, key 3 | 3 | 3 | 2 | 1 | 3 |
+| Total | **8** | **10** | **6** | **4** | **10** |
+
+The visual's comparison badges count only key comparisons, including a false relation when evaluated. A boundary failure is omitted from that badge because short-circuiting skips the key relation. A pass that makes no shift still performs its insertion write.
+
+| Additional ascending fixture | Key comparisons | Shifts | Insertion writes | Result |
+|---|---:|---:|---:|---|
+| [1,2,3,4,5] | 4 | 0 | 4 | [1,2,3,4,5] |
+| [5,4,3,2,1] | 10 | 10 | 4 | [1,2,3,4,5] |
+| [2,2,2] | 2 | 0 | 2 | [2,2,2] |
+| [] | 0 | 0 | 0 | [] |
+| [7] | 0 | 0 | 0 | [7] |
+
+## Exam practice with worked marking cues
+
+1. **[7 marks]** Dry-run ascending insertion of 1 into `[2,4,5,1,3]`. Show the saved key, j, each guard, and every intermediate array.
+2. **[5 marks]** Explain what happens if `arr[j] > current` precedes `j >= 0` in the while condition. Give a minimal counterexample and a repair.
+3. **[5 marks]** Trace descending insertion on `[1A,1B,2C]` and explain stability.
+4. **[4 marks]** A student reports six swaps on the visual input. Correct their report and give the number of array writes.
+
+<Accordions>
+<Accordion title="Worked answers and marking cues">
+
+**1.** Use the mutation table above. Award saved current=1 and j=2 (1), three true key comparisons (1), three correct intermediate arrays (3), j=-1 causing boundary failure without arr[-1] access (1), insertion at j+1=0 (1).
+
+**2.** On `[2,1]`, shifting 2 leaves j=-1. Java evaluates the first operand next and tries arr[-1], throwing ArrayIndexOutOfBoundsException. Award fixture (1), j trajectory (1), exception and operand order (1), put the boundary first (1), explain short-circuit skip (1).
+
+**3.** Pass 1: `1A<1B false`, no shift. Pass 2: save 2C, `1B<2C true`, `1A<2C true`; shift B then A, insert C at 0. Result `[2C,1A,1B]`. Award passes and evaluated values (2), saved record and shifts (1), final order (1), strict equality rule preserves A before B (1).
+
+**4.** There are six shifts and zero swaps. Add four insertion writes for ten array writes. Saving the four current values is not included. Award shifts versus swaps (2), insertion writes (1), total (1).
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can identify the sorted prefix before and after each pass.' },
+  { type: 'must', text: 'I can distinguish saving, shifting, and inserting.' },
+  { type: 'must', text: 'I can explain the boundary-safe order of the while condition.' },
+  { type: 'must', text: 'I can justify O(n) best-case and O(n²) worst-case time.' },
+  { type: 'avoid', text: 'Do not read arr[i] as the current value after shifting has begun; keep the saved variable.' }
+]} />
+
+Continue with [Merge Sort](/docs/sem3/csi247/sorting-and-searching/notes/merge-sort).

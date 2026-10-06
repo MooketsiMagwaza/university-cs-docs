@@ -1,0 +1,278 @@
+---
+title: "6. Choosing an Algorithm"
+description: "Use visual evidence about preconditions, stability, memory, existing order and writes to justify algorithm choices."
+---
+
+**Choosing an algorithm** means matching the required operation and data to an algorithm's preconditions and costs. Start by naming the job: finding an item and putting every item in order are different jobs.
+
+<Mermaid chart={`flowchart TD
+  JOB["What must the program do?"] --> SEARCH["Find an item: search"]
+  JOB --> SORT["Arrange all items: sort"]
+  SEARCH --> DATA["Check order and access pattern"]
+  SORT --> NEED["Check size, order, memory, ties and writes"]`} caption="A smaller complexity belongs to a particular operation and set of assumptions." />
+
+## 1. Work through the deciding facts
+
+### Example A: one lookup versus repeated lookups
+
+For one lookup in an unsorted array, linear search works immediately. Binary search requires sorted order and efficient midpoint access; preparing sorted data costs work too.
+
+<Mermaid chart={`flowchart TD
+  U["Unsorted array; one lookup"] --> L["Linear search: one scan"]
+  U --> PREP["Alternative: sort all n values"]
+  PREP --> B["Then binary search"]
+  PREP --> COST["Preparation belongs in the total cost"]`} caption="Compare the whole workflow, not only its final lookup." />
+
+For a fixed array of 1,024 IDs, use dominant terms as a rough operation model. These are growth-term estimates, not measured runtimes or exact comparison counts.
+
+| Workflow | One lookup | 100 lookups | Preconditions |
+|---|---:|---:|---|
+| Linear scans: `q × n` | 1,024 | 102,400 | No order required |
+| Sort once + binary: `n log₂n + q log₂n` | 10,250 | 11,240 | Sorting allowed; sorted array then retained |
+| Already sorted + binary: `q log₂n` | 10 | 1,000 | Preparation already complete |
+
+Repeated mutation may require maintaining sorted order or sorting again. A sorted linked list lacks constant-time midpoint access, so ordinary array-style binary search's time claim does not transfer directly.
+
+<Mermaid chart={`flowchart TD
+  A["Array index mid"] --> C["Direct access to cell: constant time"]
+  L["Linked list head"] --> WALK["Follow links to midpoint"]
+  WALK --> WORK["Traversal adds work even though keys are sorted"]`} caption="Sorted order and efficient random access are two separate conditions." />
+
+### Example B: preserving the order of tied records
+
+A **stable** sort keeps the original relative order of records with equal keys. Suppose names are already alphabetical and we now sort by ascending mark: Ada and Cora both have 70.
+
+<Mermaid chart={`flowchart TD
+  I["Before: Ada 70 | Ben 50 | Cora 70"] --> S["Stable: Ben 50 | Ada 70 | Cora 70"]
+  I --> U["Unstable possible result: Ben 50 | Cora 70 | Ada 70"]
+  S --> P["Ada still before Cora among the 70s"]
+  U --> R["Marks sorted, but equal-key order reversed"]`} caption="The names tag the records; sorting only bare integers would hide this difference." />
+
+| Check | Stable output | Reversed-tie output |
+|---|---|---|
+| Marks nondecreasing? | true | true |
+| Ada originally before Cora? | true | true |
+| Ada still before Cora? | true | false |
+| Stability requirement met? | yes | no |
+
+Selection sort's long swap can break this promise. On `[2A, 2B, 1]`, swapping the first 2 with the minimum 1 produces `[1, 2B, 2A]`. Both marks are correct, but the tagged 2s cross.
+
+<Mermaid chart={`flowchart TD
+  A["Before: 2A | 2B | 1"] --> SW["Swap index 0 with minimum at index 2"]
+  SW --> B["After: 1 | 2B | 2A"]
+  B --> C["2A and 2B reversed: instability witness"]`} caption="One concrete counterexample establishes that the taught selection sort is not stable." />
+
+### Example C: available memory can eliminate an algorithm
+
+The taught bubble, selection and insertion methods need a few index/key/temp variables beyond the array. The taught recursive array merge sort needs an array buffer proportional to n and a stack whose maximum depth is logarithmic.
+
+<Mermaid chart={`flowchart TD
+  subgraph SIMPLE["In-place simple sort"]
+    A["Input array: n cells"]
+    V["Extra: indexes and one saved value"]
+  end
+  subgraph MERGE["Recursive array merge sort"]
+    B["Input array: n cells"]
+    T["Temporary merge storage: O(n) peak"]
+    F["Live recursive frames: O(log n)"]
+  end`} caption="The original input is excluded from auxiliary-space counting. Count peak live extra storage, not all allocations over time." />
+
+| Memory constraint | Evaluated condition | Consequence |
+|---|---|---|
+| Only constant extra storage available | Merge buffer of size proportional to n allowed? false | Taught array merge sort is ruled out |
+| Buffer fits; predictable time required | O(n) buffer allowed? true | Merge remains a candidate |
+| Recursion prohibited but buffer allowed | Recursive stack allowed? false | Consider bottom-up merge if that variant is available |
+| Stability and constant storage required | Taught insertion stable and in-place? true | Candidate; still quadratic in worst case |
+
+### Example D: existing order changes work
+
+An **adaptive** algorithm benefits from existing order. For `[1,2,3,5,4]`, insertion moves only 5 right and inserts 4. Selection still scans every suffix; the standard merge implementation still divides and merges.
+
+<Mermaid chart={`flowchart TD
+  A["1 | 2 | 3 | 5 | 4"] --> HOLD["Hold key 4"]
+  HOLD --> CHECK["5 greater than 4: true; shift 5"]
+  CHECK --> STOP["3 greater than 4: false; stop shifting"]
+  STOP --> R["1 | 2 | 3 | 4 | 5"]`} caption="Insertion repairs local disorder. The position travelled by each key controls its work." />
+
+| Input/algorithm | Value comparisons or shifts | What it demonstrates |
+|---|---|---|
+| Sorted five values; optimized bubble | 4 comparisons, zero swaps, then stop | Flag enables O(n) best case |
+| Sorted five values; selection | `4+3+2+1 = 10` comparisons | Same suffix scans despite existing order |
+| Sorted five values; insertion | 4 value comparisons, zero shifts | Each new key already fits |
+| Nearly sorted example; insertion | 1 shift | Little disorder can mean little extra movement |
+| Reverse five values; insertion | `1+2+3+4 = 10` shifts | Quadratic worst case remains |
+
+### Example E: swaps are not the same as writes
+
+On `[4,2,5,1,3]`, the taught selection implementation uses two real swaps. Bubble uses six swaps. A swap writes two array cells; assignment to a local temp is excluded from this **array-write** convention.
+
+<Mermaid chart={`flowchart TD
+  B["Bubble: 6 swaps"] --> BW["12 array-cell writes"]
+  S["Selection: 2 swaps"] --> SW["4 array-cell writes"]
+  I["Insertion: 6 shifts + 4 key placements"] --> IW["10 array-cell writes"]`} caption="An insertion pass writes the key even when it stays in place. State the counting convention." />
+
+| Algorithm | Value comparisons | Array-cell writes | Evaluated cost at comparison = 1, write = 10 |
+|---|---:|---:|---:|
+| Optimized bubble | 10 | 12 | `10 + 10×12 = 130` |
+| Selection, skipping self-swaps | 10 | 4 | `10 + 10×4 = 50` |
+| Insertion | 8 | 10 | `8 + 10×10 = 108` |
+
+This one cost model favours selection for this input. It does not make selection universally fastest: different sizes, input orders, stability constraints and costs change the answer.
+
+<Mermaid chart={`flowchart TD
+  M["Measured comparisons and writes"] --> C["Apply the question's cost model"]
+  C --> R["Choose within its constraints"]
+  R --> LIMIT["Conclusion applies to that scenario"]`} caption="A defensible choice explains both the decisive evidence and its limits." />
+
+<QuizRef src="sem3/csi247/sorting-and-searching/notes/choosing-an-algorithm" id="check-the-choice" />
+
+## 2. Properties after the examples
+
+| Algorithm | Best | Average | Worst | Extra space | Stable as taught | Adaptive as taught |
+|---|---:|---:|---:|---:|---|---|
+| Linear search | O(1) | O(n) under ordinary positional assumptions | O(n) | O(1) iterative | Not a sort | Not a sort |
+| Binary search | O(1) | O(log n) | O(log n) | O(1) iterative; O(log n) recursive | Not a sort | Not a sort |
+| Optimized bubble | O(n) | O(n²) | O(n²) | O(1) | Yes with strict swaps | Yes |
+| Selection | O(n²) | O(n²) | O(n²) | O(1) | No | No |
+| Insertion | O(n) | O(n²) | O(n²) | O(1) | Yes with strict shifts | Yes |
+| Standard array merge | O(n log n) | O(n log n) | O(n log n) | O(n) buffer plus O(log n) stack | Yes with left-first ties | No |
+
+The table describes these implementations. Bubble's unoptimized lecture loop is still quadratic on sorted input. Alternative merge variants and different stability conditions require separate analysis.
+
+<Mermaid chart={`flowchart TD
+  CODE["Actual loop and comparison rules"] --> P["Properties of this implementation"]
+  FLAG["Bubble swapped flag present?"] --> BEST["Only then linear best case"]
+  TIE["Strict shift or left-first merge ties?"] --> STABLE["Equal records preserve order"]`} caption="Attach claims to the implementation whose conditions justify them." />
+
+## 3. A decision flow and further worked cases
+
+Use the flow to propose a candidate, then check every remaining constraint. An impossible combination should be reported as a conflict rather than solved by silently dropping a requirement.
+
+<Mermaid chart={`flowchart TD
+  JOB{"Search or sort?"} -->|Search| ORDER{"Sorted array with random access?"}
+  ORDER -->|Yes| B["Binary search; state duplicate contract"]
+  ORDER -->|No| L["Linear search, or include preparation for repeated lookups"]
+  JOB -->|Sort| SMALL{"Small or nearly sorted?"}
+  SMALL -->|Yes| I["Insertion candidate"]
+  SMALL -->|No| MEM{"O(n) buffer available?"}
+  MEM -->|Yes| M["Merge candidate for predictable worst-case bound"]
+  MEM -->|No| C["Check allowed in-place methods and worst-case requirement"]
+  I --> CHECK["Check stability, memory, writes and total cost"]
+  M --> CHECK
+  C --> CHECK`} caption="Candidates require justification; no one taught algorithm meets every possible constraint." />
+
+| Scenario | Facts checked | Justified result |
+|---|---|---|
+| One attendance lookup among 35 unordered IDs | One search; no sorted precondition | Linear search avoids preparation |
+| Thousands of lookups in 50,000 fixed sorted IDs | Order already present; random access | Iterative binary search, O(log n) each |
+| 20 nearly ordered marks; preserve ties; constant extra storage | Small; stable; in-place | Insertion with strict greater-than shifts |
+| 2,000,000 unpredictable records; buffer available; quadratic worst case unacceptable | O(n) storage allowed | Stable merge, O(n log n) worst case |
+| Constant extra space, stability and O(n log n) worst case demanded among the four taught array sorts | Simple sorts quadratic; taught merge needs buffer | None of these taught versions satisfies all constraints |
+| Writes expensive; moderate n; instability permitted | Write count matters; quadratic comparisons acceptable | Selection may be appropriate; state its costs |
+
+## 4. Fully commented Java: make the stability choice concrete
+
+This demonstration chooses stable insertion for a small record array. The strict comparison shifts only a **larger** mark; a tied record never crosses the earlier equal-mark record.
+
+<Mermaid chart={`flowchart TD
+  K["Key: Cora 70"] --> Q{"Earlier mark greater than 70?"}
+  Q -->|"Ada 70: false"| KEEP["Leave Ada before Cora"]
+  Q -->|"Larger mark: true"| SHIFT["Shift that record one position right"]`} caption="The code's strict comparison implements the stability requirement." />
+
+```java
+public class AlgorithmChoiceDemo {
+    private static class MarkRecord {
+        // Each record keeps its name attached to the key being sorted.
+        final String name;
+        final int mark;
+
+        MarkRecord(String name, int mark) {
+            this.name = name;
+            this.mark = mark;
+        }
+    }
+
+    private static void stableInsertion(MarkRecord[] records) {
+        for (int i = 1; i < records.length; i++) {
+            MarkRecord key = records[i]; // Save the entire record, not just its mark.
+            int j = i - 1; // The prefix to the left is already sorted.
+            while (j >= 0 && records[j].mark > key.mark) {
+                records[j + 1] = records[j]; // Shift only strictly larger marks.
+                j--; // Equal marks stop the shifts and retain their earlier order.
+            }
+            records[j + 1] = key; // Place the saved record into the final gap.
+        }
+    }
+
+    public static void main(String[] args) {
+        MarkRecord[] records = {
+            new MarkRecord("Ada", 70),
+            new MarkRecord("Ben", 50),
+            new MarkRecord("Cora", 70)
+        };
+        // Small record array; preserve equal-mark order; use constant extra storage.
+        stableInsertion(records);
+        for (MarkRecord record : records) {
+            System.out.println(record.name + " " + record.mark);
+        }
+    }
+}
+```
+
+```text
+Ben 50
+Ada 70
+Cora 70
+```
+
+## 5. Exam practice with marking cues
+
+For a choice question, award credit to the algorithm **and** the reason connecting its properties to the scenario. Alternative answers need explicit assumptions.
+
+1. Choose for one unsorted lookup versus 100 fixed-array lookups. Include preparation in a growth-term expression. [6]
+2. Show whether `[Ben50,Cora70,Ada70]` is sorted and whether it preserves the original Ada-before-Cora tie. [4]
+3. Demonstrate selection instability on `[2A,2B,1]`. [4]
+4. Draw extra memory for an in-place sort and recursive array merge. State peak terms. [5]
+5. Derive insertion's shifts on reverse five values and compare sorted input. [4]
+6. Using the write-cost table, calculate each total when comparison = 2 and array write = 5. [6]
+7. Choose for 20 nearly sorted records requiring stable, in-place sorting. [4]
+8. Choose for a large unpredictable array with buffer available and quadratic worst case prohibited. [4]
+9. Explain why a sorted linked list alone does not establish O(log n) binary-search time. [3]
+10. A question demands stable, constant-extra-space, O(n log n) worst-case sorting using only the four taught array implementations. Explain the conflict. [5]
+11. Change `>` to `>=` in the record code. Predict the tie order and explain the lost property. [4]
+12. Why is "selection uses fewer writes, therefore is always faster" an unsupported conclusion? Give two omitted factors. [4]
+
+<Accordions>
+<Accordion title="Answers and marking cues: 1–6">
+
+**1:** Linear for one unsorted lookup (1) with no preparation (1); repeated lookups may justify sort once (1) provided data remains sorted (1); `qn` versus `n log n + q log n` (2).
+
+**2:** Marks sorted: true (1), 50 then 70 then 70 (1); stable: false (1), Cora moved ahead of earlier Ada (1).
+
+**3:** Select 1 (1), swap endpoints (1), result 1/2B/2A (1), reversed tagged ties (1).
+
+**4:** Constant local storage beyond input (2); merge buffer O(n) (1), live stack O(log n) (1), peak rather than cumulative allocations (1).
+
+**5:** Reverse shifts 1+2+3+4=10 (2); sorted input zero shifts (1), one failed key comparison per outer pass (1).
+
+**6:** Bubble `2×10+5×12=80`; selection `2×10+5×4=40`; insertion `2×8+5×10=66`. Two marks per substitution and total.
+
+</Accordion>
+<Accordion title="Answers and marking cues: 7–12">
+
+**7:** Insertion (1); small/nearly sorted benefit (1), stable strict shifts (1), constant auxiliary storage (1).
+
+**8:** Merge (1); O(n log n) worst-case bound (1), O(n) buffer accepted (1), quadratic alternatives ruled out (1).
+
+**9:** Midpoint needs link traversal (1); sortedness only justifies which half (1); efficient indexed access is a separate assumption (1).
+
+**10:** Simple sorts have quadratic worst case (2); taught merge needs O(n) storage (1); none meets all constraints (1); request a relaxed constraint or another allowed algorithm (1).
+
+**11:** Ben50/Cora70/Ada70 (2); equality now shifts Ada past Cora (1); stability lost (1).
+
+**12:** Costs depend on write/comparison convention (1), size and order affect work (1); two other applicable factors such as stability requirement, memory, constants or available library algorithms (2).
+
+</Accordion>
+</Accordions>
+
+Use the [Sorting and Searching Cheat Sheet](/docs/sem3/csi247/sorting-and-searching/cheat-sheet), then attempt the [Practice Questions](/docs/sem3/csi247/sorting-and-searching/questions).

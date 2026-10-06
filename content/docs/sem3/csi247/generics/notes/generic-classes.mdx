@@ -1,0 +1,150 @@
+---
+title: "2. Generic Classes: Reading T Visually"
+description: "Substitute type arguments through fields, parameters and returns; use multiple parameters; understand invariance and generic-array limits."
+---
+
+A generic class declares one or more formal type parameters after its class name.
+
+~~~java
+public class Holder<T> {
+    private T item;
+
+    public void set(T item) {
+        this.item = item;
+    }
+
+    public T get() {
+        return item;
+    }
+}
+~~~
+
+## 1. The substitution method
+
+For <code>Holder&lt;String&gt;</code>, mentally replace every class-level T with String.
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-2">
+  <div className="rounded-xl border border-fd-border p-4"><strong>Generic source</strong><pre className="mt-3 text-sm">T item{"\n"}void set(T item){"\n"}T get()</pre></div>
+  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/5 p-4"><strong>For Holder&lt;String&gt;</strong><pre className="mt-3 text-sm">String item{"\n"}void set(String item){"\n"}String get()</pre></div>
+</div>
+
+For <code>Holder&lt;Account&gt;</code>, the same three positions become Account. There is still only one source class.
+
+## 2. Construction and the diamond
+
+~~~java
+Holder<String> course = new Holder<String>();
+Holder<Integer> mark = new Holder<>(); // Diamond infers Integer from the left.
+~~~
+
+The declared type and constructed type must agree. The empty diamond does not mean “any type”; it asks the compiler to infer the required type argument.
+
+| Declaration | Legal? | Reason |
+|---|---:|---|
+| <code>Holder&lt;String&gt; a = new Holder&lt;&gt;();</code> | yes | diamond infers String |
+| <code>Holder&lt;String&gt; b = new Holder&lt;Integer&gt;();</code> | no | different parameterisations |
+| <code>Holder&lt;Object&gt; c = new Holder&lt;String&gt;();</code> | no | generics are invariant |
+
+## 3. Invariance
+
+Although String is a subtype of Object, <code>Holder&lt;String&gt;</code> is **not** a subtype of <code>Holder&lt;Object&gt;</code>.
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+  <div className="rounded-xl border border-emerald-600 p-4 text-center"><code>Holder&lt;String&gt;</code><p className="mb-0 mt-2 text-sm">may accept only Strings</p></div>
+  <div className="text-center text-2xl text-red-500">≠ subtype of</div>
+  <div className="rounded-xl border border-red-500 p-4 text-center"><code>Holder&lt;Object&gt;</code><p className="mb-0 mt-2 text-sm">would allow set(new Account(...))</p></div>
+</div>
+
+If assignment were allowed, code using the Object view could insert a non-String and break the original Holder's guarantee.
+
+## 4. Multiple type parameters
+
+~~~java
+public class Pair<K, V> {
+    private final K key;
+    private final V value;
+
+    public Pair(K key, V value) {
+        this.key = key;
+        this.value = value;
+    }
+
+    public K getKey() {
+        return key;
+    }
+
+    public V getValue() {
+        return value;
+    }
+}
+~~~
+
+<div className="not-prose my-6 rounded-2xl border border-fd-border p-5">
+  <div className="text-center font-mono font-bold">Pair&lt;String, Integer&gt;</div>
+  <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-lg bg-blue-500/10 p-3 text-center"><code>K → String</code><br/>key = "CSI247"</div><div className="rounded-lg bg-emerald-500/10 p-3 text-center"><code>V → Integer</code><br/>value = 87</div></div>
+</div>
+
+Conventional names communicate roles: T type, E element, K key, V value, N number.
+
+## 5. Static context cannot use a class T directly
+
+Class-level T belongs to each parameterisation/instance-facing class definition. A static field or ordinary static method cannot use it directly.
+
+~~~java
+public class Box<T> {
+    private T value;              // Legal instance field.
+    // private static T shared;   // Illegal.
+
+    public static <U> U echo(U value) {
+        return value;             // U belongs to this generic method.
+    }
+}
+~~~
+
+## 6. Why new T() and new T[10] fail
+
+At runtime, ordinary Java generics use type erasure; the implementation cannot simply construct an unknown T or reified array of T.
+
+~~~java
+public class Shelf<T> {
+    // T item = new T();     // Illegal: unknown constructor.
+    // T[] items = new T[10]; // Illegal: array component type must be reified.
+}
+~~~
+
+Prefer a collection such as <code>ArrayList&lt;T&gt;</code>, accept a factory, or accept an array created by the caller.
+
+## 7. Complete traced example
+
+~~~java
+public class HolderDemo {
+    public static void main(String[] args) {
+        Holder<String> course = new Holder<>();
+        course.set("CSI247");
+
+        Holder<Integer> mark = new Holder<>();
+        mark.set(87); // int boxes to Integer.
+
+        System.out.println(course.get().toLowerCase());
+        System.out.println(mark.get() + 3); // Integer unboxes; prints 90.
+    }
+}
+~~~
+
+| Expression | Compile-time type | Runtime value |
+|---|---|---|
+| <code>course.get()</code> | String | "CSI247" |
+| <code>mark.get()</code> | Integer | 87 |
+| <code>mark.get() + 3</code> | int arithmetic | 90 |
+
+## 8. Exam-style practice
+
+1. Substitute Account through Holder&lt;Account&gt; and write resulting member signatures. [6]
+2. Explain the diamond without saying it creates an untyped object. [4]
+3. Prove invariance using the unsafe insertion argument. [8]
+4. Implement Pair&lt;K,V&gt; and trace Pair&lt;String,Integer&gt;. [10]
+5. Explain static-T and generic-array restrictions, then suggest alternatives. [10]
+
+<QuizRef src="sem3/csi247/generics/notes/generic-classes" id="generic-classes" />
+
+Continue with [Bounds, Comparable and Meaningful Operations](/docs/sem3/csi247/generics/notes/bounds-and-comparable).
