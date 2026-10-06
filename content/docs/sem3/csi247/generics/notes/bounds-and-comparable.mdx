@@ -1,0 +1,125 @@
+---
+title: "3. Bounds, Comparable and Meaningful Operations"
+description: "Restrict type parameters so generic code can safely use Number or Comparable operations, including multiple bounds."
+---
+
+An unbounded T is known only to be some reference type. A bound gives the compiler an additional guarantee and therefore additional legal operations.
+
+## 1. Upper bounds
+
+~~~java
+public class NumericBox<T extends Number> {
+    private final T value;
+
+    public NumericBox(T value) {
+        this.value = value;
+    }
+
+    public double doubled() {
+        return value.doubleValue() * 2; // Legal because Number declares it.
+    }
+}
+~~~
+
+<Mermaid chart={`flowchart TD
+  N["Number bound"] --> I["Integer accepted"]
+  N --> D["Double accepted"]
+  N --> L["Long accepted"]
+  N -.->|"not a Number"| S["String rejected"]`} caption="T extends Number means the actual type must be Number or one of its subclasses." />
+
+<code>extends</code> is used for both class and interface bounds.
+
+## 2. What the bound permits
+
+Without a bound:
+
+~~~java
+public static <T> double twice(T value) {
+    // return value.doubleValue() * 2; // Compiler does not know T has this method.
+    return 0;
+}
+~~~
+
+With <code>&lt;T extends Number&gt;</code>, the compiler knows every allowed T supports Number's public methods. It still does not know which exact numeric wrapper arrives.
+
+## 3. Comparable connects values to an ordering
+
+~~~java
+public static <T extends Comparable<T>> T maximum(T first, T second) {
+    if (first.compareTo(second) >= 0) {
+        return first;
+    }
+    return second;
+}
+~~~
+
+Read the header slowly:
+
+> T must be a type that can compare itself with another T.
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-3">
+  <div className="rounded-xl border border-fd-border p-4 text-center"><code>T</code><small className="block">candidate type</small></div>
+  <div className="rounded-xl border border-blue-500 p-4 text-center"><code>Comparable&lt;T&gt;</code><small className="block">required capability</small></div>
+  <div className="rounded-xl border border-emerald-600 p-4 text-center"><code>compareTo(T)</code><small className="block">operation now legal</small></div>
+</div>
+
+### Trace maximum("Data", "Structures")
+
+| Statement | Substitution/evaluation | Consequence |
+|---|---|---|
+| infer T | T is String | String implements Comparable&lt;String&gt; |
+| compare | <code>"Data".compareTo("Structures")</code> is negative | first is smaller |
+| return | second | "Structures" |
+
+## 4. Multiple bounds
+
+~~~java
+public static <T extends Shape & Comparable<T>> T largerShape(T a, T b) {
+    return a.compareTo(b) >= 0 ? a : b;
+}
+~~~
+
+The class bound, when present, must come first; interface bounds follow with <code>&amp;</code>. An allowed T must satisfy **all** bounds.
+
+## 5. Implementing Comparable correctly
+
+~~~java
+public final class Student implements Comparable<Student> {
+    private final String id;
+    private final int mark;
+
+    public Student(String id, int mark) {
+        this.id = id;
+        this.mark = mark;
+    }
+
+    @Override
+    public int compareTo(Student other) {
+        return Integer.compare(mark, other.mark);
+    }
+}
+~~~
+
+The sign matters:
+
+- negative: this comes before other;
+- zero: same ordering position;
+- positive: this comes after other.
+
+Avoid subtraction such as <code>mark - other.mark</code> for large integer ranges because it can overflow.
+
+## 6. Bound versus runtime test
+
+A bound rejects an unsuitable type at compilation. An <code>instanceof</code> test asks about an object during execution. Prefer a bound when the generic algorithm fundamentally requires a capability.
+
+## 7. Exam-style practice
+
+1. Decide which types satisfy <code>&lt;T extends Number&gt;</code>. [6]
+2. Explain every occurrence of T in <code>&lt;T extends Comparable&lt;T&gt;&gt;</code>. [6]
+3. Trace maximum for Integer, String, and Student. [9]
+4. Implement Student ordering and test negative/zero/positive results. [10]
+5. Write a valid multiple-bound header and explain the ordering rule. [6]
+
+<QuizRef src="sem3/csi247/generics/notes/bounds-and-comparable" id="bounds" />
+
+Continue with [Generic Methods and Generic Interfaces](/docs/sem3/csi247/generics/notes/generic-methods-and-interfaces).

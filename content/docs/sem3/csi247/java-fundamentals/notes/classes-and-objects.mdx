@@ -1,0 +1,208 @@
+---
+title: "4. User-Defined Classes and Objects"
+description: "Build and trace an Account class: state, constructors, methods, this, encapsulation, equality, toString, UML, and overloading."
+---
+
+A class is a blueprint. An object is one independently created instance of that class, with its own instance-variable values.
+
+## 1. Blueprint versus instance
+
+<Mermaid chart={`flowchart TD
+  C["Account class blueprint<br/>number: int<br/>balance: double<br/>deposit(), withdraw()"] --> A["acc1 object<br/>number 21347<br/>balance 38763.87"]
+  C --> B["acc2 object<br/>number 61342<br/>balance 0.00"]`} caption="One class definition can create many objects; each object owns separate state." />
+
+The reference variable is not the object:
+
+~~~java
+Account acc1 = new Account(21347, 38763.87);
+~~~
+
+<div className="not-prose my-6 flex flex-wrap items-center justify-center gap-4 rounded-2xl border border-fd-border p-5">
+  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/10 p-4 text-center font-mono">acc1<br/>ref 72</div><span className="text-2xl">→</span><div className="rounded-xl border-2 border-fd-border p-4 font-mono"><strong>Account object</strong><br/>number = 21347<br/>balance = 38763.87</div>
+</div>
+
+## 2. Class structure
+
+~~~java
+public class Account {
+    // Private instance variables: each Account object owns these values.
+    private int number;
+    private double balance;
+
+    // Constructors initialise a newly created object.
+
+    // Public methods form the object's usable interface.
+}
+~~~
+
+Private state prevents unrelated code from bypassing the class rules. Public methods decide which changes are valid.
+
+## 3. Constructors initialise objects
+
+A constructor has the class name and no return type. It runs after <code>new</code> allocates an object.
+
+~~~java
+public Account() {
+    this(0, 0.0); // Delegate to the two-parameter constructor.
+}
+
+public Account(int number, double balance) {
+    this.number = number;   // Field on the left, parameter on the right.
+    this.balance = balance;
+}
+~~~
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-4">
+  {[
+    ['new Account(7, 50)', 'request allocation'],
+    ['number = 7', 'copy first argument'],
+    ['balance = 50', 'copy second argument'],
+    ['reference returned', 'caller stores route'],
+  ].map(([title,note],index) => <div key={title} className="rounded-xl border border-fd-border p-4"><span className="text-xs font-bold text-blue-700 dark:text-blue-300">{index+1}</span><strong className="mt-2 block font-mono text-sm">{title}</strong><small className="mt-2 block text-fd-muted-foreground">{note}</small></div>)}
+</div>
+
+If a class declares no constructor, Java supplies a no-argument default constructor. Once any constructor is declared, that automatically supplied constructor is no longer added.
+
+## 4. this means the current object
+
+Inside an instance method, <code>this</code> refers to the receiver object—the object to the left of the dot at the call site.
+
+~~~java
+acc1.deposit(500.0);
+~~~
+
+<Mermaid chart={`flowchart LR
+  C["receiver: acc1"] -->|"this"| O["Account 21347"]
+  A["argument 500.0"] -->|"amount"| M["deposit frame"]
+  M --> U["this.balance = 39263.87"]`} caption="The receiver selects the object; the argument supplies the method parameter." />
+
+## 5. Setters, getters, and behaviour
+
+~~~java
+public int getNumber() {
+    return number; // Observe state without changing it.
+}
+
+public double getBalance() {
+    return balance;
+}
+
+public void setNumber(int newNumber) {
+    if (newNumber <= 0) {
+        throw new IllegalArgumentException("number must be positive");
+    }
+    number = newNumber;
+}
+
+public void deposit(double amount) {
+    if (amount <= 0) {
+        throw new IllegalArgumentException("deposit must be positive");
+    }
+    balance += amount; // Mutate this Account object's state.
+}
+
+public boolean withdraw(double amount) {
+    if (amount <= 0 || amount > balance) {
+        return false; // Reject invalid or unaffordable withdrawal.
+    }
+    balance -= amount;
+    return true;
+}
+~~~
+
+| Call | Condition with values | State change | Return |
+|---|---|---|---|
+| <code>acc.deposit(500)</code> | <code>500 &gt; 0</code> true | balance 1000 → 1500 | none |
+| <code>acc.withdraw(200)</code> | <code>200 &lt;= 1500</code> true | 1500 → 1300 | true |
+| <code>acc.withdraw(2000)</code> | <code>2000 &lt;= 1300</code> false | unchanged | false |
+
+## 6. Object equality and text
+
+<code>==</code> asks whether two variables contain the same reference. A class-defined <code>equals</code> can ask whether two distinct objects represent equal data.
+
+~~~java
+@Override
+public boolean equals(Object other) {
+    if (this == other) {
+        return true; // Same reference is certainly equal.
+    }
+    if (!(other instanceof Account account)) {
+        return false; // null or another class is not an Account.
+    }
+    return number == account.number
+        && Double.compare(balance, account.balance) == 0;
+}
+
+@Override
+public String toString() {
+    return String.format("Account{%d, P%.2f}", number, balance);
+}
+~~~
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-2">
+  <div className="rounded-xl border border-fd-border p-4"><strong>Identity</strong><p className="mb-0 mt-2 text-sm"><code>a == b</code>: one physical object?</p></div>
+  <div className="rounded-xl border border-fd-border p-4"><strong>Logical equality</strong><p className="mb-0 mt-2 text-sm"><code>a.equals(b)</code>: equal account data?</p></div>
+</div>
+
+## 7. UML class diagram
+
+<div className="not-prose my-6 mx-auto max-w-xl overflow-hidden rounded-xl border-2 border-fd-foreground">
+  <div className="border-b-2 border-fd-foreground p-3 text-center text-lg font-bold">Account</div>
+  <div className="border-b-2 border-fd-foreground p-3 font-mono text-sm">- number: int<br/>- balance: double</div>
+  <div className="p-3 font-mono text-sm">+ Account()<br/>+ Account(number: int, balance: double)<br/>+ getNumber(): int<br/>+ getBalance(): double<br/>+ deposit(amount: double): void<br/>+ withdraw(amount: double): boolean<br/>+ equals(other: Object): boolean<br/>+ toString(): String</div>
+</div>
+
+In UML, <code>-</code> means private and <code>+</code> means public.
+
+## 8. Signatures and overloading
+
+A method signature consists of its name and parameter types—not its return type.
+
+| Declaration | Signature |
+|---|---|
+| <code>deposit(double amount)</code> | <code>deposit(double)</code> |
+| <code>withdraw(double amount)</code> | <code>withdraw(double)</code> |
+| <code>transfer(Account other, double amount)</code> | <code>transfer(Account,double)</code> |
+
+Overloaded methods share a name but must have different parameter lists. Changing only the return type does not create a new signature.
+
+## 9. Complete tester
+
+~~~java
+public class AccountTester {
+    public static void main(String[] args) {
+        Account first = new Account(21347, 38763.87);
+        Account second = new Account(61342, 0.0);
+
+        second.deposit(500.0);
+        boolean withdrew = first.withdraw(1000.0);
+
+        System.out.println(first);
+        System.out.println(second);
+        System.out.println("withdrawal accepted = " + withdrew);
+        System.out.println("same account data = " + first.equals(second));
+    }
+}
+~~~
+
+## 10. Exam-style practice
+
+1. Draw the class/reference/object memory picture for two Accounts. [6]
+2. Write both constructors and explain constructor delegation. [8]
+3. Trace three deposits/withdrawals with evaluated guards and state after each call. [9]
+4. Distinguish identity from logical equality. [4]
+5. Convert the supplied Account requirements into UML. [8]
+6. Identify legal and illegal overloaded method pairs. [6]
+7. Write a transfer method that changes two Account objects only when sufficient funds exist. [12]
+
+<Accordions>
+<Accordion title="Transfer design and marking cues">
+
+The method must reject non-positive amounts and insufficient balance, subtract from <code>this.balance</code>, add to <code>other.balance</code>, and return an explicit success result. Award receiver/other distinction (2), guards (3), both state mutations (4), result contract (1), and boundary tests (2).
+
+</Accordion>
+</Accordions>
+
+<QuizRef src="sem3/csi247/java-fundamentals/notes/classes-and-objects" id="classes-and-objects" />
+
+Continue with [Arrays and Arrays of Objects](/docs/sem3/csi247/java-fundamentals/notes/arrays-and-objects).

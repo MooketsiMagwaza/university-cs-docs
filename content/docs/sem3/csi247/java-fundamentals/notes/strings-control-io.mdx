@@ -1,0 +1,202 @@
+---
+title: "2. Strings, Control Flow and Input/Output"
+description: "Trace string operations, conditions, loops, Scanner input, formatted output, and safe text-file reading and writing."
+---
+
+Programs transform data by making decisions and repeating actions. Input supplies the data; output exposes the result.
+
+## 1. Strings are objects
+
+A <code>String</code> is a reference type representing an immutable sequence of characters.
+
+<div className="not-prose my-6 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-fd-border p-5">
+  {['C','S','I','2','4','7'].map((value,index) => <div key={index} className="rounded-lg border-2 border-blue-500 bg-blue-500/5 p-3 text-center font-mono"><strong>{value}</strong><small className="mt-1 block text-fd-muted-foreground">{index}</small></div>)}
+</div>
+
+| Expression | Actual values | Result |
+|---|---|---|
+| <code>course.length()</code> | six characters | 6 |
+| <code>course.charAt(3)</code> | character at index 3 | '2' |
+| <code>course.indexOf("24")</code> | substring begins at index 3 | 3 |
+| <code>course.substring(3)</code> | from index 3 to the end | "247" |
+
+The last valid character index is <code>length() - 1</code>. Calling <code>charAt(length())</code> is outside the string.
+
+### Content equality versus reference identity
+
+~~~java
+String a = new String("CSI247");
+String b = new String("CSI247");
+
+System.out.println(a == b);      // false: two different object references.
+System.out.println(a.equals(b)); // true: the character sequences match.
+~~~
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-2">
+  <div className="rounded-xl border border-red-500 bg-red-500/5 p-4"><strong><code>==</code></strong><p className="mb-0 mt-2 text-sm">For references: “Are these routes identical?”</p></div>
+  <div className="rounded-xl border border-emerald-600 bg-emerald-500/5 p-4"><strong><code>.equals()</code></strong><p className="mb-0 mt-2 text-sm">For Strings: “Do these characters have equal content?”</p></div>
+</div>
+
+## 2. Selection: choosing one path
+
+An <code>if</code> statement evaluates a boolean condition. Only the selected branch executes.
+
+~~~java
+if (mark >= 80) {
+    grade = 'A';
+} else if (mark >= 70) {
+    grade = 'B';
+} else {
+    grade = 'C';
+}
+~~~
+
+<Mermaid chart={`flowchart TD
+  M["mark = 74"] --> A{"74 >= 80?"}
+  A -- false --> B{"74 >= 70?"}
+  B -- true --> C["grade = 'B'"]
+  B -- false --> D["grade = 'C'"]`} caption="A multi-branch if stops at the first true branch." />
+
+| Evaluated statement | Result | Consequence |
+|---|---|---|
+| <code>74 &gt;= 80</code> | false | skip A branch |
+| <code>74 &gt;= 70</code> | true | assign B |
+| later branches | not evaluated | chain is finished |
+
+<CommonMistake title="Trusting indentation instead of braces">
+Java uses braces, not visual indentation, to group statements. Without braces, only the next statement belongs to an <code>if</code> or loop.
+</CommonMistake>
+
+## 3. Repetition: choosing a loop
+
+| Loop | Best fit | Key idea |
+|---|---|---|
+| <code>for</code> | known number of iterations or array indexes | initialise, test, update |
+| <code>while</code> | repeat while a future condition remains true | may execute zero times |
+| <code>do-while</code> | menu or prompt that must run at least once | condition checked after body |
+
+<div className="not-prose my-6 grid gap-3 sm:grid-cols-3">
+  <div className="rounded-xl border border-fd-border p-4"><strong>for</strong><p className="mb-0 mt-2 text-sm">“Visit indexes 0 through length-1.”</p></div>
+  <div className="rounded-xl border border-fd-border p-4"><strong>while</strong><p className="mb-0 mt-2 text-sm">“Continue until EOF or a sentinel.”</p></div>
+  <div className="rounded-xl border border-fd-border p-4"><strong>do-while</strong><p className="mb-0 mt-2 text-sm">“Show the menu, then decide whether to repeat.”</p></div>
+</div>
+
+~~~java
+int total = 0;
+for (int i = 0; i < 4; i++) {
+    total += i;
+}
+~~~
+
+| Iteration | <code>i &lt; 4</code> | Statement | <code>total</code> after |
+|---:|---|---|---:|
+| 1 | <code>0 &lt; 4</code> true | <code>total += 0</code> | 0 |
+| 2 | <code>1 &lt; 4</code> true | <code>total += 1</code> | 1 |
+| 3 | <code>2 &lt; 4</code> true | <code>total += 2</code> | 3 |
+| 4 | <code>3 &lt; 4</code> true | <code>total += 3</code> | 6 |
+| stop | <code>4 &lt; 4</code> false | body skipped | 6 |
+
+## 4. Keyboard input with Scanner
+
+<Mermaid chart={`flowchart LR
+  K["Keyboard characters"] --> S["Scanner"]
+  S --> T{"hasNextInt()?"}
+  T -- true --> I["nextInt(): int"]
+  T -- false --> X["next(): discard bad token"]`} caption="Validate the next token before consuming it as a particular type." />
+
+~~~java
+import java.util.Scanner;
+
+public class ReadMark {
+    public static void main(String[] args) {
+        Scanner input = new Scanner(System.in);
+        int mark = -1;
+
+        while (mark < 0 || mark > 100) {
+            System.out.print("Enter a mark from 0 to 100: ");
+            if (input.hasNextInt()) {
+                mark = input.nextInt(); // Consume the validated integer token.
+            } else {
+                System.out.println("That token is not an integer.");
+                input.next();           // Consume the bad token or the loop stalls.
+            }
+        }
+
+        System.out.printf("Accepted: %d%n", mark);
+        input.close();
+    }
+}
+~~~
+
+### Why nextLine can look skipped
+
+<div className="not-prose my-6 rounded-2xl border border-fd-border p-5">
+  <div className="font-mono text-center">input buffer: <span className="rounded bg-blue-500/10 px-2 py-1">42</span><span className="rounded bg-red-500/10 px-2 py-1">\n</span><span className="rounded bg-emerald-500/10 px-2 py-1">Mpho\n</span></div>
+  <p className="mb-0 mt-4 text-sm"><code>nextInt()</code> consumes 42 but leaves the line ending. The next <code>nextLine()</code> consumes that empty remainder. Call <code>nextLine()</code> once to clear it before reading the name line.</p>
+</div>
+
+## 5. Formatted output
+
+| Specifier | Meaning | Example |
+|---|---|---|
+| <code>%d</code> | integer | <code>printf("%d", count)</code> |
+| <code>%s</code> | string/object text | <code>printf("%s", name)</code> |
+| <code>%c</code> | character | <code>printf("%c", grade)</code> |
+| <code>%.2f</code> | decimal with two places | <code>printf("%.2f", price)</code> |
+| <code>%n</code> | platform line separator | preferred over hard-coded newline |
+
+## 6. Text files: open, process, close
+
+Reading uses an existing source. Writing with <code>PrintWriter</code> normally creates a missing destination and overwrites an existing one.
+
+<Mermaid chart={`flowchart LR
+  F["data.txt"] --> R["FileReader"]
+  R --> S["Scanner"]
+  S --> P["program values"]
+  P --> W["PrintWriter"]
+  W --> O["out.txt"]`} caption="Streams connect an external file to Java values; close every owned resource." />
+
+~~~java
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.Scanner;
+
+public class CopyNonEmptyLines {
+    public static void main(String[] args) {
+        // try-with-resources closes both resources even when processing fails.
+        try (Scanner input = new Scanner(new FileReader("data.txt"));
+             PrintWriter output = new PrintWriter("out.txt")) {
+
+            while (input.hasNextLine()) {
+                String line = input.nextLine();
+                if (!line.isBlank()) {
+                    output.println(line);
+                }
+            }
+        } catch (IOException error) {
+            System.out.println("File operation failed: " + error.getMessage());
+        }
+    }
+}
+~~~
+
+## 7. Exam-style practice
+
+1. Trace <code>substring</code>, <code>charAt</code>, and <code>indexOf</code> on "CSI247". [6]
+2. Correct a two-statement <code>if</code> whose missing braces make one statement unconditional. [4]
+3. Choose and justify a loop for 50 marks, a menu, and values ending with -1. [6]
+4. Write robust input logic for an integer from 1 to 12. [8]
+5. Explain the lifecycle and failure risks of reading one text file and writing another. [8]
+
+<Accordions>
+<Accordion title="Marking cues">
+
+Award String answers only when indexes are shown. For control flow, award evaluated conditions and branch consequences. Robust Scanner logic needs both type validation and range validation, plus consumption of an invalid token. File answers must mention source existence, possible exceptions, overwrite behaviour, and guaranteed closing.
+
+</Accordion>
+</Accordions>
+
+<QuizRef src="sem3/csi247/java-fundamentals/notes/strings-control-io" id="strings-control-io" />
+
+Continue with [Methods, Parameters, Returns and Scope](/docs/sem3/csi247/java-fundamentals/notes/methods-parameters-scope).

@@ -1,0 +1,194 @@
+---
+title: "3. Methods, Parameters, Returns and Scope"
+description: "Follow a Java method call into its stack frame, distinguish arguments from parameters, and see pass-by-value and scope visually."
+---
+
+A method is a named block that performs one task. A call pauses the caller, creates a new method frame, copies argument values into parameters, executes the body, and optionally returns one value.
+
+## 1. Method anatomy
+
+~~~java
+public static double cubeVolume(double sideLength) {
+    double volume = sideLength * sideLength * sideLength;
+    return volume;
+}
+~~~
+
+<div className="not-prose my-6 grid gap-2 sm:grid-cols-5">
+  {[
+    ['public static', 'modifiers'],
+    ['double', 'return type'],
+    ['cubeVolume', 'method name'],
+    ['double sideLength', 'formal parameter'],
+    ['{ ... }', 'method body'],
+  ].map(([code,label]) => <div key={label} className="rounded-xl border border-fd-border p-3 text-center"><code className="font-bold">{code}</code><small className="mt-2 block text-fd-muted-foreground">{label}</small></div>)}
+</div>
+
+The declaration answers four questions: Who may call it? Is it attached to the class or an object? What value comes back? What input must the caller provide?
+
+## 2. A call is a temporary stack frame
+
+~~~java
+public static void main(String[] args) {
+    double result = cubeVolume(2.0);
+    System.out.println(result);
+}
+~~~
+
+<div className="not-prose my-6 mx-auto max-w-xl space-y-2 rounded-2xl border border-fd-border p-5">
+  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/10 p-4">
+    <strong>cubeVolume frame · active</strong>
+    <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-sm"><span>sideLength = 2.0</span><span>volume = 8.0</span></div>
+  </div>
+  <div className="rounded-xl border border-fd-border bg-fd-muted/20 p-4">
+    <strong>main frame · waiting</strong>
+    <div className="mt-2 font-mono text-sm">result = ?</div>
+  </div>
+</div>
+
+| Event | Active statement | Actual values | Consequence |
+|---:|---|---|---|
+| 1 | <code>cubeVolume(2.0)</code> | argument is 2.0 | create frame |
+| 2 | parameter initialisation | <code>sideLength = 2.0</code> | copied into frame |
+| 3 | multiplication | <code>2 × 2 × 2</code> | <code>volume = 8.0</code> |
+| 4 | <code>return volume</code> | return 8.0 | frame removed |
+| 5 | assignment in caller | <code>result = 8.0</code> | main resumes |
+
+## 3. Arguments and parameters
+
+An **argument** is the expression on the calling side. A **formal parameter** is the local variable named in the method declaration.
+
+<Mermaid chart={`flowchart LR
+  A["argument: total, value 10.0"] -->|"copy value"| P["parameter: price = 10.0"]
+  P --> C["called method changes price to 10.75"]
+  C --> R["caller total remains 10.0"]`} caption="Java is pass-by-value: the parameter receives a copy of the argument value." />
+
+~~~java
+public static double addTax(double price, double rate) {
+    price = price + price * rate / 100; // Changes the local parameter copy.
+    return price;                       // Caller changes only if it uses this result.
+}
+~~~
+
+### References are also passed by value
+
+For an array argument, Java copies the reference value. The parameter is a separate variable, but both references initially lead to the same object.
+
+~~~java
+public static void changeFirst(int[] values) {
+    values[0] = 99;       // Mutates the shared array object.
+    values = new int[3];  // Reassigns only the local parameter variable.
+    values[0] = -1;       // Mutates the new local array, not the caller's array.
+}
+~~~
+
+<div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
+  <div className="rounded-xl border border-fd-border p-4"><strong>Before local reassignment</strong><p className="mb-0 mt-2 font-mono text-sm">caller ref 51 → [99,2,3]<br/>parameter ref 51 ↗</p></div>
+  <div className="rounded-xl border border-fd-border p-4"><strong>After local reassignment</strong><p className="mb-0 mt-2 font-mono text-sm">caller ref 51 → [99,2,3]<br/>parameter ref 88 → [-1,0,0]</p></div>
+</div>
+
+## 4. Return values and void
+
+A value-returning method declares a result type. Every reachable path must return a compatible value. <code>return</code> immediately ends the current call.
+
+~~~java
+public static int sign(double value) {
+    if (value < 0) {
+        return -1;
+    }
+    if (value > 0) {
+        return 1;
+    }
+    return 0; // Required path for value == 0.
+}
+~~~
+
+A <code>void</code> method performs an action without producing a value expression. A bare <code>return;</code> can end it early.
+
+~~~java
+public static void boxString(String text) {
+    if (text.isEmpty()) {
+        return; // Nothing useful to draw.
+    }
+    System.out.println("[" + text + "]");
+}
+~~~
+
+## 5. Scope: where a name is visible
+
+<div className="not-prose my-6 space-y-3 rounded-2xl border border-fd-border p-5">
+  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/5 p-4"><strong>Class scope</strong><div className="mt-2 rounded-lg border border-fd-border p-3"><strong>Method scope: main</strong><div className="mt-2 rounded-lg border border-emerald-600 bg-emerald-500/5 p-3"><strong>Block scope: for loop</strong></div></div></div>
+</div>
+
+~~~java
+public class ScopeDemo {
+    private static int calls = 0; // Class field: visible to class methods.
+
+    public static int sumSquares(int limit) { // limit: parameter/local scope.
+        int sum = 0;                          // Local to this method call.
+        for (int i = 1; i <= limit; i++) {   // i: only inside this loop.
+            int square = i * i;               // square: loop block only.
+            sum += square;
+        }
+        calls++;
+        return sum;
+    }
+}
+~~~
+
+| Name | Begins | Ends | Can another method use it directly? |
+|---|---|---|---|
+| <code>calls</code> | class declaration | class end | yes, subject to modifiers |
+| <code>limit</code> | method parameter | method end | no |
+| <code>sum</code> | declaration in method | method end | no |
+| <code>i</code>, <code>square</code> | loop/block declaration | loop block end | no |
+
+Avoid shadowing a field with a local variable of the same name unless the distinction is intentional and explicit with <code>this</code>.
+
+## 6. Design and document one-task methods
+
+The lecture's process is reliable:
+
+1. state the task;
+2. identify inputs;
+3. choose parameter and return types;
+4. write pseudocode;
+5. implement one small body;
+6. test normal, boundary, and invalid cases.
+
+~~~java
+/**
+ * Returns the volume of a square-based pyramid.
+ * @param height perpendicular height; must be non-negative
+ * @param baseSide length of one square-base side; must be non-negative
+ * @return volume, or 0 when either dimension is negative
+ */
+public static double pyramidVolume(double height, double baseSide) {
+    if (height < 0 || baseSide < 0) {
+        return 0;
+    }
+    double baseArea = baseSide * baseSide;
+    return height * baseArea / 3.0; // Decimal prevents integer-style truncation.
+}
+~~~
+
+## 7. Exam-style practice
+
+1. Label every part of <code>public static boolean found(int[] a, int key)</code>. [6]
+2. Draw the call stack for <code>square(3) + square(4)</code>. [6]
+3. Explain primitive and array parameter behaviour using pass-by-value. [8]
+4. Find all names that are out of scope in a supplied nested-loop method. [6]
+5. Repair a value-returning method with a missing branch. [4]
+6. Design, document, implement, and test <code>readValueBetween(low, high)</code>. [12]
+
+<Accordions>
+<Accordion title="Marking guidance">
+
+Stack answers must show one frame per active call and that the first <code>square</code> frame returns before the second begins. Parameter answers must say that Java copies the argument value; for an array, that copied value is a reference. Scope answers earn credit only when the opening and closing boundary are identified.
+
+</Accordion>
+</Accordions>
+
+<QuizRef src="sem3/csi247/java-fundamentals/notes/methods-parameters-scope" id="methods-and-scope" />
+
+Continue with [User-Defined Classes and Objects](/docs/sem3/csi247/java-fundamentals/notes/classes-and-objects).
