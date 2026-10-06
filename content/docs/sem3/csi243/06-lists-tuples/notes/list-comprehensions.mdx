@@ -51,6 +51,83 @@ This is the template with `condition` left out entirely — a comprehension need
 
 **A variation: a tuple pattern in the generator** — Section 6 below, e.g. `[name | (name, mark) <- marks, mark >= 70]`, which destructures each pair as it is drawn instead of naming the whole tuple and taking it apart separately.
 
+## Before memorising syntax: the four-stage machine
+
+A comprehension is easier to understand when you stop seeing it as one dense line. For each possible input, Haskell repeats four conceptual stages:
+
+1. **Generate** a candidate value from the source list.
+2. **Test** the candidate with every Boolean condition, from left to right.
+3. **Produce** the output expression only when all tests pass.
+4. **Collect** each produced value into a new list, preserving generation order.
+
+Take this example:
+
+```haskell
+[x * x | x <- [1,2,3,4,5], even x]
+```
+
+Do not begin with the squaring. The generator and tests determine which values survive first:
+
+| Generated `x` | `even x` | Produce `x * x`? | Contribution to result |
+|---:|:---:|:---:|---:|
+| `1` | `False` | No | nothing |
+| `2` | `True` | Yes | `4` |
+| `3` | `False` | No | nothing |
+| `4` | `True` | Yes | `16` |
+| `5` | `False` | No | nothing |
+
+Only the produced values are collected, so the final result is `[4,16]`. A rejected candidate does not contribute a placeholder, `False`, `0`, or an empty sublist. It contributes nothing at all.
+
+This gives a dependable reading order:
+
+```text
+[ output | generator, test ]
+              1        2
+     3                         then collect as 4
+```
+
+The output is written first in the source code, but it is easiest to *reason* in this order: generator → tests → output → collection.
+
+### The symbols do four different jobs
+
+In `[x * x | x <- xs, even x]`:
+
+- the outer `[` and `]` say that the whole expression produces a list;
+- the pipe `|` separates the value to produce from the rules for producing it;
+- the generator arrow `<-` means “draw one value from this list,” not assignment;
+- the comma moves to the next qualifier and behaves like “and then.” Between Boolean tests, that means every test must be `True`.
+
+Do not confuse the two arrows used elsewhere in Haskell. `->` appears in function types and lambdas, while `<-` points the other way and appears here in generators (and later in `do` blocks for extracting an action's result).
+
+### Names come into scope from left to right
+
+The generator introduces its name. Before `x <- xs`, there is no new `x`; after it, later tests, later generators, and the output expression may use `x`.
+
+```haskell
+[(x, y) | x <- [1..3], y <- [x..3]]
+```
+
+This is valid because `x` is already in scope when Haskell reaches `y <- [x..3]`. Reversing the qualifiers is not equivalent:
+
+```haskell
+[(x, y) | y <- [x..3], x <- [1..3]]
+-- error: x is not in scope inside the first generator
+```
+
+The same rule explains why a test cannot use a name that is introduced only by a later generator. Read qualifiers from left to right and ask, “Which names have been introduced so far?”
+
+### The result type comes from the output expression
+
+The generator's element type and the output type do not have to be the same:
+
+```haskell
+[show x | x <- [1,2,3]]       -- [String]
+[(x, even x) | x <- [1,2,3]]  -- [(Integer, Bool)]
+[x > 2 | x <- [1,2,3]]        -- [Bool]
+```
+
+The source supplies integers in all three examples, but the expression before `|` decides what each surviving integer becomes. A comprehension always returns a list, even when exactly one or zero values survive.
+
 ## 1. The first part: the output function
 
 Everything **before** the pipe is the **output function**. It specifies what to apply to each input element. For every value that satisfies the second part, the output function is evaluated and its result is included in the constructed list.
@@ -219,6 +296,77 @@ ghci> [x | x <- [50..100], mod x 7 == 3]
   The results form the new list, in generation order.
   </Step>
 </StepByStep>
+
+### One problem, three equivalent views
+
+A comprehension can perform transformation, filtering, or both. Compare the same job—square only the even inputs—written three ways:
+
+```haskell
+-- Comprehension: output, source, condition
+squaredEvens xs = [x * x | x <- xs, even x]
+
+-- Higher-order pipeline: filter first, then map
+squaredEvensMap xs = map (\x -> x * x) (filter even xs)
+
+-- Explicit recursion: spell out the traversal and choices
+squaredEvensRec [] = []
+squaredEvensRec (x:xs)
+  | even x    = x * x : squaredEvensRec xs
+  | otherwise = squaredEvensRec xs
+```
+
+These definitions have the same data flow:
+
+| Comprehension part | `map`/`filter` part | Recursive part |
+|---|---|---|
+| `x <- xs` | consume `xs` | match `(x:xs)` |
+| `even x` | `filter even` | guard `even x` |
+| `x * x` | `map (\x -> x * x)` | cons `x * x` |
+| no surviving value | filtered value disappears | recurse without consing |
+| input exhausted | pipeline reaches `[]` | base case returns `[]` |
+
+Use this correspondence to debug. If you are unsure what a comprehension means, translate it into `map` and `filter`, or write the two recursive equations. If the translation does not describe the intended job, the comprehension probably does not either.
+
+<Callout type="info" title="Order of transform and test">
+In `[x * x | x <- xs, even x]`, the test uses the original `x`, then the output squares it. `map (\x -> x * x) (filter even xs)` matches that order. Writing `filter even (map (\x -> x * x) xs)` asks whether each *square* is even. It happens to keep the same elements for this particular property, but that is not generally true. For `[x + 1 | x <- xs, even x]`, testing before and after adding one gives opposite parity.
+</Callout>
+
+### A writing recipe when the blank page feels confusing
+
+Suppose the question says: “From a list of marks, return the names of students who scored at least 70.” Build the comprehension in small decisions:
+
+1. **What list am I reading?** `marks`
+2. **What does one element look like?** A pair `(name, mark)`
+3. **What pattern gives useful names to its parts?** `(name, mark) <- marks`
+4. **Which elements survive?** `mark >= 70`
+5. **What should one output element be?** `name`
+6. **Place those pieces in the template.**
+
+```haskell
+[name | (name, mark) <- marks, mark >= 70]
+```
+
+The type follows from those same choices. If `marks :: [(String, Integer)]`, then the generator binds `name :: String` and `mark :: Integer`; the test produces `Bool`; the output produces `String`; therefore the entire comprehension produces `[String]`.
+
+### Empty results need no special case
+
+There are two different ways to get `[]`:
+
+```haskell
+[x * 2 | x <- []]                  -- source has no candidates
+[x * 2 | x <- [1,3,5], even x]     -- candidates exist, but all fail
+```
+
+Both return `[]`. The second result does not indicate an error; it is the correct list of all outputs whose inputs passed the tests—there simply were none. Unlike manual recursion, a comprehension needs no separate written base case because the list machinery supplies it.
+
+<HaskellPlayground
+  title="Trace and change a list comprehension"
+  description="Predict the surviving inputs and their output values first. Then change a test, swap generator order, or make the second generator depend on the first."
+  initialCode={`main = do
+  print [x * x | x <- [1..10], odd x]
+  print [(x, y) | x <- [1,2], y <- [10,20]]
+  print [(x, y) | x <- [1..4], y <- [x..4], x + y > 4]`}
+/>
 
 ## 4. Multiple generators
 

@@ -36,12 +36,21 @@ type Expr =
   | { kind: 'literal'; value: Value; position: Position }
   | { kind: 'variable'; name: string; position: Position }
   | { kind: 'list'; items: Expr[]; position: Position }
+  | { kind: 'comprehension'; output: Expr; qualifiers: ComprehensionQualifier[]; position: Position }
   | { kind: 'range'; start: Expr; end?: Expr; position: Position }
   | { kind: 'tuple'; items: Expr[]; position: Position }
   | { kind: 'application'; fn: Expr; argument: Expr; position: Position }
   | { kind: 'infix'; operator: string; left: Expr; right: Expr; position: Position }
   | { kind: 'lambda'; parameters: string[]; body: Expr; position: Position }
   | { kind: 'if'; condition: Expr; whenTrue: Expr; whenFalse: Expr; position: Position };
+
+type ComprehensionPattern =
+  | { kind: 'variable'; name: string; position: Position }
+  | { kind: 'tuple'; names: string[]; position: Position };
+
+type ComprehensionQualifier =
+  | { kind: 'generator'; pattern: ComprehensionPattern; source: Expr; position: Position }
+  | { kind: 'guard'; condition: Expr; position: Position };
 
 type CharValue = { kind: 'char'; value: string };
 type TupleValue = { kind: 'tuple'; items: Value[] };
@@ -61,9 +70,9 @@ type Value = number | boolean | string | CharValue | TupleValue | Value[] | Lazy
 type Environment = Map<string, Value>;
 type EvalContext = { steps: number; maxSteps: number };
 
-const MULTI_OPERATORS = ['::', '->', '..', '==', '/=', '<=', '>=', '&&', '||', '++'];
+const MULTI_OPERATORS = ['::', '->', '<-', '..', '==', '/=', '<=', '>=', '&&', '||', '++'];
 const SINGLE_OPERATORS = new Set(['+', '-', '*', '/', '^', '<', '>', '=', ':', '.', '$']);
-const PUNCTUATION = new Set(['(', ')', '[', ']', ',', '\\']);
+const PUNCTUATION = new Set(['(', ')', '[', ']', ',', '|', '\\']);
 
 class Tokenizer {
   private index = 0;
@@ -358,7 +367,41 @@ class Parser {
       return { kind: 'list', items: [], position: start };
     }
 
-    const first = this.parseExpression(0, new Set());
+    const first = this.parseExpression(0, new Set(['|']));
+    if (this.current().text === '|') {
+      this.consume('|');
+      const qualifiers: ComprehensionQualifier[] = [];
+
+      while (true) {
+        if (this.isGeneratorStart()) {
+          const pattern = this.parseComprehensionPattern();
+          const arrow = this.consume('<-');
+          qualifiers.push({
+            kind: 'generator',
+            pattern,
+            source: this.parseExpression(0, new Set()),
+            position: arrow,
+          });
+        } else {
+          const position = this.current();
+          qualifiers.push({ kind: 'guard', condition: this.parseExpression(0, new Set()), position });
+        }
+
+        if (this.current().text !== ',') break;
+        this.consume(',');
+      }
+
+      if (qualifiers.length === 0 || qualifiers[0].kind !== 'generator') {
+        throw new SimulatorError(
+          'Parse error',
+          'A list comprehension needs a generator after the pipe.',
+          start,
+          'Use a form such as [x * 2 | x <- [1..5]].',
+        );
+      }
+      this.consume(']');
+      return { kind: 'comprehension', output: first, qualifiers, position: start };
+    }
     if (this.current().text === '..') {
       this.consume('..');
       const end = this.current().text === ']' ? undefined : this.parseExpression(0, new Set());
@@ -373,6 +416,37 @@ class Parser {
     }
     this.consume(']');
     return { kind: 'list', items, position: start };
+  }
+
+  private isGeneratorStart() {
+    if (this.current().kind === 'identifier' && this.peek(1).text === '<-') return true;
+    if (this.current().text !== '(') return false;
+
+    let offset = 1;
+    let names = 0;
+    while (this.peek(offset).kind === 'identifier') {
+      names += 1;
+      offset += 1;
+      if (this.peek(offset).text !== ',') break;
+      offset += 1;
+    }
+    return names >= 2 && this.peek(offset).text === ')' && this.peek(offset + 1).text === '<-';
+  }
+
+  private parseComprehensionPattern(): ComprehensionPattern {
+    if (this.current().kind === 'identifier') {
+      const name = this.consumeIdentifier();
+      return { kind: 'variable', name: name.text, position: name };
+    }
+
+    const start = this.consume('(');
+    const names = [this.consumeIdentifier().text];
+    while (this.current().text === ',') {
+      this.consume(',');
+      names.push(this.consumeIdentifier().text);
+    }
+    this.consume(')');
+    return { kind: 'tuple', names, position: start };
   }
 
   private parseParenthesized(): Expr {
@@ -527,6 +601,47 @@ function evaluate(expression: Expr, environment: Environment, context: EvalConte
     }
     case 'list':
       return expression.items.map((item) => evaluate(item, environment, context));
+    case 'comprehension': {
+      const results: Value[] = [];
+
+      const collect = (qualifierIndex: number, local: Environment): void => {
+        if (results.length > 10_000) {
+          throw new SimulatorError(
+            'Runtime error',
+            'The list comprehension produced more than 10,000 values.',
+            expression.position,
+            'Use a smaller range or add a condition that bounds the result.',
+          );
+        }
+        if (qualifierIndex === expression.qualifiers.length) {
+          results.push(evaluate(expression.output, local, context));
+          return;
+        }
+
+        const qualifier = expression.qualifiers[qualifierIndex];
+        if (qualifier.kind === 'guard') {
+          if (expectBoolean(evaluate(qualifier.condition, local, context), qualifier.position)) {
+            collect(qualifierIndex + 1, local);
+          }
+          return;
+        }
+
+        const source = evaluate(qualifier.source, local, context);
+        for (const value of iterable(source)) {
+          const next = new Map(local);
+          if (qualifier.pattern.kind === 'variable') {
+            next.set(qualifier.pattern.name, value);
+          } else {
+            const tuple = expectTuple(value, qualifier.pattern.names.length);
+            qualifier.pattern.names.forEach((name, index) => next.set(name, tuple.items[index]));
+          }
+          collect(qualifierIndex + 1, next);
+        }
+      };
+
+      collect(0, new Map(environment));
+      return results;
+    }
     case 'tuple':
       return { kind: 'tuple', items: expression.items.map((item) => evaluate(item, environment, context)) };
     case 'range': {
@@ -536,8 +651,8 @@ function evaluate(expression: Expr, environment: Environment, context: EvalConte
         if (Math.abs(end - start) > 10_000) {
           throw new SimulatorError('Runtime error', 'Finite ranges are limited to 10,001 values in the practice runner.', expression.position);
         }
-        const direction = start <= end ? 1 : -1;
-        return Array.from({ length: Math.abs(end - start) + 1 }, (_, index) => start + index * direction);
+        if (end < start) return [];
+        return Array.from({ length: end - start + 1 }, (_, index) => start + index);
       }
       return {
         kind: 'lazy-list',

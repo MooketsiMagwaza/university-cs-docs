@@ -36,6 +36,33 @@ main = do
   print (scanr (+) 0 [1,2,3])`,
   },
   {
+    label: 'Factorial with foldr',
+    code: `newFactorial :: Integer -> Integer
+newFactorial n = foldr (*) 1 [1..n]
+
+main = do
+  let number = 6
+  print (newFactorial number)`,
+  },
+  {
+    label: 'Partial application with filter',
+    code: `isThere :: String -> String -> Bool
+isThere wanted current = wanted == current
+
+goBackMachine items wanted = if null items then ["Null?"] else filter (isThere wanted) items
+
+main = do
+  let fruit = ["apple", "banana", "cherry", "apple"]
+  let choice = "banana"
+  print (goBackMachine fruit choice)`,
+  },
+  {
+    label: 'List comprehensions',
+    code: `main = do
+  print [x * x | x <- [1..10], odd x]
+  print [(x, y) | x <- [1,2], y <- [10,20], x + y > 11]`,
+  },
+  {
     label: 'Lazy infinite list',
     code: `main = print (take 5 (map (*2) [1..]))`,
   },
@@ -199,7 +226,7 @@ export function HaskellPlayground({
       </div>
 
       <div className="border-t border-fd-border bg-fd-muted/20 px-4 py-3 text-xs leading-5 text-fd-muted-foreground sm:px-6">
-        Runs locally in your browser. Supports expressions, one-line function definitions, lambdas, finite and lazy ranges,
+        Runs locally in your browser. Supports expressions, one-line function definitions, lambdas, finite and lazy ranges, list comprehensions,
         <code className="mx-1">if/then/else</code>, <code>main = do</code> with <code>let</code>/<code>print</code>/<code>putStrLn</code>,
         and the course list functions. Pattern matching, guards, imports, user-defined types, and arbitrary IO still need GHC or GHCi.
       </div>

@@ -137,6 +137,103 @@ That substitution picture is the fastest way to predict what a `foldr` does.
   }
 ]} />
 
+### Worked program: factorial with `foldr`
+
+Factorial multiplies every positive integer from `1` through `n`:
+
+```text
+4! = 1 × 2 × 3 × 4 = 24
+```
+
+That sentence already describes a fold: the input list is `[1..n]`, the combining function is multiplication, and multiplication's identity value is `1`.
+
+```haskell
+newFactorial :: Integer -> Integer
+newFactorial 0 = 1
+newFactorial n = foldr (*) 1 [1..n]
+```
+
+For `n = 4`, substitute the range and then use the `foldr` nesting rule:
+
+```haskell
+newFactorial 4
+= foldr (*) 1 [1,2,3,4]
+= 1 * (2 * (3 * (4 * 1)))
+= 24
+```
+
+Each of the three arguments to `foldr` has a specific job:
+
+| Argument | Value here | Job |
+|---|---|---|
+| Combining function | `(*)` | Multiply the current number by the folded remainder |
+| Starting value | `1` | Supply the result for an empty range and avoid changing the product |
+| Input list | `[1..n]` | Generate the factors from 1 through `n` |
+
+The explicit equation `newFactorial 0 = 1` is mathematically clear, but it is actually redundant in this definition. In Haskell, `[1..0]` is `[]`, so:
+
+```haskell
+foldr (*) 1 [1..0]
+= foldr (*) 1 []
+= 1
+```
+
+That is exactly `0!`. Therefore this shorter definition gives the same result for every non-negative input:
+
+```haskell
+newFactorial n = foldr (*) 1 [1..n]
+```
+
+<CommonMistake title="Negative input silently gives the wrong mathematical answer">
+For `n < 0`, `[1..n]` is also empty, so the short definition returns `1`. Factorial is not defined for negative integers. A production version should reject that input explicitly, for example with a guard: `newFactorial n | n < 0 = error "factorial: negative input" | otherwise = foldr (*) 1 [1..n]`.
+</CommonMistake>
+
+Here is a complete terminal program based on the example. The statements after `do` must be indented so Haskell knows they belong to the same block:
+
+```haskell
+newFactorial :: Integer -> Integer
+newFactorial 0 = 1
+newFactorial n = foldr (*) 1 [1..n]
+
+main :: IO ()
+main = do
+  putStrLn "Enter num:"
+  inputText <- getLine
+  let number = read inputText :: Integer
+  print (newFactorial number)
+```
+
+The program crosses between pure code and `IO` in small steps:
+
+1. `putStrLn "Enter num:"` prints the prompt.
+2. `getLine :: IO String` describes an input action. The bind arrow in `inputText <- getLine` performs that action and gives its resulting `String` the name `inputText`.
+3. `read inputText :: Integer` parses the string as an integer. The annotation is needed because `read` can produce many different readable types.
+4. `newFactorial number` is an ordinary pure calculation.
+5. `print` converts the result to text and writes it.
+
+For input `5`, the interaction is:
+
+```text
+Enter num:
+5
+120
+```
+
+`read` throws an exception when the user enters text that is not an integer. Later, safer application code can use `readMaybe` from `Text.Read`; the direct `read` keeps this first example focused on the fold.
+
+The browser practice runner does not simulate terminal input, so use a `let` to choose the test value and change it between runs:
+
+<HaskellPlayground
+  title="Run factorial as a fold"
+  description="Change number to 0, 1, or a larger non-negative integer and expand the right-associated multiplication by hand before running it."
+  initialCode={`newFactorial :: Integer -> Integer
+newFactorial n = foldr (*) 1 [1..n]
+
+main = do
+  let number = 6
+  print (newFactorial number)`}
+/>
+
 ## 2. Defining Prelude functions as folds
 
 Most of Chapter 6's single-value functions are one-liners once you have `foldr`:
