@@ -1,20 +1,93 @@
 ---
 title: "3. Values, Names, Types, and Text"
-description: "Learn literals, identifiers, types, characters, strings, quotation marks, and function application before printing."
+description: "Understand what a literal actually is, why quotation marks exist at all, the real difference between Char and String, and how spaces apply functions — with every rule tested by a runnable program."
 ---
 
+The previous lesson used `putStrLn "Hello, World!"` without stopping to ask why the message needed quotation marks, or what would happen without them. This lesson answers exactly that, from first principles, and does not move on until each rule has been tested in a real `main`.
 
+## 1. What a literal actually is
 
-A **literal** is a value written directly in source text. An **identifier** is a program name.
+A **literal** is a value written directly in your source code, spelled out completely, rather than computed from something else or looked up by name.
 
 | Literal | Type | Meaning |
 |---|---|---|
-| `42` | numeric | A number |
-| `True` | `Bool` | A truth value |
-| `'A'` | `Char` | One character |
-| `"Hello"` | `String` | A sequence of characters |
+| `42` | numeric | A number, spelled out digit by digit |
+| `True` | `Bool` | A truth value, one of exactly two |
+| `'A'` | `Char` | One character, wrapped in single quotes |
+| `"Hello"` | `String` | A sequence of characters, wrapped in double quotes |
 
-## Names are not text
+An **identifier** is different in kind, not just in spelling: it is a *name* the program looks up, not a value spelled out in place. `cube`, `main`, and `putStrLn` are identifiers. Haskell has to look each one up in whatever is currently in scope to find out what it refers to; a literal needs no lookup at all, because it already **is** the value.
+
+| Question | Answer |
+|---|---|
+| **What?** | A literal is a value spelled out directly in source code; an identifier is a name that must be looked up |
+| **Why does the distinction matter?** | The parser has to decide, for every word it reads, whether that word *is* a value or *names* one — and it makes that decision before anything is evaluated |
+| **When do you need to know this?** | Every time you write a message, a character, or any text — getting it wrong is the single most common first-week mistake in this course |
+| **How does Haskell tell them apart?** | By punctuation alone: quotation marks mark a literal; their absence means "look this word up" |
+
+<Mermaid chart={`flowchart TD
+  A["A word in your source code"] --> B{"Is it wrapped in quotation marks?"}
+  B -- "Yes, double quotes" --> C["A String literal — the value IS the text between the quotes"]
+  B -- "Yes, single quotes" --> D["A Char literal — the value IS the one character between the quotes"]
+  B -- "No quotes at all" --> E["An identifier — Haskell looks it up as a program name"]
+  E --> F{"Is it defined anywhere in scope?"}
+  F -- "Yes" --> G["Haskell uses whatever that name refers to"]
+  F -- "No" --> H["Error: Variable not in scope"]`} caption="This is the very first decision Haskell's parser makes about any bare word — before types, before evaluation, before anything else. Quotation marks are not decoration; they are the only thing that tells Haskell 'this is data, not a name.'" />
+
+### Why quotation marks exist at all — the actual reason
+
+Without quotation marks, a program would have no way to write text that *isn't* mistaken for a request to look up a name. Consider what `Hello` alone would have to mean: either "the five-letter word Hello, as data" or "go and find whatever is named `Hello` in this program." Haskell cannot read your mind about which one you intend, so it commits to one rule, applied with no exceptions: **an unquoted word is always a name to look up; quotation marks are the only way to write a literal piece of text.** This is not a Haskell quirk — it is the same reason every programming language needs some marker for string literals — but Haskell enforces it with zero tolerance for "it looked like a sentence, so I assumed it meant text."
+
+```haskell
+-- File: Quoting.hs
+main :: IO ()
+main = do
+  putStrLn "Hello"      -- a String literal: the value IS the text Hello
+  print (length "Hello") -- length needs a real String to count
+```
+
+```text
+Hello
+5
+```
+
+Run the broken version to see exactly what goes wrong when the quotes are missing:
+
+```haskell
+-- File: QuotingBroken.hs — do not expect this to compile
+main :: IO ()
+main = do
+  putStrLn Hello
+```
+
+```text
+QuotingBroken.hs:4:12: error: [GHC-88464]
+    Variable not in scope: Hello
+```
+
+Nothing about *evaluating* the program went wrong — the program never got that far. `Hello` was treated as a name, Haskell searched for a definition of that name, found none, and rejected the program before running a single line. This is exactly the mechanism the flowchart above describes, now seen as a real compiler error instead of an abstract rule.
+
+<Quiz title="Check: literals versus identifiers" questions={[
+  {
+    question: "Why does putStrLn Hello fail with 'Variable not in scope: Hello' rather than simply printing the word Hello?",
+    options: [
+      "putStrLn only accepts numbers, not words",
+      "Hello has no quotation marks, so Haskell treats it as an identifier to look up rather than as literal text — and no such identifier has been defined",
+      "Hello is spelled with a capital letter, which putStrLn cannot accept",
+      "This is a GHC bug that only affects the word Hello specifically"
+    ],
+    correctIndex: 1,
+    explanation: "Quotation marks are the only thing that makes a word a String literal. With no quotes, Hello can only mean one thing to the parser: 'look up a name called Hello.' Since nothing by that name exists, GHC reports exactly that — a missing variable — before putStrLn is ever reached.",
+    optionFeedback: [
+      "putStrLn's whole job is displaying String values, whether they contain letters, digits, or punctuation; the type of characters inside the string is not the issue here.",
+      "Correct. This is the rule stated above with no exceptions: an unquoted word is always a name to look up, and Hello was never defined as one.",
+      "Capitalisation changes what kind of identifier Haskell expects (a data constructor rather than an ordinary name) — it does not cause this particular error, and lowercase hello would fail exactly the same way, just with a different explanation once looked up.",
+      "This is standard, fully documented behaviour that happens for any undefined identifier — try putStrLn anythingUndefined and the same class of error appears."
+    ]
+  }
+]} />
+
+## 2. Names are not text — three ways to write "H"
 
 <ComparisonTable
   columns={[
@@ -23,43 +96,234 @@ A **literal** is a value written directly in source text. An **identifier** is a
     { header: 'Why', key: 'why' }
   ]}
   rows={[
-    { source: 'Hello', meaning: 'A program name', why: 'No quotation marks' },
-    { source: '"Hello"', meaning: 'A String value', why: 'Double quotes mark text' },
-    { source: "'H'", meaning: 'One Char value', why: 'Single quotes mark one character' }
+    { source: 'Hello', meaning: 'A program name (an identifier)', why: 'No quotation marks — this is the "look it up" branch of the flowchart above' },
+    { source: '"Hello"', meaning: 'A String value', why: 'Double quotes mark a sequence of characters as literal text' },
+    { source: "'H'", meaning: 'One Char value', why: 'Single quotes mark exactly one character as literal text' }
   ]}
 />
-
-Quotation marks instruct the parser to treat the enclosed characters as data.
 
 ```text
 ghci> :type 'A'
 'A' :: Char
 ghci> :type "A"
 "A" :: String
+ghci> :type A
 ```
 
-`'AB'` is invalid because a `Char` contains exactly one character. `"AB"` is a valid two-character `String`.
+The third line, typed with no quotes at all, does **not** ask "what type does the letter A have" — there is no such expression. It asks GHCi to look up an identifier named `A`, and since capitalised names are reserved for data constructors, GHCi reports something about an undefined constructor, not a type for a letter.
 
-## Spaces apply functions
+`'AB'` is invalid because a `Char` holds exactly one character — no more, no fewer. `"AB"` is a perfectly valid two-character `String`. This is not a stylistic preference; it is baked into what each type *is*: `Char` is defined to represent a single character, and `String` is defined as a list of characters, so a `String` of length one, `"A"`, and a `Char`, `'A'`, are still two different types even though they look almost identical on the page.
+
+### Why Char and String are genuinely different types, not two spellings of the same thing
+
+It helps to see the consequence directly, in a program that tries to treat them as interchangeable:
+
+```haskell
+-- File: CharVsString.hs
+main :: IO ()
+main = do
+  print ('A' == 'A')       -- Char compared with Char: fine
+  print ("A" == "A")       -- String compared with String: fine
+  -- print ('A' == "A")    -- would NOT type-check: Char and String are different types
+  print (length "Hello")   -- length works on the String; it counts 5 characters
+  -- print (length 'H')    -- would NOT type-check: a single Char has no "length" to count
+```
+
+```text
+True
+True
+5
+```
+
+The two commented-out lines are left in on purpose, exactly as `CharVsString.hs` would show them if you tried to compile with them uncommented: GHC would refuse before running anything, with a type error naming the mismatch between `Char` and `[Char]` (`String`'s real name). `length` is defined for lists — and a `String` is a list of `Char`, while a bare `Char` is not a list of anything.
+
+<Quiz title="Check: Char vs String" questions={[
+  {
+    question: "Why does length \"Hello\" work (giving 5) while length 'H' would be rejected by the type checker?",
+    options: [
+      "length only works on words longer than one letter",
+      "String is a list of characters, and length counts the elements of a list; a bare Char is a single value, not a list, so there is nothing for length to count",
+      "'H' is not a valid Char literal",
+      "length secretly converts 'H' into \"H\" first, so both should work identically"
+    ],
+    correctIndex: 1,
+    explanation: "length's job is counting elements in a list. \"Hello\" :: String, and String is defined as [Char] — a list — so length \"Hello\" counts its five Char elements. 'H' :: Char is one value, not a list at all, so length has nothing to apply to.",
+    optionFeedback: [
+      "length \"H\" (a one-character String) works fine and reports 1 — length is not restricted by word length, only by whether it is given a list.",
+      "Correct. This is exactly the structural difference the lesson is building toward: String is [Char], a list; Char is one element, not a list.",
+      "'H' is a perfectly valid Char literal — single quotes around exactly one character is the definition of a valid Char.",
+      "There is no automatic conversion from Char to String anywhere in this rule; the two remain distinct types unless you explicitly build a one-element list, [\'H\'], which does equal \"H\"."
+    ]
+  }
+]} />
+
+## 3. Spaces apply functions
+
+A single space between two things means **function application**: apply the thing on the left to the thing on the right.
 
 ```haskell
 -- Apply the already-defined function square to the value 4.
 square 4
 ```
 
-This is **function application**. Multiple applications group left:
+This is not punctuation and not a separator between unrelated words — it is an operator every bit as real as `+`, just spelled as a blank space instead of a symbol. Multiple applications group to the **left**, exactly the way `first second third` would in ordinary left-to-right reading:
 
 ```text
 f x y = (f x) y
 ```
 
-Therefore `print Hello World` is not one message. Haskell sees applications involving three program names because no quotation marks identify `Hello World` as text.
+Read this as: first apply `f` to `x`, producing some result; then apply *that result* to `y`. This is why `print Hello World` from the previous lesson does not mean "print the sentence Hello World" — with no quotation marks, Haskell sees three identifiers and applies them left to right: first `print` to `Hello`, then that whole result to `World`.
 
-## Common mistakes
+<StepByStep>
+  <StepByStepTitle>Why print Hello World is not one message</StepByStepTitle>
 
-| Attempt | Cause | Correction |
-|---|---|---|
-| `hello` | Identifier, not text | `"hello"` |
-| `'hello'` | More than one character inside single quotes | `"hello"` |
-| `"A" == 'A'` | String and Char are different types | Compare like with like |
-| `true` | Haskell is case-sensitive | `True` |
+  <Step number={1}>
+  Haskell scans `print Hello World` and finds three space-separated words, none in quotes: `print`, `Hello`, `World`.
+  </Step>
+
+  <Step number={2}>
+  With no quotation marks, all three are identifiers — names to look up — never literal text, regardless of how the words read to a human.
+  </Step>
+
+  <Step number={3}>
+  Application groups left, so this is parsed as `(print Hello) World`: apply `print` to `Hello` first.
+  </Step>
+
+  <Step number={4}>
+  `Hello` was never defined anywhere in the program, so Haskell reports `Variable not in scope: Hello` before `print` or `World` are even considered.
+  </Step>
+</StepByStep>
+
+```haskell
+-- File: Greeting.hs
+main :: IO ()
+main = do
+  putStrLn "one word applied to text:"
+  putStrLn "Hello World"        -- correct: one String literal
+```
+
+```text
+one word applied to text:
+Hello World
+```
+
+<Quiz title="Check: function application by spacing" questions={[
+  {
+    question: "f x y = (f x) y is given as the rule for how application groups. Applied to square 3 4 (imagining square took two arguments), what would this mean?",
+    options: [
+      "Apply square to the pair (3, 4) at once",
+      "First apply square to 3, then apply whatever that produces to 4",
+      "Apply square to 4 first, then to 3",
+      "It is meaningless; functions can only take one argument written this way"
+    ],
+    correctIndex: 1,
+    explanation: "Left-associativity means square 3 4 is (square 3) 4: square is applied to 3 first, and the result of that is then applied to 4 — never the reverse, and never as a single combined pair.",
+    optionFeedback: [
+      "That is how a tuple argument would be written explicitly, as square (3, 4) — space-separated application never bundles arguments into a pair automatically.",
+      "Correct. This is exactly the left-grouping rule: (square 3) 4, applied strictly in the order written.",
+      "Application always proceeds left to right in the order the arguments are written, never reversed.",
+      "This is precisely how Haskell writes a function taking two arguments, one space at a time — square 3 4 is completely ordinary syntax, not an error."
+    ]
+  }
+]} />
+
+## 4. Putting it together: a program that exercises every rule above
+
+```haskell
+-- File: ValuesDemo.hs
+-- PURPOSE: Show a literal, an identifier, a Char, and a String,
+-- and prove that each behaves according to its own type.
+
+greetingWord :: String
+greetingWord = "Hello"      -- greetingWord is an identifier; "Hello" is the String literal it names
+
+firstLetter :: Char
+firstLetter = 'H'            -- a Char literal: exactly one character
+
+main :: IO ()
+main = do
+  putStrLn greetingWord              -- looks up the identifier, then prints the String it refers to
+  print firstLetter                   -- print shows a Char in its readable form, with quotes
+  print (length greetingWord)         -- counts the characters in the String
+  print (greetingWord == "Hello")     -- comparing two String values
+```
+
+```text
+Hello
+'H'
+5
+True
+```
+
+Two things worth noticing in that output, both direct consequences of the rules above:
+
+- `print firstLetter` shows `'H'` **with** single quotes, because `print` always shows a value in Haskell-readable form, and the readable form of a `Char` includes the quotes that mark it as one.
+- `greetingWord` is an identifier throughout the whole program — it is looked up every time it is used — but the *value* it refers to, `"Hello"`, never changes. Using the same name twice (`putStrLn greetingWord` and `greetingWord == "Hello"`) reads the same fixed value both times, for the same reason `taxRate` kept meaning `0.14` in the immutability lesson.
+
+## 5. Common mistakes, with the actual reason each one fails
+
+| Attempt | Cause | Why it actually fails | Correction |
+|---|---|---|---|
+| `hello` | Identifier, not text | No quotes means "look this name up"; if nothing is named `hello`, it is not in scope | `"hello"` |
+| `'hello'` | More than one character inside single quotes | `Char` is defined to hold exactly one character; five characters cannot fit in that type | `"hello"` |
+| `"A" == 'A'` | `String` and `Char` are different types | `==` requires both sides to share one type; comparing across types is rejected before evaluation | Compare like with like: `"A" == "A"` or `'A' == 'A'` |
+| `true` | Haskell is case-sensitive | `true` is looked up as an ordinary lowercase identifier; the actual Boolean constructor is capitalised | `True` |
+
+<Quiz title="Check: diagnosing these mistakes" questions={[
+  {
+    question: "A student writes 'hello' (single quotes) expecting it to work like a short string. What specifically goes wrong?",
+    options: [
+      "Nothing goes wrong; single and double quotes are interchangeable in Haskell",
+      "Char is defined to hold exactly one character; 'hello' has five characters, which cannot fit inside a Char literal",
+      "hello is not a valid identifier name",
+      "Single quotes are reserved for comments in Haskell"
+    ],
+    correctIndex: 1,
+    explanation: "Single quotes specifically construct a Char, and Char's whole definition is 'exactly one character.' Five characters between single quotes is simply too many for what that literal form is allowed to hold — it is rejected as a parse error, not a type error, because it is invalid before types even come into it.",
+    optionFeedback: [
+      "They are not interchangeable: double quotes build a String (any length, including zero), single quotes build a Char (exactly one character) — different literal forms for different types.",
+      "Correct. This is the structural reason from Section 2: Char cannot represent more than one character, full stop.",
+      "hello would be a perfectly ordinary — if undefined — identifier; that is not the problem with 'hello' specifically, which fails regardless of whether hello happens to be defined elsewhere.",
+      "Comments use -- or {- -}, covered in the previous lesson; quotes of either kind have nothing to do with comments."
+    ]
+  }
+]} />
+
+## Practice
+
+Predict the output before running each of these, then check in GHCi or by saving and loading a file.
+
+1. `putStrLn "CSI243"` versus `putStrLn CSI243` — run both and read the second error carefully.
+2. `:type 'x'` versus `:type "x"` — state the two types in your own words before checking.
+3. Write a one-line program that prints your name as a `String`, then prints the number of characters in it using `length`.
+4. Predict, then check: does `'A' == "A"` type-check? If not, name the exact rule from Section 2 that explains why.
+
+<Accordions>
+<Accordion title="Check question 3">
+
+```haskell
+main :: IO ()
+main = do
+  let myName = "Naledi"
+  putStrLn myName
+  print (length myName)
+```
+
+```text
+Naledi
+6
+```
+
+</Accordion>
+</Accordions>
+
+<Checklist title="Mastery check" rules={[
+  { type: 'must', text: 'I can say what a literal is, in contrast to an identifier, without just giving an example.' },
+  { type: 'must', text: 'I can explain why quotation marks exist at all — what problem they solve for the parser.' },
+  { type: 'must', text: 'I can explain why Char and String are different types, using length or == as evidence, not just "they look different".' },
+  { type: 'must', text: 'I can trace print Hello World by hand and say exactly which step fails and why.' },
+  { type: 'must', text: 'I can explain why left-associative application means f x y is (f x) y, not f (x y).' },
+  { type: 'avoid', text: 'Do not say a bare word "becomes" text because it looks like a sentence — no unquoted word is ever text in Haskell.' }
+]} />
+
+Continue with [Expressions and Types](/docs/sem3/csi243/02-expressions-types/notes/expressions-types).
