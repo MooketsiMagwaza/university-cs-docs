@@ -185,6 +185,85 @@ cube :: Integer -> Integer
 
 The `do` keyword introduces a sequence of actions. The lines inside it must be **aligned with each other** — Haskell uses indentation to decide which statements belong to the block. Chapter 3 explains `do`, `print`, and `show` in full.
 
+### What you can leave out: signatures and `main :: IO ()`
+
+Every example so far has a **type signature** on each definition, including `main :: IO ()`. Those signatures are good practice, but Haskell does not require them. GHC can work out the types from the definitions themselves; this is called **type inference**. Here is a complete, runnable script with *no* signatures at all:
+
+```haskell
+-- Practice.hs
+double x = x * 2
+isLarge x = x > 5
+
+main = do
+  print (map double [1..6])
+  print (filter isLarge [1..10])
+```
+
+```text
+ghci> :load Practice.hs
+Ok, one module loaded.
+ghci> main
+[2,4,6,8,10,12]
+[6,7,8,9,10]
+ghci> :type double
+double :: Num a => a -> a
+ghci> :type isLarge
+isLarge :: (Ord a, Num a) => a -> Bool
+ghci> :type main
+main :: IO ()
+```
+
+GHC reached three conclusions by itself:
+
+- `double` multiplies by `2`, so `x` must be a number: `Num a => a -> a`.
+- `isLarge` compares with `>` against the number `5`, so `x` must be both orderable and numeric: `(Ord a, Num a) => a -> Bool`.
+- `main` is a `do` block whose statements are `print` actions, so it is an `IO ()`. You never had to write that down.
+
+The same idea, with every signature written out, is the fully annotated style:
+
+```haskell
+-- Fruit.hs
+isThere :: String -> String -> Bool
+isThere c n = c == n
+
+goBackMachine :: [String] -> String -> [String]
+goBackMachine [] _ = ["Null?"]
+goBackMachine m n = filter (isThere n) m
+
+main :: IO ()
+main = do
+  let fruit = ["apple", "banana", "cherry", "apple"]
+  let choice = "banana"
+
+  print (goBackMachine fruit choice)
+```
+
+```text
+ghci> main
+["banana"]
+```
+
+Both styles are valid Haskell. They differ in what they tell the reader and what they let the compiler check:
+
+| | Signature written | Signature left out |
+|---|---|---|
+| **What GHC infers** | Nothing: it checks the definition *against* your signature | The most general type that fits the body |
+| **If you make a mistake** | The error points at the definition that broke its promise | The error may appear later, where the mistake is *used* |
+| **Type of `isThere`** | `String -> String -> Bool` (only text) | `Eq a => a -> a -> Bool` (any comparable type) |
+| **Best for** | Lab submissions, anything another person reads, anything with a pitfall | Quick experiments, one-off GHCi sessions, tiny helpers |
+
+A few precise points so the shortcut does not surprise you:
+
+1. **`main` itself is still required** to compile an executable. Only its *signature* is optional. In GHCi you can load a file that has no `main` at all and call its functions directly.
+2. **Leaving out `main :: IO ()` is safe, but writing it adds a check.** With the signature, GHC rejects a `main` whose last statement returns something other than `()`, which catches a forgotten `print` or a stray expression.
+3. **A signature can make a function *less* general on purpose.** `double :: Integer -> Integer` refuses `double 2.5`, whereas the inferred `Num a => a -> a` accepts it.
+4. **Numbers with no signature get a default type.** `[1..6]` above is a list of `Integer`, because GHC defaults an unconstrained numeric type to `Integer` (or `Double` when a fractional value is involved). The section on [type inference](/docs/sem3/csi243/02-expressions-types/notes/expressions-types) explains the defaulting rule.
+5. **Check your lab sheet.** Marking schemes normally expect a signature on every top-level function, because it documents the function's contract. Treat the signature-free style as a tool for experiments, not a licence to omit them in submitted work.
+
+<Callout type="info" title="A good habit while learning">
+Write the script without signatures, load it, and ask GHCi for each function's type with `:type`. Compare that answer with the signature you would have written. Where they differ, you have just learned something about how GHC reads your code.
+</Callout>
+
 ## 7. Run a script without loading it
 
 `runhaskell` compiles and runs a script in one step, without an interactive session:
