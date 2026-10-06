@@ -64,6 +64,15 @@ The `r` means **right**: the combining starts from the right-hand end. `foldr f 
 
 That substitution picture is the fastest way to predict what a `foldr` does.
 
+<HaskellTryIt
+  title="Try a right fold"
+  description="Use subtraction to expose the nesting direction, then replace it with (+) or (*) and choose the matching starting value."
+  code={`main = do
+  print (foldr (+) 0 [1,2,3,4])
+  print (foldr (-) 0 [1,2,3])
+  print (foldr (:) [] [1,2,3])`}
+/>
+
 <StepByStep>
   <StepByStepTitle>Tracing foldr (+) 0 [1,2,3]</StepByStepTitle>
 
@@ -137,6 +146,113 @@ That substitution picture is the fastest way to predict what a `foldr` does.
   }
 ]} />
 
+### Worked program: factorial with `foldr`
+
+Factorial multiplies every positive integer from `1` through `n`:
+
+```text
+4! = 1 × 2 × 3 × 4 = 24
+```
+
+That sentence already describes a fold: the input list is `[1..n]`, the combining function is multiplication, and multiplication's identity value is `1`.
+
+```haskell
+newFactorial :: Integer -> Integer
+newFactorial 0 = 1
+newFactorial n = foldr (*) 1 [1..n]
+```
+
+For `n = 4`, substitute the range and then use the `foldr` nesting rule:
+
+```haskell
+newFactorial 4
+= foldr (*) 1 [1,2,3,4]
+= 1 * (2 * (3 * (4 * 1)))
+= 24
+```
+
+Each of the three arguments to `foldr` has a specific job:
+
+| Argument | Value here | Job |
+|---|---|---|
+| Combining function | `(*)` | Multiply the current number by the folded remainder |
+| Starting value | `1` | Supply the result for an empty range and avoid changing the product |
+| Input list | `[1..n]` | Generate the factors from 1 through `n` |
+
+The explicit equation `newFactorial 0 = 1` is mathematically clear, but it is actually redundant in this definition. In Haskell, `[1..0]` is `[]`, so:
+
+```haskell
+foldr (*) 1 [1..0]
+= foldr (*) 1 []
+= 1
+```
+
+That is exactly `0!`. Therefore this shorter definition gives the same result for every non-negative input:
+
+```haskell
+newFactorial n = foldr (*) 1 [1..n]
+```
+
+<HaskellTryIt
+  title="Try factorial with foldr"
+  description="Change number to 0, 1, 5, or 8. Then change the starting value from 1 and explain the new result."
+  code={`newFactorial n = foldr (*) 1 [1..n]
+
+main = do
+  let number = 6
+  print (newFactorial number)`}
+/>
+
+<CommonMistake title="Negative input silently gives the wrong mathematical answer">
+For `n < 0`, `[1..n]` is also empty, so the short definition returns `1`. Factorial is not defined for negative integers. A production version should reject that input explicitly, for example with a guard: `newFactorial n | n < 0 = error "factorial: negative input" | otherwise = foldr (*) 1 [1..n]`.
+</CommonMistake>
+
+Here is a complete terminal program based on the example. The statements after `do` must be indented so Haskell knows they belong to the same block:
+
+```haskell
+newFactorial :: Integer -> Integer
+newFactorial 0 = 1
+newFactorial n = foldr (*) 1 [1..n]
+
+main :: IO ()
+main = do
+  putStrLn "Enter num:"
+  inputText <- getLine
+  let number = read inputText :: Integer
+  print (newFactorial number)
+```
+
+The program crosses between pure code and `IO` in small steps:
+
+1. `putStrLn "Enter num:"` prints the prompt.
+2. `getLine :: IO String` describes an input action. The bind arrow in `inputText <- getLine` performs that action and gives its resulting `String` the name `inputText`.
+3. `read inputText :: Integer` parses the string as an integer. The annotation is needed because `read` can produce many different readable types.
+4. `newFactorial number` is an ordinary pure calculation.
+5. `print` converts the result to text and writes it.
+
+For input `5`, the interaction is:
+
+```text
+Enter num:
+5
+120
+```
+
+`read` throws an exception when the user enters text that is not an integer. Later, safer application code can use `readMaybe` from `Text.Read`; the direct `read` keeps this first example focused on the fold.
+
+The browser practice runner does not simulate terminal input, so use a `let` to choose the test value and change it between runs:
+
+<HaskellPlayground
+  title="Run factorial as a fold"
+  description="Change number to 0, 1, or a larger non-negative integer and expand the right-associated multiplication by hand before running it."
+  initialCode={`newFactorial :: Integer -> Integer
+newFactorial n = foldr (*) 1 [1..n]
+
+main = do
+  let number = 6
+  print (newFactorial number)`}
+/>
+
 ## 2. Defining Prelude functions as folds
 
 Most of Chapter 6's single-value functions are one-liners once you have `foldr`:
@@ -160,6 +276,18 @@ filter' p  = foldr (\x acc -> if p x then x : acc else acc) []
 ```
 
 You would not normally write them this way, but it shows that `foldr` is the general shape of list recursion, with `map` and `filter` as special cases.
+
+The same idea reconstructs several other Prelude functions from the lecture examples:
+
+```haskell
+reverse' = foldl (flip (:)) []
+
+append' xs ys = foldr (:) ys xs
+
+concat' = foldr (++) []
+```
+
+`append'` replaces the first list's final `[]` with `ys`, while `concat'` repeatedly appends each inner list to the accumulated result. `reverse'` must use `foldl`: each new element is consed onto the front of the accumulator, reversing the order as the fold moves left to right. Production library implementations may choose stricter folds for performance, but these equations are the clearest structural definitions.
 
 <Quiz title="Check: Prelude functions as folds" questions={[
   {
@@ -308,6 +436,33 @@ ghci> foldr1 max []
 
 A **scan** is a fold that keeps every intermediate result rather than only the last:
 
+```haskell
+scanl :: (b -> a -> b) -> b -> [a] -> [b]
+scanr :: (a -> b -> b) -> b -> [a] -> [b]
+```
+
+Both return `n + 1` values for an input list of length `n`, because the starting value is included. Their recursive definitions mirror the corresponding folds:
+
+```haskell
+scanl _ z []     = [z]
+scanl f z (x:xs) = z : scanl f (f z x) xs
+
+scanr _ z []     = [z]
+scanr f z (x:xs) = f x (head ys) : ys
+  where ys = scanr f z xs
+```
+
+The `head ys` in `scanr` is safe here because every recursive call returns at least `[z]`. As with the folds, subtraction makes the direction visible:
+
+```text
+ghci> scanl (-) 0 [1,2,3]
+[0,-1,-3,-6]
+ghci> scanr (-) 0 [1,2,3]
+[2,-1,3,0]
+```
+
+Read the last `scanr` result from the fold nesting: `1 - (2 - (3 - 0)) = 2`, then the remaining suffix results are `2 - (3 - 0) = -1`, `3 - 0 = 3`, and the initial value `0`.
+
 ```text
 ghci> scanl (+) 0 [1,2,3,4]
 [0,1,3,6,10]
@@ -336,6 +491,28 @@ Final total:    458
 ```
 
 `runningTotal` has one more element than `dailyExpenses` — the leading `0` is the starting value, present before any expense has been added — and its last element, `458`, is exactly `foldl (+) 0 dailyExpenses`, matching the rule stated above on different numbers than the `[1,2,3,4]` example.
+
+The right-scan relationship is symmetrical: the **first** element of `scanr f z xs` is exactly `foldr f z xs`.
+
+<HaskellTryIt
+  title="Try scans beside folds"
+  description="Compare every intermediate accumulator with the fold's final result. Subtraction makes left and right directions visible."
+  code={`main = do
+  print (scanl (-) 0 [1,2,3])
+  print (foldl (-) 0 [1,2,3])
+  print (scanr (-) 0 [1,2,3])
+  print (foldr (-) 0 [1,2,3])`}
+/>
+
+<HaskellPlayground
+  title="Compare fold and scan directions"
+  description="Use subtraction to make left and right association visible in both the final answers and the intermediate lists."
+  initialCode={`main = do
+  print (foldl (-) 0 [1,2,3])
+  print (foldr (-) 0 [1,2,3])
+  print (scanl (-) 0 [1,2,3])
+  print (scanr (-) 0 [1,2,3])`}
+/>
 
 <Quiz title="Check yourself: foldl and laziness" questions={[
   {

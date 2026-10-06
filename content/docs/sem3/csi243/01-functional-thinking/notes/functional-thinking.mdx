@@ -72,6 +72,23 @@ Three different result types — `Double`, `Double`, `Bool` — but the same gua
 | **When not alone?** | Real applications still need input, output, storage, time, randomness, and networking; Haskell represents these effects explicitly rather than pretending they do not exist |
 | **How?** | Define small transformations, give them types, combine them, and keep effects at a controlled boundary |
 
+### What makes a language “functional”?
+
+There is no single switch that turns a language into a functional language. The label describes which ideas the language makes natural, safe, and central:
+
+| Functional-language idea | What it means in practice | What it does **not** mean |
+|---|---|---|
+| Functions are values | A function can be stored in a name, passed to another function, or returned as a result | Functions are not limited to top-level procedures that can only be called by name |
+| Expressions produce values | `if`, function calls, and arithmetic fit together because each has a result | The program is not merely a list of commands executed for their side effects |
+| Immutable bindings | A name keeps one meaning within the scope that introduced it | The program can never process changing real-world information |
+| Pure functions | A calculation can depend only on its explicit inputs and return a result without hidden effects | Every line of a real application must be pure, or input/output is forbidden |
+| Composition | Small transformations can be connected to make a larger transformation | “Functional” does not mean squeezing everything into one unreadable expression |
+| Explicit effects | Types such as `IO String` make interaction visible in the program's structure | Effects disappear; they are represented and controlled instead |
+
+Haskell strongly favours all six ideas. A multi-paradigm language such as JavaScript, Python, or Java can still be written in a functional *style* for part of a program, but those languages also permit changing variables and hidden effects much more freely. The important question is therefore not “does this language have functions?” Almost every modern language does. Ask instead: **does the solution describe stable values and transformations, and are effects visible at the boundary?**
+
+Functional programming is also not synonymous with recursion, `map`, short code, or advanced mathematics. Those are tools or associations. A clear pipeline of named, pure transformations is functional even when it is several readable lines long; an opaque one-liner that reads global state is not made functional merely by calling `map`.
+
 ## Expression versus statement
 
 An expression has a value. For example:
@@ -208,6 +225,83 @@ ghci> taxRate
 
 Reading `taxRate` a second time, after `discountedRate` has already used it, gives the same `0.14` as before. Nothing about defining `discountedRate` in terms of `taxRate` put `taxRate` itself at risk of changing.
 
+### Why `let x = 3` followed by `let x = 4` is allowed
+
+This is the point where the word **scope** becomes essential. Immutability says one binding cannot change its value. It does **not** say the same spelling can never be used for a different binding.
+
+At the GHCi prompt, these commands are accepted back to back:
+
+```text
+ghci> let x = 3
+ghci> let oldX = x
+ghci> let x = 4
+ghci> x
+4
+ghci> oldX
+3
+ghci> (oldX, x)
+(3,4)
+```
+
+There are now two distinct bindings that happen to use the name `x`. It helps to imagine that the compiler gives them invisible identities:
+
+```text
+first command:   x₁ = 3
+second command:  oldX = x₁
+third command:   x₂ = 4
+current lookup:  x means x₂
+```
+
+The third command does not perform `x₁ := 4`. It introduces `x₂`, and the newer binding **shadows** the older one: when later text says `x`, name lookup finds the newer binding first. `oldX` proves the difference because it was defined using `x₁`; after `x₂` appears, `oldX` still produces `3`.
+
+The same rule works in nested source-code scopes:
+
+```haskell
+example :: (Integer, Integer, Integer)
+example =
+  let x = 3                 -- outer x
+  in ( x
+     , let x = 4 in x       -- a new inner x shadows outer x here only
+     , x                    -- back outside: outer x is still 3
+     )
+
+-- example == (3,4,3)
+```
+
+The inner `x` exists only inside its `let ... in ...` expression. Before that inner scope and after it, the outer `x` still means `3`. Nothing travelled backwards and rewrote it.
+
+Sequential `let` statements in a `do` block use the same idea:
+
+```haskell
+main :: IO ()
+main = do
+  let x = 3
+  let oldX = x
+  let x = 4
+  print (oldX, x)  -- (3,4)
+```
+
+Each later statement can see names introduced above it. The second `x` begins a newer binding for the statements below; it does not modify the first one. By contrast, writing two definitions for `x` inside the **same declaration group** is not shadowing and is rejected as a duplicate definition:
+
+```haskell
+bad =
+  let x = 3
+      x = 4  -- error: two definitions of x in one binding group
+  in x
+```
+
+Use shadowing sparingly in ordinary source files. It is legal and sometimes useful, but names such as `originalScore` and `adjustedScore` usually make the data flow clearer than two different bindings both called `score`.
+
+<HaskellTryIt
+  title="Try shadowing without mutation"
+  description="oldX keeps the earlier value. Change either number, run again, and explain why the pair contains both values."
+  code={`main = do
+  let x = 3
+  let oldX = x
+  let x = 4
+  print (oldX, x)`}
+/>
+
 <Quiz title="Check: immutability" questions={[
   {
     question: "After evaluating discountedRate, what is the value of taxRate?",
@@ -258,7 +352,7 @@ Hello, Naledi
 
 The design keeps the reusable rule `greeting` independent of the terminal. It can be tested without performing input or output.
 
-<Mermaid chart={`flowchart LR
+<SiteDiagram chart={`flowchart LR
   subgraph pureCore["Pure core"]
     A["greeting name"]
   end
