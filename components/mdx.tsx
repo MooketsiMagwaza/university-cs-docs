@@ -31,6 +31,7 @@ import { InsertionSortStory } from './interactive/insertion-sort-story';
 import { BinarySearchStory, LinearSearchStory } from './interactive/search-stories';
 import { BubbleSortStory, SelectionSortStory } from './interactive/simple-sort-stories';
 import { MergeSortStory } from './interactive/merge-sort-story';
+import { MergeComplexityFigure, MergeFrontWorkbench, MergeRecursionExplorer } from './interactive/merge-sort-deep-dive';
 import { PackageBuildStory, PackageFolderStory, PackageImportStory } from './interactive/package-stories';
 
 
@@ -112,6 +113,9 @@ export function getMDXComponents(components?: MDXComponents) {
     BubbleSortStory,
     SelectionSortStory,
     MergeSortStory,
+    MergeFrontWorkbench,
+    MergeRecursionExplorer,
+    MergeComplexityFigure,
     PackageImportStory,
     PackageFolderStory,
     PackageBuildStory,

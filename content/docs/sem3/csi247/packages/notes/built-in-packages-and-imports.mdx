@@ -1,154 +1,311 @@
 ---
 title: "1. Built-in Packages and Imports"
-description: "Understand package names, use Java API classes through imports or fully qualified names, and distinguish single-type imports, wildcards, and java.lang."
+description: "Resolve Java type names visually, distinguish import forms, and connect file-reading packages to a worked Book-record program."
 ---
 
-Java's standard library contains thousands of types. Packages divide that library into named groups such as `java.lang`, `java.util`, and `java.io`.
-
-| Package | Typical purpose | Examples |
-|---|---|---|
-| `java.lang` | Fundamental language classes | `String`, `Math`, `System` |
-| `java.util` | Collections and general utilities | `Scanner`, `ArrayList`, `Arrays`, `Random` |
-| `java.io` | Stream and file input/output | `File`, `FileReader`, `BufferedReader`, `PrintWriter` |
-
-Before writing an import, separate the package address from the class name:
+A **package** is a named group of related Java types. Think of the package as an address and the class as one item at that address. An **import** lets a source file use a shorter type name.
 
 <PackageImportStory />
 
-## 1. Simple and fully qualified names
+## 1. Work through name lookup before code
 
-The class's **fully qualified name** combines its package and simple name:
+### Example A: one type, two spellings
 
-```text
-java.util.Scanner
-| package | class |
-```
+`java.util.Scanner` is the fully qualified name: `java.util` is the package and `Scanner` is the simple class name. A single-type import makes that short name usable in the current file.
 
-Java can use the full name directly:
+<Mermaid chart={`flowchart TD
+  F["java.util.Scanner: full name"] --> T["The Scanner type"]
+  I["import java.util.Scanner;"] --> S["Scanner: short name in this file"]
+  S --> T`} caption="The two names identify the same type. The import changes source name lookup." />
+
+| Source-file situation | Name written | Name lookup result |
+|---|---|---|
+| No Scanner import | `java.util.Scanner` | Full name identifies the type |
+| No Scanner import | `Scanner` | Unresolved unless another applicable declaration makes it available |
+| `import java.util.Scanner;` | `Scanner` | Resolves to `java.util.Scanner` |
+| No String import | `String` | Available from `java.lang` automatically |
+
+### Example B: wildcard versus subpackage
+
+`import java.util.*;` makes accessible types directly in `java.util` available by simple name. It does not recursively include `java.util.concurrent`. A dotted subpackage is a separate package.
+
+<Mermaid chart={`flowchart TD
+  W["import java.util.*;"] --> S["Scanner: included"]
+  W --> A["Arrays: included"]
+  W -. "not included" .-> T["java.util.concurrent.TimeUnit"]
+  D["import java.util.concurrent.TimeUnit;"] --> T`} caption="A wildcard covers one package, not a recursive directory search." />
+
+| Import set | Name to resolve | Evaluated question | Result |
+|---|---|---|---|
+| `java.util.*` | `Scanner` | Directly in java.util? true | Available |
+| `java.util.*` | `TimeUnit` | Directly in java.util? false | Needs its actual package import |
+| `java.io.BufferedReader` | `FileReader` | Included by this single-type import? false | Needs another import or full name |
+
+### Example C: two classes called Date
+
+`java.util.Date` and `java.sql.Date` are different types. Two single-type imports with the same simple name conflict. With two wildcard imports, a simple reference to `Date` is ambiguous. Import one Date and fully qualify the other.
+
+<Mermaid chart={`flowchart TD
+  U["java.util.Date"] --> Q["Date: which type?"]
+  S["java.sql.Date"] --> Q
+  Q --> R["Repair: Date for util; java.sql.Date for sql"]`} caption="Qualification chooses the owner without changing either library class." />
+
+### Example D: type versus static member
+
+A normal import lets you write `Scanner`. A static import lets you write a static member such as `sqrt` without `Math.`. Neither grants access to private members.
+
+<Mermaid chart={`flowchart TD
+  N["import java.util.Scanner;"] --> C["Scanner: type name"]
+  M["import static java.lang.Math.sqrt;"] --> F["sqrt(81): static method call"]
+  F --> O["Same result as Math.sqrt(81): 9.0"]`} caption="Type names and static member names occupy different roles." />
+
+<QuizRef src="sem3/csi247/packages/notes/built-in-packages-and-imports" id="check-names-and-imports" />
+<QuizRef src="sem3/csi247/packages/notes/built-in-packages-and-imports" id="check-wildcards-and-conflicts" />
+
+## 2. A worked file-reading example from the course
+
+An exam-style file question may ask you to read records into an array of `Book` objects. Here we assume `books.txt` has one `title|price` record per line, for example `Algorithms|120.50`. Titles contain no pipe, prices use a decimal point, and records are well formed. Capacity is 50; a count tracks populated slots.
+
+<Mermaid chart={`flowchart TD
+  F["books.txt: Algorithms|120.50"] --> R["FileReader: characters"]
+  R --> B["BufferedReader: readLine"]
+  B --> P["Parse title and price"]
+  P --> O["new Book: Algorithms, 120.50"]
+  O --> A["books[0] stores a reference; count becomes 1"]`} caption="Read a line, parse fields, construct an object, then store its reference." />
+
+The Scanner alternative still uses a FileReader to open the file. One Scanner reads lines; a second Scanner parses each line using a pipe delimiter. Both routes create the same Book records.
+
+<Mermaid chart={`flowchart TD
+  F["FileReader for books.txt"] --> S["Scanner: hasNextLine and nextLine"]
+  S --> L["Line Scanner: pipe delimiter"]
+  L --> T["next: title"]
+  L --> P["nextDouble: price"]
+  T --> B["new Book(title, price)"]
+  P --> B`} caption="Scanner is in java.util; FileReader is in java.io. Imports must cover both." />
+
+For `Algorithms|120.50` followed by `Networks|99.00`:
+
+| Step | Evaluated condition/action | Array state | count |
+|---:|---|---|---:|
+| Start | Allocate 50 reference cells | `[null, null, ...]` | 0 |
+| 1 | `0 < 50` true; first line exists | `[Book("Algorithms",120.50), null, ...]` | 1 |
+| 2 | `1 < 50` true; second line exists | `[Book("Algorithms",120.50), Book("Networks",99.00), ...]` | 2 |
+| 3 | `2 < 50` true; `readLine() != null` false | Unchanged; stop | 2 |
+| Display | `i < count` true for 0/1, false for 2 | Print only two populated cells | 2 |
+
+`new Book[50]` creates the array, not 50 Books. Each `new Book(...)` constructs a separate object; unfilled cells remain `null`.
+
+<Mermaid chart={`flowchart TD
+  C0["books[0] reference"] --> B0["Book: Algorithms, 120.50"]
+  C1["books[1] reference"] --> B1["Book: Networks, 99.00"]
+  C2["books[2..49]: null"]`} caption="After two records: one array object and two Book objects." />
+
+## 3. Properties and rules
+
+| Package/form | Purpose or rule | Course examples |
+|---|---|---|
+| `java.lang` | Automatically available core types | `String`, `Math`, `System` |
+| `java.util` | Utilities and collections | `Scanner`, `Arrays`, `ArrayList`, `StringTokenizer` |
+| `java.io` | Streams and file I/O | `FileReader`, `BufferedReader`, `PrintWriter`, `IOException` |
+| Single-type import | One accessible type by simple name | `import java.io.FileReader;` |
+| Wildcard import | Accessible types in one package | `import java.io.*;` |
+| Fully qualified reference | Selects the package explicitly | `java.sql.Date` |
+| Static import | Accessible static member by simple name | `import static java.lang.Math.sqrt;` |
+
+An import applies to its source file. It does not copy code, install a library, change access permissions, or fix a missing runtime classpath.
+
+<Mermaid chart={`flowchart TD
+  I["Import"] --> N["Resolve short names in source"]
+  CP["Classpath root"] --> L["Locate compiled classes"]
+  A["Access modifiers"] --> V["Decide whether use is allowed"]`} caption="Naming, locating and permission are separate checks." />
+
+## 4. Fully commented Java
+
+### Small runnable import examples
+
+`ReadName.java`:
 
 ```java
-java.util.Scanner input = new java.util.Scanner(System.in);
-```
-
-An import lets the same source file use the short name `Scanner`:
-
-```java
-import java.util.Scanner;
+import java.util.Scanner; // Scanner belongs to java.util.
 
 public class ReadName {
     public static void main(String[] args) {
+        // The import lets this source use Scanner instead of java.util.Scanner.
         Scanner input = new Scanner(System.in);
         System.out.print("Name: ");
-        String name = input.nextLine();
+        String name = input.nextLine(); // String is automatically available.
         System.out.println("Hello, " + name);
-        input.close();
+        input.close(); // This standalone program is finished using System.in.
     }
 }
 ```
 
-The import changes name lookup in this source file. It does **not** copy the class into the file or make an external library available.
-
-<JavaTryIt example="built-in-packages" title="Experiment with built-in packages" />
-
-<QuizRef src="sem3/csi247/packages/notes/built-in-packages-and-imports" id="check-names-and-imports" />
-
-## 2. Three ways to refer to library types
-
-<ComparisonTable
-  columns={[
-    { header: 'Form', key: 'form' },
-    { header: 'Example', key: 'example' },
-    { header: 'Use', key: 'use' }
-  ]}
-  rows={[
-    { form: 'Single-type import', example: 'import java.util.Scanner;', use: 'Clear when only a few types are needed' },
-    { form: 'Wildcard import', example: 'import java.util.*;', use: 'Makes simple names from that one package available' },
-    { form: 'Fully qualified name', example: 'java.util.Date', use: 'Avoids ambiguity or a one-off import' }
-  ]}
-/>
-
-A wildcard imports types from one package only. `import java.util.*;` does not import `java.util.concurrent.*`, because subpackages are separate packages.
-
-`java.lang` is automatically available, which is why programs use `String`, `System`, and `Math` without explicit imports.
-
-## 3. Name conflicts
-
-Both `java.util` and `java.sql` contain a class named `Date`. Importing both simple names is ambiguous:
+`DatesDemo.java`:
 
 ```java
-import java.util.Date;
-import java.sql.Date;
-```
-
-`javac` reports that a type with the same simple name is already defined by another import. A clear repair is to import one and fully qualify the other:
-
-```java
-import java.util.Date;
+import java.util.Date; // Reserve the simple name Date for this type.
 
 public class DatesDemo {
-    Date createdAt;
-    java.sql.Date storedDate;
+    Date createdAt; // This is java.util.Date.
+    java.sql.Date storedDate; // Select the other Date unambiguously.
 }
 ```
 
-<CommonMistake title="Expecting a wildcard to include subpackages">
-Package names are not a recursive folder search. `java.util.*` makes types directly inside `java.util` available by simple name, but not types in `java.util.concurrent` or any other subpackage.
-</CommonMistake>
-
-## 4. Static imports are different
-
-A normal import brings a **type name** into scope. A static import brings a static member into scope:
+`DistanceDemo.java`:
 
 ```java
-import static java.lang.Math.sqrt;
+import static java.lang.Math.sqrt; // Import a member, not the Math type.
 
 public class DistanceDemo {
     public static void main(String[] args) {
-        System.out.println(sqrt(81));
+        System.out.println(sqrt(81)); // Same as Math.sqrt(81); prints 9.0.
     }
 }
 ```
 
-```text
-9.0
+<JavaTryIt example="built-in-packages" title="Experiment with built-in packages" />
+
+### Complete Book-record program
+
+Save both files together. This small example uses the unnamed package to focus on imports; the next lesson moves classes into named packages.
+
+`Book.java`:
+
+```java
+public class Book {
+    // Private fields hold each object's representation.
+    private final String title;
+    private final double price;
+
+    public Book(String title, double price) {
+        // Initialise this Book from one parsed record.
+        this.title = title;
+        this.price = price;
+    }
+
+    public String getTitle() {
+        return title; // Public read access; callers cannot alter the final field.
+    }
+
+    public double getPrice() {
+        return price; // Return the stored numeric value.
+    }
+}
 ```
 
-This is valid, but `Math.sqrt(81)` often communicates the owner more clearly. Use static imports sparingly.
+`BookImportDemo.java`:
 
-<QuizRef src="sem3/csi247/packages/notes/built-in-packages-and-imports" id="check-wildcards-and-conflicts" />
+```java
+import java.io.BufferedReader; // Read whole lines from a character stream.
+import java.io.FileReader; // Open a file as a character stream.
+import java.io.IOException; // File opening and reading may fail.
+import java.util.Locale; // Fix decimal parsing to the example's dot convention.
+import java.util.Scanner; // Scanner belongs to java.util.
 
-## 5. Common errors
+public class BookImportDemo {
+    private static Book parseLine(String line) {
+        // A pipe is special in regex syntax: escape it for the delimiter.
+        try (Scanner fields = new Scanner(line)) {
+            fields.useDelimiter("\\|");
+            fields.useLocale(Locale.US); // Parse a price such as 120.50.
+            String title = fields.next().trim();
+            double price = fields.nextDouble();
+            return new Book(title, price); // One object per record.
+        }
+    }
 
-| Attempt | What happens | Repair |
-|---|---|---|
-| Use `Scanner` with no import | `cannot find symbol` | Import `java.util.Scanner` or use its full name |
-| Write `import java.util.Scanner()` | Imports name a type, not a constructor call | Remove parentheses |
-| Place an import inside a class | Syntax error | Put imports after any package declaration and before type declarations |
-| Expect `java.util.*` to include subpackages | A subpackage type is not found | Import its actual package |
-| Import two classes with the same simple name | The simple name becomes ambiguous | Fully qualify at least one |
+    public static int readWithBufferedReader(String path, Book[] books)
+            throws IOException {
+        int count = 0; // Populated cells, not capacity.
+        // Closing the wrapper also closes the underlying FileReader.
+        try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+            String line;
+            // Capacity first; readLine returns null at end of file.
+            while (count < books.length && (line = reader.readLine()) != null) {
+                books[count] = parseLine(line); // Store the new object's reference.
+                count++; // Advance only after successful storage.
+            }
+        }
+        return count; // Caller avoids the remaining null cells.
+    }
 
-## 6. Practice
+    public static int readWithScanner(String path, Book[] books)
+            throws IOException {
+        int count = 0;
+        // This Scanner reads lines; parseLine uses a Scanner for fields.
+        try (Scanner input = new Scanner(new FileReader(path))) {
+            while (count < books.length && input.hasNextLine()) {
+                books[count] = parseLine(input.nextLine());
+                count++;
+            }
+            // Scanner records underlying read errors rather than throwing them.
+            if (input.ioException() != null) throw input.ioException();
+        }
+        return count;
+    }
 
-1. Give the fully qualified names of `Scanner`, `ArrayList`, and `BufferedReader`.
-2. Explain why `String` needs no explicit import.
-3. Rewrite a program that imports `java.util.*` so it imports only `Scanner` and `Arrays`.
-4. Explain what an import changes and two things it does not change.
+    public static void main(String[] args) throws IOException {
+        Book[] books = new Book[50]; // Array cells initially contain null.
+        String path = args.length == 0 ? "books.txt" : args[0];
+        int count = readWithBufferedReader(path, books);
+        // To use the alternative route, replace the preceding call with:
+        // int count = readWithScanner(path, books);
+        for (int i = 0; i < count; i++) {
+            System.out.println(books[i].getTitle()); // Visit only populated cells.
+        }
+    }
+}
+```
+
+Compile `javac Book.java BookImportDemo.java` and run `java BookImportDemo` from the directory containing both sources and `books.txt`. For the two-record example:
+
+```text
+Algorithms
+Networks
+```
+
+## 5. Exam practice with marking cues
+
+Attempt each task before opening its answer. These cues are practice guidance, not an official marking scheme.
+
+1. Define package, simple name, fully qualified name and import using Scanner. [6]
+2. Explain why `java.util.*` includes Scanner but not TimeUnit. Write the extra import. [4]
+3. Repair conflicting single-type Date imports while using both types. [4]
+4. Distinguish a normal Math import from a static sqrt import. Give a call for each. [4]
+5. Write imports for BufferedReader, FileReader, IOException and Scanner. [4]
+6. Trace two records into `new Book[50]`. State Book object count, populated count and unfilled slots. [5]
+7. Explain both read-loop conditions and why capacity is checked first. [4]
+8. Explain and repair printing all 50 entries after reading two books. [3]
+9. A program imports `java.io.*` but Scanner is unresolved. Diagnose and repair. [3]
+10. Compare EOF detection, parsing and resource closing in both reading routes. [6]
 
 <Accordions>
-<Accordion title="Check questions 1 and 4">
+<Accordion title="Answers and marking cues: 1–4">
 
-**1.** `java.util.Scanner`, `java.util.ArrayList`, and `java.io.BufferedReader`.
+**1:** Named group/namespace (2); Scanner simple name (1); java.util.Scanner full name (1); import permits short-name resolution in this file (2).
 
-**4.** It lets the source file use a type's simple name during name resolution. It does not copy the class, compile it, install a dependency, or import subpackages.
+**2:** Direct types only (1); subpackage is separate (1); `import java.util.concurrent.TimeUnit;` (2).
+
+**3:** Keep one import (1), remove conflicting import (1), fully qualify the other Date where used (2).
+
+**4:** Type import (1), `Math.sqrt(81)` (1); static member import (1), `sqrt(81)` (1).
+
+</Accordion>
+<Accordion title="Answers and marking cues: 5–10">
+
+**5:** One mark per correct package/type import. Wildcards covering both packages also work.
+
+**6:** Two Book objects (1); array is a separate object (1); count = 2 (1); cells 0/1 reference Books (1); cells 2–49 are null (1).
+
+**7:** Capacity prevents writing beyond the array (2); EOF prevents parsing null (1); short-circuiting stops further reads when full (1).
+
+**8:** Unfilled cells are null (1); an accessor call through null throws NullPointerException (1); use `i < count` (1).
+
+**9:** Scanner is in java.util (1); java.io wildcard excludes it (1); import Scanner or fully qualify it (1).
+
+**10:** readLine returns null versus hasNextLine becoming false (2); parseLine builds the same Book in both routes (2); try-with-resources closes wrappers and their FileReaders even on exceptions (2).
 
 </Accordion>
 </Accordions>
-
-<Checklist title="Mastery check" rules={[
-  { type: 'must', text: 'I can separate a package name, simple class name, and fully qualified name.' },
-  { type: 'must', text: 'I can choose between a single-type import, wildcard, and fully qualified reference.' },
-  { type: 'must', text: 'I can explain why java.lang is special.' },
-  { type: 'avoid', text: 'Do not assume a wildcard includes subpackages or external libraries.' }
-]} />
 
 Continue with [Creating a User-defined Package](/docs/sem3/csi247/packages/notes/creating-a-package).

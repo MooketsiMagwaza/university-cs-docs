@@ -27,7 +27,7 @@ Linear search is the simplest search: start at the left and ask each card, **"Ar
 | Required order | None | Each value is checked directly |
 | Best-case time | `O(1)` | The first value matches |
 | Worst-case time | `O(n)` | The key is last or absent |
-| Extra space | `O(1)` | Only the loop index is stored |
+| Iterative extra space | `O(1)` | Only the loop index is stored; recursion uses stack frames |
 | Duplicates | Returns the first match | The method stops immediately |
 
 ## 3. Iterative implementation
@@ -35,12 +35,17 @@ Linear search is the simplest search: start at the left and ask each card, **"Ar
 The loop index is both the current position and the value returned when a match is found.
 
 ```java
+// Contract: return the first matching index, or -1; no sorted order is required.
 public static int linearSearch(int[] arr, int key) {
+    // Visit each valid position; never read the cell at index length.
     for (int i = 0; i < arr.length; i++) {
+        // One equality comparison at this probe; return immediately on the first match.
         if (arr[i] == key) {
+            // Return the matching index, not the value stored there.
             return i;
         }
     }
+    // Every still-possible cell was ruled out; report absence.
     return -1;
 }
 ```
@@ -55,22 +60,33 @@ Read it line by line:
 ### Complete runnable example
 
 ```java
+// Import the library type used by this complete example.
 import java.util.Arrays;
 
 public class LinearSearchDemo {
+    // Contract: return the first matching index, or -1; no sorted order is required.
     public static int linearSearch(int[] arr, int key) {
+        // Visit each valid position; never read the cell at index length.
         for (int i = 0; i < arr.length; i++) {
+            // One equality comparison at this probe; return immediately on the first match.
             if (arr[i] == key) {
+                // Return the matching index, not the value stored there.
                 return i;
             }
         }
+        // Every still-possible cell was ruled out; report absence.
         return -1;
     }
 
+    // Run fixed inputs so the displayed result can be reproduced.
     public static void main(String[] args) {
+        // Keep this example's input independent so earlier sorting does not alter it.
         int[] values = {63, 29, 85, 72, 18, 42, 23, 54, 8, 32};
+        // Print the deterministic result for comparison with the output shown below.
         System.out.println(Arrays.toString(values));
+        // Print the deterministic result for comparison with the output shown below.
         System.out.println("18 -> " + linearSearch(values, 18));
+        // Print the deterministic result for comparison with the output shown below.
         System.out.println("31 -> " + linearSearch(values, 31));
     }
 }
@@ -91,20 +107,27 @@ The program is deterministic: the shown output is the result of compiling and ru
 Linear search does not *need* sorted data, but ascending order gives one extra fact. Once `arr[i]` is greater than the key, every later value is also too large.
 
 ```java
+// Precondition: arr is ascending; a value above key proves later values cannot match.
 public static int orderedLinearSearch(int[] arr, int key) {
+    // Visit each valid position; never read the cell at index length.
     for (int i = 0; i < arr.length; i++) {
+        // One equality comparison at this probe; return immediately on the first match.
         if (arr[i] == key) {
+            // Return the matching index, not the value stored there.
             return i;
         }
+        // A second key comparison: ascending order makes an early absence conclusion valid.
         if (arr[i] > key) {
+            // Every still-possible cell was ruled out; report absence.
             return -1;
         }
     }
+    // Every still-possible cell was ruled out; report absence.
     return -1;
 }
 ```
 
-On `[8, 18, 23, 29, 34, 42, 54, 63, 72, 85]`, a search for `31` checks `8`, `18`, `23`, `29`, then `34`. Because `34 > 31`, the method stops after five comparisons.
+On `[8, 18, 23, 29, 34, 42, 54, 63, 72, 85]`, a search for `31` checks `8`, `18`, `23`, `29`, then `34`. Because `34 > 31`, the method stops after **five probes**. The code performs five `==` tests and five `>` tests: **ten key comparisons**. The loop guard `i < arr.length` is evaluated five times because this early return prevents a final failed guard.
 
 <CommonMistake title="Using the early stop on unsorted data">
 The test `arr[i] > key` is valid only when the remaining values cannot become smaller again. On `[8, 40, 18]`, searching for `18` would stop incorrectly at `40`. Remove the early stop for unsorted data.
@@ -164,6 +187,112 @@ The method uses only `i` in addition to its inputs, so its auxiliary space is `O
 **1.** Indices `0, 1, 2, 3, 4, 5, 6, 7` are checked. The value `54` is found at index `7`, after eight comparisons.
 
 **3.** Keep a variable such as `last = -1`; update it whenever `arr[i] == key`, but continue through the array. Returning immediately would prove only the first match, not the last.
+
+</Accordion>
+</Accordions>
+
+
+## Recursive search: calls go forward, answers come back
+
+The current searching lecture asks you to convert the iterative method into a recursive one. Each call checks one index, then delegates the still-unchecked suffix. The first-match contract works on ascending, descending, or unsorted data.
+
+### Complete runnable recursive and ordered examples
+
+```java
+public class LinearSearchFormsDemo {
+    // Contract: return the first matching index from i onward, or -1.
+    // Caller supplies 0 <= i <= arr.length; start with i=0.
+    public static int linearSearchRecursive(int[] arr, int key, int i) {
+        // Check before arr[i]: length is outside the valid array indexes.
+        if (i >= arr.length) {
+            return -1; // Empty suffix: absence is now proved.
+        }
+        // Exactly one equality comparison at each visited array cell.
+        if (arr[i] == key) {
+            return i; // Stop at the first match, including duplicate keys.
+        }
+        // Forward the child's index unchanged during stack unwinding.
+        return linearSearchRecursive(arr, key, i + 1);
+    }
+
+    // Precondition: values are ascending. Equality comes before early exit.
+    public static int orderedAscending(int[] arr, int key) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == key) return i; // This cell matches.
+            if (arr[i] > key) return -1; // Later values can only be larger.
+        }
+        return -1; // The suffix was exhausted.
+    }
+
+    // Precondition: values are descending; reverse only the early-stop test.
+    public static int orderedDescending(int[] arr, int key) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == key) return i; // Still return the first match.
+            if (arr[i] < key) return -1; // Later values can only be smaller.
+        }
+        return -1; // No cell matched.
+    }
+
+    public static void main(String[] args) {
+        // Multiple arrays exercise duplicates, absence, and an empty suffix.
+        System.out.println("recursive found=" + linearSearchRecursive(new int[]{8, 4, 4}, 4, 0));
+        System.out.println("recursive absent=" + linearSearchRecursive(new int[]{8, 4, 4}, 9, 0));
+        System.out.println("recursive empty=" + linearSearchRecursive(new int[]{}, 9, 0));
+        // Sorted early stops are valid only for their declared direction.
+        System.out.println("ascending absent=" + orderedAscending(new int[]{8, 18, 34}, 31));
+        System.out.println("descending found=" + orderedDescending(new int[]{34, 18, 8}, 18));
+    }
+}
+```
+
+```text
+recursive found=1
+recursive absent=-1
+recursive empty=-1
+ascending absent=-1
+descending found=1
+```
+
+For `[8,4,4]`, key `9`, write the pending calls vertically. Only the top frame executes; its caller waits for its answer.
+
+| Event | Active frame | Evaluated statement | Result / pending work |
+|---:|---|---|---|
+| 1 | search(i=0) | `0 >= 3 → false; 8 == 9 → false` | Call search(i=1); frame 0 waits |
+| 2 | search(i=1) | `1 >= 3 → false; 4 == 9 → false` | Call search(i=2); frames 0,1 wait |
+| 3 | search(i=2) | `2 >= 3 → false; 4 == 9 → false` | Call search(i=3); frames 0,1,2 wait |
+| 4 | search(i=3) | `3 >= 3 → true` | Return -1 without accessing arr[3] |
+| 5 | resume i=2 | `return childResult` | Return -1; remove frame 2 |
+| 6 | resume i=1 | `return childResult` | Return -1; remove frame 1 |
+| 7 | resume i=0 | `return childResult` | Return -1 to main |
+
+There are **three probes, three equality comparisons, four base-case guard evaluations, and four simultaneous search frames**. For key `4`, calls stop at i=1: return order is frame 1 → frame 0 → main, with result 1. Worst-case recursive time is `O(n)` and stack space is `O(n)`; Java does not promise to eliminate these recursive frames.
+
+### Count the exact operation
+
+A **probe** visits one array position. A **key comparison** evaluates a relation involving its value and the key. A **guard** tests a loop or recursion boundary. They are different counts even when they happen to have the same total.
+
+| Input and method | Probes | Key comparisons | Boundary guards | Answer |
+|---|---:|---:|---:|---:|
+| Ordinary iterative [7], key 7 | 1 | 1 equality | 1 loop test | 0 |
+| Ordinary iterative [7], key 9 | 1 | 1 equality | 2 loop tests | -1 |
+| Ordinary iterative [], key 7 | 0 | 0 | 1 loop test | -1 |
+| Ordered ascending [8,18,34], key 31 | 3 | 6 (three equality, three greater-than) | 3 loop tests | -1 |
+| Ordered descending [34,18,8], key 31 | 2 | 4 (two equality, two less-than) | 2 loop tests | -1 |
+
+### Exam practice with marking cues
+
+1. **[6 marks]** Implement recursive first-match search and justify termination. Test `[]`, `[7]`, and `[4,4,4]`.
+2. **[4 marks]** An ordered search returns -1 immediately after its first mismatch. Explain the error using `[8,18,34]`, key 18, and repair it.
+3. **[4 marks]** Trace ordered descending search for 31 in `[34,18,8]`, distinguishing probes from comparisons.
+
+<Accordions>
+<Accordion title="Worked answers and marking cues">
+
+**1.** Use `linearSearchRecursive` above. Award: boundary base case before reading (1), equality returns index (1), suffix advances by one (1), child answer is returned (1), shrinking measure `arr.length-i` (1), tests returning -1, 0, and 0 respectively when the latter two keys are 7 and 4 (1). Returning a child result is essential: calling the method and then returning -1 loses a deeper match.
+
+**2.** Mismatch at 8 does not rule out 18. Award: identify the counterexample (1), continue after ordinary mismatch (1), stop only after `arr[i] > key` in ascending data (1), return -1 after exhaustion otherwise (1).
+
+**3.** At i=0: `34 == 31 → false`, `34 < 31 → false`; continue. At i=1: `18 == 31 → false`, `18 < 31 → true`; return -1. Award: both evaluated steps (2), two probes versus four key comparisons (1), descending-order justification (1).
 
 </Accordion>
 </Accordions>

@@ -26,25 +26,27 @@ export function PackageImportStory() {
 export function PackageFolderStory() {
   return (
     <section className="not-prose my-10 overflow-hidden rounded-2xl border border-fd-border bg-fd-background shadow-sm">
-      <header className="border-b border-fd-border px-4 py-5 sm:px-6"><p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-fd-muted-foreground">Visual model</p><h3 className="mb-0 mt-1 text-xl font-semibold text-fd-foreground">The declaration, folders, and class name must tell the same story</h3></header>
+      <header className="border-b border-fd-border px-4 py-5 sm:px-6"><p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-fd-muted-foreground">Visual model</p><h3 className="mb-0 mt-1 text-xl font-semibold text-fd-foreground">Declarations define identities; folders make those identities easy to find</h3></header>
       <div className="package-story-grid px-4 py-6 sm:px-6">
         <div><div className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">Source folders</div><pre className="mt-3 rounded-xl border border-fd-border bg-fd-muted/15 p-4 font-mono text-sm text-fd-foreground">{`project/
 └─ src/
    ├─ pkg/
-      ├─ A.java
+   │  ├─ A.java
+   │  └─ B.java
    └─ app/
       └─ Tester.java`}</pre></div>
         <div className="text-center text-2xl text-fd-muted-foreground" aria-hidden="true">↔</div>
-        <div><div className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">Inside each file</div><div className="mt-3 space-y-3 rounded-xl border border-blue-500/50 bg-blue-500/5 p-4"><code className="block font-semibold text-blue-700 dark:text-blue-300">A.java → package pkg;</code><code className="block font-semibold text-blue-700 dark:text-blue-300">Tester.java → package app;</code><p className="mb-0 text-sm text-fd-muted-foreground">The declaration matches that file's folder below <code>src</code>.</p></div></div>
+        <div><div className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">Inside each file</div><div className="mt-3 space-y-3 rounded-xl border border-blue-500/50 bg-blue-500/5 p-4"><code className="block font-semibold text-blue-700 dark:text-blue-300">A.java → package pkg;</code><code className="block font-semibold text-blue-700 dark:text-blue-300">B.java → package pkg;</code><code className="block font-semibold text-blue-700 dark:text-blue-300">Tester.java → package app;</code><p className="mb-0 text-sm text-fd-muted-foreground">The source tree mirrors each declaration for source-path lookup. A folder alone does not declare a package.</p></div></div>
         <div className="text-center text-2xl text-fd-muted-foreground" aria-hidden="true">↔</div>
         <div><div className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">Compiled folders</div><pre className="mt-3 rounded-xl border border-fd-border bg-fd-muted/15 p-4 font-mono text-sm text-fd-foreground">{`project/
 └─ classes/
    ├─ pkg/
-      └─ A.class
+   │  ├─ A.class
+   │  └─ B.class
    └─ app/
       └─ Tester.class`}</pre></div>
       </div>
-      <div className="border-t border-fd-border bg-fd-muted/15 px-4 py-5 sm:px-6"><table className="trace-table w-full border-collapse text-left text-sm"><thead className="border-b border-fd-border text-xs uppercase tracking-wide text-fd-muted-foreground"><tr><th className="px-3 py-2">Class</th><th className="px-3 py-2">Declaration</th><th className="px-3 py-2">Source path</th><th className="px-3 py-2">Runtime name</th></tr></thead><tbody><tr className="border-b border-fd-border/70"><td data-label="Class" className="px-3 py-2 font-mono">A</td><td data-label="Declaration" className="px-3 py-2 font-mono">package pkg;</td><td data-label="Source path" data-wide className="px-3 py-2 font-mono">src/pkg/A.java</td><td data-label="Runtime name" data-wide className="px-3 py-2 font-mono">pkg.A</td></tr><tr><td data-label="Class" className="px-3 py-2 font-mono">Tester</td><td data-label="Declaration" className="px-3 py-2 font-mono">package app;</td><td data-label="Source path" data-wide className="px-3 py-2 font-mono">src/app/Tester.java</td><td data-label="Runtime name" data-wide className="px-3 py-2 font-mono">app.Tester</td></tr></tbody></table></div>
+      <div className="border-t border-fd-border bg-fd-muted/15 px-4 py-5 sm:px-6"><table className="trace-table w-full border-collapse text-left text-sm"><thead className="border-b border-fd-border text-xs uppercase tracking-wide text-fd-muted-foreground"><tr><th className="px-3 py-2">Class</th><th className="px-3 py-2">Declaration</th><th className="px-3 py-2">Source path</th><th className="px-3 py-2">Runtime name</th></tr></thead><tbody>{[['A', 'pkg', 'src/pkg/A.java'], ['B', 'pkg', 'src/pkg/B.java'], ['Tester', 'app', 'src/app/Tester.java']].map(([name, packageName, path]) => <tr key={name} className="border-b border-fd-border/70 last:border-0"><td data-label="Class" className="px-3 py-2 font-mono">{name}</td><td data-label="Declaration" className="px-3 py-2 font-mono">package {packageName};</td><td data-label="Source path" data-wide className="px-3 py-2 font-mono">{path}</td><td data-label="Runtime name" data-wide className="px-3 py-2 font-mono">{packageName}.{name}</td></tr>)}</tbody></table></div>
     </section>
   );
 }
@@ -55,7 +57,7 @@ export function PackageBuildStory() {
       <header className="border-b border-fd-border px-4 py-5 sm:px-6"><p className="m-0 text-xs font-semibold uppercase tracking-[0.16em] text-fd-muted-foreground">Visual model</p><h3 className="mb-0 mt-1 text-xl font-semibold text-fd-foreground">Compile from source roots; run from classpath roots</h3></header>
       <div className="px-4 py-6 sm:px-6">
         <div className="package-pipeline">
-          <Segment tone="blue">src/app/Tester.java</Segment><span aria-hidden="true">→</span><Segment>javac</Segment><span aria-hidden="true">→</span><Segment tone="green">classes/app/Tester.class</Segment><span aria-hidden="true">→</span><Segment tone="red">java app.Tester</Segment>
+          <Segment tone="blue">A.java + B.java + Tester.java</Segment><span aria-hidden="true">→</span><Segment>javac -d classes</Segment><span aria-hidden="true">→</span><Segment tone="green">pkg/A.class + pkg/B.class + app/Tester.class</Segment><span aria-hidden="true">→</span><Segment tone="red">java -cp classes app.Tester</Segment>
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-2"><div className="rounded-xl border border-fd-border p-4"><div className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">Compile</div><code className="mt-2 block text-sm">javac -d classes -sourcepath src src/app/Tester.java</code></div><div className="rounded-xl border border-fd-border p-4"><div className="text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">Run</div><code className="mt-2 block text-sm">java -classpath classes app.Tester</code></div></div>
       </div>

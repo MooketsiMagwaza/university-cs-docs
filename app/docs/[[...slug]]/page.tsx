@@ -107,7 +107,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
             markdownUrl={markdownUrl}
             githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
           />
-          {isCsi247 && <PageDownloadActions title={page.data.title} />}
+          {isCsi247 && <PageDownloadActions pageUrl={page.url} />}
         </div>
       </>}
       {isMat221 ? <Mat221SourceShell pageUrl={page.url}><MDX components={mdxComponents} /></Mat221SourceShell> : <DocsBody><MDX components={mdxComponents} /></DocsBody>}
