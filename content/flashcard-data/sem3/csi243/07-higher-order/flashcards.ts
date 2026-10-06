@@ -71,4 +71,44 @@ export const flashcardData = [
     front: "When should you avoid point-free style?",
     back: "Whenever omitting the argument makes the code harder to follow. A readable named function beats a dense chain of operators; clarity comes before cleverness.",
   },
+  {
+    front: "Why does `map (*2) [1..]` (paired with `take`) terminate, even though `[1..]` never ends?",
+    back: "`:` is lazy — `map f (x:xs) = f x : map f xs` builds the cons cell as soon as it has one `x` and one `xs`, without evaluating `map f xs` further. `take` is what stops asking for more; once it reaches 0 it matches a wildcard and never touches the rest of the list.",
+  },
+  {
+    front: "How does `take` decide when to stop, and why does that matter for infinite lists?",
+    back: "take 0 _ = [] matches the wildcard immediately, without touching the list at all. take n (x:xs) = x : take (n-1) xs only pattern-matches one element at a time. Because take never demands more of the list than it needs, take 5 (map (*2) [1..]) finishes despite [1..] being infinite.",
+  },
+  {
+    front: "In the grades example (marks = [42,88,35,67,50,91,48,73]), what does filter (< 50) marks return, and what does map applyBonus marks return (a 7% bonus, rounded down)?",
+    back: "filter (< 50) marks is [42,35,48] — the failing marks, dropped from an unchanged list. map applyBonus marks is [44,94,37,71,53,97,51,78] — every mark curved, none dropped. The two are independent: map applies the bonus to everyone, including the marks filter would have removed.",
+  },
+  {
+    front: "How do you write \"count how many elements satisfy a test\" in Haskell, without a dedicated counting function?",
+    back: "length (filter p xs) — Haskell has no separate counting primitive. filter p xs produces the elements that pass, and length counts them, e.g. countSpaces xs = length (filter isSpaceChar xs).",
+  },
+  {
+    front: "add x = if even x then x+1 else x+2. Do a hand-recursion, a list comprehension, and map add give the same result on [1,2,3,4]?",
+    back: "Yes — all three give [3,3,5,5]. map never requires the function it's given to be simple; it only requires one function a -> b applied per element. A per-element rule with its own guards is still a single function, so it fits map exactly as (*2) would.",
+  },
+  {
+    front: "Signature of zipWith, and what happens when the two lists have different lengths?",
+    back: "zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]. It applies the combining function pairwise (first with first, second with second, ...) and stops as soon as the shorter list runs out — zipWith (+) [1,2,3] [10,20] is [11,22], not an error and not padded.",
+  },
+  {
+    front: "How does dropWhile differ from filter?",
+    back: "dropWhile p xs throws away elements from the front while p says yes, then keeps everything from the first failure onward, unexamined — it stops testing once p fails once. filter tests every element in the list regardless of what came before.",
+  },
+  {
+    front: "Why can foldr produce a result on an infinite list (e.g. take 3 (foldr (:) [] [1..])) while foldl cannot?",
+    back: "foldr f acc (x:xs) = f x (foldr f acc xs) can hand back f x (...) as soon as f allows it — for (:), that's immediately, without evaluating the recursive call further. foldl must walk to the very end of the list to build its accumulator before returning anything, so on an infinite list it never returns at all.",
+  },
+  {
+    front: "What is a scan, and how does scanl's last element relate to the corresponding foldl?",
+    back: "A scan is a fold that keeps every intermediate result instead of only the last. scanl (+) 0 [1,2,3,4] is [0,1,3,6,10]; its final element, 10, is exactly foldl (+) 0 [1,2,3,4].",
+  },
+  {
+    front: "What does ($) do, and why does it exist?",
+    back: "($) :: (a -> b) -> a -> b, with f $ x = f x — ordinary function application, but with the lowest possible precedence. Its only purpose is to remove nested parentheses: sum $ map (^2) $ filter odd [1..10] computes the same thing as sum (map (^2) (filter odd [1..10])).",
+  },
 ];

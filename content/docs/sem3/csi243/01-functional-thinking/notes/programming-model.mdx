@@ -159,9 +159,31 @@ Different paradigms can solve the same problem while encouraging different quest
 
 A language can support more than one paradigm. The label describes a strong design style, not a prison.
 
+<Quiz title="Check: programming paradigms" questions={[
+  {
+    question: "A cart total can be computed by setting a running total and updating it, by asking a cart object to calculate its own total, or by transforming a list of prices into one total. According to the table above, which paradigm does the last description belong to, and why?",
+    options: [
+      "Imperative, because it still involves numbers",
+      "Object-oriented, because a cart is mentioned",
+      "Functional, because its main question is 'which values and transformations produce the result', matching 'transform a list of prices into one total'",
+      "Logic, because it states a rule about prices"
+    ],
+    correctIndex: 2,
+    explanation: "The table's functional row gives exactly this typical description: 'Transform a list of prices into one total.' The imperative row instead updates a running total step by step, and the object-oriented row asks an object to calculate its own total — different questions entirely, even though all three could solve the identical problem.",
+    optionFeedback: [
+      "Numbers appear in every paradigm's version of this problem; what distinguishes them is the main question each one asks, not whether numbers are involved.",
+      "Mentioning a cart is not what makes something object-oriented; the object-oriented row's defining trait is asking which object owns the data and behaviour, e.g. 'ask a cart object to calculate its total'.",
+      "Correct. This is the exact typical description listed for the functional paradigm's row: transforming values, not issuing commands or asking an object to act.",
+      "Logic programming states facts and rules and asks which conclusions follow; nothing here declares standing price facts to be queried."
+    ]
+  }
+]} />
+
 ## 4. What is functional programming?
 
 **Functional programming** is a paradigm that models a program primarily as the evaluation of expressions and the application of functions to values.
+
+**In plain English:** a functional program is written by describing what values look like and how to turn one value into another — never by listing a sequence of commands that change things in place. This kind of dense, formal sentence shows up constantly in lecture slides and lab sheets; [Decoding Exam and Lab Language](/docs/sem3/csi243/decoding-questions) teaches a repeatable method for turning that phrasing into plain English before you try to write any Haskell.
 
 It emphasises:
 
@@ -374,6 +396,26 @@ The exact result is:
 
 The space in `cube 4` means **apply the function `cube` to the value `4`**. Haskell commonly writes function application with a space rather than parentheses and commas.
 
+<Quiz title="Check: functions and signatures" questions={[
+  {
+    question: "cube :: Integer -> Integer is read as \"cube receives an Integer and produces an Integer.\" In cube x = x * x * x, what job does the -> in the signature actually correspond to?",
+    options: [
+      "It corresponds to the multiplication symbol * in the definition",
+      "It separates the input type from the output type — it says nothing about how the result is computed, only what kind of value goes in and what kind comes out",
+      "It means cube takes zero arguments",
+      "It is only decorative and can be removed without changing the meaning"
+    ],
+    correctIndex: 1,
+    explanation: "The lesson's own table states this directly: '->' is read as 'to' or 'produces', and it 'separates input type from output type.' The actual computation, x * x * x, is a completely separate part of the definition from the type signature.",
+    optionFeedback: [
+      "The signature describes types, not operations; * appears only in the equation cube x = x * x * x, never in the type Integer -> Integer itself.",
+      "Correct. This is exactly the notation table's own reading: -> separates the input type from the output type, independent of how the function computes its result.",
+      "cube 4 in the worked trace clearly supplies one argument, 4, which becomes x; the signature's single -> matches one input and one output, not zero inputs.",
+      "The signature is meaningful, not decorative: GHC checks the implementation against it, and removing -> would leave Integer Integer, which is not valid Haskell at all."
+    ]
+  }
+]} />
+
 ## 8. Pure functions
 
 A function is **pure** when both statements are true:
@@ -475,6 +517,85 @@ Calling `isPassingScore 73` a second time gives exactly the same answer as the f
     ]
   }
 ]} />
+
+### The purity test, applied in full, with its edge cases
+
+The cheat sheet gives this test as a quick lookup. Here it is again with the reasoning spelled out, because the two conditions are easy to state and surprisingly easy to misapply on a case you have not seen before.
+
+**Template:**
+```haskell
+funcName :: InputType -> OutputType
+funcName param = expression
+-- Pure only if BOTH hold:
+-- 1. the result depends only on param (and any other arguments) — nothing else
+-- 2. evaluating it causes no outside-world effect — no print, no read, no file, no clock
+```
+
+`InputType` and `OutputType` are placeholders for whatever concrete types the function actually uses — `Integer`, `Double`, `String`, and so on. `param` is a placeholder for however many arguments the function takes; the template shows one, but the number of arguments is not what the test checks. `expression` is a placeholder for the calculation that produces the result — it may be as short as `param * 2` or built from several nested calls, and the test applies to the whole thing, however long it is.
+
+**Example:**
+```haskell
+applyLatePenalty :: Integer -> Integer
+applyLatePenalty mark = if mark - 10 < 0 then 0 else mark - 10
+```
+```text
+ghci> applyLatePenalty 45
+35
+ghci> applyLatePenalty 4
+0
+```
+Both conditions hold: the result comes only from `mark`, the one argument supplied, and evaluating the `if` touches nothing beyond that — no message is printed, no file is opened, no keystroke is read. Call it a thousand times with `45` and it produces `35` every single time, which is the entire practical payoff of purity: you never have to ask "what else has changed since the last time I called this?"
+
+**A variation: a different arity — three arguments instead of one**
+```haskell
+weightedAverage :: Double -> Double -> Double -> Double
+weightedAverage test1 test2 exam = test1 * 0.2 + test2 * 0.2 + exam * 0.6
+```
+```text
+ghci> weightedAverage 60 70 80
+74.0
+```
+Arity — how many arguments a function takes — has nothing to do with whether it passes the test. Condition 1 becomes "the result depends only on `test1`, `test2`, and `exam`, and nothing else"; three named inputs instead of one does not change what "only on the inputs" means, it only changes how many inputs there are to check.
+
+**A variation: zero arguments — a bound constant passes the same test**
+```haskell
+maxLatePenalty :: Integer
+maxLatePenalty = 10
+```
+```text
+ghci> maxLatePenalty
+10
+```
+With no parameters at all, condition 1 is trivially satisfied — there is nothing that could vary, so the result cannot possibly depend on anything except itself — and condition 2 still has to be checked separately: reading `maxLatePenalty` prints nothing and reads nothing, so it passes. A constant is not a special exception to the purity test; it is the test applied to the smallest possible case, arity zero.
+
+**A variation: a function that can crash is still pure**
+```haskell
+safeDivide :: Integer -> Integer -> Integer
+safeDivide x y = if y == 0 then error "safeDivide: division by zero" else div x y
+```
+```text
+ghci> safeDivide 20 4
+5
+ghci> safeDivide 5 0
+*** Exception: safeDivide: division by zero
+```
+This one catches people out: `safeDivide 5 0` does not "return" a value, so it is tempting to call it impure. But re-read the two conditions carefully — neither says the function must produce an ordinary value for every input, only that *whatever* happens must be determined only by the inputs, with no outside interaction along the way. `safeDivide 5 0` crashes with that exact message every single time it is called with `5` and `0`, deterministically, and evaluating it still prints nothing and reads nothing on its own. It is pure and partial at the same time — purity is about *determinism*, not about being *defined everywhere*; whether a function is defined for every input it can be given is a separate property, covered properly as **totality** in [Chapter 10](/docs/sem3/csi243/10-reasoning-revision/notes/errors-and-testing).
+
+**A variation: what actually fails the test**
+```haskell
+-- NOT pure. There is no argument for the result to depend on, and
+-- evaluating it reads a line from the keyboard: an outside-world effect.
+readAndDouble :: IO Integer
+readAndDouble = do
+  line <- getLine
+  return (2 * read line)
+```
+```text
+ghci> readAndDouble
+21
+42
+```
+(Typing `21` at the prompt when `getLine` runs is what produces `42`.) This fails *both* conditions at once, which is worth noticing precisely because the earlier examples only ever failed one condition or passed both. There is no ordinary argument here — `readAndDouble`'s type is `IO Integer`, not `SomeInput -> Integer` — so condition 1 cannot even be checked the same way, and condition 2 fails outright: reading `getLine` is exactly the kind of interaction with the outside world the second half of the test exists to catch. Comparing this against `applyLatePenalty` above is the fastest way to see what the boundary in [Section 10](#10-effects-interaction-with-the-outside-world) is actually protecting: `readAndDouble` is precisely the effectful half of a program that a pure function like `applyLatePenalty` is kept separate from.
 
 ## 9. Immutability and bindings
 

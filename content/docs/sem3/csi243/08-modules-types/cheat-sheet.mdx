@@ -1,0 +1,214 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for modules, imports, type synonyms, and custom data types: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/08-modules-types/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `ModuleName` | The name of a module — must start with a capital letter | `MyCalculator`, `Shapes` |
+| `funcName` | The name you give a function | `addTwo`, `area` |
+| `TypeName` | The name you give a new type | `Shape`, `Result` |
+| `Constructor` | A capitalised value of a `data` type | `Circle`, `Pass` |
+| `Field` | One argument carried by a constructor | `Float`, `String` |
+| `ClassName` | A type class named in a `deriving` clause | `Show`, `Eq`, `Ord` |
+| `Synonym` | The name you give a type synonym | `Metres`, `Pos` |
+
+## 2. Module declaration
+
+**Template:**
+```haskell
+module ModuleName (exportedName1, exportedName2) where
+
+exportedName1 :: ...
+exportedName1 = ...
+
+-- Not listed above: private to this module.
+helperName = ...
+```
+
+**Example — saved as `MyCalculator.hs`:**
+```haskell
+module MyCalculator (addTwo, averageTwo) where
+
+addTwo :: Int -> Int -> Int
+addTwo x y = x + y
+
+averageTwo :: Float -> Float -> Float
+averageTwo a b = (a + b) / 2.0
+```
+```text
+ghci> addTwo 89 23
+112
+```
+Names not in the export list (or every name, if the list is omitted) are exported. `helperName` above is not — it stays private to the module.
+
+<Callout type="warn" title="The filename must match the module name">
+`module MyCalculator where` saved as `Wrong.hs` loads fine on its own — `:load Wrong` succeeds and its functions work. The mismatch only surfaces when *another* module imports it, because GHC finds a module by searching for a file with the matching name:
+```text
+ghci> :load UsesIt.hs
+UsesIt.hs:1:1: error: Could not find module 'MyCalculator'.
+```
+The error points at a module that plainly exists, in the *importing* file — not the renamed one. Match filename to module name from the start: `MyCalculator` lives in `MyCalculator.hs`.
+</Callout>
+
+## 3. The five import forms
+
+<ComparisonTable
+  columns={[
+    { header: 'Form', key: 'form' },
+    { header: 'Brings in', key: 'brings' },
+    { header: 'Use when', key: 'when' }
+  ]}
+  rows={[
+    { form: 'import M', brings: 'Everything M exports', when: 'You use much of a small, familiar module' },
+    { form: 'import M (f, g)', brings: 'Only f and g', when: 'You need a couple of names, dependency documented' },
+    { form: 'import M hiding (f)', brings: 'Everything except f', when: 'One name clashes with yours' },
+    { form: 'import qualified M', brings: 'Everything, prefixed with M.', when: 'Names would otherwise be ambiguous' },
+    { form: 'import qualified M as X', brings: 'Everything, prefixed with X.', when: 'The same, but M is long to type' }
+  ]}
+/>
+
+```haskell
+import Data.Char (toUpper, toLower)   -- selective
+import qualified Data.Map as Map      -- qualified + alias
+
+shout :: String -> String
+shout = map toUpper
+```
+```text
+ghci> shout "csi243"
+"CSI243"
+ghci> Map.lookup "Kago" (Map.fromList [("Kago", 72)])
+Just 72
+```
+Imports must sit at the top of the file, one per line, before any definition. A selective import and `hiding` cannot be combined in one statement; types and type synonyms can never be hidden.
+
+## 4. Type synonym: a rename, not a new type
+
+**Template:**
+```haskell
+type Synonym = ExistingType
+```
+
+**Example:**
+```haskell
+type Age = Int
+
+birthdayOf :: Age -> Age
+birthdayOf a = a + 1
+```
+```text
+ghci> birthdayOf 20
+21
+```
+`Age` and `Int` are, to GHC, the exact same type — the synonym is expanded away before anything is checked. That is also why it adds no protection:
+```haskell
+type Metres = Double
+type Feet   = Double
+-- distance :: Metres; height :: Feet
+```
+```text
+ghci> distance + height
+130.0
+```
+Both operands are simply `Double` once the synonyms are expanded, so mixing metres and feet is accepted. The synonym documented intent; it did not enforce it.
+
+## 5. `data`: a genuinely new type
+
+**Template:**
+```haskell
+data TypeName = Constructor1 Field1 Field2
+              | Constructor2
+  deriving (ClassName1, ClassName2)
+```
+
+**Example:**
+```haskell
+data Shape = Circle Float | Rectangle Float Float
+  deriving (Show, Eq)
+
+area :: Shape -> Float
+area (Circle r)      = pi * r * r
+area (Rectangle w l) = w * l
+```
+```text
+ghci> area (Circle 2.0)
+12.566371
+ghci> Circle 2.0 == Circle 2.0
+True
+```
+`Circle` and `Rectangle` are **constructors** — capitalised values (or, with fields, curried functions) of type `Shape`, never types themselves. Without `deriving (Show)` printing a value fails with `No instance for (Show Shape)`; without `deriving (Eq)`, `==` fails the same way. One equation per constructor is required, or a match is non-exhaustive at run time.
+
+Compare the same idea, built with `data`, that the synonym above could not protect:
+```haskell
+data MetresD = MetresD Double deriving (Show)
+data FeetD   = FeetD Double   deriving (Show)
+```
+```text
+ghci> MetresD 100 + FeetD 30
+<interactive>: error:
+    * Couldn't match expected type 'MetresD' with actual type 'FeetD'
+```
+The compiler now enforces what the synonym could only suggest.
+
+**A variation: record syntax, when a constructor's fields deserve names.**
+```haskell
+data TypeName = Constructor { field1 :: Field1Type, field2 :: Field2Type }
+  deriving (ClassName1, ClassName2)
+```
+```haskell
+data Student = Student { name :: String, mark :: Int } deriving (Show)
+```
+```text
+ghci> let s = Student { name = "Kago", mark = 72 }
+ghci> s
+Student {name = "Kago", mark = 72}
+ghci> name s
+"Kago"
+ghci> mark s
+72
+```
+Naming the fields does two things the plain `Student String Int` form does not: `Show` prints field names alongside values, and `name`/`mark` are automatically generated as ordinary functions (`name :: Student -> String`) — no separate accessor code to write. `Student "Kago" 72` (positional) and `Student { name = "Kago", mark = 72 }` (record) build the identical value; record syntax is a different way to *construct* one, not a different type.
+
+## 6. Type synonym vs. `data` type, at a glance
+
+<ComparisonTable
+  columns={[
+    { header: 'Question', key: 'q' },
+    { header: 'type Synonym', key: 'syn' },
+    { header: 'data TypeName', key: 'dat' }
+  ]}
+  rows={[
+    { q: 'Creates a new type?', syn: 'No — just another name', dat: 'Yes, distinct from every other type' },
+    { q: 'Mixing two of these built on the same base type', syn: 'Accepted — both expand to the same type', dat: 'Rejected at compile time: type mismatch' },
+    { q: 'Needs constructors?', syn: 'No', dat: 'Yes, at least one' },
+    { q: 'Can be recursive?', syn: 'No — no finite expansion', dat: 'Yes — constructors stop the expansion' },
+    { q: 'Good for', syn: 'Readability of an existing type', dat: 'A concept the compiler must keep separate' }
+  ]}
+  highlightCol="dat"
+/>
+
+## 7. Common errors, at a glance
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `Could not find module 'X'` on import | `X` lives in a file with a different name | Rename the file to `X.hs` |
+| `Ambiguous occurrence 'nub'` | Two imported modules export the same name | Use `hiding`, or a qualified import |
+| `Variable not in scope: toUpper` | Not included in a selective import | Add it to the parentheses |
+| Expecting `Metres`/`Feet` not to mix | A `type` synonym is not a distinct type | Use `data` |
+| `type Chain = [Chain]` | Synonyms cannot be recursive | Use `data` |
+| `print (classify 64)` fails | No `Show` instance on the `data` type | Add `deriving (Show)` |
+| `area Circle r = ...` | Constructor patterns need parentheses | `area (Circle r) = ...` |
+| Missing a constructor case | Non-exhaustive patterns at run time | One equation per constructor |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can write a module header and say why its filename must match the module name.' },
+  { type: 'must', text: 'I can pick the right one of the five import forms for a described need in under 10 seconds.' },
+  { type: 'must', text: 'I can say, with an example, why a type synonym adds no type safety while data does.' },
+]} />
+
+Full explanations, worked traces, and more examples: [Modules](/docs/sem3/csi243/08-modules-types/notes/modules) · [Importing](/docs/sem3/csi243/08-modules-types/notes/imports) · [Type Synonyms](/docs/sem3/csi243/08-modules-types/notes/type-synonyms) · [Custom Data Types](/docs/sem3/csi243/08-modules-types/notes/custom-types).

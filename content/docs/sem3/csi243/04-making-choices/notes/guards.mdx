@@ -24,6 +24,36 @@ The rules:
 - The last option should catch everything remaining, using the keyword `otherwise`.
 - There must be at least two guards; there may be many.
 
+| Placeholder | Stands for | Example |
+|---|---|---|
+| `functionName` | The function's name | `getSign`, `grade`, `bmiTell` |
+| `parameters` | The argument(s), named but with no pattern to match on | `n`, `mark`, `weight height` |
+| `condition` | A Boolean test — an expression that evaluates to `True` or `False` | `n < 0`, `mark >= 80` |
+| `result` | What the function evaluates to if that guard is the first one to succeed | `-1`, `"A"` |
+| `otherwise` | A keyword, not a placeholder — it is literally `True`, used as the final, always-succeeding guard | (written exactly as `otherwise`) |
+
+`otherwise` is worth pausing on: it is not special syntax reserved for this position. It is an ordinary Prelude binding, `otherwise = True`, and it works as the last guard for the same reason `True` would — a guard list is read top to bottom, and the first one that evaluates to `True` wins. Writing `otherwise` instead of `True` is a readability convention, not a language requirement.
+
+<Quiz title="Check: what otherwise really is" questions={[
+  {
+    question: "Could you replace the final `| otherwise = 0` in getSign with `| True = 0` and have it behave identically?",
+    options: [
+      "No — otherwise is reserved syntax that True cannot substitute for",
+      "Yes — otherwise is just an ordinary Bool binding equal to True, so a guard list ending in either one behaves exactly the same way",
+      "No — True can only appear as a value, never as a guard",
+      "Yes, but only in the very last guard position, never elsewhere"
+    ],
+    correctIndex: 1,
+    explanation: "otherwise = True in the Prelude, and any guard, anywhere in the list, is evaluated as an ordinary Boolean expression. Writing True directly instead of otherwise changes nothing about how the guard list behaves — only the readability of the source.",
+    optionFeedback: [
+      "otherwise is not a keyword or special syntax — it is a perfectly ordinary top-level binding, exactly as usable or replaceable as any other Bool-valued name.",
+      "Correct — since otherwise is defined as True, the two guards are indistinguishable to the compiler.",
+      "True is a completely ordinary Bool value and can appear as a guard anywhere a Boolean expression is expected, including here.",
+      "Nothing about otherwise's behaviour is special to the last position — it would behave as an always-succeeding guard wherever it was written, though placing it before other guards would make them unreachable, exactly as Pattern Matching's ordering rule warns."
+    ]
+  }
+]} />
+
 Compare the two forms of the same function:
 
 ```haskell
@@ -51,6 +81,22 @@ ghci> getSign 42
 ```
 
 The guarded version reads as a table of cases, which is exactly what the specification was.
+
+As a full program that runs all three branches:
+
+```haskell
+main :: IO ()
+main = do
+  print (getSign (-7))
+  print (getSign 0)
+  print (getSign 42)
+```
+
+```text
+-1
+0
+1
+```
 
 <Quiz title="Check: guard syntax" questions={[
   {
@@ -95,6 +141,24 @@ ghci> grade 42
 "F"
 ```
 
+Wrapped in a program that exercises every letter, including the one the transcript above skips:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (grade 95)
+  putStrLn (grade 85)
+  putStrLn (grade 72)
+  putStrLn (grade 42)
+```
+
+```text
+A
+B
+C
+F
+```
+
 <Mermaid chart={`flowchart TD
   Call["grade score"] --> G1{"score >= 90?"}
   G1 -- Yes --> A["\"A\""]
@@ -113,6 +177,18 @@ grade score
   | score >= 80 = "B"
   | score >= 90 = "A"
   | otherwise   = "F"
+```
+
+Run as a program, this is exactly what happens — no error, no warning, just the wrong answer:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (grade 95)
+```
+
+```text
+C
 ```
 
 `grade 95` now returns `"C"`, because `95 >= 70` is the first `True` guard. The function compiles and runs; it is simply wrong. **Order the guards from the most restrictive condition to the least.**
@@ -156,6 +232,35 @@ grade score
   }
 ]} />
 
+### A second example, a different domain
+
+The same discipline — most restrictive condition first — applies wherever ranges are compared, not just to exam marks:
+
+```haskell
+-- Classify the physical state of water at standard pressure, by Celsius temperature.
+waterState :: Double -> String
+waterState temp
+  | temp <= 0   = "solid"
+  | temp < 100  = "liquid"
+  | otherwise   = "gas"
+```
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (waterState (-5))
+  putStrLn (waterState 25)
+  putStrLn (waterState 100)
+```
+
+```text
+solid
+liquid
+gas
+```
+
+`waterState 100` falls all the way to `otherwise`: `100 <= 0` is `False`, and `100 < 100` is also `False` (100 is not *less than* 100), so `"gas"` is the only guard left standing.
+
 ## 3. `otherwise`
 
 `otherwise` is not special syntax. It is an ordinary name defined in the Prelude as:
@@ -176,6 +281,22 @@ classify n
   | n > 0 = "positive"
   | n < 0 = "negative"
 ```
+
+On inputs that do match a guard, `classify` behaves like any other function:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (classify 5)
+  putStrLn (classify (-3))
+```
+
+```text
+positive
+negative
+```
+
+But `classify` is a **partial function** — it has no guard for zero. Calling it on an input that no guard covers crashes the whole program, not just that one call, which is why this specific case is best seen at the `ghci` prompt rather than guessed at as compiled output:
 
 ```text
 ghci> classify 0
@@ -227,7 +348,96 @@ ghci> describe [-3, 1]
 "starts with zero or a negative"
 ```
 
+Wrapped in a program that runs all four cases:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (describe [])
+  putStrLn (describe [5])
+  putStrLn (describe [7, 1, 2])
+  putStrLn (describe [-3, 1])
+```
+
+```text
+empty
+one element
+starts positive
+starts with zero or a negative
+```
+
 If every guard in an equation fails, matching **falls through to the next equation** rather than failing immediately.
+
+<Quiz title="Check: guards combined with patterns" questions={[
+  {
+    question: "In describe, why does the pattern (x:xs) need a guard at all, instead of just returning one fixed result for every non-empty list?",
+    options: [
+      "Because a pattern is only allowed to select an equation, not decide what result that equation returns",
+      "Because a non-empty list still needs its result to depend on more than just \"is it empty or not\" — whether it has exactly one element, and if not, whether its head is positive — and patterns alone can only express the list's shape, not those further conditions",
+      "Because Haskell requires every multi-equation function to use guards somewhere",
+      "Because null xs is not a valid expression to use inside a guard"
+    ],
+    correctIndex: 1,
+    explanation: "The pattern (x:xs) only tells Haskell \"this list is non-empty, and here are its head and tail.\" It says nothing about whether the tail is itself empty, or what sign x has. Those are exactly the kind of range/compound conditions guards are for, which is why the pattern and the guards work together rather than either alone.",
+    optionFeedback: [
+      "A pattern does exactly this in every other function in this chapter — patterns select the equation whose body runs. describe's equation body just happens to be a guarded expression rather than a single result.",
+      "Correct — the pattern narrows to \"non-empty list\"; the guards then distinguish the further cases within that.",
+      "Plenty of functions in this chapter use no guards at all, e.g. axisOf and stW from the pattern-matching lesson — guards are not mandatory.",
+      "null xs is an ordinary Bool-valued expression, and any Bool-valued expression is valid as a guard condition."
+    ]
+  },
+  {
+    question: "Calling describe [0, 9], which guard fires, and why does describe [] not get tried first?",
+    options: [
+      "describe [] is tried first for every call and always fails before the pattern-matched equation runs",
+      "describe (x:xs) is selected because [0, 9] is non-empty; among its guards, null xs fails (the tail [9] is not empty), so | x > 0 is tried next, and it fails too because x is 0, leaving otherwise to fire",
+      "The first guard, null xs, succeeds because x itself is 0",
+      "This call is rejected as non-exhaustive, since no case covers a list starting with 0"
+    ],
+    correctIndex: 1,
+    explanation: "Equation selection happens first, by pattern: [0, 9] matches (x:xs) with x = 0, xs = [9], not the [] pattern. Then, within that one equation, its guards are checked in order: null xs is False (xs is [9], not []), x > 0 is False (x is 0, not greater than 0), so otherwise supplies the result, \"starts with zero or a negative\".",
+    optionFeedback: [
+      "Equation selection tries patterns in order and commits to the first match; [0, 9] matches (x:xs) directly, not [] — describe [] never runs for this call.",
+      "Correct — pattern selects the equation, then its three guards are checked in order until one succeeds.",
+      "null xs checks whether the tail is empty, not whether x is 0 — for [0, 9], xs is [9], and null [9] is False.",
+      "(x:xs) matches [0, 9] perfectly well; there is no missing case here, and the otherwise guard supplies a defined answer."
+    ]
+  }
+]} />
+
+### A variation: a nested pattern selects the equation, guards do the rest
+
+Section 4's `describe` combined a one-level cons pattern with guards. The same combination works just as well when the pattern nests two layers deep — a tuple inside a tuple — which is worth seeing once here, since [Pattern Matching](/docs/sem3/csi243/04-making-choices/notes/pattern-matching#nested-patterns-a-pattern-can-sit-inside-another-pattern) introduces nested patterns properly but pairs them with a list, not with a run of guards this long.
+
+**Template:**
+```haskell
+funcName (outerPattern innerPattern)
+  | condition1 = expression1
+  | condition2 = expression2
+  | otherwise  = defaultExpression
+```
+
+**Example:**
+```haskell
+-- Classify a rectangle given as two opposite corners.
+rectShape :: ((Int, Int), (Int, Int)) -> String
+rectShape ((x1, y1), (x2, y2))
+  | x1 == x2 && y1 == y2           = "degenerate: both corners the same point"
+  | x1 == x2 || y1 == y2           = "degenerate: a straight line, not a rectangle"
+  | abs (x2 - x1) == abs (y2 - y1) = "square"
+  | otherwise                      = "rectangle"
+```
+```text
+ghci> rectShape ((0,0), (0,0))
+"degenerate: both corners the same point"
+ghci> rectShape ((0,0), (5,0))
+"degenerate: a straight line, not a rectangle"
+ghci> rectShape ((0,0), (4,4))
+"square"
+ghci> rectShape ((0,0), (4,7))
+"rectangle"
+```
+`((x1, y1), (x2, y2))` is one pattern, matched once: a pair of pairs, immediately naming all four coordinates. That single match is what a pattern is *for* — stating the argument's shape. Everything the pattern cannot express — is one corner directly above or beside the other, are the two side lengths equal — is exactly what the four guards below it are for. Notice the same most-restrictive-first discipline as `grade` and `isDiv`: a degenerate rectangle (`x1 == x2 && y1 == y2`) also satisfies the second guard's `||`, so it must be checked first or it would be wrongly reported as merely "a straight line."
 
 ## 5. Sharing work with `where`
 
@@ -252,6 +462,22 @@ ghci> bmiTell 100 1.7
 "obese"
 ```
 
+As a program spanning three of the four bands — underweight, normal, and obese:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (bmiTell 50 1.7)
+  putStrLn (bmiTell 60 1.7)
+  putStrLn (bmiTell 100 1.7)
+```
+
+```text
+underweight
+normal weight
+obese
+```
+
 `bmi` is computed once and is visible to every guard and every result in that equation. It is not visible outside it.
 
 A `where` clause may define several names, and even local functions:
@@ -273,6 +499,20 @@ ghci> rectangleReport 4 4
 "Square with area 16.0"
 ghci> rectangleReport 4 6
 "Rectangle with area 24.0 and perimeter 20.0"
+```
+
+As a program:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (rectangleReport 4 4)
+  putStrLn (rectangleReport 4 6)
+```
+
+```text
+Square with area 16.0
+Rectangle with area 24.0 and perimeter 20.0
 ```
 
 <Callout type="warn" title="Indentation carries meaning">
@@ -358,6 +598,20 @@ ghci> isVowel 'z'
 False
 ```
 
+```haskell
+main :: IO ()
+main = do
+  print (isVowel 'a')
+  print (isVowel 'E')
+  print (isVowel 'z')
+```
+
+```text
+True
+True
+False
+```
+
 Or, staying with guards and no import:
 
 ```haskell
@@ -374,6 +628,20 @@ True
 ghci> isVowel 'A'
 True
 ghci> isVowel 'x'
+False
+```
+
+```haskell
+main :: IO ()
+main = do
+  print (isVowel 'a')
+  print (isVowel 'A')
+  print (isVowel 'x')
+```
+
+```text
+True
+True
 False
 ```
 
@@ -468,6 +736,24 @@ isDiv m n
 ```
 
 The order is forced by the specification. Both `m == n` and `m < n` must be tested *before* the divisibility test, because `mod` would otherwise report a true but unwanted answer for equal values — and would divide by zero if `n` were `0`. Guards let you state those preconditions as ordinary readable lines.
+
+As a program exercising all four branches:
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn (isDiv 8 4)
+  putStrLn (isDiv 8 3)
+  putStrLn (isDiv 3 8)
+  putStrLn (isDiv 4 4)
+```
+
+```text
+Yes, m is divisible by n
+No, m is not divisible by n
+m should be greater than n
+m and n are equal
+```
 
 </Accordion>
 </Accordions>

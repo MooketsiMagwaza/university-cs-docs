@@ -32,6 +32,36 @@ The argument moves away from the base case with every call. This is an infinite 
 This is the gap to watch for. `Integer` includes negatives; the specification does not. Whenever a type admits values your specification excludes, you must decide explicitly what happens to them.
 </Callout>
 
+<Mermaid chart={`flowchart TD
+  A["fac (-4)"] --> B["(-4) * fac (-5)"]
+  B --> C["(-4) * ((-5) * fac (-6))"]
+  C --> D["... continues forever, memory grows"]
+  E["fac 5"] --> F["5 * fac 4"]
+  F --> G["5 * (4 * fac 3)"]
+  G --> H["... reaches fac 0 = 1, unwinds to 120"]
+  style D fill:#ff453a,stroke:#ff453a,color:#fff
+  style H fill:#30d158,stroke:#30d158,color:#fff`} caption="Both calls follow the exact same recursive rule. The only difference is which direction the argument moves: fac 5 counts down to the base case 0; fac (-4) counts away from it, past every integer, forever. Nothing in the type signature Integer -> Integer distinguishes these two cases — only the value does." />
+
+<Quiz title="Check: why fac (-4) never terminates" questions={[
+  {
+    question: "fac 5 and fac (-4) both call the exact same definition, fac n = n * fac (n - 1). Why does one terminate and the other never does?",
+    options: [
+      "fac (-4) is a different, buggier function than fac 5 uses",
+      "Both recursive calls shrink n by exactly 1 each time, but only fac 5's argument is moving toward the base case (n == 0 or n <= 1); fac (-4)'s argument moves further from it with every call and never reaches it",
+      "Negative numbers are not valid Integer values, so GHC rejects fac (-4) before it runs",
+      "GHCi has a bug specifically with negative recursion"
+    ],
+    correctIndex: 1,
+    explanation: "n - 1 shrinks the argument by exactly one either way. Termination depends on whether that shrinking direction actually leads to a base case that exists for this input. 5, 4, 3, 2, 1, 0 hits the base case fac 0 = 1 after five steps. -4, -5, -6, ... never hits n == 0 or n <= 1 in the direction it's moving, so the recursive step fires forever.",
+    optionFeedback: [
+      "It is the same definition, applied to the same rule, fac n = n * fac (n - 1) — there is only one fac here, called on two different arguments.",
+      "Correct. This is exactly the distinction Section 6's termination checklist is built around: shrinking the argument is not enough; it has to shrink toward an existing base case.",
+      "Integer includes negative numbers by definition (unlike a type such as a hypothetical Natural) — GHC's type checker has no way to know this particular function's specification excludes them, which is exactly the callout's point above.",
+      "This is not a bug; it is the direct, correct consequence of the recursive definition given no guard against negative input — GHC is running exactly what was written."
+    ]
+  }
+]} />
+
 ## 2. Three ways to close the gap
 
 | Approach | What it does | When to use it |
@@ -71,7 +101,37 @@ ghci> fac (-1)
 *** Exception: fac: only defined for non-negative integers
 ```
 
-Compare the two behaviours. Before, `fac (-1)` hung forever with no explanation. Now it stops immediately and names the problem. The specification that produced it:
+Compare the two behaviours. Before, `fac (-1)` hung forever with no explanation. Now it stops immediately and names the problem.
+
+Seeing this inside a real program, not just at the prompt, makes the difference concrete:
+
+```haskell
+-- File: Fac.hs
+fac :: Integer -> Integer
+fac n
+  | n < 0            = error "fac: only defined for non-negative integers"
+  | n >= 0 && n <= 1 = 1
+  | otherwise        = n * fac (n - 1)
+
+main :: IO ()
+main = do
+  print (fac 5)
+  print (fac 0)
+  print (fac (-1))    -- this line is what stops the program
+```
+
+```text
+ghci> :load Fac.hs
+Ok, one module loaded.
+ghci> main
+120
+1
+*** Exception: fac: only defined for non-negative integers
+```
+
+The first two `print` calls run to completion, in order, exactly as written. `print (fac (-1))` is where the program actually stops — everything before that line already finished and its output is already on the screen; nothing after it (if there were more lines) would ever run. `error` does not merely produce a value that happens to look like an error; it aborts the entire `IO` action currently running, which is why no later `print` in the same `do` block could ever "recover" and continue.
+
+The specification that produced it:
 
 ```text
 fac n = | 1                if n = 0
@@ -95,6 +155,26 @@ An error message is read by someone trying to fix a program, often under time pr
 
 Prefix the message with the function name. When the failure surfaces from deep inside a program, that prefix is often the only clue to its origin.
 
+<Quiz title="Check: error's type and its message" questions={[
+  {
+    question: "error :: String -> a. Why is the result type the fully general a, rather than something like error :: String -> Integer?",
+    options: [
+      "Because error secretly returns the empty string as a placeholder value of any type",
+      "Because error never actually returns a value at all — it aborts the computation — so it can be used anywhere a value of any type was expected, including Integer, Bool, or a list, without needing a separate version for each",
+      "Because a is a shorthand GHC uses specifically for String",
+      "Because error's type is a mistake in the Prelude that happens to still work"
+    ],
+    correctIndex: 1,
+    explanation: "The lesson states this directly: error's result type is a, any type at all, precisely because it never returns — not because it produces some universal placeholder value. This lets error 'fac: ...' stand in for a missing Integer in fac's otherwise-total definition, or a missing value of any other type elsewhere, using the exact same function.",
+    optionFeedback: [
+      "error does not return the empty string, or anything else — it raises an exception and control never reaches the point that expected a return value.",
+      "Correct. Being able to fit anywhere a value is expected is possible precisely because no value is ever actually produced.",
+      "a here is an ordinary type variable, exactly like the a in map :: (a -> b) -> [a] -> [b] — it means 'any type', not a synonym for String.",
+      "This is standard, deliberate Prelude design, used throughout Haskell for exactly this purpose — not an accident."
+    ]
+  }
+]} />
+
 ## 4. Extending the base case instead
 
 Sometimes the extra values have a sensible answer, and inventing an error would be unhelpful. `rangeSum` from the previous lesson is an example: a reversed range can reasonably be treated as empty.
@@ -107,7 +187,52 @@ rangeSum m n
   | otherwise = m + rangeSum (m + 1) n
 ```
 
+Three calls, three different shapes of input, run inside one program to show the base case actually catching the reversed case rather than crashing on it:
+
+```haskell
+-- File: RangeSum.hs
+rangeSum :: Integer -> Integer -> Integer
+rangeSum m n
+  | m > n     = 0          -- an empty range sums to zero
+  | m == n    = m
+  | otherwise = m + rangeSum (m + 1) n
+
+main :: IO ()
+main = do
+  print (rangeSum 1 5)   -- an ordinary ascending range
+  print (rangeSum 3 3)   -- a range of exactly one number
+  print (rangeSum 5 1)   -- reversed: m > n, treated as empty
+```
+
+```text
+15
+3
+0
+```
+
+`rangeSum 5 1` does not error, does not hang, and does not need a guard rejecting it — it simply falls into the first guard, `m > n`, and returns the documented answer for an empty range. Compare this with `fac`, where the equivalent out-of-domain call (`fac (-1)`) was made to error instead. The difference is not a rule about recursion; it is a difference in what each specification decided a reversed or negative input should *mean*.
+
 This is a design decision, not a rule. Ask which answer a caller would find more useful, and document the choice in a comment.
+
+<Quiz title="Check: reject or extend?" questions={[
+  {
+    question: "fac chooses to error on negative input; rangeSum chooses to return 0 on a reversed range. Both are 'out of the originally imagined domain'. Why are they handled differently?",
+    options: [
+      "rangeSum's author forgot to add error handling",
+      "Because the two situations differ in whether a sensible, useful answer exists: an empty range summing to 0 is mathematically natural and safe to return silently, whereas there is no non-arbitrary numeric answer for the factorial of a negative number",
+      "error only works for functions with one argument, and rangeSum takes two",
+      "Because rangeSum is a pure function and fac is not"
+    ],
+    correctIndex: 1,
+    explanation: "The lesson is explicit that this is a design decision, not a fixed rule: extend the base case when a sensible answer exists and returning it silently would not hide a real bug; error when no sensible answer exists, or when silently returning something could mask a caller's mistake. 0 for an empty range satisfies the first; there is no such candidate value for factorial of a negative number.",
+    optionFeedback: [
+      "rangeSum 5 1 = 0 is a deliberate design choice stated directly above, not a missing feature.",
+      "Correct. This is exactly the 'ask which answer a caller would find more useful' judgement call the lesson describes — the two functions simply have different answers to that question.",
+      "error :: String -> a works regardless of how many arguments the calling function takes; guards inside a two-argument function can call error exactly as freely as a one-argument function's can.",
+      "Both rangeSum and fac (once guarded) are equally pure functions — purity has no bearing on this design choice at all."
+    ]
+  }
+]} />
 
 ## 5. Why `error` is a blunt instrument
 
@@ -131,6 +256,43 @@ That is acceptable for laboratory functions with a clearly stated domain, and it
 />
 
 The `Maybe` type belongs to Chapter 9, once custom types and polymorphism are available. Until then, `error` plus an honest comment is the right tool.
+
+<Quiz title="Check: error as a blunt instrument" questions={[
+  {
+    question: "The comparison table lists four approaches to invalid input. What is the one thing that distinguishes a Maybe result from all three of the others?",
+    options: [
+      "It is the only approach that avoids a run-time cost entirely",
+      "It is the only approach where the caller can recover — the other three either loop forever, crash obscurely, or stop with a message, none of which hand control back to the caller",
+      "It is the only approach that works for recursive functions specifically",
+      "It is the only approach that does not require a type signature"
+    ],
+    correctIndex: 1,
+    explanation: "The table's \"Can the caller recover?\" column reads No, No, Not needed, and Yes — only for Maybe. No handling at all and error both stop the program (looping or crashing) with nothing the caller can do about it. Extending the base case sidesteps the question by returning a normal, defined value. Only Maybe hands the caller a value — Nothing — that it can inspect and respond to.",
+    optionFeedback: [
+      "The table makes no claim about run-time cost for any of the four approaches; the distinguishing column is about recoverability, not performance.",
+      "Correct — Maybe is the only row marked Yes under \"Can the caller recover?\"; every other approach either has no failure case to recover from, or offers no way back once it fails.",
+      "Nothing about Maybe is specific to recursive functions — the table's comparison applies to any function that might receive invalid input, recursive or not.",
+      "Every one of the four approaches still requires an ordinary type signature; this is not what sets Maybe apart."
+    ]
+  },
+  {
+    question: "Why does the lesson call error a 'blunt instrument' specifically, rather than simply calling it wrong or discouraging its use?",
+    options: [
+      "Because error is buggy and sometimes fails to stop the program",
+      "Because error does exactly what it is designed to do — stop evaluation immediately with a message — but that same behaviour aborts the whole program with no way for surrounding pure code to catch it or offer another attempt, which is a real cost even when it is the right tool for the job",
+      "Because error cannot be given a custom message",
+      "Because error only works inside recursive functions"
+    ],
+    correctIndex: 1,
+    explanation: "The lesson is explicit that error's stopping-the-program behaviour is 'acceptable for laboratory functions with a clearly stated domain, and it is what this course uses' — it is not being called a mistake. 'Blunt instrument' names the trade-off: it works, but it is total and unrecoverable, unlike a Maybe result the caller could inspect and route around.",
+    optionFeedback: [
+      "error works entirely reliably — it always stops evaluation exactly as documented. The concern is about what that stopping costs, not about a malfunction.",
+      "Correct — error is doing its job correctly; the 'blunt' part is that it is the only tool available and it offers no recovery path, not that it is malfunctioning.",
+      "error \"fac: only defined for non-negative integers\" shows a custom message being supplied without any trouble — this is not the limitation being described.",
+      "error works in any function, recursive or not — nothing about its behaviour is tied to recursion specifically."
+    ]
+  }
+]} />
 
 ## 6. A checklist for termination
 

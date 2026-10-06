@@ -67,4 +67,44 @@ export const flashcardData = [
     front: "`type` or `data`?",
     back: "Use type for readability of an existing type; it is interchangeable and cannot recurse. Use data when you need a genuinely new type, enforced separation, or recursion.",
   },
+  {
+    front: "What is `newtype`, and why use it instead of `data` for a single-field wrapper like `Metres`?",
+    back: "newtype Metres = Metres Double creates a type as genuinely distinct as data would — mixing Metres and Feet is still a compile error — but the wrapper is erased entirely at compile time, so a newtype value costs no more than the Double it holds. It's data's type safety at type's run-time price.",
+  },
+  {
+    front: "What restriction does `newtype` have that `data` does not?",
+    back: "A newtype allows exactly one constructor with exactly one field. newtype Shape = Circle Float | Rectangle Float Float is rejected — GHC needs exactly one way to build and unwrap the value to erase it safely. More constructors, more fields, or recursion all require data.",
+  },
+  {
+    front: "Given `data Student = Student { studentName :: String, studentMark :: Int }`, what does GHC generate automatically?",
+    back: "One accessor function per named field — studentName :: Student -> String and studentMark :: Student -> Int — with no pattern match written by hand. Values also print with their field names attached, e.g. Student {studentName = \"Kago\", studentMark = 72}.",
+  },
+  {
+    front: "What does `kago { studentMark = 75 }` actually do, and what happens to `kago` itself?",
+    back: "It builds and returns a brand-new Student, copying every field from kago except studentMark. kago itself is completely unchanged — there is no mutation in pure Haskell, so the new value must be bound to a name to be kept.",
+  },
+  {
+    front: "Is `data StudentP = StudentP String Int Bool` a Haskell \"record\"?",
+    back: "No. That's a positional constructor — reading one field means pattern matching all three positions and discarding the rest, e.g. (StudentP _ mark _). A real record needs curly braces after the constructor name, Student { studentName :: String, ... }, which is what generates accessors and enables { field = value } update syntax.",
+  },
+  {
+    front: "`import qualified Data.Map as Map` and `import qualified Data.Set as Map` appear in the same file. What happens?",
+    back: "An error — Data.Map and Data.Set both export overlapping names (like insert, empty), so sharing the alias Map between them creates an ambiguous-name conflict. Several modules may share an alias only if none of their names actually clash.",
+  },
+  {
+    front: "A file named `calc.hs` contains `module Calculator where`. What happens when another file does `import Calculator`?",
+    back: "GHC reports \"Could not find module Calculator\" — it finds modules by searching for a matching filename (Calculator.hs), not by reading file contents. Loading calc.hs directly with :load calc still works fine on its own; the mismatch only breaks an import from elsewhere.",
+  },
+  {
+    front: "After `Map.insert \"Sipho\" 55 marks`, what is `marks` itself, and what does `Map.lookup` return for a missing key?",
+    back: "marks is unchanged — Map.insert returns a new map, like every Haskell update. Map.lookup returns a Maybe: Just value if the key is present, Nothing if it's missing.",
+  },
+  {
+    front: "What is a parameterised type synonym? Give `Pair` and `Assoc`.",
+    back: "A type declaration taking lowercase type-variable parameters, instantiated differently at each use. type Pair a = (a, a) and type Assoc k v = [(k, v)] — Assoc is a lookup table from keys to values, e.g. marks :: Assoc String Int.",
+  },
+  {
+    front: "Can you write `import Data.List (sort) hiding (nub)`?",
+    back: "No — a selective import and hiding cannot be combined in the same statement. An import either lists what you want (selective) or what you don't want (hiding), never both. Use hiding alone if you need most of a module minus a couple of names.",
+  },
 ];
