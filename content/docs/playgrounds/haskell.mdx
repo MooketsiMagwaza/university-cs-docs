@@ -1,0 +1,77 @@
+---
+title: "Haskell Playground"
+description: "Run CSI243 Haskell expressions in the browser, and learn how the playground works under the hood."
+---
+
+## Try it yourself
+
+<HaskellPlayground />
+
+This is the same runner used in the [CSI243 notes](/docs/sem3/csi243/playground). It is labelled **Course subset** on purpose: it is not GHC, it is a small interpreter written for this site that covers the expression and list-processing ideas taught in the course.
+
+## How the Haskell playground works
+
+Python, SQL and JavaScript playgrounds hand your code to an existing engine. There is no practical way to run the Glasgow Haskell Compiler inside a web page, so the Haskell playground is different: **the site contains its own tiny Haskell interpreter, written in TypeScript** (the file `lib/haskell-simulator.ts` in the site's source). When you press **Run code**, your text goes through the same stages as a real language implementation, only much smaller.
+
+### 1. Split the program into lines and statements
+
+The runner reads your program one line at a time. It skips blank lines, `--` comments and type-signature lines such as `double :: Int -> Int`, and it strips a leading `ghci>` so you can paste from a GHCi session. Then it classifies each remaining line:
+
+| Line looks like | Treated as |
+|---|---|
+| `double x = x * 2` | a function definition (name, parameters, body) |
+| `limit = 10` | a constant, evaluated once |
+| `main = do` followed by indented lines | a block of `let`, `print` and `putStrLn` statements |
+| `main = print (...)` | a one-line program |
+| anything else | an expression to evaluate and show |
+
+### 2. Tokenize
+
+The tokenizer turns characters into **tokens**: numbers, strings, characters, names, operators such as `++` and `<-`, and punctuation. Each token remembers its line and column, which is how errors can later say "line 3, column 12".
+
+### 3. Parse into a tree
+
+The parser reads the tokens and builds an **expression tree**. It uses operator precedence, so `1 + 2 * 3` becomes a `+` node whose right child is a `*` node, and function application binds tighter than any operator, so `f x + 1` means `(f x) + 1`. The tree has node types for literals, variables, lists, ranges such as `[1..10]`, tuples, list comprehensions, lambdas, `if/then/else`, infix operators and applications. A malformed line stops here and is reported as a **Parse error** with a position.
+
+### 4. Build the environment
+
+The environment is a table from names to values. It starts with the library, such as `map`, `filter`, `foldr`, `zipWith`, `take` and `length`. Every function value carries two things: how many arguments it needs (its **arity**) and the arguments it has received so far. Applying a function to fewer arguments than it needs does not fail. It returns a new function that remembers what it already got:
+
+```haskell
+add x y = x + y
+
+main = print (map (add 10) [1, 2, 3])
+```
+
+Here `add 10` has received one of its two arguments, so it becomes a function waiting for the second. That is exactly **partial application and currying**, so the playground demonstrates the course idea rather than hiding it. Your own definitions are added to the environment as functions with the same shape.
+
+### 5. Evaluate the tree
+
+The evaluator walks the tree from the root downwards. A literal returns its value, a variable looks itself up in the environment, and an application evaluates the function and its argument and then applies one to the other. A lambda or a user-defined function copies the environment, binds its parameters, and evaluates its body in that copy, which is how local variables and recursion work.
+
+Two details are worth knowing:
+
+- **Evaluation is strict.** Arguments are evaluated before the call. Real Haskell is lazy.
+- **Ranges are lazy.** `[1..]` is stored as an iterator that produces the next number only when asked, so `take 5 (map (*2) [1..])` works, while printing a bare `[1..]` is refused with a hint to use `take`.
+
+### 6. Guard against runaway programs
+
+Every evaluation step increments a counter. After **50,000 steps** the run stops with `Evaluation limit exceeded`, and list comprehensions stop at 10,000 results. A very deep chain of calls is also caught if it exhausts the browser's call stack first. A recursive function with no base case therefore ends with a helpful hint instead of freezing the browser tab.
+
+### 7. Report errors in GHC's style
+
+There is **no type inference**. Instead, every built-in operation checks the shape of its inputs as it runs. If `map` receives a list where it needs a function, or `+` receives a string, the runner raises a **Type error** worded like GHC's:
+
+```haskell
+main = print (map [1,2,3] (*2))
+```
+
+Here the first argument of `map` is a list where a function is needed, so the runner reports `Expected a function, but received [Integer]`. The three categories are **Parse error** (the text is not valid), **Type error** (a value of the wrong kind met an operation) and **Runtime error** (the program was valid but failed, such as running out of steps).
+
+### 8. Format the result like `show`
+
+Finally `print` converts the value to text using Haskell's `show` conventions: strings in double quotes, characters in single quotes, lists in brackets, tuples in parentheses. `putStrLn` prints a string as is.
+
+### What this means for your practice
+
+Because types are checked while running, rather than before, a type mistake inside code that never executes is invisible to the playground, but GHC would reject it. Type signatures are read and ignored. Pattern-matching equations, guards, `where`, imports, custom data types, type classes and input functions such as `getLine` are outside the subset. For those, use [GHCi](/docs/sem3/csi243/02-expressions-types/notes/ghci) or a compiled `.hs` file. Use the playground to **build intuition quickly**, then confirm important work in real GHC.
