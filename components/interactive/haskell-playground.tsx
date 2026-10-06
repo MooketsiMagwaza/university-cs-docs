@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Play, RotateCcw, TerminalSquare } from 'lucide-react';
 import { runHaskell, type HaskellRunResult } from '@/lib/haskell-simulator';
 
@@ -89,23 +89,23 @@ export function HaskellPlayground({
   description = 'Edit a course example, run it in the browser, and inspect the result or diagnostic.',
   initialCode = examples[0].code,
 }: HaskellPlaygroundProps) {
+  const exampleSelectId = useId();
+  const initialExampleIndex = examples.findIndex((example) => example.code === initialCode);
   const [code, setCode] = useState(initialCode);
   const [result, setResult] = useState<HaskellRunResult | null>(null);
-  const [selectedExample, setSelectedExample] = useState(
-    String(Math.max(0, examples.findIndex((example) => example.code === initialCode))),
-  );
+  const [selectedExample, setSelectedExample] = useState(initialExampleIndex >= 0 ? String(initialExampleIndex) : 'lesson');
 
   const run = () => setResult(runHaskell(code));
 
   const reset = () => {
-    const fallback = examples[Number(selectedExample)]?.code ?? initialCode;
+    const fallback = selectedExample === 'lesson' ? initialCode : examples[Number(selectedExample)]?.code ?? initialCode;
     setCode(fallback);
     setResult(null);
   };
 
   const selectExample = (index: string) => {
     setSelectedExample(index);
-    setCode(examples[Number(index)].code);
+    setCode(index === 'lesson' ? initialCode : examples[Number(index)].code);
     setResult(null);
   };
 
@@ -129,16 +129,18 @@ export function HaskellPlayground({
             <p className="mb-0 mt-2 max-w-3xl text-sm text-fd-muted-foreground">{description}</p>
           </div>
           <label
-            htmlFor="haskell-example"
+            htmlFor={exampleSelectId}
             className="flex shrink-0 items-center gap-2 text-sm text-fd-muted-foreground"
           >
             Example
             <select
-              id="haskell-example"
+              id={exampleSelectId}
+              aria-label="Example"
               value={selectedExample}
               onChange={(event) => selectExample(event.target.value)}
               className="rounded-lg border border-fd-border bg-fd-background px-3 py-2 text-sm text-fd-foreground"
             >
+              {initialExampleIndex < 0 && <option value="lesson">This lesson</option>}
               {examples.map((example, index) => (
                 <option key={example.label} value={index}>{example.label}</option>
               ))}
