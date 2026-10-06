@@ -37,7 +37,7 @@ type Expr =
   | { kind: 'variable'; name: string; position: Position }
   | { kind: 'list'; items: Expr[]; position: Position }
   | { kind: 'comprehension'; output: Expr; qualifiers: ComprehensionQualifier[]; position: Position }
-  | { kind: 'range'; start: Expr; end?: Expr; position: Position }
+  | { kind: 'range'; start: Expr; next?: Expr; end?: Expr; position: Position }
   | { kind: 'tuple'; items: Expr[]; position: Position }
   | { kind: 'application'; fn: Expr; argument: Expr; position: Position }
   | { kind: 'infix'; operator: string; left: Expr; right: Expr; position: Position }
@@ -410,6 +410,17 @@ class Parser {
     }
 
     const items = [first];
+    if (this.current().text === ',') {
+      this.consume(',');
+      const second = this.parseExpression(0, new Set());
+      if (this.current().text === '..') {
+        this.consume('..');
+        const end = this.current().text === ']' ? undefined : this.parseExpression(0, new Set());
+        this.consume(']');
+        return { kind: 'range', start: first, next: second, end, position: start };
+      }
+      items.push(second);
+    }
     while (this.current().text === ',') {
       this.consume(',');
       items.push(this.parseExpression(0, new Set()));
@@ -646,20 +657,36 @@ function evaluate(expression: Expr, environment: Environment, context: EvalConte
       return { kind: 'tuple', items: expression.items.map((item) => evaluate(item, environment, context)) };
     case 'range': {
       const start = expectInteger(evaluate(expression.start, environment, context), expression.position);
+      const next = expression.next
+        ? expectInteger(evaluate(expression.next, environment, context), expression.position)
+        : start + 1;
+      const step = next - start;
       if (expression.end) {
         const end = expectInteger(evaluate(expression.end, environment, context), expression.position);
-        if (Math.abs(end - start) > 10_000) {
+        if (step === 0) {
+          throw new SimulatorError(
+            'Runtime error',
+            'A finite stepped range cannot use a zero step in the practice runner.',
+            expression.position,
+            'Change the second value so it differs from the first, for example [1,2..5].',
+          );
+        }
+        if ((step > 0 && end < start) || (step < 0 && end > start)) return [];
+        const length = Math.floor((end - start) / step) + 1;
+        if (length > 10_001) {
           throw new SimulatorError('Runtime error', 'Finite ranges are limited to 10,001 values in the practice runner.', expression.position);
         }
-        if (end < start) return [];
-        return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+        return Array.from({ length }, (_, index) => start + index * step);
       }
       return {
         kind: 'lazy-list',
-        description: `[${start}..]`,
+        description: expression.next ? `[${start},${next}..]` : `[${start}..]`,
         iterator: function* () {
           let current = start;
-          while (true) yield current++;
+          while (true) {
+            yield current;
+            current += step;
+          }
         },
       };
     }

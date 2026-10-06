@@ -44,7 +44,7 @@ square :: Integer -> Integer
 
 Read strictly left to right, one arrow at a time: "`square` takes an `Integer`, and gives back an `Integer`." That is the entire signature — nothing is hidden, nothing is implied beyond what is written.
 
-<Mermaid chart={`flowchart LR
+<SiteDiagram chart={`flowchart LR
   A[Integer] -->|square| B[Integer]`} caption="One arrow, one input, one output: square consumes an Integer and produces an Integer. The arrow names the function that connects them." />
 
 A signature with only one `->` is as simple as this notation gets. Real functions often need more than one input, which means more than one arrow — and the reading rule does not change, it just gets applied more than once.
@@ -420,6 +420,16 @@ square (3 + 4)
 
 Parentheses communicate the second intention explicitly.
 
+<HaskellTryIt
+  title="Try precedence yourself"
+  description="Change the parentheses and predict which operation happens first before running the program."
+  code={`square n = n * n
+
+main = do
+  print (square 3 + 4)
+  print (square (3 + 4))`}
+/>
+
 ## A mechanical type-checking method
 
 Consider:
@@ -442,6 +452,12 @@ not 3
 ```
 
 `not` requires `Bool`, but `3` is numeric. The expression is rejected before evaluation.
+
+<HaskellTryIt
+  title="Read a type error"
+  description="Run the broken line, use the diagnostic to identify the expected type, then replace 3 with a Boolean expression."
+  code={`main = print (not 3)`}
+/>
 
 <Quiz title="Check: the mechanical type-checking method" questions={[
   {
@@ -544,6 +560,97 @@ Defaulting is a convenience for the GHCi prompt, not a design tool. In a saved p
       "Correct. This is exactly the reasoning that separates 2 + 3 (defaults to Integer) from 2.5 (defaults to Double): which typeclass is actually required.",
       "The choice is not random; it follows the same deterministic defaulting rule every time, based on which typeclass constraint remains.",
       "2.5 is an ordinary, valid floating-point literal — it evaluates and displays without any error."
+    ]
+  }
+]} />
+
+## Static typing and lazy evaluation are different ideas
+
+The phrase “Haskell is lazily typed” mixes up two independent questions:
+
+1. **When are types checked?** Haskell is **statically typed**: GHC checks types before the program executes.
+2. **When are values calculated?** Haskell is **lazily evaluated** (more precisely, non-strict): an expression is normally calculated only when its result is demanded.
+
+| Axis | Haskell's choice | Meaning |
+|---|---|---|
+| Type checking | Static | An ill-typed program is rejected before `main` runs |
+| Type annotations | Often inferred | You may omit many signatures because GHC can infer them; this is still static typing |
+| Value evaluation | Lazy / non-strict | A well-typed expression may remain unevaluated until another expression needs its value |
+
+### Type inference is not lazy typing
+
+When GHC infers the type of `double x = x * 2`, it is not postponing type checking until `double` is called. It solves the type constraints while compiling or loading the definition and concludes that `double` needs a numeric input and produces the same numeric type. Inference changes who *writes* the type—the compiler instead of the programmer—not *when* the type is checked.
+
+This program is rejected even though the bad branch would never be selected:
+
+```haskell
+bad = if True then 1 else "not a number"
+```
+
+The condition's value is clearly `True`, but both branches belong to one `if` expression and must have one shared type. Static type checking examines the whole expression before evaluation; laziness does not provide an escape hatch around the type system.
+
+### What lazy evaluation postpones
+
+Consider:
+
+```haskell
+first :: a -> b -> a
+first x _ = x
+
+answer = first 3 (10 `div` 0)
+```
+
+`answer` evaluates to `3`. The second argument is well typed, but calculating it would cause division by zero. `first` never uses that argument—the wildcard says its value is irrelevant—so lazy evaluation never demands the division and it is never performed.
+
+This does **not** mean the second argument has no type. GHC still checks that `(10 `div` 0)` is a valid numeric expression. Laziness postpones or avoids its **value calculation**, not its **type checking**.
+
+### Thunks: a useful beginner mental model
+
+An expression that has been defined but not yet evaluated can be pictured as a **thunk**: a suspended recipe together with the environment needed to run it. If the value is demanded, Haskell evaluates the thunk and normally remembers the result so later demands can reuse it. This behaviour is called **sharing**; it prevents the same named computation from being repeated every time it is read.
+
+Do not imagine that Haskell eagerly constructs an infinite object in memory. For `[1..]`, it can construct the first list cell—`1` and a suspended recipe for the rest—without constructing the rest. Then:
+
+```haskell
+take 5 [1..]
+```
+
+demands only enough of the range to produce five cells. After `[1,2,3,4,5]` has been produced, `take 0 _ = []` stops demanding the tail, so the unbounded remainder is never generated.
+
+### Demand determines how far evaluation goes
+
+Different consumers demand different amounts:
+
+| Expression | What it demands |
+|---|---|
+| `head [1..]` | Only the first list cell |
+| `take 5 [1..]` | The first five cells |
+| `length [1..]` | Every cell, so it never finishes |
+| `print [1..]` | More cells forever because printing the complete list never reaches an end |
+
+Laziness is therefore powerful but not magic. A finite consumer can use a finite prefix of an infinite producer. A consumer that needs the complete infinite structure still diverges.
+
+### The four combinations are conceptually possible
+
+Typing strategy and evaluation strategy are separate axes. A language may be statically typed and strict, dynamically typed and strict, statically typed and lazy, or dynamically typed and lazy. Haskell's combination is **static typing plus lazy evaluation**. The precise sentence to use in an exam is:
+
+> Haskell checks types before execution, but evaluates well-typed expressions only when their values are demanded.
+
+<Quiz title="Check: static types versus lazy values" questions={[
+  {
+    question: "Why is 'Haskell is lazily typed' inaccurate?",
+    options: [
+      "Because Haskell has no type system",
+      "Because Haskell is statically typed; laziness describes when well-typed values are evaluated, while type inference still happens before execution",
+      "Because every Haskell expression is evaluated immediately",
+      "Because lazy evaluation applies only to Strings"
+    ],
+    correctIndex: 1,
+    explanation: "Static typing and lazy evaluation answer different questions. GHC checks whether expressions fit their types before running the program; only the calculation of a valid expression's value may be postponed until demanded.",
+    optionFeedback: [
+      "Haskell has a strong static type system; the confusion is between typing and evaluation, not an absence of types.",
+      "Correct. Inference may spare you from writing a signature, but it does not postpone checking until run time.",
+      "That describes strict evaluation, the opposite of Haskell's normal non-strict strategy.",
+      "Laziness applies broadly to expressions and data structures, not only text."
     ]
   }
 ]} />
