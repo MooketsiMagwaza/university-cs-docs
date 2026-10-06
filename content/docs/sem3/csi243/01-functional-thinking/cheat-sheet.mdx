@@ -1,0 +1,198 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for pure functions, immutability, expressions vs statements, and the pure-core/effectful-boundary idea: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/01-functional-thinking/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `funcName` | The name you give the function | `isPassingScore`, `greeting`, `circleArea` |
+| `param` | A name that receives an input value | `score`, `radius`, `name` |
+| `expression` | What the function's body evaluates to | `score >= 50`, `pi * radius * radius` |
+| `condition` | A Boolean test | `score >= 50`, `mark < 0` |
+
+## 2. The two-part purity test
+
+**Template:**
+```haskell
+funcName :: InputType -> OutputType
+funcName param = expression
+-- Pure only if BOTH hold:
+-- 1. the result depends only on param (and any other arguments)
+-- 2. evaluating it causes no outside-world effect
+```
+
+**Example:**
+```haskell
+isPassingScore :: Integer -> Bool
+isPassingScore score = score >= 50
+```
+```text
+ghci> isPassingScore 42
+False
+ghci> isPassingScore 73
+True
+ghci> isPassingScore 73
+True
+```
+Calling it twice with `73` gives the same answer both times — nothing ran in between that could have changed it.
+
+**The same test applies whatever the arity — two arguments:**
+```haskell
+bothPass :: Integer -> Integer -> Bool
+bothPass a b = a >= 50 && b >= 50
+```
+```text
+ghci> bothPass 60 70
+True
+ghci> bothPass 40 70
+False
+```
+**...or zero arguments — a bound constant is still pure, by the same two-part test:**
+```haskell
+passMark :: Integer
+passMark = 50
+```
+```text
+ghci> passMark
+50
+```
+`passMark` has no parameters at all, yet the test still applies cleanly: its result depends on nothing that could vary (there's nothing to vary), and reading it touches nothing outside itself. Arity changes how many things the result can depend on; it never changes what purity itself means.
+
+<ComparisonTable
+  columns={[
+    { header: 'Pure calculation', key: 'pure' },
+    { header: 'Effectful action', key: 'effect' }
+  ]}
+  rows={[
+    { pure: 'square 5', effect: 'Read a line from the keyboard' },
+    { pure: 'length names', effect: 'Write to a file' },
+    { pure: 'filter even numbers', effect: 'Print to the terminal' },
+    { pure: 'maximum scores', effect: 'Read the current time' }
+  ]}
+/>
+
+## 3. Immutability: binding once, not a box you overwrite
+
+**Template:**
+```haskell
+name :: Type
+name = expression   -- "=" means "is defined as", not "assign into a box"
+```
+
+**Example:**
+```haskell
+taxRate :: Double
+taxRate = 0.14
+
+discountedRate :: Double
+discountedRate = taxRate - 0.02
+```
+```text
+ghci> taxRate
+0.14
+ghci> discountedRate
+0.12
+ghci> taxRate
+0.14
+```
+`discountedRate` *reads* `taxRate`'s value to build its own; reading is not writing. `taxRate` still means `0.14` afterwards.
+
+<ComparisonTable
+  columns={[
+    { header: 'Immutable binding', key: 'immutable' },
+    { header: 'Mutable variable', key: 'mutable' }
+  ]}
+  rows={[
+    { immutable: 'A name has a stable meaning in its scope', mutable: 'A storage location may hold different values over time' },
+    { immutable: 'Reason from the definition and inputs alone', mutable: 'Must track every operation that might update the location' },
+    { immutable: "Favoured by Haskell's =", mutable: 'Common in imperative programming' }
+  ]}
+/>
+
+<Callout type="warn" title="Rebinding in GHCi looks like mutation — it is not">
+`let score = 72` followed later by `let score = 90` in the *same* GHCi session makes `score` display `90` next. Nothing was overwritten: the second `let` introduces a brand-new, separate binding that happens to reuse the name `score`, and that newer one simply shadows the older one from then on. Any earlier expression that had already captured `score` as `72` still means `72`.
+</Callout>
+
+## 4. Expression versus statement
+
+Every Haskell `if` is an **expression** — it must produce a value on every branch, which is why `else` is compulsory.
+
+**Template:**
+```haskell
+funcName param =
+  if condition
+    then expressionIfTrue
+    else expressionIfFalse
+```
+
+**Example:**
+```haskell
+resultLabel :: Integer -> String
+resultLabel score = if score >= 50 then "Pass" else "Fail"
+```
+```text
+ghci> resultLabel 42
+"Fail"
+ghci> resultLabel 73
+"Pass"
+```
+An imperative *statement* (e.g. "update this variable") need not produce a value. An expression always does — that is the entire reason a missing `else` is rejected before the program ever runs, not a runtime surprise.
+
+## 5. The pure-core / effectful-boundary idea
+
+**Template:**
+```haskell
+-- Pure: builds a value from already-known inputs. No IO in sight.
+funcName :: InputType -> String
+funcName param = expression
+
+-- Effectful: the one line that actually touches the outside world.
+main :: IO ()
+main = putStrLn (funcName arg)
+```
+
+**Example:**
+```haskell
+greeting :: String -> String
+greeting name = "Hello, " ++ name
+
+main :: IO ()
+main = putStrLn (greeting "Naledi")
+```
+```text
+Hello, Naledi
+```
+`greeting` never crosses into `IO`, no matter how the program grows — it can be tested directly at the prompt with no `main` involved: `greeting "Naledi"` → `"Hello, Naledi"`.
+
+## 6. Common misconceptions, at a glance
+
+| Misconception | Correction |
+|---|---|
+| "Functional programming just means using functions." | It specifically emphasises values, expressions, purity, immutability, composition, and controlled effects — not merely having functions. |
+| "Pure means clean-looking code." | Purity is precise: same inputs give the same output, and evaluation causes no outside-world effect. |
+| "Effects are bad." | Effects are necessary. Haskell makes them explicit so they don't become hidden dependencies. |
+| "Immutable means the program can't handle change." | The world can still supply new values. Immutability only stops an existing binding from being silently overwritten. |
+| "An expression automatically prints its value." | An expression calculates a value. GHCi shows it for convenience; a saved program still needs an output action. |
+| "Pure means fast." | Purity makes behaviour predictable. It says nothing about whether the algorithm is efficient. |
+
+## 7. Common errors, at a glance
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "Nothing got printed" | A pure function's result was never handed to `putStrLn`/`print` | Wrap it: `print (funcName arg)` |
+| Missing `else` | `if` is an expression; both branches must produce a value | Add `else` |
+| "taxRate changed!" after a second `let` | Mistaking rebinding (shadowing) for mutation | Recognise the second `let` as a *new* binding, not an overwrite |
+| A function called "impure" for being slow | Purity is about determinism and no side effects, not speed | Re-check against the two-part test, not performance |
+| Calling `map` everywhere and nothing else "functional" | `map` is one reusable pattern, not the definition of the paradigm | Focus on values, purity, immutability, composition |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can state the two-part purity test from memory and apply it to a new function.' },
+  { type: 'must', text: 'I can explain why rebinding a name in GHCi is shadowing, not mutation.' },
+  { type: 'must', text: "I can point to the exact line where a program crosses from pure to effectful." },
+]} />
+
+Full explanations, worked traces, and more examples: [Programming and the Functional Model](/docs/sem3/csi243/01-functional-thinking/notes/programming-model) · [Functional Thinking](/docs/sem3/csi243/01-functional-thinking/notes/functional-thinking).

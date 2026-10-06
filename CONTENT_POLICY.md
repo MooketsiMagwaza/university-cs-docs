@@ -41,6 +41,6 @@ Content must be checked against authoritative sources and independently verified
 
 ## Takedowns and corrections
 
-Report a licensing, privacy, attribution, or academic-integrity concern through a Content issue unless public disclosure would expose sensitive information. For sensitive concerns, contact the maintainer privately through the method listed on the [MVMC4 profile](https://github.com/MVMC4).
+Report a licensing, privacy, attribution, or academic-integrity concern through a Content issue unless public disclosure would expose sensitive information. For sensitive concerns, contact the maintainer privately through the method listed on [Mooketsi Magwaza's profile](https://github.com/MooketsiMagwaza).
 
 Maintainers may temporarily remove disputed content while investigating. Valid notices will be handled promptly, and history may be rewritten when required to remove sensitive or unlawfully distributed material.

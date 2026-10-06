@@ -63,4 +63,44 @@ export const flashcardData = [
     front: "Why is naive `fib` slow?",
     back: "Each call branches into two, so sub-results are recomputed many times over — fib 5 evaluates fib 2 three separate times. The work roughly doubles per step.",
   },
+  {
+    front: "What is mutual recursion, and what must still hold for it to terminate?",
+    back: "Two or more functions call each other rather than themselves. Termination still needs a reachable base case somewhere in the group, and an argument that shrinks toward it across the whole group, not just within one function.",
+  },
+  {
+    front: "How do isEven and isOdd terminate, tracing `isEven 4`?",
+    back: "Each hands off to the other on n - 1. isEven 4 = isOdd 3 = isEven 2 = isOdd 1 = isEven 0 = True. Four handoffs land on isEven 0 because the chain started at isEven and each step flips which function is waiting.",
+  },
+  {
+    front: "What is an accumulator, and what makes `facAcc` tail-recursive?",
+    back: "An accumulator is an extra argument that carries the running answer. facAcc multiplies acc * n immediately, before recursing, so the recursive call is the very last thing done — nothing is left pending for a later rewinding phase.",
+  },
+  {
+    front: "Why does `fac' n = facAcc 1 n` seed the accumulator at 1, not 0?",
+    back: "1 is the identity for multiplication, so it leaves the running product unchanged until real factors are multiplied in. Seeding at 0 would make every product 0 regardless of n.",
+  },
+  {
+    front: "What does `rangeSum 9 6` return, and why?",
+    back: "0. The specification treats a reversed range (m > n) as empty and returns the identity for addition, rather than erroring — a deliberate design choice, not something forced by recursion itself.",
+  },
+  {
+    front: "`fac` errors on negative input; `rangeSum` returns 0 for a reversed range. Why the different treatment?",
+    back: "It is a design decision about whether a sensible answer exists. An empty range summing to 0 is mathematically natural and safe. There is no non-arbitrary numeric answer for the factorial of a negative number.",
+  },
+  {
+    front: "How does `evensFrom k n` build an ascending list of evens with no input list to recurse on?",
+    back: "It recurses on the gap between a counter k and a bound n: the base-case guard k > n returns [], and the recursive step conses k and recurses on k + 2 — counting up rather than consuming an existing structure.",
+  },
+  {
+    front: "Why does `containsValue :: Eq a => a -> [a] -> Bool` need the `Eq a` constraint?",
+    back: "Its recursive step compares v == x, and == is only defined for types that implement equality, so the constraint must be declared or GHC refuses to compile it with \"No instance for (Eq a)\".",
+  },
+  {
+    front: "Besides `error` and extending the base case, what is a third way to close a domain gap, and what does it add?",
+    back: "Return a Maybe result — Nothing for invalid input, Just value otherwise. Unlike error, which aborts the whole program, the caller receives Nothing and can recover instead of being stopped.",
+  },
+  {
+    front: "Why does `gcdRec a b = gcdRec b (a `mod` b)` terminate even though neither argument counts down by 1?",
+    back: "a `mod` b is always strictly less than b, so the second argument still strictly decreases every call and cannot go below 0. Termination only requires something to measurably shrink toward the base case, not that it shrink by exactly one.",
+  },
 ];

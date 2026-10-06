@@ -1,0 +1,213 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for specifications, precondition handling, equational reasoning, error classes, and Big-O costs: templates, placeholders, and one example each — no long explanations."
+---
+
+Use the [chapter notes](/docs/sem3/csi243/10-reasoning-revision/notes) for full explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `funcName` | The name being specified | `fac`, `isDigit`, `average` |
+| `Purpose` | What the function represents, in one sentence | "report whether `c` is a decimal digit" |
+| `Prec` | What must be true of the arguments before the call | `n >= 0`, or "none" |
+| `Postc` | What must be true of the result after the call | `result = n!` |
+
+## 2. The specification template
+
+**Template:**
+```text
+funcName : InputType -> OutputType
+Purpose: <what the function represents, one sentence>
+Prec:    <what must be true of the arguments, or "none">
+Postc:   result = <what must be true of the result>
+```
+```haskell
+funcName :: InputType -> OutputType
+funcName pattern = expression   -- derived directly from Postc
+```
+
+**Example — `isDigit`:**
+```text
+isDigit : Char -> Boolean
+Purpose: report whether c is one of the decimal digits.
+Prec:    none; every Char is acceptable.
+Postc:   result = ('0' <= c <= '9')
+```
+```haskell
+isDigit :: Char -> Bool
+isDigit c = ('0' <= c) && (c <= '9')
+```
+```text
+ghci> isDigit '5'
+True
+ghci> isDigit 'a'
+False
+```
+
+**A variation, with a genuine precondition (not "none"):**
+```text
+average : [Double] -> Double
+Purpose: return the arithmetic mean of a list of values.
+Prec:    the list is non-empty.
+Postc:   result = (sum of the elements) / (number of elements)
+```
+```haskell
+average :: [Double] -> Double
+average xs = sum xs / fromIntegral (length xs)
+```
+```text
+ghci> average [2, 4, 6]
+4.0
+```
+`isDigit` had no restriction on its input — every `Char` is acceptable. `average` does: `sum [] / fromIntegral (length [])` is `0 / 0`, which is `NaN` for `Double`, not an exception — a silent, wrong-looking answer rather than a crash. Stating `Prec: the list is non-empty` up front is what lets you say, deliberately, whether `average` should reject `[]`, define an answer for it, or report failure with `Maybe` — see [§3](#3-three-ways-to-handle-an-out-of-precondition-argument) for exactly that choice, worked through.
+
+## 3. Three ways to handle an out-of-precondition argument
+
+<ComparisonTable
+  columns={[
+    { header: 'Choice', key: 'choice' },
+    { header: 'Mechanism', key: 'mechanism' },
+    { header: 'Effect', key: 'effect' }
+  ]}
+  rows={[
+    { choice: 'Reject it', mechanism: '`error "..."`', effect: 'Stops with a message; not recoverable' },
+    { choice: 'Define it', mechanism: 'Extend the base case', effect: 'The out-of-range value gets a documented answer' },
+    { choice: 'Report it', mechanism: 'Return `Maybe`', effect: 'Failure visible in the type; caller must handle it' }
+  ]}
+/>
+
+```haskell
+-- Reject it.
+fac :: Integer -> Integer
+fac n
+  | n < 0            = error "fac: only defined for non-negative integers"
+  | n >= 0 && n <= 1 = 1
+  | otherwise        = n * fac (n - 1)
+
+-- Define it: the base case is extended to cover negatives too, instead of rejecting them.
+facTotal :: Integer -> Integer
+facTotal n
+  | n <= 1    = 1
+  | otherwise = n * facTotal (n - 1)
+
+-- Report it.
+facMaybe :: Integer -> Maybe Integer
+facMaybe n
+  | n < 0     = Nothing
+  | n <= 1    = Just 1
+  | otherwise = fmap (n *) (facMaybe (n - 1))
+```
+```text
+ghci> fac (-1)
+*** Exception: fac: only defined for non-negative integers
+ghci> facTotal (-1)
+1
+ghci> facMaybe (-1)
+Nothing
+```
+
+Whichever you choose, **state it in the specification's `Prec` line** — an unstated precondition is a defect waiting to surface.
+
+## 4. Equational reasoning: the shape, not the algebra
+
+An expression is **referentially transparent** when it can be replaced by its value anywhere in the program without changing behaviour — this is what licenses substituting equals for equals in every proof step, and it holds because Haskell is pure.
+
+A structural-induction proof over a list always has the same four parts:
+
+<ComparisonTable
+  columns={[
+    { header: 'Part', key: 'part' },
+    { header: 'Does', key: 'does' },
+    { header: 'For `length (xs ++ ys) = length xs + length ys`', key: 'example' }
+  ]}
+  rows={[
+    { part: 'Base case', does: 'Show the claim holds directly for `xs = []`', example: 'Both sides reduce to `length ys`' },
+    { part: 'Inductive hypothesis', does: 'Assume the claim holds for some list `xs`', example: '`length (xs ++ ys) = length xs + length ys`' },
+    { part: 'Inductive step', does: 'Use the hypothesis to show the claim then holds for `(x:xs)`', example: 'Rewrite `length ((x:xs) ++ ys)` down to `length (x:xs) + length ys`' },
+    { part: 'Conclusion', does: 'State the claim holds for every finite list', example: 'Every list is built from `[]` by a finite number of conses' }
+  ]}
+/>
+
+If you can write the `[]` / `(x:xs)` recursion, you can structure the proof — the two cases are the same split.
+
+## 5. Syntax vs. semantic, compile-time vs. run-time
+
+<ComparisonTable
+  columns={[
+    { header: 'Class', key: 'cls' },
+    { header: 'Concerns', key: 'concerns' },
+    { header: 'Caught', key: 'caught' },
+    { header: 'Example', key: 'example' }
+  ]}
+  rows={[
+    { cls: 'Syntax / Type', concerns: 'The structure or type-consistency of the code', caught: 'Compile-time — before the program runs at all', example: 'Missing `else`; `(+) True 1`' },
+    { cls: 'Semantic', concerns: 'The meaning of the program on a particular input', caught: 'Run-time — only if that input is actually reached', example: '`head []`; divide by zero' }
+  ]}
+/>
+
+A well-typed program can still be semantically wrong: `fac 0 = 0` type checks perfectly and violates the postcondition (`0! = 1`).
+
+## 6. Big-O basics: cost of common list operations
+
+<ComparisonTable
+  columns={[
+    { header: 'Operation', key: 'op' },
+    { header: 'Cost', key: 'cost' },
+    { header: 'Why', key: 'why' }
+  ]}
+  rows={[
+    { op: '`head xs`', cost: 'O(1)', why: 'Inspects one constructor' },
+    { op: '`x : xs`', cost: 'O(1)', why: 'Builds one cell' },
+    { op: '`length xs`', cost: 'O(n)', why: 'Walks the whole list' },
+    { op: '`xs !! k`', cost: 'O(k)', why: 'Walks to position k' },
+    { op: '`xs ++ ys`', cost: 'O(n) in xs', why: 'Rebuilds the first list' },
+    { op: '`reverse xs` (naive)', cost: 'O(n²)', why: '`++ [x]` at each of n steps' },
+    { op: '`map f xs`, `filter p xs`', cost: 'O(n)', why: 'One pass' },
+    { op: '`sort xs`', cost: 'O(n log n)', why: 'A comparison sort' }
+  ]}
+/>
+
+<Callout type="warn" title="Identical output does not mean identical cost">
+`slow xs = [x | x <- xs, length xs > 3]` and `fast xs = if length xs > 3 then xs else []` return exactly the same values on every input — but `slow` recomputes `length xs`, an O(n) walk, once per surviving element, turning an O(n) pass into O(n²). Never call an O(n) operation once per element inside a loop or comprehension; compute it once, outside.
+</Callout>
+
+## 7. Recursion is not slow — recomputation is
+
+<ComparisonTable
+  columns={[
+    { header: 'Metric', key: 'metric' },
+    { header: 'naive `fib`', key: 'fib' },
+    { header: '`fibFast` (accumulator)', key: 'fast' }
+  ]}
+  rows={[
+    { metric: 'Cost at n = 30', fib: '≈ 2,692,537 calls — O(2ⁿ), exponential', fast: '30 calls — O(n), linear' }
+  ]}
+/>
+
+Both compute the same specification. `fib` recomputes the same overlapping subproblems (`fib 5` evaluates `fib 2` three separate times); `fibFast` carries the two values it needs forward instead, so nothing is ever recomputed.
+
+## 8. Common errors, at a glance
+
+| Message | Category | Check |
+|---|---|---|
+| `parse error on input ...` | Syntax | Missing `else`? Unbalanced parens? Consistent indentation? |
+| `Variable not in scope: x` | Scope | Spelling and case — `score`, `Score`, `scores` are three different names |
+| `Couldn't match expected type 'Bool' with actual type 'Int'` | Type | Which subexpression must produce `Bool`? |
+| `No instance for (Num a)` | Class constraint | Which class does the operation need? Add it before `=>` |
+| `No instance for (Show Shape)` | Class constraint | Add `deriving (Show)` |
+| `Ambiguous occurrence 'nub'` | Import | Use `hiding`, or a qualified import |
+| `Non-exhaustive patterns in function f` | Semantic (run-time) | Which input matches no equation? Add a catch-all |
+| `Prelude.head: empty list` | Semantic (run-time) | Was the empty case handled before calling a partial function? |
+| `Prelude.!!: index too large` | Semantic (run-time) | Is the index within `0 .. length - 1`? |
+| `divide by zero` | Semantic (run-time) | Is the divisor guarded? |
+| Session hangs, no prompt returns | Semantic (run-time) | Is the recursive argument shrinking towards the base case? |
+
+<Checklist title="Before you move on" rules={[
+  { type: 'must', text: 'I can write Purpose/Prec/Postc for a function and name which of the three precondition mechanisms it uses.' },
+  { type: 'must', text: 'I can name the four parts of a structural-induction proof, in order, without writing the algebra.' },
+  { type: 'must', text: 'I can classify an error message by category, and state the cost of head, :, length, !!, ++, naive reverse, map/filter, and sort from memory.' },
+]} />
+
+Full explanations, worked traces, and more examples: [Specification and Correctness](/docs/sem3/csi243/10-reasoning-revision/notes/specification) · [Equational Reasoning](/docs/sem3/csi243/10-reasoning-revision/notes/equational-reasoning) · [Errors and Testing](/docs/sem3/csi243/10-reasoning-revision/notes/errors-and-testing) · [The Cost of a Definition](/docs/sem3/csi243/10-reasoning-revision/notes/complexity).

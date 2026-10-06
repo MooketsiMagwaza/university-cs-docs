@@ -14,7 +14,7 @@ Reviewers are trusted contributors who regularly provide accurate, constructive 
 
 ### Maintainers
 
-Maintainers set project direction, manage releases and repository settings, enforce community standards, resolve security reports, and make final merge decisions. The current lead maintainer is [MVMC4](https://github.com/MVMC4).
+Maintainers set project direction, manage releases and repository settings, enforce community standards, resolve security reports, and make final merge decisions. The current lead maintainer is [Mooketsi Vincent Magwaza](https://github.com/MooketsiMagwaza).
 
 ## Decision-making
 
