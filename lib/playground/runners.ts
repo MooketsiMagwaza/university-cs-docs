@@ -222,6 +222,12 @@ function createWorker(language: keyof typeof WORKER_SOURCES): Worker {
   return worker;
 }
 
+function discardPersistentWorker(language: keyof typeof WORKER_SOURCES, worker: Worker) {
+  worker.terminate();
+  if (sharedWorkers.get(language) === worker) sharedWorkers.delete(language);
+  warmedUp.delete(language);
+}
+
 export function runInWorker(
   language: Exclude<PlaygroundLanguage, 'html'>,
   job: Job,
@@ -265,11 +271,14 @@ export function runInWorker(
         finish({ tables: message.tables, error: message.error });
       }
     };
-    const onError = (event: ErrorEvent) => finish({ error: event.message || 'The runner crashed.' });
+    const onError = (event: ErrorEvent) => {
+      if (persistent) discardPersistentWorker(language, worker);
+      finish({ error: event.message || 'The runner crashed.' });
+    };
 
     const timer = setTimeout(() => {
-      worker.terminate();
-      sharedWorkers.delete(language);
+      if (persistent) discardPersistentWorker(language, worker);
+      else worker.terminate();
       finish({
         timedOut: true,
         error: `Stopped after ${Math.round(budget / 1000)} seconds. The program may contain an infinite loop.`,
@@ -278,6 +287,11 @@ export function runInWorker(
 
     worker.addEventListener('message', onMessage);
     worker.addEventListener('error', onError);
-    worker.postMessage({ id, ...job });
+    try {
+      worker.postMessage({ id, ...job });
+    } catch (error) {
+      if (persistent) discardPersistentWorker(language, worker);
+      finish({ error: error instanceof Error ? error.message : 'The runner could not start.' });
+    }
   });
 }

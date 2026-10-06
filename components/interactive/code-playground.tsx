@@ -133,6 +133,7 @@ export function CodePlayground({
                 <select
                   id={exampleSelectId}
                   value={selected}
+                  disabled={running}
                   onChange={(event) => loadExample(event.target.value)}
                   className={selectClass}
                 >
@@ -148,6 +149,7 @@ export function CodePlayground({
                   <select
                     id={seedSelectId}
                     value={seedId}
+                    disabled={running}
                     onChange={(event) => { setSeedId(event.target.value); setResult(null); }}
                     className={selectClass}
                   >
@@ -205,6 +207,7 @@ export function CodePlayground({
                 id={stdinId}
                 value={stdin}
                 onChange={(event) => setStdin(event.target.value)}
+                disabled={running}
                 rows={2}
                 spellCheck={false}
                 className="w-full resize-y rounded-md border border-zinc-700 bg-zinc-950 p-2 font-mono text-[13px] leading-5 text-zinc-100 outline-none focus:border-fd-primary"
@@ -224,7 +227,8 @@ export function CodePlayground({
             <button
               type="button"
               onClick={() => loadExample(selected)}
-              className="inline-flex items-center gap-2 rounded-lg border border-fd-border bg-fd-background px-4 py-2 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-muted"
+              disabled={running}
+              className="inline-flex items-center gap-2 rounded-lg border border-fd-border bg-fd-background px-4 py-2 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-muted disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Reset
