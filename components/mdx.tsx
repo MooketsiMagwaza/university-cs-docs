@@ -20,6 +20,7 @@ import { GraphViewer } from './visuals/graph-viewer';
 import { Mermaid } from './visuals/mermaid';
 import { Card } from './callouts/card';
 import { ResourceHub } from './interactive/resource-hub';
+import { HaskellPlayground } from './interactive/haskell-playground';
 
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -87,6 +88,7 @@ export function getMDXComponents(components?: MDXComponents) {
     FumaStep,
     Card,
     ResourceHub,
+    HaskellPlayground,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,

@@ -161,6 +161,18 @@ filter' p  = foldr (\x acc -> if p x then x : acc else acc) []
 
 You would not normally write them this way, but it shows that `foldr` is the general shape of list recursion, with `map` and `filter` as special cases.
 
+The same idea reconstructs several other Prelude functions from the lecture examples:
+
+```haskell
+reverse' = foldl (flip (:)) []
+
+append' xs ys = foldr (:) ys xs
+
+concat' = foldr (++) []
+```
+
+`append'` replaces the first list's final `[]` with `ys`, while `concat'` repeatedly appends each inner list to the accumulated result. `reverse'` must use `foldl`: each new element is consed onto the front of the accumulator, reversing the order as the fold moves left to right. Production library implementations may choose stricter folds for performance, but these equations are the clearest structural definitions.
+
 <Quiz title="Check: Prelude functions as folds" questions={[
   {
     question: "length' = foldr (\\_ n -> n + 1) 0. What does the combining function do with each element?",
@@ -308,6 +320,33 @@ ghci> foldr1 max []
 
 A **scan** is a fold that keeps every intermediate result rather than only the last:
 
+```haskell
+scanl :: (b -> a -> b) -> b -> [a] -> [b]
+scanr :: (a -> b -> b) -> b -> [a] -> [b]
+```
+
+Both return `n + 1` values for an input list of length `n`, because the starting value is included. Their recursive definitions mirror the corresponding folds:
+
+```haskell
+scanl _ z []     = [z]
+scanl f z (x:xs) = z : scanl f (f z x) xs
+
+scanr _ z []     = [z]
+scanr f z (x:xs) = f x (head ys) : ys
+  where ys = scanr f z xs
+```
+
+The `head ys` in `scanr` is safe here because every recursive call returns at least `[z]`. As with the folds, subtraction makes the direction visible:
+
+```text
+ghci> scanl (-) 0 [1,2,3]
+[0,-1,-3,-6]
+ghci> scanr (-) 0 [1,2,3]
+[2,-1,3,0]
+```
+
+Read the last `scanr` result from the fold nesting: `1 - (2 - (3 - 0)) = 2`, then the remaining suffix results are `2 - (3 - 0) = -1`, `3 - 0 = 3`, and the initial value `0`.
+
 ```text
 ghci> scanl (+) 0 [1,2,3,4]
 [0,1,3,6,10]
@@ -336,6 +375,18 @@ Final total:    458
 ```
 
 `runningTotal` has one more element than `dailyExpenses` — the leading `0` is the starting value, present before any expense has been added — and its last element, `458`, is exactly `foldl (+) 0 dailyExpenses`, matching the rule stated above on different numbers than the `[1,2,3,4]` example.
+
+The right-scan relationship is symmetrical: the **first** element of `scanr f z xs` is exactly `foldr f z xs`.
+
+<HaskellPlayground
+  title="Compare fold and scan directions"
+  description="Use subtraction to make left and right association visible in both the final answers and the intermediate lists."
+  initialCode={`main = do
+  print (foldl (-) 0 [1,2,3])
+  print (foldr (-) 0 [1,2,3])
+  print (scanl (-) 0 [1,2,3])
+  print (scanr (-) 0 [1,2,3])`}
+/>
 
 <Quiz title="Check yourself: foldl and laziness" questions={[
   {

@@ -863,6 +863,53 @@ ghci> zip [1,2,3] "abc"
 [(1,'a'),(2,'b'),(3,'c')]
 ```
 
+### Building `zip` and `zipWith` by hand
+
+Both functions use the two-list recursion shape from Chapter 6. Either list can run out first, so both empty-list equations are required:
+
+```haskell
+myZip :: [a] -> [b] -> [(a, b)]
+myZip [] _ = []
+myZip _ [] = []
+myZip (x:xs) (y:ys) = (x, y) : myZip xs ys
+```
+
+`zipWith` changes only what happens to each pair. Instead of constructing `(x, y)`, it applies the supplied binary function:
+
+```haskell
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+```
+
+Trace `myZipWith (+) [1,2,3] [10,20]`: the first step emits `1 + 10`, the second emits `2 + 20`, and the second list then matches `[]`, so the result is `[11,22]`. The unused `3` is never passed to `f`.
+
+### Relationships among `zip`, `map`, and `zipWith`
+
+These definitions expose how the three functions fit together:
+
+```haskell
+zip = zipWith (,)
+
+zipWith f xs ys = map (uncurry f) (zip xs ys)
+
+-- Illustrative rather than idiomatic: duplicate xs supplies a second list.
+map f xs = zipWith (\x _ -> f x) xs xs
+```
+
+`uncurry f` changes a curried two-argument function `f :: a -> b -> c` into a function on one pair, `(a, b) -> c`. That makes it exactly the function `map` needs after `zip xs ys` has built a list of pairs.
+
+<HaskellPlayground
+  title="Try a binary function with zipWith"
+  description="Change the combining rule or make the two lists different lengths. The output stops with the shorter list."
+  initialCode={`combine x y = x * 10 + y
+
+main = do
+  print (zipWith combine [1,2,3] [4,5,6])
+  print (zipWith (+) [1,2,3] [10,20])`}
+/>
+
 ### Putting `zipWith` to work: turning the curved marks into report lines
 
 The `curved` marks from the grades example earlier in this lesson pair naturally with the students they belong to:
