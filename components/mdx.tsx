@@ -25,6 +25,13 @@ import { HaskellPlayground } from './interactive/haskell-playground';
 import { HaskellTryIt } from './interactive/haskell-try-it';
 import { CodePlayground } from './interactive/code-playground';
 import { CodeTryIt } from './interactive/code-try-it';
+import { JavaPlayground } from './interactive/java-playground';
+import { JavaTryIt } from './interactive/java-try-it';
+import { InsertionSortStory } from './interactive/insertion-sort-story';
+import { BinarySearchStory, LinearSearchStory } from './interactive/search-stories';
+import { BubbleSortStory, SelectionSortStory } from './interactive/simple-sort-stories';
+import { MergeSortStory } from './interactive/merge-sort-story';
+import { PackageBuildStory, PackageFolderStory, PackageImportStory } from './interactive/package-stories';
 
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -97,6 +104,17 @@ export function getMDXComponents(components?: MDXComponents) {
     HaskellTryIt,
     CodePlayground,
     CodeTryIt,
+    JavaPlayground,
+    JavaTryIt,
+    InsertionSortStory,
+    LinearSearchStory,
+    BinarySearchStory,
+    BubbleSortStory,
+    SelectionSortStory,
+    MergeSortStory,
+    PackageImportStory,
+    PackageFolderStory,
+    PackageBuildStory,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,
