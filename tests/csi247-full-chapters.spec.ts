@@ -29,12 +29,18 @@ for (const [chapter, slug, kind, steps] of routes) {
       await expect(sections.first().locator('svg, figure, pre, table')).toHaveCount(0);
       await expect(sections.nth(1)).toHaveAttribute('id', /visual-map$/);
       await expect(sections.nth(2)).toHaveAttribute('id', /-array$/);
+      await expect(sections.nth(2).locator(':scope > details')).not.toHaveAttribute('open');
       const formal = article.locator('section[id$="-definition"] > details');
       await expect(formal).not.toHaveAttribute('open');
     }
     await expect(article.locator(`[data-map-kind="${kind}"]`)).toBeVisible();
     await expect(article.locator('.quiz-question')).toHaveCount(12);
     const player = article.locator(`[data-player="${['imports','package','build'].includes(kind) ? 'packages-' + kind : kind + '-main'}"]`);
+    if (chapter === 'sorting-and-searching') {
+      const walkthrough = article.locator('section[id$="-interactive-walkthrough"] > details');
+      await expect(walkthrough).not.toHaveAttribute('open');
+      await walkthrough.locator(':scope > summary').click();
+    }
     await expect(player.locator('[data-frame]')).toHaveCount(steps);
     await player.locator('[data-action=next]').click();
     await expect(player.locator('[data-frame="1"]')).toBeVisible();
@@ -63,7 +69,7 @@ for (const [chapter, slug, kind, steps] of routes) {
 test('code toolbar copies only source and reference diagrams have full-run evidence', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/docs/sem3/csi247/sorting-and-searching/notes/insertion-sort');
-  const panel = page.locator('.code-panel').first();
+  const panel = page.locator('#insertion-sort-annotated-java .code-panel').first();
   const expected = await panel.locator('pre').textContent();
   await panel.getByRole('button', { name: 'Copy code' }).click();
   expect((await page.evaluate(() => navigator.clipboard.readText())).replaceAll('\r\n', '\n')).toBe(expected);

@@ -6,7 +6,8 @@ import { algorithmOverview, packageOverview } from './overviews.mjs';
 import { topicQuiz } from './quizzes.mjs';
 import { focusedMergeLesson } from './merge-lesson.mjs';
 import { barLesson } from './bar-lessons.mjs';
-import { ALGORITHM_INTRODUCTIONS, algorithmIntroduction } from './introductions.mjs';
+import { ALGORITHM_INTRODUCTIONS, algorithmIntroduction, algorithmReason } from './introductions.mjs';
+import { finalMergeWalkthrough } from './merge-map.mjs';
 
 const SORT_INPUT = [4, 2, 5, 1, 3];
 const MERGE_INPUT = [63, 29, 72, 85, 18, 49, 3, 54];
@@ -282,15 +283,19 @@ export function createGuides() {
       const refs = referenceChapter(kind);
       const take = (ids) => ids.map(id => refs.find(s => s.id === id)).filter(Boolean);
       const ids = kind === 'insertion' ? ['array', 'definition', 'simple', 'idea', 'movements'] : [`${kind}-array`, `${kind}-definition`, `${kind}-simple`, `${kind}-idea`, `${kind}-movements`];
-      const concepts = take(ids).map(item => item.id === 'definition' || item.id.endsWith('-definition') || item.id === 'simple' || item.id.endsWith('-simple') ? { ...item, optional: true } : item);
+      const concepts = take(ids);
       const implementation = take(kind === 'insertion' ? ['trace', 'table', 'java', 'recursive'] : [kind === 'merge' ? 'merge-sort' : kind]);
       const explained = take(kind === 'insertion' ? ['properties', 'complexity', 'when'] : [`${kind}-properties`, `${kind}-complexity`, `${kind}-when`]);
       const placed = new Set([...concepts, ...implementation, ...explained].map(s => s.id));
       const rest = refs.filter(s => !placed.has(s.id));
-      sections = [algorithmIntroduction(kind), map, ...concepts, walkthrough, trace,
+      sections = [algorithmIntroduction(kind), map, concepts[0], algorithmReason(kind),
+        ...(kind === 'merge' ? [section('final-merge', 'Build the final row, one value at a time', finalMergeWalkthrough(sort('merge', MERGE_INPUT)))] : []),
+        walkthrough, trace,
         ...(kind === 'merge' ? [section('merge-lanes', 'A closer look at one merge return', `<div class="studio">${focusedMergeLesson(sort('merge', MERGE_INPUT))}</div>`)] : []),
-        section('bar-explanation', 'Read the algorithm as a bar graph', `<div class="studio">${barLesson(kind)}</div>`), ...implementation,
+        section('bar-explanation', 'Read the algorithm as a bar graph', `<div class="studio">${barLesson(kind)}</div>`),
         extension('implementation', 'annotated-java', 'Fully annotated Java: connect each line to the movement'),
+        section('topic-quiz', 'Topic quiz: try it yourself', topicQuiz(kind)),
+        ...concepts.slice(1), ...implementation,
         extension('recursive', 'recursion-lab', 'Recursion, calls and returns'),
         ...(kind === 'merge' ? [extension('mechanics', 'merge-mechanics-lab', 'Inside a merge: pointers, temporary output and copy-back')] : []),
         extension('runnable', 'runnable-java', 'A complete runnable Java example'),
@@ -311,11 +316,11 @@ export function createGuides() {
         extension('practice', 'expanded-exam-practice', 'Exam-style practice with worked answers'),
         ...referenceChapter(kind).filter(s => s.id !== 'packages').map(s => ({ ...s, title: `Application: ${s.title}` }))];
     }
-    sections.push(section('topic-quiz', 'Topic quiz: test your understanding', topicQuiz(kind)));
+    if (!MAP_KIND(kind)) sections.push(section('topic-quiz', 'Topic quiz: test your understanding', topicQuiz(kind)));
     // Preserve the full reference, but do not present several competing traces
     // or alternate implementations at once on a student's first reading.
     const optional = new Set(['concise-trace', 'merge-lanes', 'bar-explanation', 'recursion-lab', 'merge-mechanics-lab', 'runnable-java', 'expanded-worked-cases', 'expanded-exam-practice']);
-    sections = sections.map(item => optional.has(item.id) ? { ...item, optional: true } : item);
+    sections = sections.map(item => optional.has(item.id) || (MAP_KIND(kind) && (item.reference || item.id === 'interactive-walkthrough')) ? { ...item, optional: true } : item);
     return { ...guide, summary: ALGORITHM_INTRODUCTIONS[kind]?.goal || guide.summary, referenceSha256: REFERENCE_SHA256, sections };
   });
   // Resolve the reference's cross-topic anchors after splitting the book.

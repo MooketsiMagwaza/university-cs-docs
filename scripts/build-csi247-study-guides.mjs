@@ -53,8 +53,10 @@ assert.deepEqual(algorithmOverview('binary').rows.map(row => row.slice(0, 5)), [
 assert.deepEqual(algorithmOverview('selection').rows.map(row => row[2]), ['0 ↔ 3', '1 ↔ 3', '2 ↔ 8', '3 ↔ 7', '4 ↔ 6', 'No swap', '6 ↔ 7', 'No swap']);
 assert.deepEqual(algorithmOverview('insertion').rows.map(row => row.slice(1, 4)), [[12, 1, 0], [59, 1, 1], [45, 2, 1], [72, 1, 3], [51, 3, 2]]);
 const binaryMarkdown = getFullChapterMarkdown('/docs/sem3/csi247/sorting-and-searching/notes/binary-search');
-assert(binaryMarkdown.includes('2 &lt; 7: discard indexes 0..4.'), 'Markdown lost a comparison condition');
-assert(binaryMarkdown.includes('high = 9'), 'Markdown lost the final binary boundary');
+assert(binaryMarkdown.includes('2 &lt; 7') && binaryMarkdown.includes('Rule out indexes 0 through 4. Keep indexes 5 through 9'), 'Markdown lost the comparison and resulting lower boundary');
+assert(binaryMarkdown.includes('6 &lt; 7') && binaryMarkdown.includes('Rule out indexes 5 through 7. Keep indexes 8 through 9'), 'Markdown lost the second probe and remaining candidate range');
+assert(binaryMarkdown.includes('7 == 7 is true. Return index 8'), 'Markdown lost the final matching index');
+assert(binaryMarkdown.includes('high = 9'), 'Markdown lost the inclusive upper boundary');
 console.log('Reference-image traces verified: 3 binary probes, 8 selection passes, 5 held insertion keys.');
 await mkdir(outputDir, { recursive: true });
 
@@ -75,6 +77,9 @@ function auditHtml(html, guide) {
     assert(guide.sections[0].body.includes('A small example'), `${guide.id}: missing beginner example`);
     assert(!/<svg\b|<figure\b|<pre\b|<table\b/i.test(guide.sections[0].body), `${guide.id}: opening should explain before visual/code detail`);
     assert(guide.sections[2].id === 'array' || guide.sections[2].id.endsWith('-array'), `${guide.id}: array rules should follow the map`);
+    assert(guide.sections.filter(item => item.reference).every(item => item.optional), `${guide.id}: retained reference must remain available without crowding the first reading`);
+    assert(guide.sections.find(item => item.id === 'interactive-walkthrough')?.optional, `${guide.id}: walkthrough must be an optional extension of the whole-run map`);
+    assert(!guide.sections.find(item => item.id === 'annotated-java')?.optional, `${guide.id}: the primary annotated implementation must stay visible`);
   } else assert.equal(guide.sections[0].id, 'visual-map', `${guide.id}: package visual map is not first`);
   assert((html.match(/class="quiz-question"/g) || []).length >= 12, `${guide.id}: topic quiz is too short`);
   assert((html.match(/class="question"/g) || []).length >= 5, `${guide.id}: missing explained exam practice`);
