@@ -1,6 +1,6 @@
 import { escape } from './visuals.mjs';
 
-export const VERSION = '2026-10-07.5';
+export const VERSION = '2026-10-07.6';
 
 export function renderSection(item) {
   if (item.optional) return `<section id="${escape(item.id)}" class="studio-section optional-section"><details class="lesson-detail"><summary><h2>${escape(item.title)}</h2><span class="detail-hint">Optional · expand to explore</span></summary><div class="detail-body">${codeWindows(item.body)}</div></details></section>`;
@@ -24,7 +24,8 @@ export function codeWindows(html) {
 }
 
 export function document(guide, css, runtime) {
-  const toc = guide.sections.map((item) => `<a href="#${escape(item.id)}">${escape(item.title.replace(/^\d+\.\s*/, ''))}</a>`).join('');
+  const tocLink = item => `<a href="#${escape(item.id)}">${escape(item.title.replace(/^\d+\.\s*/, ''))}</a>`;
+  const toc = guide.sections.filter(item => !item.optional).map(tocLink).join('') + `<details><summary>More examples and reference</summary>${guide.sections.filter(item => item.optional).map(tocLink).join('')}</details>`;
   const chapter = guide.chapter === 'packages' ? 'Java packages' : 'Searching and sorting';
   return `<!doctype html>
 <html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${escape(guide.summary)}"><meta name="color-scheme" content="light dark"><meta name="csi247-artifact-id" content="${escape(guide.id)}"><meta name="csi247-artifact-version" content="${VERSION}"><meta name="csi247-reference-sha256" content="${escape(guide.referenceSha256)}"><title>CSI247 - ${escape(guide.title)} | Complete Visual Chapter</title><style>${css}</style><script>try{const t=localStorage.getItem('csi247-guide-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch{}</script></head>

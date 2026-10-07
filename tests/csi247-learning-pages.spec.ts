@@ -22,6 +22,7 @@ test('topic pages link to complete standalone HTML guides and light PDFs', async
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
   const player = page.locator('[data-player]').first();
+  await page.locator('#interactive-walkthrough > details > summary').click();
   await player.getByRole('button', { name: 'Next' }).click();
   await expect(player.locator('[data-frame="1"]')).toBeVisible();
   await expect(player.locator('[data-row="1"]')).toHaveAttribute('aria-current', 'step');
@@ -39,6 +40,7 @@ test('merge lesson shows the whole run before guided returns and merge mechanics
   await page.goto('/docs/sem3/csi247/sorting-and-searching/notes/merge-sort');
 
   const merge = page.locator('[data-player="merge-main"]');
+  await page.locator('#merge-sort-interactive-walkthrough > details > summary').click();
   await expect(merge).toBeVisible();
   await merge.getByRole('button', { name: /Next/ }).click();
   await expect(merge.locator('tr[aria-current="step"]')).toContainText('[72,85]');
@@ -59,6 +61,7 @@ test('standalone merge guide works offline-style and keeps trace state synchroni
 
   await expect(page.getByRole('heading', { level: 1, name: 'Merge Sort' })).toBeVisible();
   const player = page.locator('[data-player="merge-main"]');
+  await page.locator('#interactive-walkthrough > details > summary').click();
   await expect(player).toBeVisible();
   await player.locator('[data-action="next"]').click();
   await expect(player.locator('[data-frame="1"]')).toBeVisible();
