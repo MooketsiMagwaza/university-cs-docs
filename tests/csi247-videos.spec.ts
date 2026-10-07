@@ -1,43 +1,21 @@
 import {expect,test} from '@playwright/test';
-import timings from '../videos/csi247/timings.json';
 
-for (const [chapter,count] of [['sorting-and-searching',3],['packages',1]] as const) {
-  test(`${chapter}: optional Ava recaps play with captions and transcripts`,async({page,request})=>{
+for (const chapter of ['sorting-and-searching','packages'] as const) {
+  test(`${chapter}: resources support written study without video recaps`,async({page}) => {
     await page.goto(`/docs/sem3/csi247/${chapter}/resources`);
-    const videos=page.locator('video');
-    await expect(videos).toHaveCount(count);
-    for(let index=0;index<count;index++) {
-      const video=videos.nth(index),panel=video.locator('..');
-      await expect(panel).not.toHaveAttribute('open');
-      await expect(video).not.toHaveAttribute('autoplay');
-      await panel.locator(':scope > summary').click();
-      const metadata=await video.evaluate(async node=>{
-        const element=node as HTMLVideoElement;
-        await new Promise<void>((resolve,reject)=>{
-          element.addEventListener('loadedmetadata',()=>resolve(),{once:true});
-          element.addEventListener('error',()=>reject(new Error('Video failed to load')),{once:true});
-          element.load();
-        });
-        return {width:element.videoWidth,height:element.videoHeight,duration:element.duration};
-      });
-      expect(metadata.width).toBe(720);
-      expect(metadata.height).toBe(1280);
-      const src = (await video.locator('source').getAttribute('src'))!;
-      const slug = src.split('/').at(-1)!.replace('.mp4','') as keyof typeof timings;
-      const expectedDuration = timings[slug].durationInFrames / timings[slug].fps;
-      expect(metadata.duration).toBeGreaterThan(30);
-      expect(Math.abs(metadata.duration - expectedDuration)).toBeLessThan(.2);
-      const captions=await request.get((await video.locator('track').getAttribute('src'))!);
-      expect(captions.ok()).toBe(true);
-      expect(await captions.text()).toMatch(/^WEBVTT/);
-      await video.evaluate(async node=>{const v=node as HTMLVideoElement;v.muted=true;await v.play();});
-      await expect.poll(()=>video.evaluate(node=>(node as HTMLVideoElement).currentTime)).toBeGreaterThan(.1);
-      await video.evaluate(node=>(node as HTMLVideoElement).pause());
-      await panel.getByText('Read the complete transcript',{exact:true}).click();
-      await expect(panel.locator('h3').first()).toBeVisible();
-      await panel.locator(':scope > summary').click();
-    }
+    await expect(page.getByRole('heading',{name:'Resources',exact:true,level:1})).toBeVisible();
+    await expect(page.locator('video,audio')).toHaveCount(0);
+    await expect(page.locator('a[href*="/files/sem3/csi247/videos/"]')).toHaveCount(0);
+    await expect(page.getByRole('heading',{name:/Optional narrated recap/})).toHaveCount(0);
+    await expect(page.getByRole('heading',{name:chapter === 'packages' ? 'javac Command' : 'Java Arrays API',exact:true,level:3})).toBeVisible();
     await page.setViewportSize({width:390,height:844});
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 }
+
+test('withdrawn CSI247 recaps are no longer served',async({request}) => {
+  for (const slug of ['merge-sort','sorting-movements','searching','java-packages']) {
+    const response = await request.get(`/files/sem3/csi247/videos/${slug}.mp4`);
+    expect(response.status()).toBe(404);
+  }
+});
