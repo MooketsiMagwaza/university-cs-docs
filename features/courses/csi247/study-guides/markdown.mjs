@@ -1,36 +1,54 @@
+import { parseFragment } from 'parse5';
 import { createGuides } from './guides.mjs';
+import { nodeText, omittedTags } from './html-text.mjs';
 
-const decode = text => text.replace(/&(amp|lt|gt|quot|apos|#39|nbsp|#\d+|#x[\da-f]+);/gi, (all, entity) => {
-  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", nbsp: ' ' };
-  return named[entity] ?? (entity.startsWith('#x') ? String.fromCodePoint(parseInt(entity.slice(2), 16)) : entity.startsWith('#') ? String.fromCodePoint(Number(entity.slice(1))) : all);
-});
-const plain = html => decode(html.replace(/<\/?[a-zA-Z][^>]*>/g, ''));
+// Escape literal text once, including backslashes. Never emit raw source HTML.
+const text = value => value.replace(/[&<>\\`*_\[\]|]/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;'}[char] ?? `\\${char}`));
+const attr = (node, name) => node.attrs?.find(item => item.name === name)?.value || '';
+const fence = (value, minimum) => '`'.repeat(Math.max(minimum, ...[...value.matchAll(/`+/g)].map(match => match[0].length + 1)));
+const descendants = (node, tag) => (node.childNodes || []).flatMap(child => child.tagName === tag ? [child] : descendants(child, tag));
+const blocks = new Set(['p','div','article','section','figure','summary','legend','label','li','ol','ul','aside','details']);
 
-// The controlled chapter markup, rather than the superseded MDX lesson, is
-// also the source of Copy Markdown. Preserve code before stripping other tags.
+function render(node) {
+  if (node.nodeName === '#text') return text(node.value);
+  if (node.nodeName === '#comment' || omittedTags.has(node.tagName)) return '';
+  const tag = node.tagName;
+  if (tag === 'pre') {
+    const source = nodeText(node).trim(), ticks = fence(source, 3);
+    return `\n${ticks}\n${source}\n${ticks}\n`;
+  }
+  if (tag === 'svg') return `\n*Diagram: ${text(attr(node, 'aria-label') || 'See visual chapter')}*\n`;
+  if (tag === 'table') {
+    const rows = descendants(node, 'tr').map(row => (row.childNodes || [])
+      .filter(cell => cell.tagName === 'td' || cell.tagName === 'th')
+      .map(cell => text(nodeText(cell).trim().replace(/\s+/g, ' '))));
+    return '\n' + rows.map((row, i) => '| ' + row.join(' | ') + ' |' +
+      (i === 0 ? '\n| ' + row.map(() => '---').join(' | ') + ' |' : '')).join('\n') + '\n';
+  }
+  if (tag === 'code') {
+    const source = nodeText(node), ticks = fence(source, 1);
+    return `${ticks} ${source} ${ticks}`;
+  }
+  const children = (node.childNodes || []).map(render).join('');
+  if (/^h[1-6]$/.test(tag || '')) return `\n${'#'.repeat(Number(tag[1]))} ${children.trim()}\n`;
+  if (tag === 'a') {
+    const href = attr(node, 'href');
+    try {
+      const url = new URL(href, 'https://study.invalid');
+      if (!['http:', 'https:', 'mailto:'].includes(url.protocol)) return children;
+      const target = encodeURI(href).replaceAll('(', '%28').replaceAll(')', '%29');
+      return `[${children}](<${target}>)`;
+    } catch { return children; }
+  }
+  if (tag === 'strong' || tag === 'b') return `**${children}**`;
+  if (tag === 'br') return '\n';
+  if (tag === 'li') return `\n- ${children}\n`;
+  return blocks.has(tag) ? `\n${children}\n\n` : children;
+}
+
+// The parsed shared chapter, not the superseded MDX, powers Copy Markdown.
 export function chapterMarkdown(html) {
-  const blocks = [];
-  const save = text => { blocks.push(text); return `\nCHAPTERBLOCK${blocks.length - 1}END\n`; };
-  return html
-    .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/g, (_, code) => save(`\n\`\`\`\n${plain(code).trim()}\n\`\`\`\n`))
-    .replace(/<svg\b([^>]*)>[\s\S]*?<\/svg>/g, (_, attrs) => `\n*Diagram: ${decode(attrs.match(/aria-label="([^"]*)"/)?.[1] || 'See visual chapter')}*\n`)
-    .replace(/<table\b[^>]*>([\s\S]*?)<\/table>/g, (_, table) => {
-      const rows = [...table.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(match => [...match[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map(cell => plain(cell[1]).trim().replace(/\|/g, '\\|').replace(/\s+/g, ' ')));
-      if (!rows.length) return '';
-      return save('\n' + rows.map((row, i) => '| ' + row.join(' | ') + ' |' + (i === 0 ? '\n| ' + row.map(() => '---').join(' | ') + ' |' : '')).join('\n') + '\n');
-    })
-    .replace(/<template>[\s\S]*?<\/template>/g, '')
-    .replace(/<button\b[^>]*>[\s\S]*?<\/button>/g, '')
-    .replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/g, (_, level, title) => `\n${'#'.repeat(Number(level))} ${plain(title)}\n`)
-    .replace(/<code\b[^>]*>([\s\S]*?)<\/code>/g, (_, code) => '`' + plain(code) + '`')
-    .replace(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g, (_, href, label) => `[${plain(label)}](${decode(href)})`)
-    .replace(/<(strong|b)>([\s\S]*?)<\/\1>/g, (_, tag, text) => `**${plain(text)}**`)
-    .replace(/<li\b[^>]*>/g, '\n- ')
-    .replace(/<\/(p|div|article|section|figure|summary|legend|label|li|ol|ul)>/g, '\n\n')
-    .replace(/<br\s*\/?>/g, '\n')
-    .replace(/<\/?[a-zA-Z][^>]*>/g, '')
-    .replace(/CHAPTERBLOCK(\d+)END/g, (_, i) => blocks[Number(i)])
-    .split('\n').map(line => decode(line).trimEnd()).join('\n')
+  return render(parseFragment(html)).split('\n').map(line => line.trimEnd()).join('\n')
     .replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -39,5 +57,6 @@ export function getFullChapterMarkdown(pageUrl) {
   chapters ??= createGuides();
   const matched = chapters.filter(guide => guide.sourceRoutes.includes(pageUrl));
   if (!matched.length) return null;
-  return matched.map(guide => `# ${guide.title}\n\n${guide.summary}\n\n` + guide.sections.map(section => chapterMarkdown(section.raw ? section.body : `<h2>${section.title}</h2>${section.body}`)).join('\n\n')).join('\n\n');
+  return matched.map(guide => `# ${text(guide.title)}\n\n${text(guide.summary)}\n\n` +
+    guide.sections.map(section => (section.raw ? '' : `## ${text(section.title)}\n\n`) + chapterMarkdown(section.body)).join('\n\n')).join('\n\n');
 }

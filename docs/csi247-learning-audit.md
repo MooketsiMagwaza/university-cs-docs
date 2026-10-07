@@ -84,3 +84,10 @@ instructions are in `videos/csi247/README.md`.
 and nested KaTeX dependency trees. The affected installed versions are unchanged
 from the pre-video lockfile; a broad dependency downgrade was not mixed into
 this teaching-content change.
+
+The complete local browser suite passed all 25 tests, including media playback
+and Java sandbox recovery. PR security scanning then identified four issues in
+the original regex-based Markdown/import text conversion. Those paths now parse
+HTML with parse5, decode entities once, escape literal Markdown text and reject
+unsafe link protocols. Regression checks run in CI alongside the full artifact
+and Java audit; no security checks were disabled or alerts dismissed.

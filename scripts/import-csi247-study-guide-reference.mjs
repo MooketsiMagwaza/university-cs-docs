@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { htmlText } from '../features/courses/csi247/study-guides/html-text.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const source = resolve(process.argv[2] || '');
@@ -19,13 +20,7 @@ for (const match of html.matchAll(/<section\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/sec
   const [, id, body] = match;
   if (sections[id]) throw new Error(`Duplicate reference section id: ${id}`);
   const headingHtml = body.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i)?.[1] || id;
-  const title = headingHtml
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  const title = htmlText(headingHtml)
     .replace(/\s+/g, ' ')
     .trim();
   sections[id] = { id, title, body };

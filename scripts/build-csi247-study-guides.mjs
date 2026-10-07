@@ -52,7 +52,7 @@ assert.deepEqual(algorithmOverview('binary').rows.map(row => row.slice(0, 5)), [
 assert.deepEqual(algorithmOverview('selection').rows.map(row => row[2]), ['0 ↔ 3', '1 ↔ 3', '2 ↔ 8', '3 ↔ 7', '4 ↔ 6', 'No swap', '6 ↔ 7', 'No swap']);
 assert.deepEqual(algorithmOverview('insertion').rows.map(row => row.slice(1, 4)), [[12, 1, 0], [59, 1, 1], [45, 2, 1], [72, 1, 3], [51, 3, 2]]);
 const binaryMarkdown = getFullChapterMarkdown('/docs/sem3/csi247/sorting-and-searching/notes/binary-search');
-assert(binaryMarkdown.includes('2 < 7: discard indexes 0..4.'), 'Markdown lost a comparison condition');
+assert(binaryMarkdown.includes('2 &lt; 7: discard indexes 0..4.'), 'Markdown lost a comparison condition');
 assert(binaryMarkdown.includes('high = 9'), 'Markdown lost the final binary boundary');
 console.log('Reference-image traces verified: 3 binary probes, 8 selection passes, 5 held insertion keys.');
 await mkdir(outputDir, { recursive: true });

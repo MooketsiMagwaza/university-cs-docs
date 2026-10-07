@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {chapterMarkdown,getFullChapterMarkdown} from '../features/courses/csi247/study-guides/markdown.mjs';
+import {htmlText} from '../features/courses/csi247/study-guides/html-text.mjs';
+
+assert.equal(htmlText('A &amp;lt; B &amp;amp; C'),'A &lt; B &amp; C');
+assert.equal(chapterMarkdown('<p>&lt;script&gt;literal&lt;/script&gt;</p>'),'&lt;script&gt;literal&lt;/script&gt;');
+assert.equal(chapterMarkdown('<script>unsafe()</script><p>Lesson</p>'),'Lesson');
+assert(!chapterMarkdown('<scr<script>ipt>unsafe()</scr<script>ipt>').includes('<script'));
+assert.equal(chapterMarkdown('<a href="java&#x73;cript:unsafe()">text</a>'),'text');
+assert.equal(chapterMarkdown('<p>\\|</p>'),String.raw`\\\|`);
+assert.equal(chapterMarkdown('<pre>if (a &lt; b) {\n  print("```");\n}</pre>'),'````\nif (a < b) {\n  print("```");\n}\n````');
+assert(chapterMarkdown('<table><tr><th>A</th></tr><tr><td>x|y</td></tr></table>').includes('| x\\|y |'));
+const guide=getFullChapterMarkdown('/docs/sem3/csi247/sorting-and-searching/notes/merge-sort');
+assert(guide.includes('Fully annotated Java'));
+assert(guide.includes('temp[k]'));
+assert(guide.includes('Diagram:'));
+assert(guide.includes('Topic quiz'));
+console.log('Markdown checks passed: parsed HTML, one-pass entities, literal markup, safe links, code fences, table escaping and complete chapters.');
