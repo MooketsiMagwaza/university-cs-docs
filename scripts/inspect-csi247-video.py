@@ -1,8 +1,11 @@
 """Contact sheets for authored beat stills or decoded final-video frames (Pillow)."""
 import argparse
+from array import array
+import io
 import json
 from pathlib import Path
 import subprocess
+import wave
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +36,14 @@ def main():
         assert abs(float(video['duration'])-float(audio['duration'])) < .1
         assert video['codec_name']=='h264' and audio['codec_name']=='aac'
         assert video['r_frame_rate']==f"{STORY['fps']}/1"
+        pcm=subprocess.check_output([str(executables/f'ffmpeg{suffix}'),'-v','error','-i',str(source),'-vn','-c:a','pcm_s16le','-f','wav','-'])
+        with wave.open(io.BytesIO(pcm),'rb') as decoded:
+            assert decoded.getsampwidth()==2
+            values=array('h',decoded.readframes(decoded.getnframes()))
+        peak=max(abs(value) for value in values)/32768
+        clipped=sum(abs(value)>=32767 for value in values)
+        assert clipped==0, f'{clipped} clipped PCM samples'
+        metadata['decodedAudio']={'peak':peak,'clippedSamples':clipped}
         (QA/'encoded-metadata.json').write_text(json.dumps(metadata,indent=2),encoding='utf8')
     entries=list(samples())
     for first in range(0,len(entries),16):

@@ -30,7 +30,13 @@ for (const [chapter,count] of [['sorting-and-searching',3],['packages',1]] as co
       expect(Math.abs(metadata.duration - expectedDuration)).toBeLessThan(.2);
       const captions=await request.get((await video.locator('track').getAttribute('src'))!);
       expect(captions.ok()).toBe(true);
-      expect(await captions.text()).toMatch(/^WEBVTT/);
+      const captionText=await captions.text();
+      expect(captionText).toMatch(/^WEBVTT/);
+      if(slug==='merge-sort') {
+        const cues=captionText.trim().split(/\r?\n\r?\n/).slice(1);
+        expect(cues.length).toBeGreaterThan(timings[slug].scenes.length);
+        for(const cue of cues) expect(cue.split(/\r?\n/).slice(1).join(' ').length).toBeLessThan(85);
+      }
       await video.evaluate(async node=>{const v=node as HTMLVideoElement;v.muted=true;await v.play();});
       await expect.poll(()=>video.evaluate(node=>(node as HTMLVideoElement).currentTime)).toBeGreaterThan(.1);
       await video.evaluate(node=>(node as HTMLVideoElement).pause());

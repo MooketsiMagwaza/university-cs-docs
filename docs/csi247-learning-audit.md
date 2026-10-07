@@ -130,3 +130,29 @@ copy-back writes, and runs in CI. The encoded file has 3024 frames at 24 fps,
 before/motion/after samples were visually reviewed. Both resource-page video
 tests pass, checking all four files, captions, transcripts and mobile width.
 The production build passes. The other three recap experiments are unchanged.
+
+## Follow-up: eight-value soft-glass merge film
+
+The user clarified that the B1 soft-glass reskin applies only to the video.
+The merge film now uses eight values, a continuous blue/mint bar stage, curved
+copy paths, side-by-side child comparisons and a larger traffic-light Java
+panel. The script opens with a question and explains why ordered fronts are
+enough; comparison/copy totals were removed from both speech and picture.
+Two Sol review passes identified and corrected speech/motion drift, changing
+output colours, ambiguous simultaneous code highlights and an inapplicable
+front-pointer note. The website theme, chapter diagrams and other three videos
+are unchanged; only the merge player width accommodates its square format.
+
+The final Remotion export has 4,921 frames at 60 fps, 1440×1440 H.264 video,
+82.016667 seconds of picture and 82.027 seconds of AAC audio. Ava word boundaries
+drive named decisions and short punctuated captions. Original quiet procedural
+effects accompany comparisons, landings and returns; there is no music. Decoded
+audio peaks at 0.552 full scale with zero clipped 16-bit PCM samples.
+
+All 66 decision/travel/landing and scene-boundary samples were reviewed before
+rendering, then again from the encoded MP4. Type checking, the production build,
+full content/Java audits, Markdown checks and all 25 browser tests passed.
+The expanded trace tests cover all seven merges, stable duplicate values,
+correct pointer advancement, untouched source values during splits, copy-back,
+speech anchors and waveform-verified sound metadata. No PDFs were regenerated
+in this video-only revision.

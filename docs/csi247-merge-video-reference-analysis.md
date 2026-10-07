@@ -82,3 +82,14 @@ the parent merge waits until both results have returned. A persistent label
 and Ava explanation distinguish this side-by-side overview from the Java
 implementation's left-then-right execution. The greater-than form chooses the
 right front when true, otherwise the left, preserving left-first ties.
+
+### Later user direction: eight bars and soft glass
+
+The four-value/site-theme/counter recommendation above records the earlier
+prototype, not the current target. The user subsequently asked for eight values,
+a friendly explanation without operation-count filler, more visible bar motion,
+and the B1 soft-glass visual reference for the video only. The new film keeps the
+reference's persistent context, curved visible copies and simultaneous child
+overview, with larger blue/mint bars and a traffic-light Java panel. Named
+decisions follow measured Ava word boundaries. Quiet original synthetic cues
+replace the earlier silent movement; no music or source-reel audio is used.
