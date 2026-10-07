@@ -20,10 +20,11 @@ for (const [chapter,count] of [['sorting-and-searching',3],['packages',1]] as co
         });
         return {width:element.videoWidth,height:element.videoHeight,duration:element.duration};
       });
-      expect(metadata.width).toBe(720);
-      expect(metadata.height).toBe(1280);
       const src = (await video.locator('source').getAttribute('src'))!;
       const slug = src.split('/').at(-1)!.replace('.mp4','') as keyof typeof timings;
+      const dimensions = timings[slug] as {width?:number;height?:number};
+      expect(metadata.width).toBe(dimensions.width ?? 720);
+      expect(metadata.height).toBe(dimensions.height ?? 1280);
       const expectedDuration = timings[slug].durationInFrames / timings[slug].fps;
       expect(metadata.duration).toBeGreaterThan(30);
       expect(Math.abs(metadata.duration - expectedDuration)).toBeLessThan(.2);

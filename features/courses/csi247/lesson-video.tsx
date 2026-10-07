@@ -7,7 +7,7 @@ export function Csi247LessonVideo({ id }: { id: keyof typeof stories }) {
   return <details className="my-4 rounded-lg border border-fd-border bg-fd-card p-4">
     <summary className="cursor-pointer font-medium">Watch: {story.title} <span className="text-sm text-fd-muted-foreground">({Math.round(story.durationInFrames / story.fps)}s)</span></summary>
     <p className="text-sm text-fd-muted-foreground">Experimental recap · AI narration by Microsoft Ava. Try the lesson diagram first, then use this to review.</p>
-    <video className="mx-auto my-4 max-h-[70vh] w-full max-w-sm rounded-lg" controls playsInline preload="none" poster={`${base}.png`} aria-label={story.title}>
+    <video className={`mx-auto my-4 max-h-[70vh] w-full rounded-lg ${id === 'merge-sort' ? 'max-w-2xl' : 'max-w-sm'}`} controls playsInline preload="none" poster={`${base}.png`} aria-label={story.title}>
       <source src={`${base}.mp4`} type="video/mp4" />
       <track kind="captions" src={`${base}.vtt`} srcLang="en" label="English" />
       Your browser does not support embedded video. <a href={`${base}.mp4`}>Download the recap</a>.

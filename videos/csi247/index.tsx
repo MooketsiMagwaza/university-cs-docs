@@ -4,7 +4,7 @@ import stories from './timings.json';
 import {MergeJourneyScene, type MergeJourneySceneData} from './merge-journey';
 
 type Scene = {heading:string;mode:'facts'|'copyback'|'split'|'merge'|'runs'|'insertion'|'bars'|'bubble'|'selection'|'linear'|'binary';caption:string;narration:string;audio:string;fromFrame:number;durationInFrames:number;values?:number[];after?:number[];left?:number[];right?:number[];i?:number;j?:number;output?:number[];chosen?:string;value?:number;lines?:string[]};
-type Story = {title:string;scenes:(Scene | (MergeJourneySceneData & {fromFrame:number}))[];durationInFrames:number;fps:number;voice:string};
+type Story = {title:string;scenes:(Scene | MergeJourneySceneData)[];durationInFrames:number;fps:number;voice:string;width?:number;height?:number};
 const C={paper:'#f1ebdd',ink:'#273047',card:'#fbf5e9',muted:'#6e7180',blue:'#b8c5df',rose:'#d9a9b0',green:'#6d9c91'};
 const clamp={extrapolateLeft:'clamp' as const,extrapolateRight:'clamp' as const};
 const mix=(a:number,b:number,t:number)=>a+(b-a)*t;
@@ -97,5 +97,5 @@ function SceneView({scene,index,total,title}:{scene:Scene;index:number;total:num
   </AbsoluteFill>;
 }
 const Lesson=({story}:{story:Story})=><>{story.scenes.map((scene,i)=><Sequence key={i} from={scene.fromFrame} durationInFrames={scene.durationInFrames}>{scene.mode==='merge-journey'?<MergeJourneyScene scene={scene}/>:<SceneView scene={scene} index={i} total={story.scenes.length} title={story.title}/>}</Sequence>)}</>;
-const Root=()=> <>{Object.entries(stories).map(([id,story])=><Composition key={id} id={id} component={Lesson} width={720} height={1280} fps={story.fps} durationInFrames={story.durationInFrames} defaultProps={{story:story as Story}}/>)}</>;
+const Root=()=> <>{Object.entries(stories).map(([id,story])=><Composition key={id} id={id} component={Lesson} width={(story as Story).width??720} height={(story as Story).height??1280} fps={story.fps} durationInFrames={story.durationInFrames} defaultProps={{story:story as Story}}/>)}</>;
 registerRoot(Root);
