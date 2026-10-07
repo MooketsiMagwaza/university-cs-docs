@@ -91,3 +91,19 @@ the original regex-based Markdown/import text conversion. Those paths now parse
 HTML with parse5, decode entities once, escape literal Markdown text and reject
 unsafe link protocols. Regression checks run in CI alongside the full artifact
 and Java audit; no security checks were disabled or alerts dismissed.
+
+## Follow-up: explain before the diagram
+
+The six searching/sorting chapters now open with a plain-language idea, an
+everyday explanation, a small numerical example and instructions for reading
+the next diagram. The original whole-run SVG map follows immediately, then
+the reference array section. Formal definitions and the older overlapping
+plain-language sections remain available as collapsed reference material.
+No original diagram or detailed explanation was removed.
+
+The shared source regenerates the website, offline HTML and PDF chapters.
+All nine regenerated PDFs (407 pages) pass text-boundary and content checks;
+every rendered page was reviewed in contact sheets, with full-size checks of
+the revised opening and annotated merge code. All 19 chapter/theme/support
+browser tests passed, including a successful rerun of one selection-page
+timeout. TypeScript, the full content audit and standalone Java checks passed.

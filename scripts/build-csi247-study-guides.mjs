@@ -70,7 +70,12 @@ function auditHtml(html, guide) {
   assert(ids.includes('annotated-java'), `${guide.id}: missing annotated Java`);
   assert(ids.includes('expanded-exam-practice'), `${guide.id}: missing expanded exam practice`);
   assert((html.match(/class="worked"/g) || []).length >= 5, `${guide.id}: missing worked cases`);
-  assert.equal(guide.sections[0].id, 'visual-map', `${guide.id}: visual map is not first`);
+  if (guide.chapter === 'sorting-and-searching') {
+    assert.deepEqual(guide.sections.slice(0, 2).map(item => item.id), ['plain-language', 'visual-map'], `${guide.id}: explain the idea before the diagram`);
+    assert(guide.sections[0].body.includes('A small example'), `${guide.id}: missing beginner example`);
+    assert(!/<svg\b|<figure\b|<pre\b|<table\b/i.test(guide.sections[0].body), `${guide.id}: opening should explain before visual/code detail`);
+    assert(guide.sections[2].id === 'array' || guide.sections[2].id.endsWith('-array'), `${guide.id}: array rules should follow the map`);
+  } else assert.equal(guide.sections[0].id, 'visual-map', `${guide.id}: package visual map is not first`);
   assert((html.match(/class="quiz-question"/g) || []).length >= 12, `${guide.id}: topic quiz is too short`);
   assert((html.match(/class="question"/g) || []).length >= 5, `${guide.id}: missing explained exam practice`);
   assert(html.includes('data-current') && html.includes('aria-current="step"'), `${guide.id}: trace synchronization absent`);

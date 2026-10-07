@@ -6,6 +6,7 @@ import { algorithmOverview, packageOverview } from './overviews.mjs';
 import { topicQuiz } from './quizzes.mjs';
 import { focusedMergeLesson } from './merge-lesson.mjs';
 import { barLesson } from './bar-lessons.mjs';
+import { ALGORITHM_INTRODUCTIONS, algorithmIntroduction } from './introductions.mjs';
 
 const SORT_INPUT = [4, 2, 5, 1, 3];
 const MERGE_INPUT = [63, 29, 72, 85, 18, 49, 3, 54];
@@ -273,20 +274,20 @@ export function createGuides() {
     const overview = MAP_KIND(kind) ? algorithmOverview(kind) : packageOverview(kind);
     const sources = new Map(guide.sections.map(s => [s.id, s]));
     const extension = (source, id, title) => section(id, title, `<div class="studio">${sources.get(source).body}</div>`);
-    const map = section('visual-map', 'The whole process at a glance', `<p class="lede">${guide.summary}</p><p>${SORT_INFO[kind]?.plain || (kind === 'binary' ? 'Think of looking up a word in a dictionary: order tells you which half to keep. Only the boundaries move; the array stays unchanged.' : kind === 'linear' ? 'Look along the row of cards until the value you want appears. Return the position, not the card’s value.' : 'Think of a package as a class address. The package, filename, source root and compiled root have distinct jobs.')}</p><div class="studio">${overview.body}</div>`);
+    const map = section('visual-map', 'The whole process at a glance', `${MAP_KIND(kind) ? '' : `<p class="lede">${guide.summary}</p><p>Think of a package as a class address. The package, filename, source root and compiled root have distinct jobs.</p>`}<div class="studio">${overview.body}</div>`);
     const walkthrough = section('interactive-walkthrough', 'Guided walkthrough: predict the next major step', `<div class="studio">${overview.walkthrough}</div>`);
     const trace = section('concise-trace', 'The trace at a glance', `<div class="studio">${overview.trace}</div>`);
     let sections;
     if (MAP_KIND(kind)) {
       const refs = referenceChapter(kind);
       const take = (ids) => ids.map(id => refs.find(s => s.id === id)).filter(Boolean);
-      const ids = kind === 'insertion' ? ['definition', 'simple', 'array', 'idea', 'movements'] : [`${kind}-definition`, `${kind}-simple`, `${kind}-array`, `${kind}-idea`, `${kind}-movements`];
-      const concepts = take(ids);
+      const ids = kind === 'insertion' ? ['array', 'definition', 'simple', 'idea', 'movements'] : [`${kind}-array`, `${kind}-definition`, `${kind}-simple`, `${kind}-idea`, `${kind}-movements`];
+      const concepts = take(ids).map(item => item.id === 'definition' || item.id.endsWith('-definition') || item.id === 'simple' || item.id.endsWith('-simple') ? { ...item, optional: true } : item);
       const implementation = take(kind === 'insertion' ? ['trace', 'table', 'java', 'recursive'] : [kind === 'merge' ? 'merge-sort' : kind]);
       const explained = take(kind === 'insertion' ? ['properties', 'complexity', 'when'] : [`${kind}-properties`, `${kind}-complexity`, `${kind}-when`]);
       const placed = new Set([...concepts, ...implementation, ...explained].map(s => s.id));
       const rest = refs.filter(s => !placed.has(s.id));
-      sections = [map, ...concepts, walkthrough, trace,
+      sections = [algorithmIntroduction(kind), map, ...concepts, walkthrough, trace,
         ...(kind === 'merge' ? [section('merge-lanes', 'A closer look at one merge return', `<div class="studio">${focusedMergeLesson(sort('merge', MERGE_INPUT))}</div>`)] : []),
         section('bar-explanation', 'Read the algorithm as a bar graph', `<div class="studio">${barLesson(kind)}</div>`), ...implementation,
         extension('implementation', 'annotated-java', 'Fully annotated Java: connect each line to the movement'),
@@ -315,7 +316,7 @@ export function createGuides() {
     // or alternate implementations at once on a student's first reading.
     const optional = new Set(['concise-trace', 'merge-lanes', 'bar-explanation', 'recursion-lab', 'merge-mechanics-lab', 'runnable-java', 'expanded-worked-cases', 'expanded-exam-practice']);
     sections = sections.map(item => optional.has(item.id) ? { ...item, optional: true } : item);
-    return { ...guide, referenceSha256: REFERENCE_SHA256, sections };
+    return { ...guide, summary: ALGORITHM_INTRODUCTIONS[kind]?.goal || guide.summary, referenceSha256: REFERENCE_SHA256, sections };
   });
   // Resolve the reference's cross-topic anchors after splitting the book.
   const destinations = new Map();
