@@ -22,7 +22,16 @@ for (const [chapter, slug, kind, steps] of routes) {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`/docs/sem3/csi247/${chapter}/notes/${slug}`);
     const article = page.locator('.csi247-chapter').filter({ has: page.locator(`[data-map-kind="${kind}"]`) });
-    await expect(article.locator('.chapter-content > section').first()).toHaveAttribute('id', /visual-map$/);
+    const sections = article.locator('.chapter-content > section');
+    await expect(sections.first()).toHaveAttribute('id', chapter === 'sorting-and-searching' ? /plain-language$/ : /visual-map$/);
+    if (chapter === 'sorting-and-searching') {
+      await expect(sections.first()).toContainText('A small example');
+      await expect(sections.first().locator('svg, figure, pre, table')).toHaveCount(0);
+      await expect(sections.nth(1)).toHaveAttribute('id', /visual-map$/);
+      await expect(sections.nth(2)).toHaveAttribute('id', /-array$/);
+      const formal = article.locator('section[id$="-definition"] > details');
+      await expect(formal).not.toHaveAttribute('open');
+    }
     await expect(article.locator(`[data-map-kind="${kind}"]`)).toBeVisible();
     await expect(article.locator('.quiz-question')).toHaveCount(12);
     const player = article.locator(`[data-player="${['imports','package','build'].includes(kind) ? 'packages-' + kind : kind + '-main'}"]`);

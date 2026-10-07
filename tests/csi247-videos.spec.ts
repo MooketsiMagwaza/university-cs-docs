@@ -1,4 +1,5 @@
 import {expect,test} from '@playwright/test';
+import timings from '../videos/csi247/timings.json';
 
 for (const [chapter,count] of [['sorting-and-searching',3],['packages',1]] as const) {
   test(`${chapter}: optional Ava recaps play with captions and transcripts`,async({page,request})=>{
@@ -21,8 +22,11 @@ for (const [chapter,count] of [['sorting-and-searching',3],['packages',1]] as co
       });
       expect(metadata.width).toBe(720);
       expect(metadata.height).toBe(1280);
-      expect(metadata.duration).toBeGreaterThan(80);
-      expect(metadata.duration).toBeLessThan(120);
+      const src = (await video.locator('source').getAttribute('src'))!;
+      const slug = src.split('/').at(-1)!.replace('.mp4','') as keyof typeof timings;
+      const expectedDuration = timings[slug].durationInFrames / timings[slug].fps;
+      expect(metadata.duration).toBeGreaterThan(30);
+      expect(Math.abs(metadata.duration - expectedDuration)).toBeLessThan(.2);
       const captions=await request.get((await video.locator('track').getAttribute('src'))!);
       expect(captions.ok()).toBe(true);
       expect(await captions.text()).toMatch(/^WEBVTT/);
