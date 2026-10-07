@@ -79,3 +79,64 @@ The marking cues below are practice guidance. For a diagnosis, name the failing 
   <SubQuestion part="b" prompt={<>B in pkg calls A's package-private tripled method and returns the result through its own public wrapper. Explain why app.Tester may call that wrapper without directly calling tripled. [5]</>} solution={<>B and A share pkg (1); internal call allowed (1); B's wrapper is public (1); app can call the accessible public API (1); imports do not open tripled itself (1).</>} />
   <SubQuestion part="c" prompt={<>Explain why an outside subclass may access a protected instance member through this or a suitable subclass receiver but not an arbitrary Base receiver. [4]</>} solution={<>Protected external access requires an inheritance context (1); caller qualifies as a subclass (1); receiver restriction is also checked (1); an arbitrary Base reference does not satisfy that restriction (1).</>} />
 </ExamQuestion>
+
+## Question 10: Build from a different working directory [12 marks]
+
+The project contains `src/school/app/Main.java`, declaring `school.app`, and `src/school/model/Book.java`, declaring `school.model`. Main imports Book. You have changed directory into `src`.
+
+1. Compile Main and source dependencies into the project's sibling `classes` folder.
+2. Give the resulting class-file paths relative to your current directory.
+3. Run Main without changing directory.
+4. Explain why the project-root commands copied unchanged may fail here.
+
+<details>
+<summary>Worked answer</summary>
+
+```text
+javac -d ../classes -sourcepath . school/app/Main.java
+java -cp ../classes school.app.Main
+```
+
+The outputs are `../classes/school/app/Main.class` and `../classes/school/model/Book.class`. Relative roots are interpreted from the current working directory; package names are not. `src/school/app/Main.java` from inside src would ask for an extra nested src directory.
+
+Award three marks for each part: correct root, correct package path/name, and explanation. Equivalent explicitly supplied source-file commands are acceptable.
+
+</details>
+
+## Question 11: An import does not repair every failure [10 marks]
+
+For each case, decide whether an import alone can fix it and give the correct repair.
+
+| Case | Observation |
+|---|---|
+| A | Source uses `Scanner` but has no matching import |
+| B | Public `Book` has a package-private constructor; caller is in another package |
+| C | Compile succeeds; runtime classpath omits the dependency root |
+| D | Two wildcard imports both supply `Date`; source uses simple `Date` |
+| E | `Main.class` is found, but the required main method is absent |
+
+<details>
+<summary>Worked answer</summary>
+
+A: yes, `import java.util.Scanner;` (or fully qualify the use). B: no, adjust constructor access if it is meant to be public API. C: no, supply the compiled dependency root on the runtime classpath. D: disambiguate with one explicit type import or a fully qualified name at the use. E: no, define the correct entry point or run the intended class. Two marks per classification with a concrete repair.
+
+</details>
+
+## Question 12: Package-aware file processing [14 marks]
+
+`school.app.Main` reads titles and prices from a file and stores `school.model.Book` objects in `Book[3]`. Input contains two valid records. Explain imports, accessibility, object counts, loop bounds and a missing-file failure.
+
+<details>
+<summary>Worked answer and marking cues</summary>
+
+- Import `school.model.Book` and the chosen input types, such as `java.io.BufferedReader`, `java.io.FileReader` and `java.io.IOException` [3].
+- Book and the constructor/accessors Main calls need appropriate public access across the package boundary [3].
+- Allocating `new Book[3]` creates one array of three initially null references, not three Book objects. Reading the records constructs two Book objects and sets count to 2 [3].
+- Display only indexes 0 and 1 (`i < count`), not every capacity cell. Check capacity before storing [2].
+- A missing input file is an I/O failure, not an import or classpath failure. Handle or declare the checked exception and check the file's path relative to the process working directory [3].
+
+</details>
+
+## Mark and retry
+
+For each lost mark, record the mistaken layer: **name**, **source path**, **compiled path**, **access**, **entry point**, or **file I/O**. Then change the package name and folder root and solve the same task again. Correctly guessing a command once is not the same as being able to reconstruct it.

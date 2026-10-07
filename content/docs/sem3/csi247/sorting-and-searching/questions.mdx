@@ -5,6 +5,12 @@ description: Lecture-aligned practice on linear and binary search, Bubble Sort, 
 
 These questions stay within the algorithms covered by the Sorting & Searching notes. Start with the traces, then explain the choice and efficiency of each algorithm.
 
+## How to use this practice paper
+
+First attempt questions without opening solutions. Record **indexes and values separately**. For sorting, label complete passes; for merging, distinguish input runs, temporary output, and copy-back. The marks are practice guidance, not an official marking scheme.
+
+After Questions 1–5, try the extended paper below. Budget approximately 35–45 minutes, then use the worked answers to identify a specific error pattern.
+
 <ExamQuestion title="Question 1: Linear and Binary Search [10 Marks]">
   <SubQuestion part="a" prompt={<>Use linear search to find <code>23</code> in <code>[8, 14, 23, 31, 42]</code>. List the indices checked and state the returned index. [3]</>} solution={<>Check indices 0, 1, and 2. The value 23 is found at index 2, so the algorithm returns 2.</>} />
   <SubQuestion part="b" prompt={<>Use binary search to find <code>31</code> in the same array. Show <code>low</code>, <code>mid</code>, and <code>high</code> for each step. [4]</>} solution={<>Start with low = 0 and high = 4. Mid = 2, so compare with 23 and move low to 3. Now mid = 3 and the value is 31, so return index 3.</>} />
@@ -34,3 +40,122 @@ These questions stay within the algorithms covered by the Sorting & Searching no
   <SubQuestion part="b" prompt={<>State Merge Sort's time complexity and the auxiliary space required for an array. [3]</>} solution={<>Its best, average, and worst-case time is O(N log N). An array implementation requires O(N) auxiliary space for merging.</>} />
   <SubQuestion part="c" prompt={<>Choose an algorithm for each case: one search in unsorted data; many searches in sorted array data. [2]</>} solution={<>Use linear search for the one search in unsorted data. Use binary search for repeated searches in sorted array data.</>} />
 </ExamQuestion>
+
+## Question 6: A merge, one output cell at a time [12 marks]
+
+LEFT is `[2,7,9]`; RIGHT is `[3,5,10]`. Both are sorted. Build ascending TEMP. For each write, show the comparison (or exhausted side), chosen input and new output. Count key comparisons and array writes, including copy-back. Explain why you do not repeatedly scan both runs for a global minimum.
+
+<details>
+<summary>Worked answer and marking cues</summary>
+
+| Write | Decision before writing | Chosen side | TEMP after writing |
+|---|---|---|---|
+| 0 | `2 <= 3` true | Left | `[2]` |
+| 1 | `7 <= 3` false | Right | `[2,3]` |
+| 2 | `7 <= 5` false | Right | `[2,3,5]` |
+| 3 | `7 <= 10` true | Left | `[2,3,5,7]` |
+| 4 | `9 <= 10` true | Left | `[2,3,5,7,9]` |
+| 5 | Left exhausted | Right leftover | `[2,3,5,7,9,10]` |
+
+Six correct rows [6]. Five key comparisons [1]; six temp writes plus six copy-back writes [2]. The only possible smallest unread values are the two fronts, because each run is already sorted [2]. Advance only the chosen pointer [1]. No step is a swap.
+
+</details>
+
+## Question 7: Held keys, shifts and duplicates [10 marks]
+
+Start with sorted prefix `[12,45,59,85]` followed by key `51`. Show every shift and final insertion. Explain the temporary duplicates and count shifts, key comparisons and insertion writes.
+
+<details>
+<summary>Worked answer</summary>
+
+Save `key = 51` before changing any array cell.
+
+| Action | Physical array cells |
+|---|---|
+| Shift 85 right | `[12,45,59,85,85]` |
+| Shift 59 right | `[12,45,59,59,85]` |
+| `45 > 51` is false: stop | `[12,45,59,59,85]` |
+| Write held 51 at `j+1 = 2` | `[12,45,51,59,85]` |
+
+Saving the key [2], two shifts with correct states [4], correct insertion [2], counts and explanation [2]. Two shifts, three key comparisons, one insertion write. The duplicate cells are safe because the displaced key remains in a separate variable; the “gap” is a conceptual model, not a Java null cell.
+
+</details>
+
+## Question 8: Binary search when the key is absent [10 marks]
+
+Search for `6` in `[1,3,5,7,9]`. Trace inclusive bounds. What is returned? Would changing `low <= high` to `low < high` always work?
+
+<details>
+<summary>Worked answer</summary>
+
+| Probe | low | mid | high | Value | Update |
+|---|---:|---:|---:|---:|---|
+| 1 | 0 | 2 | 4 | 5 | `low = 3` |
+| 2 | 3 | 3 | 4 | 7 | `high = 2` |
+
+Now `low = 3 > high = 2`: return `-1`. Two rows [4], both updates [2], termination/result [2]. The strict loop condition is wrong for this inclusive formulation because it can skip a final single candidate; `[7]` searched for 7 is a counterexample [2].
+
+</details>
+
+## Question 9: Counts are not interchangeable [10 marks]
+
+A nine-element selection sort makes no swap on two of its eight passes. How many key comparisons and actual swaps occur? Compare with insertion sort on a sorted nine-element array. Assume self-swaps are skipped and insertion always writes its held key back.
+
+<details>
+<summary>Worked answer</summary>
+
+Selection: `8+7+6+5+4+3+2+1 = 36` comparisons [3]; six actual swaps [2]. Insertion: eight failed `a[j] > key` comparisons [2], zero shifts [1], eight final key writes [1]. “No swap” does not mean “no comparison” [1].
+
+</details>
+
+## Question 10: Repair the code, then justify it [12 marks]
+
+For each defect, supply a corrected expression and a smallest useful failing example:
+
+1. Binary search updates `low = mid` after a failed probe that is too small.
+2. Insertion checks `a[j] > key && j >= 0`.
+3. Merge copies `temp[k]` into `a[k]` for a range beginning at `start = 4`.
+4. Bubble stops immediately after one adjacent pair needs no swap.
+
+<details>
+<summary>Worked answer</summary>
+
+Award one mark for the repair, one for the example and one for the reason in each part.
+
+1. `low = mid + 1`; `[1,3]`, key 3 can otherwise probe index 0 repeatedly. The failed midpoint must be excluded.
+2. `j >= 0 && a[j] > key`; `[2,1]` shifts 2 and decrements `j` to -1. Bounds must be checked before the array read.
+3. `a[start + k] = temp[k]`; merging indexes 4..5 must not overwrite indexes 0..1.
+4. Stop only after a **whole pass** has zero swaps. `[1,3,2]` begins with an ordered pair but still needs a swap later.
+
+</details>
+
+## Question 11: Stability using labelled duplicates [8 marks]
+
+The input is `[2A,2B,1]`, where only the number is compared. Trace one selection pass and explain stability. What happens if merge chooses the RIGHT item when equal?
+
+<details>
+<summary>Worked answer</summary>
+
+Selection swaps 1 with 2A, giving `[1,2B,2A]` [3]. The two equal records reversed relative order, so the implementation is not stable [2]. If equal items span a merge boundary, choosing RIGHT first can similarly move a later record ahead of an earlier equal LEFT record [2]. Use `left <= right` to choose LEFT on equality [1].
+
+</details>
+
+## Question 12: Explain a bar-graph animation [8 marks]
+
+Bars initially have heights `[7,3,5,2]`. Animation A ends its first pass at `[3,5,2,7]`. Animation B ends its first pass at `[2,3,5,7]`. Identify the algorithms and describe their different movements. Explain why sorting first is unnecessary for one search of this original array.
+
+<details>
+<summary>Worked answer</summary>
+
+A is bubble: 7 crosses three neighbours through three adjacent swaps [3]. B is selection: scan for minimum 2, then make one distant swap with 7 [3]. One linear scan already answers a one-off search in `O(n)` without modifying the data; preprocessing by comparison sorting costs extra work and can change original indexes [2].
+
+</details>
+
+## Turn mistakes into a revision route
+
+| Missed skill | Revise next | Retry |
+|---|---|---|
+| Bounds or absent key | [Binary search](/docs/sem3/csi247/sorting-and-searching/notes/binary-search) | Q8 and Q10.1 |
+| Shift versus swap | [Insertion sort](/docs/sem3/csi247/sorting-and-searching/notes/insertion-sort) | Q7 and Q10.2 |
+| Pointer/output confusion | [Merge sort](/docs/sem3/csi247/sorting-and-searching/notes/merge-sort) | Q6 and Q10.3 |
+| Counts or stability | [Cheat sheet](/docs/sem3/csi247/sorting-and-searching/cheat-sheet) | Q9 and Q11 |

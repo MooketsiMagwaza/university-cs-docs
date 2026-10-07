@@ -103,7 +103,74 @@ static void mergeSort(int[] a, int start, int end) {
 }
 ```
 
-The merge helper needs three phases: compare while both runs have values, copy the left leftovers, copy the right leftovers, then copy the temporary result back.
+The merge helper has four phases: compare while both runs have values, copy left leftovers, copy right leftovers, then copy temporary output back. At most one leftover loop does any work.
+
+```java
+static void merge(int[] a, int start, int mid, int end) {
+    int[] temp = new int[end - start + 1];
+    int left = start, right = mid + 1, out = 0;
+    while (left <= mid && right <= end) {
+        // Left wins ties: preserve the relative order of equal records.
+        if (a[left] <= a[right]) temp[out++] = a[left++];
+        else temp[out++] = a[right++];
+    }
+    while (left <= mid) temp[out++] = a[left++];
+    while (right <= end) temp[out++] = a[right++];
+    // start is essential when this call handles only a subrange.
+    for (int k = 0; k < temp.length; k++) a[start + k] = temp[k];
+}
+```
+
+Call `mergeSort(a, 0, a.length - 1)`. An empty array gives the range `0..-1`, which immediately returns. Splitting changes range boundaries; merging writes values.
+
+## The operation that identifies each algorithm
+
+| Algorithm | What you compare | What you move | Guaranteed after the step |
+|---|---|---|---|
+| Linear | `a[i] == key` | Nothing; advance `i` | Earlier indexes did not match |
+| Binary | Midpoint value against key | Nothing; change bounds | Discarded range cannot contain key |
+| Bubble | Neighbours `a[j]`, `a[j+1]` | Swap an inverted pair | A full pass fixes the largest active value |
+| Selection | Candidate against current minimum | One final swap, or none | Next smallest value is fixed on the left |
+| Insertion | Held key against earlier prefix values | Right shifts, then insert key | Prefix through `i` is sorted |
+| Merge | Front unread values of two sorted runs | Copy to temp, then copy back | The merged range is sorted |
+
+## Count the right thing
+
+| Count | Exact rule in these implementations | Example |
+|---|---|---|
+| Selection comparisons | `n(n-1)/2`, regardless of input order | 9 values: 36 comparisons |
+| Selection actual swaps | At most `n-1`; skip self-swaps | Supplied 9-value example: 6 swaps |
+| Optimized bubble best case | `n-1` comparisons, 0 swaps | `[1,2,3,4]`: 3 comparisons, stop |
+| Insertion shifts | One per earlier value greater than held key | Insert 2 into `[3,5,7]`: 3 shifts |
+| Merge of two nonempty runs, total `m` | At most `m-1` key comparisons | `[2,7]` + `[3,5]`: 3 comparisons |
+| Merge writes | `m` temp writes and `m` copy-back writes | Four values: 8 writes in total |
+
+A **probe** means visiting one search position. A key comparison tests values. A loop-bound check tests an index. These are different counting conventions: state the convention before giving an exact total.
+
+## Boundary and stability reminders
+
+- Binary search uses inclusive bounds here: `low <= high`. Exclude the failed midpoint with `mid + 1` or `mid - 1`; merely assigning `low = mid` can stall.
+- Evaluate `j >= 0` before `a[j] > current` in insertion sort. Java short-circuiting protects `a[-1]`.
+- Stable: equal records keep their original relative order. Bubble needs strict `>`; insertion needs strict `>`; merge chooses LEFT on `<=`.
+- Selection's distant swap can reverse equal records, even when the comparison is strict.
+- Iterative search/simple sorts use constant auxiliary space. Their recursive versions may need a call stack; do not copy the iterative space answer automatically.
+- Standard array merge sort uses `O(n)` temporary storage plus `O(log n)` stack space; total auxiliary space is `O(n)`.
+
+## Descending order: change the decision, not the whole algorithm
+
+| Algorithm | Descending decision |
+|---|---|
+| Binary search | If `a[mid] > key`, keep the right half; if smaller, keep the left |
+| Bubble | Swap when `a[j] < a[j+1]` |
+| Selection | Select the maximum remaining value |
+| Insertion | Shift while `a[j] < current` |
+| Merge | Choose LEFT when `a[left] >= a[right]` |
+
+## Read a bar chart correctly
+
+Height is the value; horizontal position is the index. Searching highlights bars without moving them. Sorting moves values between positions. A sorted ascending chart has non-decreasing heights, not necessarily distinct heights.
+
+For `[7,3,5,2]`, bubble's first pass gives `[3,5,2,7]`; selection's first pass gives `[2,3,5,7]`. The same final sorted order does **not** imply the same intermediate movements.
 
 ## Trace formats
 

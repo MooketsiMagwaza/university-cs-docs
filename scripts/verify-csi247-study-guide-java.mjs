@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { JAVA, runnable } from '../features/courses/csi247/study-guides/java.mjs';
+import { createGuides } from '../features/courses/csi247/study-guides/guides.mjs';
+import { chapterMarkdown } from '../features/courses/csi247/study-guides/markdown.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'csi247-guide-java-'));
 function command(executable, args, input) {
   const result = spawnSync(executable, args, { cwd: directory, encoding: 'utf8', input });
@@ -34,3 +36,28 @@ assert.equal(command('java', ['-classpath', 'classes', 'pkg.Tester']), 'Hello fr
 assert.equal(command('java', ['-classpath', 'classes', 'app.Main']), 'Hello from pkg.A\n10');
 assert.equal(command('java', ['-classpath', 'classes', 'app.ImportDemo'], '5\n'), 'Enter one whole number: [1, 2, 5]');
 console.log(`PASS all package/import programs. Verification sources retained at ${directory}`);
+
+// Compile complete projects retained from the supplied HTML as well as our
+// annotated implementations. Do not execute the file-I/O reference applications.
+const projects = new Map(), seen = new Set();
+for (const guide of createGuides()) for (const section of guide.sections) {
+  if (!section.reference || seen.has(section.id)) continue;
+  seen.add(section.id);
+  const project = section.id.startsWith('package-reference-') ? 'reference-packages' : section.id;
+  for (const match of section.body.matchAll(/<pre\b[^>]*>[\s\S]*?<\/pre>/g)) {
+    const code = chapterMarkdown(match[0]).replace(/^```\n|\n```$/g, '');
+    const declarations = code.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    const name = declarations.match(/^\s*public\s+(?:abstract\s+)?class\s+(\w+)/m)?.[1];
+    if (!name) continue;
+    const namespace = declarations.match(/^\s*package\s+([\w.]+);/m)?.[1];
+    const path = join(directory, 'reference', project, 'src', ...(namespace?.split('.') || []), `${name}.java`);
+    await mkdir(join(path, '..'), { recursive: true });
+    await writeFile(path, code);
+    if (!projects.has(project)) projects.set(project, []);
+    projects.get(project).push(path);
+  }
+}
+for (const [project, files] of projects) {
+  command('javac', ['-encoding', 'UTF-8', '--release', '8', '-d', join(directory, 'reference', project, 'classes'), ...files]);
+  console.log(`PASS imported reference project ${project}: ${files.length} complete classes compiled`);
+}

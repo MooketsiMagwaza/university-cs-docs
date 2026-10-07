@@ -3,6 +3,7 @@ import type { MDXComponents } from 'mdx/types';
 
 // 1. Import your custom components
 import { SafeImage } from './visuals/safe-image';
+import { Csi247LessonVideo } from '@/features/courses/csi247/lesson-video';
 import { Quiz } from './interactive/quiz';
 import { QuizRef } from './interactive/quiz-ref';
 import { Columns, Column } from './layouts/columns';
@@ -68,6 +69,7 @@ export function getMDXComponents(components?: MDXComponents) {
     
     // 2. Register them globally
     SafeImage,
+    Csi247LessonVideo,
     Quiz,
     QuizRef,
     Columns,
