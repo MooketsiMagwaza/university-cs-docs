@@ -22,7 +22,7 @@ test('full chapters inherit site fonts and surface tokens in both themes',async(
   await expect(page.locator('[data-map-kind="merge"] .merge-choice-detail[open]')).toHaveCount(0);
   const optional=page.locator('#merge-sort-merge-lanes > details');
   await expect(optional).not.toHaveAttribute('open');
-  await optional.locator('summary').click();
+  await optional.locator(':scope > summary').click();
   await expect(player.locator('[data-frame]')).toHaveCount(8);
   await expect(player.locator('[data-frame="0"]')).toContainText('Copy 3 from RIGHT into temp[0]');
   await player.getByRole('button',{name:'Next',exact:true}).click();
