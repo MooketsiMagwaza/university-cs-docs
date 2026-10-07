@@ -1,8 +1,9 @@
 import { escape } from './visuals.mjs';
 
-export const VERSION = '2026-10-07.3';
+export const VERSION = '2026-10-07.5';
 
 export function renderSection(item) {
+  if (item.optional) return `<section id="${escape(item.id)}" class="studio-section optional-section"><details class="lesson-detail"><summary><h2>${escape(item.title)}</h2><span class="detail-hint">Optional · expand to explore</span></summary><div class="detail-body">${codeWindows(item.body)}</div></details></section>`;
   if (item.raw) return `<section id="${escape(item.id)}" data-reference-section>${codeWindows(item.body)}</section>`;
   return `<section id="${escape(item.id)}" class="studio-section"><h2>${escape(item.title)}</h2>${codeWindows(item.body)}</section>`;
 }

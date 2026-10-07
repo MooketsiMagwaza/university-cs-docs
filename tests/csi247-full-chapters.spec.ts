@@ -25,7 +25,7 @@ for (const [chapter, slug, kind, steps] of routes) {
     await expect(article.locator('.chapter-content > section').first()).toHaveAttribute('id', /visual-map$/);
     await expect(article.locator(`[data-map-kind="${kind}"]`)).toBeVisible();
     await expect(article.locator('.quiz-question')).toHaveCount(12);
-    const player = article.locator('[data-player]').first();
+    const player = article.locator(`[data-player="${['imports','package','build'].includes(kind) ? 'packages-' + kind : kind + '-main'}"]`);
     await expect(player.locator('[data-frame]')).toHaveCount(steps);
     await player.locator('[data-action=next]').click();
     await expect(player.locator('[data-frame="1"]')).toBeVisible();

@@ -6,6 +6,19 @@ export function initializeChapter(scope) {
     node.addEventListener(event, callback, options);
     listeners.push(() => node.removeEventListener(event, callback, options));
   };
+  // Deep links and the site's own TOC must reveal their collapsed destination.
+  const revealHash = () => {
+    let id;
+    try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+    const target = document.getElementById(id);
+    if (!target || !scope.contains(target)) return;
+    for (let node = target; node && node !== scope; node = node.parentElement) {
+      if (node.tagName === 'DETAILS') node.open = true;
+    }
+    target.querySelector(':scope > details.lesson-detail')?.setAttribute('open', '');
+  };
+  on(window, 'hashchange', revealHash);
+  revealHash();
   const themeButton = scope.querySelector('[data-theme-toggle]');
   if (themeButton) {
     const root = document.documentElement;

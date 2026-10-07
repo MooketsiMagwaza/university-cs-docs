@@ -4,6 +4,8 @@ import { JAVA, runnable } from './java.mjs';
 import { REFERENCE_SECTIONS, REFERENCE_SHA256 } from './reference-content.mjs';
 import { algorithmOverview, packageOverview } from './overviews.mjs';
 import { topicQuiz } from './quizzes.mjs';
+import { focusedMergeLesson } from './merge-lesson.mjs';
+import { barLesson } from './bar-lessons.mjs';
 
 const SORT_INPUT = [4, 2, 5, 1, 3];
 const MERGE_INPUT = [63, 29, 72, 85, 18, 49, 3, 54];
@@ -284,7 +286,9 @@ export function createGuides() {
       const explained = take(kind === 'insertion' ? ['properties', 'complexity', 'when'] : [`${kind}-properties`, `${kind}-complexity`, `${kind}-when`]);
       const placed = new Set([...concepts, ...implementation, ...explained].map(s => s.id));
       const rest = refs.filter(s => !placed.has(s.id));
-      sections = [map, ...concepts, walkthrough, trace, ...implementation,
+      sections = [map, ...concepts, walkthrough, trace,
+        ...(kind === 'merge' ? [section('merge-lanes', 'A closer look at one merge return', `<div class="studio">${focusedMergeLesson(sort('merge', MERGE_INPUT))}</div>`)] : []),
+        section('bar-explanation', 'Read the algorithm as a bar graph', `<div class="studio">${barLesson(kind)}</div>`), ...implementation,
         extension('implementation', 'annotated-java', 'Fully annotated Java: connect each line to the movement'),
         extension('recursive', 'recursion-lab', 'Recursion, calls and returns'),
         ...(kind === 'merge' ? [extension('mechanics', 'merge-mechanics-lab', 'Inside a merge: pointers, temporary output and copy-back')] : []),
@@ -307,6 +311,10 @@ export function createGuides() {
         ...referenceChapter(kind).filter(s => s.id !== 'packages').map(s => ({ ...s, title: `Application: ${s.title}` }))];
     }
     sections.push(section('topic-quiz', 'Topic quiz: test your understanding', topicQuiz(kind)));
+    // Preserve the full reference, but do not present several competing traces
+    // or alternate implementations at once on a student's first reading.
+    const optional = new Set(['concise-trace', 'merge-lanes', 'bar-explanation', 'recursion-lab', 'merge-mechanics-lab', 'runnable-java', 'expanded-worked-cases', 'expanded-exam-practice']);
+    sections = sections.map(item => optional.has(item.id) ? { ...item, optional: true } : item);
     return { ...guide, referenceSha256: REFERENCE_SHA256, sections };
   });
   // Resolve the reference's cross-topic anchors after splitting the book.

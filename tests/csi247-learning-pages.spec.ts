@@ -45,6 +45,7 @@ test('merge lesson shows the whole run before guided returns and merge mechanics
   await expect(merge.locator('[data-current]')).toContainText('Current step 2:');
 
   await expect(page.locator('[data-map-kind="merge"] .map-pass')).toHaveCount(7);
+  await page.locator('#merge-sort-merge-mechanics-lab > details > summary').click();
   const pointers = page.locator('[data-player="merge-pointers"]');
   await pointers.getByRole('button', { name: 'Next' }).click();
   await expect(pointers.locator('[data-frame="1"]')).toContainText('take right');

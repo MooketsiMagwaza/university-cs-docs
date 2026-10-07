@@ -98,9 +98,11 @@ export function algorithmOverview(kind) {
     head = 'First split ranges until each contains one value. Then read the merge returns below in execution order: complete the left child, complete the right child, merge, return.';
     for (const r of run.returns) {
       const choices = r.micro.filter(s => s.phase === 'choose' || s.phase === 'leftover').map(s => s.explanation);
-      const visual = row(cards([...r.left, ...r.right], { roles: roleRange(r.left.length, 'selected'), labels: { 0: 'left front', [r.left.length]: 'right front' }, caption: `Merge ${r.lo}..${r.hi}: both children sorted` }), `Merge range ${r.lo}..${r.hi}; left [${r.left}], right [${r.right}]. Compare the two front values and advance only the chosen side.`)
-        + `<ol class="merge-choices">${choices.map(c => `<li>${e(c)}</li>`).join('')}</ol>`
-        + row(cards(r.result, { roles: roleRange(r.result.length, 'fixed'), caption: `Return sorted range ${r.lo}..${r.hi}` }), `Copy temp back to arr[${r.lo}..${r.hi}], then return. ${r.comparisons} key comparisons; ${r.result.length} temp writes and ${r.result.length} copy-back writes. Diagram indexes are relative to this run.`);
+      const parent = r.lo === 0 && r.hi === input.length - 1 ? null : run.returns.find(candidate => candidate.lo <= r.lo && candidate.hi >= r.hi && candidate.hi - candidate.lo > r.hi - r.lo);
+      const visual = row(cards([...r.left, ...r.right], { roles: roleRange(r.left.length, 'selected'), labels: { 0: 'LEFT', [r.left.length]: 'RIGHT' }, caption: `Merge ${r.lo}..${r.hi}: both children have returned sorted` }), `<strong>Children ready:</strong> LEFT [${r.left.join(', ')}] and RIGHT [${r.right.join(', ')}]. Compare only the front unread values; copy the smaller to temp and advance its pointer.`)
+        + `<details class="merge-choice-detail"><summary>Follow each comparison and copy</summary><ol class="merge-choices">${choices.map(c => `<li>${e(c)}</li>`).join('')}</ol><p>${r.comparisons} key comparisons; ${r.result.length} temp writes and ${r.result.length} copy-back writes.</p></details>`
+        + `<p class="merge-return-arrow" aria-label="Merge the two children, copy back, then return">↓ merge into temp &nbsp; → &nbsp; copy back &nbsp; → &nbsp; return</p>`
+        + row(cards(r.result, { roles: roleRange(r.result.length, 'fixed'), labels: { 0: 'sorted' }, caption: `Return sorted range ${r.lo}..${r.hi}` }), `<strong>Sorted range ${r.lo}..${r.hi} returns.</strong> ${parent ? `Follow this result to the ${r.lo === parent.lo ? 'LEFT' : 'RIGHT'} input of return ${parent.number} (range ${parent.lo}..${parent.hi}).` : 'Root return: the entire array is sorted.'}`);
       frames.push({ title: `Merge return ${r.number}: range ${r.lo}..${r.hi}`, visual, explanation: `Both child ranges are sorted before this merge. Return [${r.result}].` });
       rows.push([r.number, `${r.lo}..${r.hi}`, `[${r.left}] + [${r.right}]`, `[${r.result}]`, r.comparisons]);
     }
@@ -108,7 +110,7 @@ export function algorithmOverview(kind) {
   }
   const headers = kind === 'selection' ? ['Pass', 'Minimum', 'Action', 'Array after pass', 'Comparisons'] : kind === 'insertion' ? ['Pass', 'Held key', 'Shifts', 'Insert at', 'Array after pass'] : kind === 'binary' ? ['Probe', 'low', 'mid', 'high', 'Value', 'Decision'] : kind === 'linear' ? ['Check', 'Index', 'Value', 'Decision'] : kind === 'bubble' ? ['Pass', 'Comparisons', 'Swaps', 'Array after pass'] : ['Return', 'Range', 'Sorted inputs', 'Result', 'Comparisons'];
   return {
-    body: `<p>${head}</p>${legend}<div class="whole-run" data-map-kind="${kind}">${kind === 'merge' ? recursionTree(input) : ''}${frames.map(f => pass(f.title, f.visual)).join('')}</div><p class="result-line">${e(result)}</p>`,
+    body: `<p>${head}</p>${legend}<div class="whole-run" data-map-kind="${kind}">${kind === 'merge' ? `<p><strong>Going down:</strong> follow the original split tree. Only range boundaries change. <strong>Coming back:</strong> read the seven numbered SVG merge returns below; each green result becomes an input to its parent.</p>${recursionTree(input)}` : ''}${frames.map(f => pass(f.title, f.visual)).join('')}</div><p class="result-line">${e(result)}</p>`,
     walkthrough: `<p>Predict the next completed ${['linear','binary'].includes(kind) ? 'check' : kind === 'merge' ? 'merge' : 'pass'}, then advance. Each scene keeps all its movements together.</p>${player(`${kind}-main`, 'Guided walkthrough: major steps', frames, headers, rows.map(r => r.slice(1)))}`,
     trace: table(headers, rows, `${kind} overview concise trace`),
     frames, rows, result,
