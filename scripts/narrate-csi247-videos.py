@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import json
 import math
+import subprocess
 from pathlib import Path
 import edge_tts
 from mutagen.mp3 import MP3
@@ -17,6 +18,12 @@ FPS = 24
 
 async def main():
     stories = json.loads((ROOT / 'videos/csi247/storyboards.json').read_text(encoding='utf8'))
+    # The revised merge pilot is generated from the same computed operations
+    # that drive its visuals, not separately transcribed intermediate arrays.
+    stories['merge-sort'] = json.loads(subprocess.check_output([
+        'node', '--input-type=module', '-e',
+        'import {createMergeJourney} from "./videos/csi247/merge-journey.mjs"; console.log(JSON.stringify(createMergeJourney()));'
+    ], cwd=ROOT, text=True, encoding='utf8'))
     destination = ROOT / 'public/files/sem3/csi247/videos/narration'
     destination.mkdir(parents=True, exist_ok=True)
     for slug, story in stories.items():
@@ -25,8 +32,24 @@ async def main():
             digest = hashlib.sha256((VOICE + scene['narration']).encode()).hexdigest()[:12]
             name = f'{slug}-{index+1}-{digest}.mp3'
             audio = destination / name
-            if not audio.exists():
-                await edge_tts.Communicate(scene['narration'], VOICE, rate='-4%').save(str(audio))
+            valid = False
+            if audio.exists() and audio.stat().st_size:
+                try:
+                    valid = MP3(audio).info.length > 0
+                except Exception:
+                    pass
+            if not valid:
+                pending = audio.with_suffix('.pending.mp3')
+                for attempt in range(3):
+                    try:
+                        await edge_tts.Communicate(scene['narration'], VOICE, rate='-4%').save(str(pending))
+                        assert MP3(pending).info.length > 0, 'Speech service returned empty audio'
+                        pending.replace(audio)
+                        break
+                    except Exception:
+                        if attempt == 2:
+                            raise
+                        await asyncio.sleep(2 * (attempt + 1))
             duration = MP3(audio).info.length
             scene.update(audio=f'files/sem3/csi247/videos/narration/{name}',
                          fromFrame=frame, durationInFrames=math.ceil((duration + .75) * FPS))

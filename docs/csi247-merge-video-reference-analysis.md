@@ -71,3 +71,14 @@ beginner; do not reproduce the reel's accelerated ending literally.
 
 Do not reuse the reference's Naruto art, scene, banner, music or rendered frames.
 The transferable reference is the motion and explanation structure.
+
+### User-directed side-by-side adaptation
+
+After the initial sequential prototype, the user explicitly requested both
+children reordering at the same time, each with its own `x > y` statement and
+Java below. The revised pilot therefore pairs the two independent child merge
+traces on screen. Both lanes have their own comparison and temporary output;
+the parent merge waits until both results have returned. A persistent label
+and Ava explanation distinguish this side-by-side overview from the Java
+implementation's left-then-right execution. The greater-than form chooses the
+right front when true, otherwise the left, preserving left-first ties.

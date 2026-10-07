@@ -22,7 +22,10 @@ Matching voice/text hashes reuse existing recordings without a network call.
 
 ## Sources and narration
 
-`storyboards.json` is the authored teaching script. `timings.json` is generated;
+`storyboards.json` contains the first pilots' authored scripts. The revised merge
+pilot uses `merge-journey.mjs` as its execution-derived source of truth; the
+narration builder replaces that pilot's original storyboard with this trace.
+`timings.json` is generated;
 the website uses it for accurate durations and transcripts. Narration uses
 Microsoft `en-US-AvaMultilingualNeural` through the Edge online speech service
 with [edge-tts](https://github.com/rany2/edge-tts), not a cloned voice. Generating
@@ -31,9 +34,16 @@ The output explicitly identifies AI narration. Offline video playback needs no
 speech service, Remotion runtime, or third-party embed.
 
 Animations use [Remotion](https://www.remotion.dev/docs/). No Instagram video,
-music, images, branding, or audio was copied. The supplied reels could not be
-viewed in this environment, so these are original diagram-led experiments, not
-claims to reproduce those reels. Check provider terms and Remotion's applicable
+music, images, branding, or audio is included in the published assets. The
+initial web embeds were inaccessible. The user subsequently supplied the actual
+merge-sort MP4; all 902 frames were reviewed locally. See
+`docs/csi247-merge-video-reference-analysis.md` for timestamped findings and the
+adaptation rationale. The revised merge pilot carries over persistent context,
+visible copy paths, comparison holds and code highlighting, using original
+graphics. Both child merges animate together as the user requested, with their
+own greater-than comparison. A persistent overview label and narration explain
+that the accompanying Java executes left, then right; visual simultaneity is
+not presented as parallel Java execution. Check provider terms and Remotion's applicable
 license before expanding this prototype into a commercial production workflow.
 
 ## Review checklist

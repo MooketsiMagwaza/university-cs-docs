@@ -13,7 +13,7 @@ export function Csi247LessonVideo({ id }: { id: keyof typeof stories }) {
       Your browser does not support embedded video. <a href={`${base}.mp4`}>Download the recap</a>.
     </video>
     <details className="mt-4"><summary className="cursor-pointer text-sm font-medium">Read the complete transcript</summary>
-      {story.scenes.map(scene => <div key={scene.heading} className="mt-4"><h3 className="text-base font-semibold">{scene.heading}</h3><p>{scene.narration}</p></div>)}
+      {story.scenes.map(scene => <div key={scene.fromFrame} className="mt-4"><h3 className="text-base font-semibold">{scene.heading}</h3><p>{scene.narration}</p></div>)}
     </details>
   </details>;
 }

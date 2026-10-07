@@ -107,3 +107,26 @@ every rendered page was reviewed in contact sheets, with full-size checks of
 the revised opening and annotated merge code. All 19 chapter/theme/support
 browser tests passed, including a successful rerun of one selection-page
 timeout. TypeScript, the full content audit and standalone Java checks passed.
+
+## Follow-up: actual reel reference and side-by-side merge video
+
+The user supplied the local merge-sort MP4 after the web embeds failed. All
+902 video frames were decoded and visually reviewed; the timestamped analysis
+is in `csi247-merge-video-reference-analysis.md`. Audio from that reference was
+not assessed or reused. No reference frames or character assets are published.
+
+The new 126-second merge recap retains the same four array values through
+12 computed scenes. At the user's request, it animates both children together,
+with separate greater-than comparisons, then performs the final merge. A
+persistent label and narration distinguish this overview from Java's sequential
+left-then-right execution. It shows comparison holds, pointer advances, copies into
+temporary output and all three copy-back returns with highlighted Java lines.
+Consumed read views disappear during copy-back to keep the moving tiles clear.
+Microsoft Ava narration was regenerated with validated, retryable audio writes.
+
+The trace test checks five comparisons, eight temporary copies and eight
+copy-back writes, and runs in CI. The encoded file has 3024 frames at 24 fps,
+720 x 1280 H.264 video and matching AAC duration. Scene stills and 36 encoded
+before/motion/after samples were visually reviewed. Both resource-page video
+tests pass, checking all four files, captions, transcripts and mobile width.
+The production build passes. The other three recap experiments are unchanged.
