@@ -1,6 +1,9 @@
 import { array, code, escape, figure, levels, list, player, recursionTree, stack, table } from './visuals.mjs';
 import { search, sort } from './simulations.mjs';
 import { JAVA, runnable } from './java.mjs';
+import { REFERENCE_SECTIONS, REFERENCE_SHA256 } from './reference-content.mjs';
+import { algorithmOverview, packageOverview } from './overviews.mjs';
+import { topicQuiz } from './quizzes.mjs';
 
 const SORT_INPUT = [4, 2, 5, 1, 3];
 const MERGE_INPUT = [63, 29, 72, 85, 18, 49, 3, 54];
@@ -25,7 +28,7 @@ export const REGISTRY = [
   ['built-in-packages-and-imports', 'Built-in Packages and Imports', 'packages', 'imports'],
   ['creating-a-package', 'Creating a Java Package', 'packages', 'package'],
   ['compiling-and-running', 'Compiling and Running Packages', 'packages', 'build'],
-].map(([slug, title, chapter, kind]) => ({ slug, title, chapter, kind, id: `${chapter}/${slug}`, sourceRoutes: [`/docs/sem3/csi247/${chapter}/notes/${kind === 'bubble' || kind === 'selection' ? 'bubble-and-selection-sort' : slug}`] }));
+].map(([slug, title, chapter, kind]) => ({ slug, title, chapter, kind, id: `${chapter}/${slug}`, sourceRoutes: [`/docs/sem3/csi247/${chapter}/notes/${slug}`, ...(['bubble', 'selection'].includes(kind) ? [`/docs/sem3/csi247/${chapter}/notes/bubble-and-selection-sort`] : [])] }));
 
 const SORT_INFO = {
   bubble: {
@@ -210,6 +213,117 @@ function packageGuide(meta) {
   ] };
 }
 
-export function createGuides() {
+function createCondensedGuides() {
   return REGISTRY.map((meta) => ['linear', 'binary'].includes(meta.kind) ? searchGuide(meta) : SORT_INFO[meta.kind] ? sortGuide(meta) : packageGuide(meta));
 }
+
+const REFERENCE_CHAPTERS = {
+  linear: ['searching', 'linear-array', 'linear-definition', 'linear-simple', 'linear-idea', 'linear-movements', 'linear', 'linear-variants', 'linear-examples', 'linear-properties', 'linear-complexity', 'linear-when', 'linear-mistakes', 'linear-summary', 'linear-practice'],
+  binary: ['searching', 'binary-array', 'binary-definition', 'binary-simple', 'binary-idea', 'binary-movements', 'binary', 'binary-descending', 'binary-examples', 'binary-properties', 'binary-complexity', 'binary-when', 'binary-mistakes', 'binary-summary', 'binary-practice', 'search-summary'],
+  bubble: ['why-sort', 'sort-map', 'bubble-array', 'bubble-definition', 'bubble-simple', 'bubble-idea', 'bubble-movements', 'bubble', 'bubble-descending', 'bubble-examples', 'bubble-properties', 'bubble-complexity', 'bubble-when', 'bubble-mistakes', 'bubble-summary', 'bubble-practice'],
+  selection: ['why-sort', 'sort-map', 'selection-array', 'selection-definition', 'selection-simple', 'selection-idea', 'selection-movements', 'selection', 'selection-descending', 'selection-examples', 'selection-properties', 'selection-complexity', 'selection-when', 'selection-mistakes', 'selection-summary', 'selection-practice'],
+  insertion: ['why-sort', 'sort-map', 'array', 'definition', 'simple', 'idea', 'movements', 'trace', 'table', 'java', 'recursive', 'insertion-descending', 'insertion-test', 'examples', 'properties', 'complexity', 'when', 'mistakes', 'summary', 'practice'],
+  merge: ['why-sort', 'sort-map', 'merge-array', 'merge-definition', 'merge-simple', 'merge-idea', 'merge-movements', 'merge-sort', 'merge-descending', 'merge-examples', 'merge-properties', 'merge-complexity', 'merge-when', 'merge-mistakes', 'merge-summary', 'merge-practice', 'sort-compare', 'growth'],
+  imports: ['array-foundations', 'file-array-app', 'object-sorting', 'packages', 'test1-q2'],
+  package: ['packages', 'lab-work', 'lab-marks', 'lab-staff'],
+  build: ['packages', 'lab-work', 'lab-marks', 'lab-staff'],
+};
+
+const SUPPLEMENTS = {
+  linear: [['visual', 'interactive-lab', 'Interactive trace lab'], ['implementation', 'annotated-java', 'Fully annotated Java'], ['recursive', 'recursion-lab', 'Recursive version and call stack'], ['runnable', 'runnable-java', 'Complete runnable Java playground'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  binary: [['visual', 'interactive-lab', 'Interactive trace lab'], ['implementation', 'annotated-java', 'Fully annotated Java'], ['recursive', 'recursion-lab', 'Recursive version and call stack'], ['runnable', 'runnable-java', 'Complete runnable Java playground'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  bubble: [['visual', 'interactive-lab', 'Interactive trace lab'], ['implementation', 'annotated-java', 'Fully annotated Java'], ['recursive', 'recursion-lab', 'Recursive version and call stack'], ['runnable', 'runnable-java', 'Complete runnable Java playground'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  selection: [['visual', 'interactive-lab', 'Interactive trace lab'], ['implementation', 'annotated-java', 'Fully annotated Java'], ['recursive', 'recursion-lab', 'Recursive version and call stack'], ['runnable', 'runnable-java', 'Complete runnable Java playground'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  insertion: [['visual', 'interactive-lab', 'Interactive trace lab'], ['implementation', 'annotated-java', 'Fully annotated Java'], ['recursive', 'recursion-lab', 'Recursive version and call stack'], ['runnable', 'runnable-java', 'Complete runnable Java playground'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  merge: [['visual', 'interactive-lab', 'Interactive call-and-return lab'], ['mechanics', 'merge-mechanics-lab', 'Every merge movement in slow motion'], ['implementation', 'annotated-java', 'Fully annotated Java'], ['recursive', 'recursion-lab', 'Recursion tree and live call stack'], ['runnable', 'runnable-java', 'Complete runnable Java playground'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  imports: [['workflow', 'interactive-workflow', 'Interactive name-resolution workflow'], ['implementation', 'annotated-java', 'Fully annotated Java and commands'], ['examples', 'expanded-worked-cases', 'More worked package cases'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  package: [['workflow', 'interactive-workflow', 'Interactive package workflow'], ['implementation', 'annotated-java', 'Fully annotated Java and commands'], ['examples', 'expanded-worked-cases', 'More worked package cases'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+  build: [['workflow', 'interactive-workflow', 'Interactive compile-and-run workflow'], ['implementation', 'annotated-java', 'Fully annotated Java and commands'], ['examples', 'expanded-worked-cases', 'More worked package cases'], ['practice', 'expanded-exam-practice', 'More exam-style practice']],
+};
+
+function softenPastPaperLabels(html) {
+  return html
+    .replace(/Test 1 question/gi, 'Exam-style question')
+    .replace(/Test 1/gi, 'the past paper');
+}
+
+function referenceChapter(kind) {
+  return REFERENCE_CHAPTERS[kind].map((id) => {
+    const item = REFERENCE_SECTIONS[id];
+    if (!item) throw new Error(`Missing reference section ${id} for ${kind}`);
+    const exampleNotice = id === 'array' || id.endsWith('-array') ? '<p class="fine-print"><strong>Detailed reference example:</strong> this part introduces its own input, shown below. The opening whole-run map and guided walkthrough keep their original input throughout; each later worked example states its new input explicitly.</p>' : '';
+    return { ...item, title: softenPastPaperLabels(item.title), body: exampleNotice + softenPastPaperLabels(item.body), raw: true, reference: true };
+  });
+}
+
+function supplementalSections(guide) {
+  const byId = new Map(guide.sections.map((item) => [item.id, item]));
+  return SUPPLEMENTS[guide.kind].map(([sourceId, id, title]) => {
+    const source = byId.get(sourceId);
+    if (!source) throw new Error(`Missing supplemental section ${sourceId} for ${guide.kind}`);
+    return section(id, title, `<div class="studio">${source.body}</div>`);
+  });
+}
+
+export function createGuides() {
+  const guides = createCondensedGuides().map((guide) => {
+    const { kind } = guide;
+    const overview = MAP_KIND(kind) ? algorithmOverview(kind) : packageOverview(kind);
+    const sources = new Map(guide.sections.map(s => [s.id, s]));
+    const extension = (source, id, title) => section(id, title, `<div class="studio">${sources.get(source).body}</div>`);
+    const map = section('visual-map', 'The whole process at a glance', `<p class="lede">${guide.summary}</p><p>${SORT_INFO[kind]?.plain || (kind === 'binary' ? 'Think of looking up a word in a dictionary: order tells you which half to keep. Only the boundaries move; the array stays unchanged.' : kind === 'linear' ? 'Look along the row of cards until the value you want appears. Return the position, not the card’s value.' : 'Think of a package as a class address. The package, filename, source root and compiled root have distinct jobs.')}</p><div class="studio">${overview.body}</div>`);
+    const walkthrough = section('interactive-walkthrough', 'Guided walkthrough: predict the next major step', `<div class="studio">${overview.walkthrough}</div>`);
+    const trace = section('concise-trace', 'The trace at a glance', `<div class="studio">${overview.trace}</div>`);
+    let sections;
+    if (MAP_KIND(kind)) {
+      const refs = referenceChapter(kind);
+      const take = (ids) => ids.map(id => refs.find(s => s.id === id)).filter(Boolean);
+      const ids = kind === 'insertion' ? ['definition', 'simple', 'array', 'idea', 'movements'] : [`${kind}-definition`, `${kind}-simple`, `${kind}-array`, `${kind}-idea`, `${kind}-movements`];
+      const concepts = take(ids);
+      const implementation = take(kind === 'insertion' ? ['trace', 'table', 'java', 'recursive'] : [kind === 'merge' ? 'merge-sort' : kind]);
+      const explained = take(kind === 'insertion' ? ['properties', 'complexity', 'when'] : [`${kind}-properties`, `${kind}-complexity`, `${kind}-when`]);
+      const placed = new Set([...concepts, ...implementation, ...explained].map(s => s.id));
+      const rest = refs.filter(s => !placed.has(s.id));
+      sections = [map, ...concepts, walkthrough, trace, ...implementation,
+        extension('implementation', 'annotated-java', 'Fully annotated Java: connect each line to the movement'),
+        extension('recursive', 'recursion-lab', 'Recursion, calls and returns'),
+        ...(kind === 'merge' ? [extension('mechanics', 'merge-mechanics-lab', 'Inside a merge: pointers, temporary output and copy-back')] : []),
+        extension('runnable', 'runnable-java', 'A complete runnable Java example'),
+        ...explained, ...rest,
+        extension('examples', 'expanded-worked-cases', 'More worked cases: edge cases, duplicates and descending order'),
+        extension('practice', 'expanded-exam-practice', 'Exam-style practice with worked answers')];
+    } else {
+      // Split the original package chapter only at heading boundaries; retain
+      // every paragraph, table, command and example in its original order.
+      const parts = REFERENCE_SECTIONS.packages.body.split(/(?=<h3\b)/);
+      const refs = parts.map((body, i) => ({ id: `package-reference-${i}`, title: body.match(/<h[23][^>]*>(.*?)<\/h[23]>/)?.[1].replace(/<[^>]+>/g, '') || 'Package foundations', body, raw: true, reference: true }));
+      sections = [map, extension('definition', 'concept', 'The concept, plain language and vocabulary'), walkthrough, trace,
+        ...refs, extension('implementation', 'annotated-java', 'Fully annotated Java and commands'),
+        extension('visibility', 'visibility', 'Imports and access: different responsibilities'),
+        extension('properties', 'properties', 'Properties and practical cost'),
+        extension('examples', 'expanded-worked-cases', 'Five worked package cases'),
+        extension('errors', 'errors', 'Common errors and exact repairs'),
+        extension('practice', 'expanded-exam-practice', 'Exam-style practice with worked answers'),
+        ...referenceChapter(kind).filter(s => s.id !== 'packages').map(s => ({ ...s, title: `Application: ${s.title}` }))];
+    }
+    sections.push(section('topic-quiz', 'Topic quiz: test your understanding', topicQuiz(kind)));
+    return { ...guide, referenceSha256: REFERENCE_SHA256, sections };
+  });
+  // Resolve the reference's cross-topic anchors after splitting the book.
+  const destinations = new Map();
+  for (const guide of guides) for (const s of guide.sections) {
+    for (const id of [s.id, ...[...s.body.matchAll(/\bid="([^"]+)"/g)].map(m => m[1])]) if (!destinations.has(id)) destinations.set(id, guide);
+  }
+  for (const guide of guides) {
+    const local = new Set(guide.sections.flatMap(s => [s.id, ...[...s.body.matchAll(/\bid="([^"]+)"/g)].map(m => m[1])]));
+    guide.sections = guide.sections.map(s => ({ ...s, body: s.body.replace(/href="#([^"]+)"/g, (all, id) => {
+      if (local.has(id)) return all;
+      const target = destinations.get(id);
+      if (!target) throw new Error(`Unresolved reference anchor ${id} in ${guide.id}`);
+      return `href="../${target.chapter}/${target.slug}.html#${id}"`;
+    }) }));
+  }
+  return guides;
+}
+
+function MAP_KIND(kind) { return ['linear', 'binary', 'bubble', 'selection', 'insertion', 'merge'].includes(kind); }

@@ -6,7 +6,7 @@ type StudyGuideArtifact = {
   title: string;
   sourceRoutes: string[];
   html: string;
-  pdf: string;
+  pdf: string | null;
 };
 
 const artifacts = manifest.artifacts as StudyGuideArtifact[];
@@ -35,7 +35,7 @@ export function PageDownloadActions({ pageUrl }: { pageUrl: string }) {
               <Download className="h-4 w-4" aria-hidden="true" />
               {showTitle ? `${guide.title} HTML` : 'HTML'}
             </a>
-            <a
+            {guide.pdf && <a
               href={guide.pdf}
               download
               title={`Download the light-mode ${guide.title} PDF`}
@@ -43,7 +43,7 @@ export function PageDownloadActions({ pageUrl }: { pageUrl: string }) {
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
               {showTitle ? `${guide.title} PDF` : 'PDF'}
-            </a>
+            </a>}
           </div>
         );
       })}
