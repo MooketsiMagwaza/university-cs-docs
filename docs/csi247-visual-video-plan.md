@@ -1,5 +1,10 @@
 # CSI247 visual and video plan
 
+> Prototype status (7 October 2026): four short Ava-narrated portrait recaps are
+> implemented under `videos/csi247`, with resource-page players, captions and
+> transcripts. The per-method scripts and widescreen checklist below are a
+> future expansion plan, not a description of the currently generated pilots.
+
 ## Decision
 
 The topic-embedded interactive walkthrough is the primary learning tool. A learner can stop before a pass, predict the next row, and compare their answer with the dry-run table.

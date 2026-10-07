@@ -43,6 +43,44 @@ The builder checks these expected intermediate states independently of the final
 
 Edit the shared chapter sources under `features/courses/csi247/study-guides`, then regenerate. `reference-content.mjs` and `reference.css` retain the imported reference; `native-chapter.css`, the HTML files, PDFs and manifest are generated. The old MDX lesson bodies remain in the repository for historical/source continuity, while the in-scope routes render the shared full chapters.
 
-No deployment, commit, push or unrelated course redesign is part of this change.
+The user subsequently authorized incremental Conventional Commits and merging
+into GitHub's default branch after checks pass. Existing unrelated route and
+deployment edits in the local checkout are not included in these commits.
 
 Verified results: production build and TypeScript passed; all 13 focused browser tests passed; the course content audit and standalone Java checks passed. All nine generated HTML/PDF pairs pass the artifact audit. PDF contact sheets are reviewed for light presentation, diagram/page boundaries and complete answers.
+
+## Follow-up: theme, merge clarity and a quieter reading path
+
+- Native lessons inherit the site's Inter/Fraunces typography and light/dark
+  surface tokens; code panels keep recognizable editor chrome and copy controls.
+- The original SVG split tree and array-card merge diagrams are retained.
+  Each sorted return explicitly names the parent return and LEFT/RIGHT input
+  it supplies. Comparison-by-comparison detail is expandable.
+- Duplicate trace tables, slow-motion extensions, alternate recursion/runnable
+  examples and extra practice are collapsed by default. They remain in the
+  page and complete downloads; deep links reveal the relevant section. Optional
+  extensions no longer crowd the main contents list.
+- Six bar-graph supplements explain value height versus index position and
+  distinguish swaps, shifts, copies and pointer-only searches.
+- All eight sorting/searching and packages support pages have expanded worked
+  practice, retrieval exercises, error diagnosis and focused resource guidance.
+- The PDF skill's render-and-inspect workflow is used alongside a glyph-bound
+  audit: the final nine PDFs contain 405 pages, all inside safe text margins.
+  Contact sheets cover every page; detailed renders cover maps, code and quizzes.
+- Four Remotion pilots use actual Microsoft AvaMultilingualNeural narration,
+  720×1280 H.264 video and AAC audio. They are optional resource-page recaps with
+  captions and full transcripts, not replacements for the diagrams. Durations
+  are approximately 110, 90, 89 and 84 seconds. All 22 scene stills were reviewed.
+  The supplied Instagram reels were inaccessible; no claim of matching their
+  unseen animation style is made and none of their media was copied.
+
+Additional checks: `tests/csi247-study-expansion.spec.ts` covers theme inheritance,
+restored SVGs, optional details/deep links and all eight support pages.
+`tests/csi247-videos.spec.ts` checks all four playable files, dimensions, durations,
+captions, transcripts, no autoplay and mobile width. Video source and reproduction
+instructions are in `videos/csi247/README.md`.
+
+`npm audit` reports 10 existing findings (6 low, 4 high) in the Excalidraw/Sass
+and nested KaTeX dependency trees. The affected installed versions are unchanged
+from the pre-video lockfile; a broad dependency downgrade was not mixed into
+this teaching-content change.
