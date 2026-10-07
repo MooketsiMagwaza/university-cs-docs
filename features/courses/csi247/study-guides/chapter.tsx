@@ -3,7 +3,7 @@ import { renderSection } from './document.mjs';
 import { ChapterClient } from './chapter-client';
 import './native-chapter.css';
 
-type Section = { id: string; title: string; body: string; raw?: boolean };
+type Section = { id: string; title: string; body: string; raw?: boolean; optional?: boolean };
 type Guide = { id: string; slug: string; title: string; sourceRoutes: string[]; sections: Section[] };
 const guides = createGuides() as Guide[];
 
@@ -13,7 +13,7 @@ export function getFullChapters(pageUrl: string) {
 
 export function getChapterToc(chapters: Guide[]) {
   if (chapters.length > 1) return [];
-  return chapters.flatMap(guide => guide.sections.map(section => ({
+  return chapters.flatMap(guide => guide.sections.filter(section => !section.optional).map(section => ({
     title: chapters.length > 1 ? `${guide.title}: ${section.title}` : section.title,
     url: `#${guide.slug}-${section.id}`,
     depth: 2,
