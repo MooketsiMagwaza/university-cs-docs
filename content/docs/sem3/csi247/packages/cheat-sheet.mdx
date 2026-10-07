@@ -87,3 +87,56 @@ For protected instance members outside the package, a suitable subclass receiver
 | `Main method not found` | main signature and target class |
 
 Return to the [chapter overview](/docs/sem3/csi247/packages).
+
+## One class, four representations
+
+| Representation | Example | What it means |
+|---|---|---|
+| Package declaration | `package school.people;` | Namespace declared by source |
+| Fully qualified type name | `school.people.Student` | Identity used in imports and code |
+| Sourcepath lookup | `src/school/people/Student.java` | Source root plus package path and filename |
+| Runtime classpath lookup | `classes/school/people/Student.class` | Compiled root plus binary-name path |
+
+An import changes the spelling you may use in **one source file**. It does not move a file, download a library, open a private member, or set the runtime classpath.
+
+## Two-stage compilation
+
+From the project root, compile a library class first, then a caller that uses it:
+
+```text
+javac -d classes src/school/people/Student.java
+javac -cp classes -d classes src/school/app/Main.java
+java -cp classes school.app.Main
+```
+
+The second command needs the compiled dependency root. Alternatively, the single command with `-sourcepath src` can locate source dependencies automatically. The dependency class and called constructor/method must also be accessible.
+
+## Diagnose in this order
+
+1. **Spelling and identity:** package, class, member and filename are case-sensitive.
+2. **Location:** reconstruct `root + package/path + Type.java` or `.class`.
+3. **Availability:** is the dependency source or bytecode present at that location?
+4. **Access:** public type? accessible constructor/member? same exact package?
+5. **Entry point:** run the fully qualified class with the required main method.
+
+Do not repair a visibility error by adding more imports. A message naming a non-public method usually means the type was already found.
+
+## Seven quiz traps
+
+| Claim | Correction |
+|---|---|
+| `java.util.*` imports subpackages | It covers accessible types directly in that package only |
+| Moving a file changes its package | The declaration defines the package identity |
+| `school.people.helpers` shares package access with `school.people` | Different exact package names mean different packages |
+| A public class makes every member public | Constructors and members have separate access modifiers |
+| `import Math.sqrt` enables `sqrt(9)` | Use `import static java.lang.Math.sqrt;` |
+| Classpath should point to the package folder | It normally points to the root **above** the package path |
+| Run `school.app.Main.class` | Run `school.app.Main`, without the extension |
+
+## Mini worked diagnosis
+
+Command: `java -cp classes/school school.app.Main`.
+
+The launcher appends `school/app/Main.class` to the supplied root, producing `classes/school/school/app/Main.class`. The repeated `school` exposes the wrong root. Repair: `java -cp classes school.app.Main`.
+
+On Windows, separate multiple classpath entries with `;`; on Linux/macOS, use `:`. Quote the complete classpath when paths contain spaces.
