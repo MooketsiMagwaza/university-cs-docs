@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {chapterMarkdown,getFullChapterMarkdown} from '../features/courses/csi247/study-guides/markdown.mjs';
 import {htmlText} from '../features/courses/csi247/study-guides/html-text.mjs';
+import {document as renderDocument} from '../features/courses/csi247/study-guides/document.mjs';
 
 assert.equal(htmlText('A &amp;lt; B &amp;amp; C'),'A &lt; B &amp; C');
 assert.equal(chapterMarkdown('<p>&lt;script&gt;literal&lt;/script&gt;</p>'),'&lt;script&gt;literal&lt;/script&gt;');
@@ -15,4 +16,6 @@ assert(guide.includes('Fully annotated Java'));
 assert(guide.includes('temp[k]'));
 assert(guide.includes('Diagram:'));
 assert(guide.includes('Topic quiz'));
+const sample={id:'test',slug:'test',title:'Test',chapter:'packages',summary:'Test',referenceSha256:'test',sections:[{id:'body',title:'Body',body:'<p>A\r\nB</p>'}]};
+assert.equal(renderDocument(sample,'a{}\r\n','// runtime\r\n'),renderDocument(sample,'a{}\n','// runtime\n'));
 console.log('Markdown checks passed: parsed HTML, one-pass entities, literal markup, safe links, code fences, table escaping and complete chapters.');

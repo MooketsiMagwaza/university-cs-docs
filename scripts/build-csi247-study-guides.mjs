@@ -18,12 +18,13 @@ const publicRoot = '/files/sem3/csi247/study-guides';
 const pdfRequested = process.argv.includes('--pdf');
 const verifyBrowser = process.argv.includes('--verify');
 const auditOnly = process.argv.includes('--audit-only');
+const readText = async path => (await readFile(path, 'utf8')).replace(/\r\n?/g, '\n');
 const guides = createGuides();
 const [referenceCss, overrides, runtime, siteTheme] = await Promise.all([
-  readFile(join(sourceDir, 'reference.css'), 'utf8'),
-  readFile(join(sourceDir, 'study-guide-overrides.css'), 'utf8'),
-  readFile(join(sourceDir, 'runtime.js'), 'utf8'),
-  readFile(join(sourceDir, 'site-theme.css'), 'utf8'),
+  readText(join(sourceDir, 'reference.css')),
+  readText(join(sourceDir, 'study-guide-overrides.css')),
+  readText(join(sourceDir, 'runtime.js')),
+  readText(join(sourceDir, 'site-theme.css')),
 ]);
 const css = `${referenceCss}\n${overrides}`;
 // Scope the same editorial rules to the native website chapter. No reference
@@ -40,7 +41,7 @@ siteCss.walkRules(rule => {
 });
 const nativeCss = `/* Generated from reference.css and study-guide-overrides.css. */\n${siteCss.toString()}\n.csi247-chapter{background:transparent;margin:0;min-width:0;font-size:1rem;--bar-h:3rem}\n.csi247-chapter::before{display:none}\n.csi247-chapter .chapter-content{max-width:none}\n.csi247-chapter .chapter-content>section{padding:2rem 0;margin:0;opacity:1;transform:none}\n.csi247-chapter h2{font-size:clamp(1.6rem,3vw,2.2rem)}\n.csi247-chapter h3{font-size:1.3rem}\n.csi247-chapter .map-pass h3{font-size:.95rem}\n.csi247-chapter.csi247-chapter{--paper:var(--color-fd-background);--paper-light:var(--color-fd-card);--paper-deep:var(--color-fd-muted);--ink:var(--color-fd-foreground);--muted:var(--color-fd-muted-foreground);--line:var(--color-fd-border)}\n@media print{.csi247-chapter.csi247-chapter{--paper:#fff;--paper-light:#fff;--paper-deep:#eee;--ink:#292722;--muted:#5f5a52;--line:#aaa}}\n`;
 if (!auditOnly) await writeFile(join(sourceDir, 'native-chapter.css'), nativeCss + siteTheme);
-else assert.equal(await readFile(join(sourceDir, 'native-chapter.css'), 'utf8'), nativeCss + siteTheme, 'Native chapter CSS is stale');
+else assert.equal(await readText(join(sourceDir, 'native-chapter.css')), nativeCss + siteTheme, 'Native chapter CSS is stale');
 let previousArtifacts = [];
 try { previousArtifacts = JSON.parse(await readFile(join(outputDir, 'manifest.json'), 'utf8')).artifacts || []; } catch {}
 console.log(verifySimulations());
@@ -89,7 +90,7 @@ const artifacts = [];
 try {
   for (const guide of guides) {
     const htmlPath = join(outputDir, guide.chapter, `${guide.slug}.html`), pdfPath = htmlPath.replace(/\.html$/, '.pdf');
-    const html = auditOnly ? await readFile(htmlPath, 'utf8') : document(guide, css, runtime);
+    const html = auditOnly ? await readText(htmlPath) : document(guide, css, runtime);
     if (auditOnly) assert.equal(html, document(guide, css, runtime), `${guide.id}: generated HTML is stale; rerun the builder`);
     auditHtml(html, guide);
     if (!auditOnly) { await mkdir(dirname(htmlPath), { recursive: true }); await writeFile(htmlPath, html, 'utf8'); }
