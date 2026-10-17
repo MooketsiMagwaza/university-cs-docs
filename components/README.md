@@ -105,6 +105,12 @@ The quiz shows one question at a time. When the questions have more than one `gr
 | `source` | Where the question comes from, for example `"CSI247 2018 paper, Q3"`. Use it when a past paper inspired the question. |
 | `id` | A stable id (lowercase words with hyphens), unique in the quiz. Saved answers and progress follow it, so set one when you might reword the question. Without it, an id is derived from the text. |
 
+## Code window
+
+Every fenced code block in the notes is rendered by `components/interactive/code-window.tsx` (the MDX `pre` in `components/mdx.tsx`), styled in `app/styles/code-window.css`. It has three window buttons, the language name (or the fence `title="File.java"`), a copy button, and line numbers from six lines (or with `lineNumbers` on the fence). The language comes from the `language-xxx` class that `rehypeCodeOptions: { addLanguageClass: true }` in `source.config.ts` adds.
+
+A `text` fence straight after code is that code's **Output** panel and joins the window above it; a `text` fence that starts with `ghci>`, `$ ` or `>>> ` is a session transcript and joins it the same way; any other `text` fence on its own is labelled Text. Code never wraps or clips: a long line scrolls sideways inside the window, which can be focused from the keyboard. The Try it yourself components, the quiz `code` field and a Run button do not use the window yet (TRY-01, TRY-07).
+
 ## Decoding the questions
 
 Every review page ends with a `## Decoding the questions` section that teaches how to read a question before answering it. `<CommandWords />` shows the shared table of command words (define, explain, compare and so on), and `<DecodeQuestion>` works through a real question from the topic. Course-specific dictionaries live in `content/decoding/<course>.json`.

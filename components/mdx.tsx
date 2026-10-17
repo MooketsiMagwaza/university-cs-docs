@@ -27,6 +27,7 @@ import { Card } from './callouts/card';
 import { ResourceHub } from './interactive/resource-hub';
 import { HaskellPlayground } from './interactive/haskell-playground';
 import { HaskellTryIt } from './interactive/haskell-try-it';
+import { MdxPre } from './interactive/code-window';
 import { CodePlayground } from './interactive/code-playground';
 import { CodeTryIt } from './interactive/code-try-it';
 import { JavaPlayground } from './interactive/java-playground';
@@ -68,7 +69,9 @@ import { Mat221SourceFormulaSheet, Mat221SourceResources } from '@/features/cour
 export function getMDXComponents(components?: MDXComponents) {
   return {
     ...defaultMdxComponents,
-    
+    // Every fenced code block is a code window.
+    pre: MdxPre,
+
     // 2. Register them globally
     SafeImage,
     Quiz,
