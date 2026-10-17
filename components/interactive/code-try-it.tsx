@@ -5,8 +5,7 @@ import { Code2, Play, X } from 'lucide-react';
 import { LANGUAGE_META } from '@/lib/playground/examples';
 import type { PlaygroundLanguage } from '@/lib/playground/runners';
 import { CodePlayground } from './code-playground';
-import { nodeText } from './code-window';
-import { RunnableCode } from './runnable-code';
+import { RunnableCode, tryItParts } from './runnable-code';
 
 type CodeTryItProps = {
   language: PlaygroundLanguage;
@@ -25,9 +24,10 @@ type CodeTryItProps = {
  * a rendered preview, so it keeps the static sample with a button that opens the playground.
  */
 export function CodeTryIt(props: CodeTryItProps) {
-  const code = props.code ?? nodeText(props.children).replace(/\n$/, '');
+  const parts = tryItParts(props.children);
+  const code = props.code ?? parts.code;
   if (props.language === 'html') return <HtmlTryIt {...props} code={code} />;
-  return <RunnableCode language={props.language} code={code} stdin={props.stdin} seed={props.seed} />;
+  return <RunnableCode language={props.language} code={code} expected={parts.output} stdin={props.stdin} seed={props.seed} />;
 }
 
 /** A static HTML sample with a "Try it Yourself" button that opens an editable, runnable copy. */

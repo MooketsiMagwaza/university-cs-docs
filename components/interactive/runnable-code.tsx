@@ -1,11 +1,11 @@
 'use client';
 
 import { Play, RotateCcw } from 'lucide-react';
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { Children, isValidElement, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { runJava } from '@/lib/java-playground/runner';
 import { getPlaygroundData } from '@/lib/playground/data';
 import { runInWorker, type SqlTable } from '@/lib/playground/runners';
-import { CodeWindow } from './code-window';
+import { CodeWindow, nodeText } from './code-window';
 
 export type RunnableLanguage = 'haskell' | 'java' | 'javascript' | 'python' | 'sql';
 
@@ -67,9 +67,21 @@ function readsInput(language: RunnableLanguage, code: string): boolean {
   return false;
 }
 
+/**
+ * The parts of a Try it yourself tag written with fenced children: the first fence is the program, and an optional
+ * second fence is the output the page shows for it, which stays visible until the reader runs the program.
+ */
+export function tryItParts(children: ReactNode): { code: string; output?: string } {
+  const blocks = Children.toArray(children).filter(isValidElement);
+  if (blocks.length >= 2) return { code: nodeText(blocks[0]).replace(/\n$/, ''), output: nodeText(blocks[1]).replace(/\n$/, '') };
+  return { code: nodeText(children).replace(/\n$/, '') };
+}
+
 type RunnableCodeProps = {
   language: RunnableLanguage;
   code: string;
+  /** The output the page shows for this program; it appears in the Output window until the first run. */
+  expected?: string;
   /** Input the program reads (Python input(), for example). */
   stdin?: string;
   /** Id of a seed dataset (content/playground-data) that runs first, for the SQL, Python and JavaScript examples. */
@@ -80,7 +92,7 @@ type RunnableCodeProps = {
  * A "Try it yourself" example that runs where it stands: a code window with an editable program, Run and Reset
  * buttons, and the Output panel joined beneath it. Ctrl or Cmd + Enter runs it.
  */
-export function RunnableCode({ language, code, stdin, seed }: RunnableCodeProps) {
+export function RunnableCode({ language, code, expected, stdin, seed }: RunnableCodeProps) {
   const [text, setText] = useState(code);
   const [input, setInput] = useState(stdin ?? '');
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -91,7 +103,7 @@ export function RunnableCode({ language, code, stdin, seed }: RunnableCodeProps)
 
   const prelude = seed && language !== 'haskell' && language !== 'java' ? getPlaygroundData(language).seeds.find((item) => item.id === seed)?.code : undefined;
   const lineCount = text.split('\n').length;
-  const outputText = outcome ? outcome.lines.map((line) => line.text).join('\n') : '';
+  const outputText = outcome ? outcome.lines.map((line) => line.text).join('\n') : expected ?? '';
 
   const run = async () => {
     if (running) return;
@@ -205,6 +217,15 @@ export function RunnableCode({ language, code, stdin, seed }: RunnableCodeProps)
         <div className="cw-out">
           {running ? (
             <p className="cw-out-note">{status || 'Running…'}</p>
+          ) : !outcome && expected !== undefined ? (
+            <>
+              {expected.split('\n').map((line, index) => (
+                <div key={index} className="cw-ln" data-stream="out">
+                  {line}
+                </div>
+              ))}
+              <p className="cw-out-note">This is the output shown for the program as written. Change the code and press Run, or Ctrl + Enter, to see yours.</p>
+            </>
           ) : !outcome ? (
             <p className="cw-out-note">Press Run, or Ctrl + Enter, to see the output here. Tab adds spaces; press Esc and then Tab to leave the editor.</p>
           ) : (

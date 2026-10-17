@@ -42,7 +42,25 @@ const NUMBERED_FROM = 6;
 
 type Kind = 'code' | 'output' | 'session';
 
-export function nodeText(node: ReactNode): string {
+/**
+ * Content a server component streams to a client component can arrive as a lazy reference ({ $$typeof: react.lazy,
+ * _payload, _init }) instead of an element. When its data is already in, `_init` returns the element synchronously;
+ * if it is still pending it throws, and the text of that part is simply unknown.
+ */
+function unwrapLazy(node: unknown): unknown {
+  const lazy = node as { $$typeof?: symbol; _init?: (payload: unknown) => unknown; _payload?: unknown } | null;
+  if (lazy && typeof lazy === 'object' && lazy.$$typeof === Symbol.for('react.lazy') && typeof lazy._init === 'function') {
+    try {
+      return lazy._init(lazy._payload);
+    } catch {
+      return null;
+    }
+  }
+  return node;
+}
+
+export function nodeText(raw: ReactNode): string {
+  const node = unwrapLazy(raw) as ReactNode;
   if (node === null || node === undefined || typeof node === 'boolean') return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(nodeText).join('');

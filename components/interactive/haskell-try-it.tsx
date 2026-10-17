@@ -1,8 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { nodeText } from './code-window';
-import { RunnableCode } from './runnable-code';
+import { RunnableCode, tryItParts } from './runnable-code';
 
 type HaskellTryItProps = {
   /** The program, as a fenced block inside the tag. Written as `code="…"` it loses its indentation in MDX. */
@@ -27,5 +26,6 @@ type HaskellTryItProps = {
  *     </HaskellTryIt>
  */
 export function HaskellTryIt({ children, code, input }: HaskellTryItProps) {
-  return <RunnableCode language="haskell" code={code ?? nodeText(children).replace(/\n$/, '')} stdin={input} />;
+  const parts = tryItParts(children);
+  return <RunnableCode language="haskell" code={code ?? parts.code} expected={parts.output} stdin={input} />;
 }
