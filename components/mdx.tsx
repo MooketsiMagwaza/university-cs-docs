@@ -39,6 +39,7 @@ import { BubbleSortStory, SelectionSortStory } from './interactive/simple-sort-s
 import { MergeSortStory } from './interactive/merge-sort-story';
 import { MergeComplexityFigure, MergeFrontWorkbench, MergeRecursionExplorer } from './interactive/merge-sort-deep-dive';
 import { PackageBuildStory, PackageFolderStory, PackageImportStory } from './interactive/package-stories';
+import { DistributionExplorer } from './interactive/distribution-explorer';
 
 
 import { Callout } from './callouts/callout';
@@ -135,6 +136,7 @@ export function getMDXComponents(components?: MDXComponents) {
     PackageImportStory,
     PackageFolderStory,
     PackageBuildStory,
+    DistributionExplorer,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,

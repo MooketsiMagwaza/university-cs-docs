@@ -130,7 +130,7 @@ Each question is an `ExamQuestion` with a Show solution button, the steps as `St
 
 Every fenced code block in the notes is rendered by `components/interactive/code-window.tsx` (the MDX `pre` in `components/mdx.tsx`), styled in `app/styles/code-window.css`. It has three window buttons, the language name (or the fence `title="File.java"`), a copy button, and line numbers from six lines (or with `lineNumbers` on the fence). The language comes from the `language-xxx` class that `rehypeCodeOptions: { addLanguageClass: true }` in `source.config.ts` adds.
 
-A `text` fence straight after code is that code's **Output** panel and joins the window above it; a `text` fence that starts with `ghci>`, `$ ` or `>>> ` is a session transcript and joins it the same way; any other `text` fence on its own is labelled Text. Code never wraps or clips: a long line scrolls sideways inside the window, which can be focused from the keyboard. The quiz `code` field and the flashcards do not use the window yet (TRY-01, TRY-07).
+A `text` fence straight after code is that code's **Output** panel and joins the window above it; a `text` fence that starts with `ghci>`, `$ ` or `>>> ` is a session transcript and joins it the same way; any other `text` fence on its own is labelled Text. Code never wraps or clips: a long line scrolls sideways inside the window, which can be focused from the keyboard. The quiz `code` field is a code window too (the language comes from the course in the page path), and `RichText` renders `inline code` in quiz text and on flashcards.
 
 ### Try it yourself
 
@@ -147,6 +147,24 @@ main = print [x * x | x <- [1..5]]
 
 </HaskellTryIt>
 ````
+
+## Distribution explorer
+
+`<DistributionExplorer />` (`components/interactive/distribution-explorer.tsx`, styled in `app/styles/explorer.css`) lets a reader pick a distribution, move its parameters with sliders, shade an interval with two more sliders, and read off the probability, the mean and the variance beside the formula. It draws the mass or density and the cumulative curve as SVG from the `--ui-*` tokens, and the maths is in `lib/stats/distributions.ts` (tested by `npm run test:distributions`).
+
+```mdx
+<DistributionExplorer family="binomial" start={{ n: 10, p: 0.5 }} />
+<DistributionExplorer families={["geometric", "negative-binomial"]} convention="failures" />
+```
+
+| Prop | Meaning |
+|---|---|
+| `family` | One of `binomial`, `poisson`, `geometric`, `negative-binomial`, `hypergeometric`, `uniform`, `exponential`, `normal` |
+| `families` | A list the reader can switch between (the first is shown first) |
+| `start` | Starting parameter values by key: `n`, `p`, `lambda`, `r`, `N`, `K`, `a`, `b`, `mu`, `sigma` |
+| `convention` | For the geometric and negative binomial only: `trials` (counts up to the success, STA122) or `failures` (counts the failures before it, CSI213 lesson 5.3) |
+
+Set the convention to match the lesson, because the two conventions give different values for the same experiment. The plot has a text description in its `aria-label`, and the readout beneath it gives the same numbers as text.
 
 ## Decoding the questions
 
