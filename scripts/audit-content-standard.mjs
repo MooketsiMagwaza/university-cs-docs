@@ -46,7 +46,7 @@ const NOTES_COMPONENTS = new Set([
 ]);
 
 // Assessment components belong on assessment pages, never inside notes.
-const QUIZ_COMPONENTS = new Set(['Quiz', 'QuizRef', 'ExamQuestion', 'SubQuestion', 'CheckpointQuiz', 'FlashcardDeck', 'Flashcard']);
+const QUIZ_COMPONENTS = new Set(['Quiz', 'QuizRef', 'PracticeRef', 'ExamQuestion', 'SubQuestion', 'CheckpointQuiz', 'FlashcardDeck', 'Flashcard']);
 
 // Components the standard replaces; each maps to what replaces it.
 const RETIRED = {
@@ -83,7 +83,7 @@ const GENERATED = new Set(['TopicNotesFlow', 'ChapterReview', 'ChapterQuestions'
 
 const ASSESSMENT_COMPONENTS = {
   review: new Set(['FlashcardDeck', 'QuizRef', 'Quiz', 'Callout', 'CommandWords', 'DecodeQuestion', 'KeyTerm', 'Steps', 'Step']),
-  questions: new Set(['ExamQuestion', 'SubQuestion', 'Callout', 'KeyTerm', 'Steps', 'Step', 'SiteDiagram', 'ComparisonTable', 'FormulaBlock']),
+  questions: new Set(['PracticeRef', 'ExamQuestion', 'SubQuestion', 'Callout', 'KeyTerm', 'Steps', 'Step', 'SiteDiagram', 'ComparisonTable', 'FormulaBlock']),
 };
 
 // MDX components that exist: the global registry plus the MAT221 page overrides.

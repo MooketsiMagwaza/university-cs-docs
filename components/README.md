@@ -105,6 +105,27 @@ The quiz shows one question at a time. When the questions have more than one `gr
 | `source` | Where the question comes from, for example `"CSI247 2018 paper, Q3"`. Use it when a past paper inspired the question. |
 | `id` | A stable id (lowercase words with hyphens), unique in the quiz. Saved answers and progress follow it, so set one when you might reword the question. Without it, an id is derived from the text. |
 
+## Practice questions from data
+
+A Practice page with many formulas should not carry them in the MDX: with `rehype-katex` every formula becomes markup in the compiled page, and two CSI213 pages compiled to 1.4 MB and 0.8 MB (about 1.4 GB of dev server memory for one page, DEV-03). Write the questions in JSON under `content/practice-data/`, mirroring the page path, and show a group of them with `<PracticeRef />`. The maths is written with `$...$` and drawn in the browser, as in the quizzes.
+
+```mdx
+## Binomial
+
+A sentence or a table that belongs to the whole group stays here, in the MDX.
+
+<PracticeRef src="sem3/csi213/05-discrete-distributions/questions" group="binomial" />
+```
+
+```json
+{ "groups": { "binomial": { "title": "Binomial", "questions": [
+  { "title": "Foundation: ...", "prompt": "Text with $maths$ and **bold**.",
+    "steps": [{ "title": "Name the model", "body": "..." }], "answer": "**Final answer.** ..." }
+] } } }
+```
+
+Each question is an `ExamQuestion` with a Show solution button, the steps as `Steps`, and the answer under them. Keep the `##` heading in the MDX so the page contents list still has the group. The loader is `lib/practice-data.ts`; the file path and group id are checked and a wrong one stops the build with a message.
+
 ## Code window
 
 Every fenced code block in the notes is rendered by `components/interactive/code-window.tsx` (the MDX `pre` in `components/mdx.tsx`), styled in `app/styles/code-window.css`. It has three window buttons, the language name (or the fence `title="File.java"`), a copy button, and line numbers from six lines (or with `lineNumbers` on the fence). The language comes from the `language-xxx` class that `rehypeCodeOptions: { addLanguageClass: true }` in `source.config.ts` adds.

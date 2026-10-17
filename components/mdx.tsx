@@ -5,6 +5,7 @@ import type { MDXComponents } from 'mdx/types';
 import { SafeImage } from './visuals/safe-image';
 import { Quiz } from './interactive/quiz';
 import { QuizRef } from './interactive/quiz-ref';
+import { PracticeRef } from './interactive/practice-ref';
 import { Columns, Column } from './layouts/columns';
 import { ComparisonTable } from './layouts/comparison-table';
 import { PresetCard } from './callouts/preset-card';
@@ -76,6 +77,7 @@ export function getMDXComponents(components?: MDXComponents) {
     SafeImage,
     Quiz,
     QuizRef,
+    PracticeRef,
     Columns,
     Column,
     ComparisonTable,
