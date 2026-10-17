@@ -5,6 +5,15 @@ import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 import { classifyFolder, lessonLabel, topicFolderLabel, topicLabel, topicPageLabel } from './topic-pages';
 import { getFullChapterMarkdown } from '@/features/courses/csi247/study-guides/markdown.mjs';
 
+/**
+ * A copy of a page tree node with a new name. Only string keys are copied: spreading a node also copied the symbol keys
+ * React adds to objects made during a render (Symbol(name), Symbol(owner)), and Next refuses to pass those to a client
+ * component ("Only plain objects can be passed to Client Components").
+ */
+function renamed<T extends { name: unknown }>(node: T, name: string): T {
+  return { ...Object.fromEntries(Object.entries(node)), name } as T;
+}
+
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: docsRoute,
@@ -18,7 +27,7 @@ export const source = loader({
       transformPageTree: {
         file(node, filePath) {
           const label = topicPageLabel(filePath);
-          return label ? { ...node, name: label } : node;
+          return label ? renamed(node, label) : node;
         },
         folder(node, folderPath) {
           const folder = classifyFolder(folderPath);
@@ -26,7 +35,7 @@ export const source = loader({
           if (folder.kind === 'topic') {
             // "6. Lists and Tuples": the number comes from the folder name, never from the title.
             return folder.number !== undefined && typeof node.name === 'string'
-              ? { ...node, name: topicLabel(folder.number, node.name) }
+              ? renamed(node, topicLabel(folder.number, node.name))
               : node;
           }
           // The notes folder is "Notes", and its lessons are "6.1", "6.2" ... in the order of notes/meta.json.
@@ -34,9 +43,9 @@ export const source = loader({
           const children = node.children.map((child) => {
             if (child.type !== 'page' || folder.number === undefined || typeof child.name !== 'string') return child;
             position += 1;
-            return { ...child, name: lessonLabel(folder.number, position, child.name) };
+            return renamed(child, lessonLabel(folder.number, position, child.name));
           });
-          return { ...node, name: topicFolderLabel(folderPath) ?? node.name, children };
+          return { ...Object.fromEntries(Object.entries(node)), name: topicFolderLabel(folderPath) ?? node.name, children } as typeof node;
         },
       },
     },
