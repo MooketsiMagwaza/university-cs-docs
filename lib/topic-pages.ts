@@ -33,6 +33,17 @@ const coursePageLabels: Record<string, string> = {
 };
 
 /**
+ * The label for a folder inside a topic that is a standard page. A topic's lessons live in `notes/`, and that folder
+ * is called "Notes" in the sidebar whatever its own meta.json title says, so a topic with one notes page and a topic
+ * with a folder of lessons look the same. Undefined for every other folder.
+ */
+export function topicFolderLabel(folderPath: string | undefined): string | undefined {
+  if (!folderPath) return undefined;
+  const path = folderPath.replace(/\\/g, '/');
+  return /^sem\d+\/[^/]+\/[^/]+\/notes$/.test(path) ? stageLabel('notes') : undefined;
+}
+
+/**
  * The label for a content file that is a standard page: a page of a topic folder
  * (`sem1/csi131/01-logic/review.mdx`) or a course's own overview and resources page
  * (`sem3/csi243/resources.mdx`). Undefined for every other file, including lessons

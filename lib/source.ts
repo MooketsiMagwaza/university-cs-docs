@@ -2,7 +2,7 @@ import { docs } from 'collections/server';
 import { loader } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
-import { topicPageLabel } from './topic-pages';
+import { topicFolderLabel, topicPageLabel } from './topic-pages';
 import { getFullChapterMarkdown } from '@/features/courses/csi247/study-guides/markdown.mjs';
 
 // See https://fumadocs.dev/docs/headless/source-api for more info
@@ -18,6 +18,10 @@ export const source = loader({
       transformPageTree: {
         file(node, filePath) {
           const label = topicPageLabel(filePath);
+          return label ? { ...node, name: label } : node;
+        },
+        folder(node, folderPath) {
+          const label = topicFolderLabel(folderPath);
           return label ? { ...node, name: label } : node;
         },
       },
