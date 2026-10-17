@@ -7,8 +7,8 @@ import { dirname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const contentRoots = [
-  join(root, 'content', 'docs', 'sem3', 'csi247', 'sorting-and-searching'),
-  join(root, 'content', 'docs', 'sem3', 'csi247', 'packages'),
+  join(root, 'content', 'docs', 'sem3', 'csi247', '04-sorting-and-searching'),
+  join(root, 'content', 'docs', 'sem3', 'csi247', '05-packages'),
 ];
 const work = mkdtempSync(join(tmpdir(), 'csi247-java-audit-'));
 const sourceRoot = join(work, 'src');

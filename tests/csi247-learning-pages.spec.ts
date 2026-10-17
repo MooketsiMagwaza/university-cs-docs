@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('topic pages link to complete standalone HTML guides and light PDFs', async ({ page, request }) => {
-  await page.goto('/docs/sem3/csi247/sorting-and-searching/notes/bubble-and-selection-sort');
+  await page.goto('/docs/sem3/csi247/04-sorting-and-searching/notes/bubble-and-selection-sort');
 
   const bubbleHtml = page.getByRole('link', { name: 'Bubble Sort HTML' });
   const selectionHtml = page.getByRole('link', { name: 'Selection Sort HTML' });
@@ -37,7 +37,7 @@ test('topic pages link to complete standalone HTML guides and light PDFs', async
 });
 
 test('merge lesson shows the whole run before guided returns and merge mechanics', async ({ page }) => {
-  await page.goto('/docs/sem3/csi247/sorting-and-searching/notes/merge-sort');
+  await page.goto('/docs/sem3/csi247/04-sorting-and-searching/notes/merge-sort');
 
   const merge = page.locator('[data-player="merge-main"]');
   await page.locator('#merge-sort-interactive-walkthrough > details > summary').click();

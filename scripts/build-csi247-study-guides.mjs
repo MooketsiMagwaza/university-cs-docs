@@ -52,7 +52,7 @@ assert.deepEqual(algorithmOverview('binary').rows.map(row => row.slice(0, 5)), [
 ]);
 assert.deepEqual(algorithmOverview('selection').rows.map(row => row[2]), ['0 ↔ 3', '1 ↔ 3', '2 ↔ 8', '3 ↔ 7', '4 ↔ 6', 'No swap', '6 ↔ 7', 'No swap']);
 assert.deepEqual(algorithmOverview('insertion').rows.map(row => row.slice(1, 4)), [[12, 1, 0], [59, 1, 1], [45, 2, 1], [72, 1, 3], [51, 3, 2]]);
-const binaryMarkdown = getFullChapterMarkdown('/docs/sem3/csi247/sorting-and-searching/notes/binary-search');
+const binaryMarkdown = getFullChapterMarkdown('/docs/sem3/csi247/04-sorting-and-searching/notes/binary-search');
 assert(binaryMarkdown.includes('2 &lt; 7') && binaryMarkdown.includes('Rule out indexes 0 through 4. Keep indexes 5 through 9'), 'Markdown lost the comparison and resulting lower boundary');
 assert(binaryMarkdown.includes('6 &lt; 7') && binaryMarkdown.includes('Rule out indexes 5 through 7. Keep indexes 8 through 9'), 'Markdown lost the second probe and remaining candidate range');
 assert(binaryMarkdown.includes('7 == 7 is true. Return index 8'), 'Markdown lost the final matching index');

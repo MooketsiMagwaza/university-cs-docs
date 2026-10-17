@@ -1,0 +1,142 @@
+---
+title: "Cheat Sheet"
+description: "Java package declarations, imports, source layout, compile and run commands, access levels, and common diagnostics at a glance."
+---
+
+## Required order in a source file
+
+```java
+package pkg;
+
+import java.util.Scanner;
+
+public class Example {
+    // fields, constructors, and methods
+}
+```
+
+The package declaration is optional only for the unnamed package. When present, it comes before imports and type declarations.
+
+The declaration defines package identity. Mirroring the package under `src` is the normal sourcepath/tooling convention; a file explicitly passed to javac can compile from another directory without being renamed.
+
+## Name lookup forms
+
+| Goal | Form |
+|---|---|
+| Import one type | `import java.util.Scanner;` |
+| Import types directly in one package | `import java.util.*;` |
+| Avoid a simple-name conflict | `java.sql.Date value;` |
+| Import one static member | `import static java.lang.Math.sqrt;` |
+| Use automatically available core type | `String`, `Math`, `System` from `java.lang` |
+
+## Folder template
+
+```text
+project/
+  src/
+    pkg/
+      A.java       // package pkg;
+    app/
+      Tester.java  // package app;
+  classes/
+```
+
+## Commands
+
+```text
+javac -d classes -sourcepath src src/app/Tester.java
+java -cp classes app.Tester
+```
+
+| Option | Meaning |
+|---|---|
+| `-d classes` | Root for generated package folders and `.class` files |
+| `-sourcepath src` | Root for package-structured `.java` dependencies |
+| `-cp classes` | Root for compiled packages at compile or run time |
+
+## Access lookup
+
+| Modifier | Same class | Same package | Subclass elsewhere | Other package |
+|---|:---:|:---:|:---:|:---:|
+| `private` | yes | no | no | no |
+| package-private | yes | yes | no | no |
+| `protected` | yes | yes | qualifying inherited access | no |
+| `public` | yes | yes | yes | yes |
+
+For protected instance members outside the package, a suitable subclass receiver is also required; an arbitrary base-class object does not qualify. The type name used at the call site must also be accessible; a public member alone does not make a hidden type name accessible.
+
+## Book-record integration
+
+| Job | Type or condition |
+|---|---|
+| Open character input | `java.io.FileReader` |
+| Read whole lines | `java.io.BufferedReader`; EOF is `readLine() == null` |
+| Alternative line/field scanner | `java.util.Scanner`; lines use `hasNextLine()` |
+| Handle file failures | `java.io.IOException` |
+| Guard storage | Capacity check before reading/storing |
+| Display populated Books | `i < count`; unused cells remain null |
+
+## Diagnostic map
+
+| Message | Check |
+|---|---|
+| `package ... does not exist` | declaration, path, source/classpath root |
+| `cannot find symbol` | import and exact type/member spelling |
+| `... is not public` | access modifier and package boundary |
+| `Could not find or load main class` | classpath root and fully qualified class name |
+| `Main method not found` | main signature and target class |
+
+Return to the [chapter overview](/docs/sem3/csi247/05-packages).
+
+## One class, four representations
+
+| Representation | Example | What it means |
+|---|---|---|
+| Package declaration | `package school.people;` | Namespace declared by source |
+| Fully qualified type name | `school.people.Student` | Identity used in imports and code |
+| Sourcepath lookup | `src/school/people/Student.java` | Source root plus package path and filename |
+| Runtime classpath lookup | `classes/school/people/Student.class` | Compiled root plus binary-name path |
+
+An import changes the spelling you may use in **one source file**. It does not move a file, download a library, open a private member, or set the runtime classpath.
+
+## Two-stage compilation
+
+From the project root, compile a library class first, then a caller that uses it:
+
+```text
+javac -d classes src/school/people/Student.java
+javac -cp classes -d classes src/school/app/Main.java
+java -cp classes school.app.Main
+```
+
+The second command needs the compiled dependency root. Alternatively, the single command with `-sourcepath src` can locate source dependencies automatically. The dependency class and called constructor/method must also be accessible.
+
+## Diagnose in this order
+
+1. **Spelling and identity:** package, class, member and filename are case-sensitive.
+2. **Location:** reconstruct `root + package/path + Type.java` or `.class`.
+3. **Availability:** is the dependency source or bytecode present at that location?
+4. **Access:** public type? accessible constructor/member? same exact package?
+5. **Entry point:** run the fully qualified class with the required main method.
+
+Do not repair a visibility error by adding more imports. A message naming a non-public method usually means the type was already found.
+
+## Seven quiz traps
+
+| Claim | Correction |
+|---|---|
+| `java.util.*` imports subpackages | It covers accessible types directly in that package only |
+| Moving a file changes its package | The declaration defines the package identity |
+| `school.people.helpers` shares package access with `school.people` | Different exact package names mean different packages |
+| A public class makes every member public | Constructors and members have separate access modifiers |
+| `import Math.sqrt` enables `sqrt(9)` | Use `import static java.lang.Math.sqrt;` |
+| Classpath should point to the package folder | It normally points to the root **above** the package path |
+| Run `school.app.Main.class` | Run `school.app.Main`, without the extension |
+
+## Mini worked diagnosis
+
+Command: `java -cp classes/school school.app.Main`.
+
+The launcher appends `school/app/Main.class` to the supplied root, producing `classes/school/school/app/Main.class`. The repeated `school` exposes the wrong root. Repair: `java -cp classes school.app.Main`.
+
+On Windows, separate multiple classpath entries with `;`; on Linux/macOS, use `:`. Quote the complete classpath when paths contain spaces.

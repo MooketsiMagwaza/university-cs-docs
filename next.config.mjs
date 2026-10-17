@@ -146,6 +146,37 @@ const config = {
         destination: `/docs/sem5/csi323/${newFolder}${page}`,
         permanent: true,
       }))),
+      // The CSI247 topic folders are numbered 01 to 13, like every other course. Each row: old folder, new folder, extra pages.
+      ...[
+        ['java-fundamentals', '01-java-fundamentals', ['/notes/arrays-and-objects', '/notes/classes-and-objects', '/notes/methods-parameters-scope', '/notes/strings-control-io', '/notes/values-primitives-references']],
+        ['recursion', '02-recursion', []],
+        ['time-complexity', '03-time-complexity', []],
+        ['sorting-and-searching', '04-sorting-and-searching', ['/notes/binary-search', '/notes/bubble-and-selection-sort', '/notes/bubble-sort', '/notes/choosing-an-algorithm', '/notes/insertion-sort', '/notes/linear-search', '/notes/merge-sort', '/notes/selection-sort', '/cheat-sheet']],
+        ['packages', '05-packages', ['/notes/built-in-packages-and-imports', '/notes/compiling-and-running', '/notes/creating-a-package', '/cheat-sheet']],
+        ['object-oriented-programming', '06-object-oriented-programming', ['/notes/abstract-classes-and-interfaces', '/notes/encapsulation-and-abstraction', '/notes/inheritance-and-super', '/notes/overriding-and-polymorphism']],
+        ['generics', '07-generics', ['/notes/bounds-and-comparable', '/notes/generic-classes', '/notes/generic-methods-and-interfaces', '/notes/why-generics', '/notes/wildcards-and-variance']],
+        ['collections', '08-collections', ['/notes/choosing-a-collection', '/notes/core-interfaces', '/notes/framework-and-generics', '/notes/iteration-and-algorithms']],
+        ['linked-lists-traversals', '09-linked-lists-traversals', []],
+        ['stacks-and-queues', '10-stacks-and-queues', []],
+        ['hash-tables', '11-hash-tables', []],
+        ['trees', '12-trees', []],
+        ['graphs', '13-graphs', []],
+      ].flatMap(([oldFolder, newFolder, extraPages]) => ['', '/review', '/questions', '/resources', ...extraPages].map((page) => ({
+        source: `/docs/sem3/csi247/${oldFolder}${page}`,
+        destination: `/docs/sem3/csi247/${newFolder}${page}`,
+        permanent: true,
+      }))),
+      // The overview and resources of the legacy Linear Structures folder repeated the linked-list and stack chapters.
+      {
+        source: '/docs/sem3/csi247/linear-structures',
+        destination: '/docs/sem3/csi247/09-linked-lists-traversals',
+        permanent: true,
+      },
+      {
+        source: '/docs/sem3/csi247/linear-structures/resources',
+        destination: '/docs/sem3/csi247/09-linked-lists-traversals/resources',
+        permanent: true,
+      },
     ];
   },
   async rewrites() {
