@@ -109,7 +109,23 @@ The quiz shows one question at a time. When the questions have more than one `gr
 
 Every fenced code block in the notes is rendered by `components/interactive/code-window.tsx` (the MDX `pre` in `components/mdx.tsx`), styled in `app/styles/code-window.css`. It has three window buttons, the language name (or the fence `title="File.java"`), a copy button, and line numbers from six lines (or with `lineNumbers` on the fence). The language comes from the `language-xxx` class that `rehypeCodeOptions: { addLanguageClass: true }` in `source.config.ts` adds.
 
-A `text` fence straight after code is that code's **Output** panel and joins the window above it; a `text` fence that starts with `ghci>`, `$ ` or `>>> ` is a session transcript and joins it the same way; any other `text` fence on its own is labelled Text. Code never wraps or clips: a long line scrolls sideways inside the window, which can be focused from the keyboard. The Try it yourself components, the quiz `code` field and a Run button do not use the window yet (TRY-01, TRY-07).
+A `text` fence straight after code is that code's **Output** panel and joins the window above it; a `text` fence that starts with `ghci>`, `$ ` or `>>> ` is a session transcript and joins it the same way; any other `text` fence on its own is labelled Text. Code never wraps or clips: a long line scrolls sideways inside the window, which can be focused from the keyboard. The quiz `code` field and the flashcards do not use the window yet (TRY-01, TRY-07).
+
+### Try it yourself
+
+`HaskellTryIt`, `JavaTryIt` and `CodeTryIt` (JavaScript, Python and SQL; `html` keeps a static sample with a button that opens the playground) render `components/interactive/runnable-code.tsx`: an editable code window with Run and Reset in the title bar, and an Output window joined beneath it that shows the result, any error, and how long the run took. Ctrl or Cmd with Enter runs; Tab indents two spaces (press Esc and then Tab to leave the editor); Copy copies what is in the editor now.
+
+Write the program as a fenced block inside the tag. MDX strips the indentation from a multi-line template literal in an attribute, so `code={`...`}` loses it; a fenced child keeps it:
+
+````mdx
+<HaskellTryIt>
+
+```haskell
+main = print [x * x | x <- [1..5]]
+```
+
+</HaskellTryIt>
+````
 
 ## Decoding the questions
 

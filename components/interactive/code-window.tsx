@@ -42,7 +42,7 @@ const NUMBERED_FROM = 6;
 
 type Kind = 'code' | 'output' | 'session';
 
-function nodeText(node: ReactNode): string {
+export function nodeText(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === 'boolean') return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(nodeText).join('');
@@ -68,6 +68,22 @@ type CodeWindowProps = {
   numbered?: boolean;
   className?: string;
   style?: CSSProperties;
+  /** What the title bar says, instead of the language or file name. */
+  name?: string;
+  /** Sets the kind instead of working it out from the language and the text. */
+  kind?: Kind;
+  /** A small pill beside the name, such as "Try it yourself" or a run time. */
+  tag?: string;
+  /** Buttons placed before Copy, such as Run and Reset. */
+  actions?: ReactNode;
+  /** The body is custom content (an editor, an output panel) and not a highlighted pre. */
+  bare?: boolean;
+  /** The body is an editor, which scrolls itself. */
+  editor?: boolean;
+  /** What Copy copies, when it is not the text of the pre. */
+  copyText?: () => string;
+  /** Announce changes in the body to screen readers. */
+  live?: boolean;
   children: ReactNode;
 };
 
@@ -76,14 +92,14 @@ type CodeWindowProps = {
  * button), the code with line numbers when it is long enough, and, for a `text` fence that follows code, an Output
  * panel that joins the window above it. Colours come from the --ui-* tokens in code-window.css.
  */
-export function CodeWindow({ language, title, text, numbered, className, style, children }: CodeWindowProps) {
+export function CodeWindow({ language, title, text, numbered, className, style, name, kind: forcedKind, tag, actions, bare, editor, copyText, live, children }: CodeWindowProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
   const plain = language === undefined || PLAIN_LANGUAGES.has(language);
   const firstLine = text.split('\n').find((line) => line.trim() !== '') ?? '';
   const session = plain && SESSION_START.test(firstLine);
-  const kind: Kind = session ? 'session' : plain ? 'output' : 'code';
+  const kind: Kind = forcedKind ?? (session ? 'session' : plain ? 'output' : 'code');
   const lineCount = text.replace(/\n$/, '').split('\n').length;
   const showNumbers = kind === 'code' && (numbered || lineCount >= NUMBERED_FROM);
 
@@ -91,7 +107,7 @@ export function CodeWindow({ language, title, text, numbered, className, style, 
   const sessionName = firstLine.startsWith('ghci>') ? 'GHCi' : firstLine.startsWith('>>>') ? 'Python' : 'Terminal';
 
   const copy = async () => {
-    const code = bodyRef.current?.querySelector('pre')?.textContent ?? text;
+    const code = copyText?.() ?? bodyRef.current?.querySelector('pre')?.textContent ?? text;
     try {
       await navigator.clipboard.writeText(code);
     } catch {
@@ -110,7 +126,7 @@ export function CodeWindow({ language, title, text, numbered, className, style, 
     window.setTimeout(() => setCopied(false), 1600);
   };
 
-  const label = kind === 'code' ? title ?? languageName : kind === 'session' ? title ?? sessionName : title ?? 'Output';
+  const label = name ?? (kind === 'code' ? title ?? languageName : kind === 'session' ? title ?? sessionName : title ?? 'Output');
 
   return (
     <figure className={`cw not-prose${className ? ` ${className}` : ''}`} data-kind={kind} data-lang={language} dir="ltr" style={style}>
@@ -123,7 +139,7 @@ export function CodeWindow({ language, title, text, numbered, className, style, 
           </span>
         )}
         <span className="cw-name">
-          {kind === 'output' && !title ? (
+          {kind === 'output' && !title && !name ? (
             // A text fence straight after code is that code's output; on its own it is just text (see code-window.css).
             <>
               <span className="cw-as-output">Output</span>
@@ -133,15 +149,29 @@ export function CodeWindow({ language, title, text, numbered, className, style, 
             label
           )}
         </span>
+        {tag && <span className="cw-tag">{tag}</span>}
+        {actions && <span className="cw-actions">{actions}</span>}
         <button type="button" className="cw-copy" data-copied={copied || undefined} onClick={copy} aria-label={copied ? 'Copied' : `Copy ${kind === 'code' ? 'code' : 'text'}`}>
           {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
           <span aria-hidden="true">{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </figcaption>
-      <div ref={bodyRef} className="cw-body" role="region" tabIndex={0} aria-label={`${label}, ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`}>
-        <pre className="cw-pre" data-numbered={showNumbers || undefined}>
-          {children}
-        </pre>
+      <div
+        ref={bodyRef}
+        className="cw-body"
+        data-editor={editor || undefined}
+        role={editor ? undefined : 'region'}
+        tabIndex={editor ? undefined : 0}
+        aria-live={live ? 'polite' : undefined}
+        aria-label={editor ? undefined : `${label}, ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`}
+      >
+        {bare ? (
+          children
+        ) : (
+          <pre className="cw-pre" data-numbered={showNumbers || undefined}>
+            {children}
+          </pre>
+        )}
       </div>
     </figure>
   );
