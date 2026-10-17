@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
-import { MathText } from './math-text';
+import { RichText } from './rich-text';
 
 // Flip mechanics are inline styles so they cannot be lost to a utility-class purge.
 const FLIP_TRANSITION = 'transform 0.6s cubic-bezier(0.34, 1.18, 0.5, 1)';
@@ -43,12 +43,12 @@ export function FlipCard({
       >
         <div className="ui-flip-face" style={{ ...FACE, transform: 'rotateY(0deg)' }}>
           <span className="ui-flip-label">Question</span>
-          <div className="ui-flip-text ui-flip-front"><MathText text={front} /></div>
+          <div className="ui-flip-text ui-flip-front"><span><RichText text={front} /></span></div>
           <span className="ui-flip-hint">Select to reveal the answer</span>
         </div>
         <div className="ui-flip-face ui-flip-back" style={{ ...FACE, transform: 'rotateY(180deg)' }}>
           <span className="ui-flip-label">Answer</span>
-          <div className="ui-flip-text"><MathText text={back} /></div>
+          <div className="ui-flip-text"><span><RichText text={back} /></span></div>
           <span className="ui-flip-hint">Select to flip back</span>
         </div>
       </div>
