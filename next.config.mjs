@@ -121,6 +121,31 @@ const config = {
         destination: '/docs/sem3/csi243/03-defining-functions/notes/input-processing',
         permanent: true,
       },
+      // The CSI213 sub-topic pages are the lessons of their topic's Notes.
+      ...[
+        ['01-set-theory', ['definitions', 'algebra', 'combinatorics', 'summations']],
+        ['02-probability', ['sample-space-events', 'axioms', 'outcomes']],
+        ['03-conditional-probability', ['conditional-prob', 'laws-bayes', 'independent-events']],
+        ['04-random-var-distributions', ['random-var', 'expectation-variance']],
+        ['05-discrete-distributions', ['bernoulli-binomial', 'poisson', 'geometric-negative-binomial', 'hypergeometric']],
+        ['06-continuous-distributions', ['continuous-exponential', 'normal-standardization', 'reliability-hazard']],
+        ['07-regression-analysis', ['MLS-OLS', 'ANOVA']],
+      ].flatMap(([topic, lessons]) => lessons.map((lesson) => ({
+        source: `/docs/sem3/csi213/${topic}/${lesson}`,
+        destination: `/docs/sem3/csi213/${topic}/notes/${lesson}`,
+        permanent: true,
+      }))),
+      // The CSI323 topic folders are numbered, like every other course.
+      ...[
+        ['trees-and-bsts', '01-trees-and-bsts'],
+        ['heaps-and-priority-queues', '02-heaps-and-priority-queues'],
+        ['hash-tables', '03-hash-tables'],
+        ['graphs', '04-graphs'],
+      ].flatMap(([oldFolder, newFolder]) => ['', '/review', '/questions', '/resources'].map((page) => ({
+        source: `/docs/sem5/csi323/${oldFolder}${page}`,
+        destination: `/docs/sem5/csi323/${newFolder}${page}`,
+        permanent: true,
+      }))),
     ];
   },
   async rewrites() {
