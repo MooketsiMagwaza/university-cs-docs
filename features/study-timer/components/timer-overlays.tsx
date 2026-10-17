@@ -1,5 +1,6 @@
 'use client';
 
+import { TimerAlarm } from './timer-alarm';
 import { TimerFullscreen } from './timer-fullscreen';
 import { TimerSettings } from './timer-settings';
 
@@ -8,6 +9,7 @@ export function TimerOverlays() {
     <>
       <TimerFullscreen />
       <TimerSettings />
+      <TimerAlarm />
     </>
   );
 }
