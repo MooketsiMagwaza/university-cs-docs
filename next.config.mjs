@@ -49,6 +49,17 @@ const config = {
         destination: '/docs/:semester/:course/:topic/review',
         permanent: true,
       },
+      // Course-level playground pages moved under /docs/playgrounds, so a course folder holds only its overview, topics and resources.
+      {
+        source: '/docs/sem3/csi247/java-playground',
+        destination: '/docs/playgrounds/java',
+        permanent: true,
+      },
+      {
+        source: '/docs/sem3/csi243/playground',
+        destination: '/docs/playgrounds/haskell',
+        permanent: true,
+      },
       {
         source: '/docs/sem3/csi243/decoding-questions',
         destination: '/docs/sem3/csi243/01-functional-thinking/review',
