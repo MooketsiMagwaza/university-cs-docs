@@ -6,6 +6,11 @@ const withMDX = createMDX();
 const config = {
   reactStrictMode: true,
   poweredByHeader: false,
+  experimental: {
+    // Turbopack keeps every compiled page in memory by default. 'full' drops what it has already saved to its disk
+    // cache after each save, so the dev server stays small (DEV-01).
+    turbopackMemoryEviction: 'full',
+  },
   // Allow cross-origin dev requests from your network IP
   allowedDevOrigins: ['100.124.114.119'],
   async redirects() {
