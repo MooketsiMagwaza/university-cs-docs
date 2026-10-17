@@ -164,7 +164,8 @@ export function HaskellPlayground({
       <div className="border-t border-fd-border bg-fd-muted/20 px-4 py-3 text-xs leading-5 text-fd-muted-foreground sm:px-6">
         Runs locally in your browser. Supports expressions, one-line function definitions, lambdas, finite and lazy ranges, list comprehensions,
         <code className="mx-1">if/then/else</code>, <code>main = do</code> with <code>let</code>/<code>print</code>/<code>putStrLn</code>,
-        and the course list functions. Pattern matching, guards, imports, user-defined types, and arbitrary IO still need GHC or GHCi.
+        and the course list functions. It also reads multi-equation definitions, guards, <code className="mx-1">where</code>, <code>case</code>,
+        user-defined types and a large part of the Prelude. There is no type inference, so a type error shows only when a run reaches it; use GHC or GHCi for anything beyond the course.
       </div>
     </section>
   );

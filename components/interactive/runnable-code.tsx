@@ -2,7 +2,6 @@
 
 import { Play, RotateCcw } from 'lucide-react';
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { runHaskell } from '@/lib/haskell-simulator';
 import { runJava } from '@/lib/java-playground/runner';
 import { getPlaygroundData } from '@/lib/playground/data';
 import { runInWorker, type SqlTable } from '@/lib/playground/runners';
@@ -32,7 +31,9 @@ async function execute(
   onStatus: (text: string) => void,
 ): Promise<Outcome> {
   if (language === 'haskell') {
-    const result = runHaskell(code);
+    // The interpreter is a large module, so it is fetched when someone first presses Run, not with every page.
+    const { runHaskellWithInput } = await import('@/lib/haskell-simulator');
+    const result = runHaskellWithInput(code, options.stdin ?? '');
     if (result.ok) {
       const lines: Line[] = result.output === '' ? [info('The program ran and printed nothing.')] : result.output.split('\n').map((text) => ({ stream: 'out', text }));
       return { ok: true, lines, tables: [], elapsedMs: result.elapsedMs };
@@ -59,6 +60,13 @@ async function execute(
   return { ok: result.ok, lines, tables: result.tables, elapsedMs: result.elapsedMs };
 }
 
+/** Programs that read what the reader types: Haskell's getLine and friends, and Python's input(). */
+function readsInput(language: RunnableLanguage, code: string): boolean {
+  if (language === 'haskell') return /\b(getLine|readLn|getContents|interact)\b/.test(code);
+  if (language === 'python') return /\binput\s*\(/.test(code);
+  return false;
+}
+
 type RunnableCodeProps = {
   language: RunnableLanguage;
   code: string;
@@ -74,6 +82,7 @@ type RunnableCodeProps = {
  */
 export function RunnableCode({ language, code, stdin, seed }: RunnableCodeProps) {
   const [text, setText] = useState(code);
+  const [input, setInput] = useState(stdin ?? '');
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('');
@@ -90,7 +99,7 @@ export function RunnableCode({ language, code, stdin, seed }: RunnableCodeProps)
     setRunning(true);
     setStatus('');
     try {
-      const result = await execute(language, text, { stdin, prelude }, setStatus);
+      const result = await execute(language, text, { stdin: input, prelude }, setStatus);
       if (id === latestRun.current) setOutcome(result);
     } finally {
       if (id === latestRun.current) {
@@ -103,6 +112,7 @@ export function RunnableCode({ language, code, stdin, seed }: RunnableCodeProps)
   const reset = () => {
     latestRun.current += 1;
     setText(code);
+    setInput(stdin ?? '');
     setOutcome(null);
     setRunning(false);
     setStatus('');
@@ -170,6 +180,26 @@ export function RunnableCode({ language, code, stdin, seed }: RunnableCodeProps)
             onKeyDown={onKeyDown}
           />
         </div>
+        {readsInput(language, text) && (
+          <label className="cw-stdin">
+            <span>Input</span>
+            <textarea
+              rows={2}
+              value={input}
+              wrap="off"
+              spellCheck={false}
+              placeholder="What the program reads, one line per line"
+              aria-label="Text the program reads as input, one line per line"
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  void run();
+                }
+              }}
+            />
+          </label>
+        )}
       </CodeWindow>
       <CodeWindow kind="output" name="Output" tag={outcome && !running ? `${outcome.elapsedMs < 10 ? outcome.elapsedMs.toFixed(1) : Math.round(outcome.elapsedMs)} ms` : undefined} text={outputText} bare live copyText={() => outputText}>
         <div className="cw-out">

@@ -113,7 +113,7 @@ A `text` fence straight after code is that code's **Output** panel and joins the
 
 ### Try it yourself
 
-`HaskellTryIt`, `JavaTryIt` and `CodeTryIt` (JavaScript, Python and SQL; `html` keeps a static sample with a button that opens the playground) render `components/interactive/runnable-code.tsx`: an editable code window with Run and Reset in the title bar, and an Output window joined beneath it that shows the result, any error, and how long the run took. Ctrl or Cmd with Enter runs; Tab indents two spaces (press Esc and then Tab to leave the editor); Copy copies what is in the editor now.
+`HaskellTryIt`, `JavaTryIt` and `CodeTryIt` (JavaScript, Python and SQL; `html` keeps a static sample with a button that opens the playground) render `components/interactive/runnable-code.tsx`: an editable code window with Run and Reset in the title bar, and an Output window joined beneath it that shows the result, any error, and how long the run took. Ctrl or Cmd with Enter runs; Tab indents two spaces (press Esc and then Tab to leave the editor); Copy copies what is in the editor now. A program that reads input (Haskell `getLine`, `readLn`, `getContents` or `interact`, Python `input()`) gets an **Input** box under the editor, one line per line of input; `<HaskellTryIt input="21">` sets what it starts with. The Haskell interpreter (`lib/haskell-simulator.ts`) loads only when Run is first pressed. `npm run scan:haskell` runs every Haskell example in the CSI243 notes through it and compares the output with what the page shows, and `npm run test:haskell` runs its unit tests.
 
 Write the program as a fenced block inside the tag. MDX strips the indentation from a multi-line template literal in an attribute, so `code={`...`}` loses it; a fenced child keeps it:
 
