@@ -2,7 +2,7 @@ import { docs } from 'collections/server';
 import { loader } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
-import { topicFolderLabel, topicPageLabel } from './topic-pages';
+import { classifyFolder, lessonLabel, topicFolderLabel, topicLabel, topicPageLabel } from './topic-pages';
 import { getFullChapterMarkdown } from '@/features/courses/csi247/study-guides/markdown.mjs';
 
 // See https://fumadocs.dev/docs/headless/source-api for more info
@@ -21,8 +21,22 @@ export const source = loader({
           return label ? { ...node, name: label } : node;
         },
         folder(node, folderPath) {
-          const label = topicFolderLabel(folderPath);
-          return label ? { ...node, name: label } : node;
+          const folder = classifyFolder(folderPath);
+          if (!folder) return node;
+          if (folder.kind === 'topic') {
+            // "6. Lists and Tuples": the number comes from the folder name, never from the title.
+            return folder.number !== undefined && typeof node.name === 'string'
+              ? { ...node, name: topicLabel(folder.number, node.name) }
+              : node;
+          }
+          // The notes folder is "Notes", and its lessons are "6.1", "6.2" ... in the order of notes/meta.json.
+          let position = 0;
+          const children = node.children.map((child) => {
+            if (child.type !== 'page' || folder.number === undefined || typeof child.name !== 'string') return child;
+            position += 1;
+            return { ...child, name: lessonLabel(folder.number, position, child.name) };
+          });
+          return { ...node, name: topicFolderLabel(folderPath) ?? node.name, children };
         },
       },
     },

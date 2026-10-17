@@ -52,7 +52,7 @@ Measured on 2026-10-15 across `content/docs`.
 ```text
 semN/<course>/
   index.mdx               Overview: what the course covers, topic cards, how it is assessed
-  01-<topic>/             Numbered folder; meta.json title "1. Topic name"
+  01-<topic>/             Numbered folder; meta.json title "Topic name" (the sidebar adds "1.")
     index.mdx             Overview: what you'll learn, prerequisites, the pages below, an optional visual study map
     notes.mdx | notes/    Notes: one page, or a folder of lessons for a large topic
     cheat-sheet.mdx       Cheat sheet (optional)
@@ -65,6 +65,28 @@ semN/<course>/
 The sidebar and the topic tabs use the same labels everywhere, in this order: Overview, Notes, Cheat sheet, Review, Practice, Resources. Overview, Notes, Review and Practice are required; Cheat sheet and Resources are optional. A topic may leave out an optional page; it may not invent another one. A course folder holds only its overview, its numbered topics and its resources page; course-level extras such as a playground or a decoding guide move to `/docs/playgrounds` and into Review.
 
 There is no Exam page. The site has no exam papers to build one from, and a mock exam written without a paper would be invented. When a course does have a past paper, it is used as context for review questions and listed in Resources (section 2.4). `exam.mdx` and `exam-practice.mdx` redirect to Review.
+
+### 2.1.1 Sidebar labels
+
+One rule for each level of the sidebar. Code applies it (`lib/topic-pages.ts`, used by the page tree in `lib/source.ts`), so the sidebar, the breadcrumb, the topic tabs and the pager always read the same, and no course can drift.
+
+| Level | Label | Comes from | Example |
+|---|---|---|---|
+| Course | `CODE: Title` | the course `meta.json` title | `CSI243: Functional Programming` |
+| Course pages | `Course Overview`, `Course Resources` | fixed | |
+| Topic | `N. Title` | N from the folder (`06-` is 6, never `06.`), Title from the topic `meta.json` | `6. Lists and Tuples` |
+| Topic pages | `Overview`, `Notes`, `Cheat sheet`, `Review`, `Practice`, `Resources` | fixed (section 2.1) | |
+| Lesson | `N.M Title` | N is the topic number, M the lesson's place in `notes/meta.json`, Title the page title | `6.4 List Comprehensions` |
+
+Rules that follow:
+
+- **A title carries no number.** Write `title: "List Comprehensions"`, never `"4. List Comprehensions"` or `"6.4 List Comprehensions"`. The number is computed from the folder name and the order in `meta.json`, so reordering or inserting a lesson renumbers everything and nothing is typed twice.
+- **A topic is always a numbered folder** (`NN-slug`), so every topic shows a number. A topic with a single `notes.mdx` and a topic with a `notes/` folder both show one entry called Notes; the lessons sit beneath it.
+- **A lesson title names the lesson**, in a few words that say what it teaches. "Notes", "Lesson 1" and "Introduction" do not.
+- **No status markers** in a title, such as `(WIP)` or `(draft)`. A page that is unfinished says so in a Callout.
+- Course titles are `CODE: Title` with a colon and one space, the code in capitals.
+
+`npm run audit:content-standard` reports `label-typed-number`, `label-status` and `label-course-title`.
 
 ### 2.2 Notes page template
 
