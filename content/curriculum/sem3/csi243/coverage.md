@@ -25,10 +25,10 @@ The units above are taught on the site inside chapter folders, which do not map 
 | 00 Start Here | `02-expressions-types/notes/ghci`, `notes/first-program` |
 | 01 Functional Thinking | `01-functional-thinking/notes/*` |
 | 02 Expressions and Types | `02-expressions-types/notes/values-text`, `notes/expressions-types` |
-| 03 Defining Functions | `03-defining-functions/notes/*`, `lab-01` |
-| 04 Making Choices | `04-making-choices/notes/*`, `lab-02` |
+| 03 Defining Functions | `03-defining-functions/notes/*` (including `notes/lab-01`) |
+| 04 Making Choices | `04-making-choices/notes/*` (including `notes/lab-02`) |
 | 05 Recursion | `05-recursion/notes/*` |
-| 06 Lists, Tuples and Comprehensions | `06-lists-tuples/notes/*`, `lab-03` |
+| 06 Lists, Tuples and Comprehensions | `06-lists-tuples/notes/*` (including `notes/lab-03a` and `notes/lab-03`) |
 | 07 Higher-Order Functions | `07-higher-order/notes/*` |
 | 08 Modules and Custom Types | `08-modules-types/notes/*` |
 | 09 Polymorphism and Type Classes | `09-polymorphism/notes/*` |
@@ -38,9 +38,9 @@ The units above are taught on the site inside chapter folders, which do not map 
 
 | Lab | Source | Site location |
 |---|---|---|
-| Lab 1 — Introduction to the Haskell Environment | `Labs/Lab 1 (1).docx` | `03-defining-functions/lab-01`, with Tasks 1–3 also covered in `02-expressions-types/notes/ghci` |
-| Lab 2 — Making Choices | `Labs/Lab 2 Making Choices (1).docx` | `04-making-choices/lab-02` |
-| Lab 3 — Recursion and Lists | `Labs/Lab 3 Recursion Continued.pdf` | `06-lists-tuples/lab-03` |
+| Lab 1 — Introduction to the Haskell Environment | `Labs/Lab 1 (1).docx` | `03-defining-functions/notes/lab-01`, with Tasks 1–3 also covered in `02-expressions-types/notes/ghci` |
+| Lab 2 — Making Choices | `Labs/Lab 2 Making Choices (1).docx` | `04-making-choices/notes/lab-02` |
+| Lab 3 — Recursion and Lists | `Labs/Lab 3 Recursion Continued.pdf` | `06-lists-tuples/notes/lab-03` |
 
 ## Verification status
 

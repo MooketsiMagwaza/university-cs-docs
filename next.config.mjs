@@ -60,6 +60,17 @@ const config = {
         destination: '/docs/playgrounds/haskell',
         permanent: true,
       },
+      // The CSI243 lab pages are the last lessons of their topic's Notes.
+      ...[
+        ['03-defining-functions', 'lab-01'],
+        ['04-making-choices', 'lab-02'],
+        ['06-lists-tuples', 'lab-03a'],
+        ['06-lists-tuples', 'lab-03'],
+      ].map(([topic, lab]) => ({
+        source: `/docs/sem3/csi243/${topic}/${lab}`,
+        destination: `/docs/sem3/csi243/${topic}/notes/${lab}`,
+        permanent: true,
+      })),
       {
         source: '/docs/sem3/csi243/decoding-questions',
         destination: '/docs/sem3/csi243/01-functional-thinking/review',
