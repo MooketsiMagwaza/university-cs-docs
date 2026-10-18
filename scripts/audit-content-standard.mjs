@@ -158,8 +158,8 @@ function auditOverview(course, file) {
   const where = rel(file);
   const { title = '' } = frontmatter(source);
   if (GENERIC_OVERVIEW_TITLE.test(title.trim())) add(course, 'overview-title', where, `title "${title}" should be the topic's name`);
-  const objectives = source.search(/<LearningObjectives/);
-  const prerequisites = source.search(/<Prerequisites/);
+  const objectives = source.search(/<LearningObjectives/);
+  const prerequisites = source.search(/<Prerequisites/);
   const pages = source.search(/^##\s+Pages in this topic\s*$/im);
   if (objectives < 0) add(course, 'overview-layout', where, 'no LearningObjectives list');
   if (prerequisites < 0) add(course, 'overview-layout', where, 'no Prerequisites list');
