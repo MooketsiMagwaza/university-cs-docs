@@ -88,6 +88,19 @@ Rules that follow:
 
 `npm run audit:content-standard` reports `label-typed-number`, `label-status` and `label-course-title`.
 
+### 2.1.2 Topic Overview layout
+
+Every topic's `index.mdx` (the Overview tab) has the same sections in the same order, so a reader always finds what a topic is for, what it assumes, and where its pages are:
+
+1. **Title and description.** The title is the topic's name without a number, such as "Lists, Tuples and Comprehensions" (never "Topic 6 overview" or "Chapter Overview"); the description is one sentence.
+2. **An opening paragraph** of two or three sentences: what the topic is about and why it matters.
+3. **`<LearningObjectives items={[...]} />`** (it draws its own "Learning objectives" heading): three to six outcomes, each starting with a verb (Explain, Write, Trace, Compare, Prove), the same outcomes the notes teach and Practice tests.
+4. **`<Prerequisites items={[...]} />`** (it draws its own "Prerequisites" heading): the earlier topics or skills this one assumes, named in plain text (the items are strings, not links), or "Nothing beyond the start of the course" for a first topic.
+5. **`## Visual study map`** (optional): the topic's canvas or diagram, when it has one.
+6. **`## Pages in this topic`**: a table with one row for each lesson in Notes (in order, with the question it answers) and one for each of Cheat sheet, Review, Practice and Resources that exists.
+
+An Overview holds no lesson content, quiz or exercise. A longer introduction from an older page moves into the first lesson. The audit reports `overview-title` and `overview-layout`.
+
 ### 2.2 Notes page template
 
 Every notes page, in this order:

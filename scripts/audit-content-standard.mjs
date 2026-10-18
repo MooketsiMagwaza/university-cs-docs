@@ -147,6 +147,27 @@ function auditLabel(course, where, title, what) {
   if (/\((?:wip|draft|todo)\)/i.test(title)) add(course, 'label-status', where, `${what} title "${title}" carries a status marker`);
 }
 
+/**
+ * The topic Overview layout (docs/content-standard.md, section 2.1.2): a title that names the topic, then
+ * <LearningObjectives>, <Prerequisites> (each draws its own heading) and "## Pages in this topic", in that order.
+ */
+const GENERIC_OVERVIEW_TITLE = /^(?:topic \d+ overview|chapter \d+ overview|chapter overview|topic overview|overview)$/i;
+
+function auditOverview(course, file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const where = rel(file);
+  const { title = '' } = frontmatter(source);
+  if (GENERIC_OVERVIEW_TITLE.test(title.trim())) add(course, 'overview-title', where, `title "${title}" should be the topic's name`);
+  const objectives = source.search(/<LearningObjectives/);
+  const prerequisites = source.search(/<Prerequisites/);
+  const pages = source.search(/^##\s+Pages in this topic\s*$/im);
+  if (objectives < 0) add(course, 'overview-layout', where, 'no LearningObjectives list');
+  if (prerequisites < 0) add(course, 'overview-layout', where, 'no Prerequisites list');
+  if (pages < 0) add(course, 'overview-layout', where, 'missing "## Pages in this topic"');
+  if (objectives >= 0 && prerequisites >= 0 && objectives > prerequisites) add(course, 'overview-layout', where, 'Prerequisites comes before LearningObjectives');
+  if (prerequisites >= 0 && pages >= 0 && prerequisites > pages) add(course, 'overview-layout', where, '"## Pages in this topic" comes before Prerequisites');
+}
+
 function auditNotesPage(course, file) {
   const source = fs.readFileSync(file, 'utf8');
   const where = rel(file);
@@ -190,7 +211,10 @@ function auditTopic(course, directory) {
   }
   auditLabel(course, rel(path.join(directory, 'meta.json')), readJson(path.join(directory, 'meta.json')).title ?? '', 'topic');
   const overview = path.join(directory, 'index.mdx');
-  if (fs.existsSync(overview)) auditLabel(course, rel(overview), frontmatter(fs.readFileSync(overview, 'utf8')).title ?? '', 'Overview');
+  if (fs.existsSync(overview)) {
+    auditLabel(course, rel(overview), frontmatter(fs.readFileSync(overview, 'utf8')).title ?? '', 'Overview');
+    auditOverview(course, overview);
+  }
   const known = pages.filter((page) => TOPIC_PAGES.includes(page.replace(/\.mdx$/, '')));
   for (const page of pages) {
     if (REMOVED_TOPIC_PAGES.includes(page)) add(course, 'topic-extra-page', where, `"${page}": the Exam section was removed`);
@@ -278,7 +302,7 @@ if (asJson) {
   process.stdout.write(`${JSON.stringify({ courses, findings }, null, 2)}\n`);
 } else {
   const groups = {
-    structure: ['topic-folder-name', 'topic-meta', 'topic-extra-page', 'topic-missing-page', 'topic-order', 'course-extra-page', 'course-missing-page', 'course-separator', 'course-no-topics', 'canvas-file', 'label-typed-number', 'label-status', 'label-course-title'],
+    structure: ['topic-folder-name', 'topic-meta', 'topic-extra-page', 'topic-missing-page', 'topic-order', 'course-extra-page', 'course-missing-page', 'course-separator', 'course-no-topics', 'canvas-file', 'label-typed-number', 'label-status', 'label-course-title', 'overview-title', 'overview-layout'],
     notes: ['notes-title', 'notes-description', 'notes-repeated-title', 'notes-quiz', 'retired-component', 'unlisted-component'],
     assessment: ['assessment-component'],
     generated: ['generated'],
