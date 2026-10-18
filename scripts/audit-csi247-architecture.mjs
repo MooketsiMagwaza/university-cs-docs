@@ -54,9 +54,9 @@ for (const file of mdxFiles) {
 }
 
 const officialChapters = [
-  'java-fundamentals', 'recursion', 'time-complexity', 'sorting-and-searching',
-  'packages', 'object-oriented-programming', 'generics', 'collections',
-  'linked-lists-traversals', 'stacks-and-queues', 'hash-tables', 'trees', 'graphs',
+  '01-java-fundamentals', '02-recursion', '03-time-complexity', '04-sorting-and-searching',
+  '05-packages', '06-object-oriented-programming', '07-generics', '08-collections',
+  '09-linked-lists-traversals', '10-stacks-and-queues', '11-hash-tables', '12-trees', '13-graphs',
 ];
 for (const chapter of officialChapters) {
   if (!existsSync(join(courseRoot, chapter, 'meta.json')) || !existsSync(join(courseRoot, chapter, 'index.mdx'))) {
@@ -65,14 +65,14 @@ for (const chapter of officialChapters) {
 }
 
 const embeddedVisuals = new Map([
-  ['sorting-and-searching/notes/linear-search.mdx', '<LinearSearchStory'],
-  ['sorting-and-searching/notes/binary-search.mdx', '<BinarySearchStory'],
-  ['sorting-and-searching/notes/bubble-and-selection-sort.mdx', '<BubbleSortStory'],
-  ['sorting-and-searching/notes/insertion-sort.mdx', '<InsertionSortStory'],
-  ['sorting-and-searching/notes/merge-sort.mdx', '<MergeSortStory'],
-  ['packages/notes/built-in-packages-and-imports.mdx', '<PackageImportStory'],
-  ['packages/notes/creating-a-package.mdx', '<PackageFolderStory'],
-  ['packages/notes/compiling-and-running.mdx', '<PackageBuildStory'],
+  ['04-sorting-and-searching/notes/linear-search.mdx', '<LinearSearchStory'],
+  ['04-sorting-and-searching/notes/binary-search.mdx', '<BinarySearchStory'],
+  ['04-sorting-and-searching/notes/bubble-and-selection-sort.mdx', '<BubbleSortStory'],
+  ['04-sorting-and-searching/notes/insertion-sort.mdx', '<InsertionSortStory'],
+  ['04-sorting-and-searching/notes/merge-sort.mdx', '<MergeSortStory'],
+  ['05-packages/notes/built-in-packages-and-imports.mdx', '<PackageImportStory'],
+  ['05-packages/notes/creating-a-package.mdx', '<PackageFolderStory'],
+  ['05-packages/notes/compiling-and-running.mdx', '<PackageBuildStory'],
 ]);
 
 for (const [page, component] of embeddedVisuals) {
@@ -80,21 +80,21 @@ for (const [page, component] of embeddedVisuals) {
   if (!source.includes(component)) problems.push(`${page}: missing required topic-embedded visual ${component}.`);
 }
 
-const combinedSortSource = readFileSync(join(courseRoot, 'sorting-and-searching', 'notes', 'bubble-and-selection-sort.mdx'), 'utf8');
-if (!combinedSortSource.includes('<SelectionSortStory')) problems.push('sorting-and-searching/notes/bubble-and-selection-sort.mdx: missing required topic-embedded visual <SelectionSortStory.');
+const combinedSortSource = readFileSync(join(courseRoot, '04-sorting-and-searching', 'notes', 'bubble-and-selection-sort.mdx'), 'utf8');
+if (!combinedSortSource.includes('<SelectionSortStory')) problems.push('04-sorting-and-searching/notes/bubble-and-selection-sort.mdx: missing required topic-embedded visual <SelectionSortStory.');
 
-const retiredLab = join(courseRoot, 'sorting-and-searching', 'visual-lab.mdx');
-if (existsSync(retiredLab)) problems.push('sorting-and-searching/visual-lab.mdx: the generic lab must remain retired; visuals belong inside their topic lessons.');
+const retiredLab = join(courseRoot, '04-sorting-and-searching', 'visual-lab.mdx');
+if (existsSync(retiredLab)) problems.push('04-sorting-and-searching/visual-lab.mdx: the generic lab must remain retired; visuals belong inside their topic lessons.');
 
 const requiredTeachingEvidence = new Map([
-  ['sorting-and-searching/notes/linear-search.mdx', ['linearSearchRecursive', 'four simultaneous search frames', 'orderedDescending']],
-  ['sorting-and-searching/notes/binary-search.mdx', ['binarySearchRecursive', 'descendingRecursive', 'four probes, five key comparisons']],
-  ['sorting-and-searching/notes/bubble-and-selection-sort.mdx', ['Literal lecture', 'descendingRecursive', 'minIndex after', '[1C,2B,2A]']],
-  ['sorting-and-searching/notes/insertion-sort.mdx', ['insertionDescending', 'six shifts', 'j >= 0']],
-  ['sorting-and-searching/notes/merge-sort.mdx', ['<MergeFrontWorkbench', '<MergeRecursionExplorer', '<MergeComplexityFigure', 'mergeDescending', 'Iterative bottom-up']],
-  ['packages/notes/built-in-packages-and-imports.mdx', ['BookImportDemo', 'BufferedReader', 'java.util.concurrent']],
-  ['packages/notes/creating-a-package.mdx', ['scratch/A.java', 'sourcepath', 'package pkg;']],
-  ['packages/notes/compiling-and-running.mdx', ['-sourcepath src', 'java -cp classes app.Tester', 'fully qualified']],
+  ['04-sorting-and-searching/notes/linear-search.mdx', ['linearSearchRecursive', 'four simultaneous search frames', 'orderedDescending']],
+  ['04-sorting-and-searching/notes/binary-search.mdx', ['binarySearchRecursive', 'descendingRecursive', 'four probes, five key comparisons']],
+  ['04-sorting-and-searching/notes/bubble-and-selection-sort.mdx', ['Literal lecture', 'descendingRecursive', 'minIndex after', '[1C,2B,2A]']],
+  ['04-sorting-and-searching/notes/insertion-sort.mdx', ['insertionDescending', 'six shifts', 'j >= 0']],
+  ['04-sorting-and-searching/notes/merge-sort.mdx', ['<MergeFrontWorkbench', '<MergeRecursionExplorer', '<MergeComplexityFigure', 'mergeDescending', 'Iterative bottom-up']],
+  ['05-packages/notes/built-in-packages-and-imports.mdx', ['BookImportDemo', 'BufferedReader', 'java.util.concurrent']],
+  ['05-packages/notes/creating-a-package.mdx', ['scratch/A.java', 'sourcepath', 'package pkg;']],
+  ['05-packages/notes/compiling-and-running.mdx', ['-sourcepath src', 'java -cp classes app.Tester', 'fully qualified']],
 ]);
 
 for (const [page, evidence] of requiredTeachingEvidence) {

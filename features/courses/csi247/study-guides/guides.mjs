@@ -22,6 +22,10 @@ const headersOfSearch = (kind) => kind === 'binary' ? ['Probe', 'low', 'high', '
 const allSorted = (values) => values.map((_, i) => i);
 const searchFrames = (run) => run.steps.map((s, i) => ({ title: `${run.kind === 'binary' ? 'Probe' : 'Check'} ${i + 1}: index ${s.i}`, visual: figure(array(run.input, { active: [s.i], sorted: s.match ? [s.i] : [], discarded: run.input.flatMap((_, j) => run.kind === 'binary' ? j < s.low || j > s.high ? [j] : [] : j < s.i ? [j] : []), labels: run.kind === 'binary' ? { [s.low]: 'low', [s.high]: s.low === s.high ? 'low/high' : 'high', [s.i]: s.i === s.low && s.i === s.high ? 'low/mid/high' : 'mid' } : { [s.i]: s.match ? 'found' : 'i' } }), `Key ${run.key}; ${run.kind === 'binary' ? `inclusive candidate range ${s.low}..${s.high}` : 'checks proceed left to right'}.`), explanation: s.decision, print: true }));
 
+// A chapter's name is also the folder of its generated files under public/files/sem3/csi247/study-guides,
+// so the name stays as it is. Its documentation page lives in a numbered topic folder (UNI-02).
+const PAGE_FOLDER = { 'sorting-and-searching': '04-sorting-and-searching', packages: '05-packages' };
+
 export const REGISTRY = [
   ['linear-search', 'Linear Search', 'sorting-and-searching', 'linear'],
   ['binary-search', 'Binary Search', 'sorting-and-searching', 'binary'],
@@ -32,7 +36,7 @@ export const REGISTRY = [
   ['built-in-packages-and-imports', 'Built-in Packages and Imports', 'packages', 'imports'],
   ['creating-a-package', 'Creating a Java Package', 'packages', 'package'],
   ['compiling-and-running', 'Compiling and Running Packages', 'packages', 'build'],
-].map(([slug, title, chapter, kind]) => ({ slug, title, chapter, kind, id: `${chapter}/${slug}`, sourceRoutes: [`/docs/sem3/csi247/${chapter}/notes/${slug}`, ...(['bubble', 'selection'].includes(kind) ? [`/docs/sem3/csi247/${chapter}/notes/bubble-and-selection-sort`] : [])] }));
+].map(([slug, title, chapter, kind]) => ({ slug, title, chapter, kind, id: `${chapter}/${slug}`, sourceRoutes: [`/docs/sem3/csi247/${PAGE_FOLDER[chapter]}/notes/${slug}`, ...(['bubble', 'selection'].includes(kind) ? [`/docs/sem3/csi247/${PAGE_FOLDER[chapter]}/notes/bubble-and-selection-sort`] : [])] }));
 
 const SORT_INFO = {
   bubble: {

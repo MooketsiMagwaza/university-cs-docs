@@ -1,0 +1,183 @@
+---
+title: "Cheat Sheet"
+description: "Lookup tables and Java templates for linear search, binary search, bubble sort, selection sort, insertion sort, and merge sort."
+---
+
+Use this page for recall after completing the lessons. It gives templates and boundary rules, not the reasoning behind them.
+
+## Placeholders and bounds
+
+| Name | Meaning | Initial value |
+|---|---|---|
+| `i`, `j` | Current loop indexes | Depends on algorithm |
+| `low` | First possible binary-search index | `0` |
+| `high` | Last possible binary-search index | `arr.length - 1` |
+| `mid` | Overflow-safe midpoint | `low + (high - low) / 2` |
+| `current` | Saved insertion-sort value | `arr[i]` |
+| `minIndex` | Index of current minimum | `i` |
+| `-1` | Search key absent | Return after possibilities are exhausted |
+
+## Complexity lookup
+
+| Algorithm | Precondition / guarantee | Best | Worst | Extra space |
+|---|---|---:|---:|---:|
+| Linear search | Any array; first match | `O(1)` | `O(n)` | `O(1)` |
+| Binary search | Sorted array | `O(1)` | `O(log n)` | `O(1)` iterative |
+| Bubble sort | Largest unsorted value final after each pass | `O(n)` optimized | `O(n²)` | `O(1)` |
+| Selection sort | Smallest unsorted value final after each pass | `O(n²)` | `O(n²)` | `O(1)` |
+| Insertion sort | Sorted prefix grows by one | `O(n)` | `O(n²)` | `O(1)` |
+| Merge sort | Sorted halves are merged | `O(n log n)` | `O(n log n)` | `O(n)` arrays |
+
+## Search templates
+
+```java
+static int linearSearch(int[] a, int key) {
+    for (int i = 0; i < a.length; i++) {
+        if (a[i] == key) return i;
+    }
+    return -1;
+}
+
+static int binarySearch(int[] a, int key) {
+    int low = 0, high = a.length - 1;
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+        if (a[mid] < key) low = mid + 1;
+        else if (a[mid] > key) high = mid - 1;
+        else return mid;
+    }
+    return -1;
+}
+```
+
+## Quadratic sort templates
+
+```java
+static void bubbleSort(int[] a) {
+    for (int pass = 0; pass < a.length - 1; pass++) {
+        boolean swapped = false;
+        for (int j = 0; j < a.length - 1 - pass; j++) {
+            if (a[j] > a[j + 1]) {
+                int t = a[j]; a[j] = a[j + 1]; a[j + 1] = t;
+                swapped = true;
+            }
+        }
+        if (!swapped) return;
+    }
+}
+
+static void selectionSort(int[] a) {
+    for (int i = 0; i < a.length - 1; i++) {
+        int minIndex = i;
+        for (int j = i + 1; j < a.length; j++) {
+            if (a[j] < a[minIndex]) minIndex = j;
+        }
+        if (minIndex != i) {
+            int t = a[i]; a[i] = a[minIndex]; a[minIndex] = t;
+        }
+    }
+}
+
+static void insertionSort(int[] a) {
+    for (int i = 1; i < a.length; i++) {
+        int current = a[i];
+        int j = i - 1;
+        while (j >= 0 && a[j] > current) {
+            a[j + 1] = a[j];
+            j--;
+        }
+        a[j + 1] = current;
+    }
+}
+```
+
+## Merge-sort skeleton
+
+```java
+static void mergeSort(int[] a, int start, int end) {
+    if (start >= end) return;
+    int mid = start + (end - start) / 2;
+    mergeSort(a, start, mid);
+    mergeSort(a, mid + 1, end);
+    merge(a, start, mid, end);
+}
+```
+
+The merge helper has four phases: compare while both runs have values, copy left leftovers, copy right leftovers, then copy temporary output back. At most one leftover loop does any work.
+
+```java
+static void merge(int[] a, int start, int mid, int end) {
+    int[] temp = new int[end - start + 1];
+    int left = start, right = mid + 1, out = 0;
+    while (left <= mid && right <= end) {
+        // Left wins ties: preserve the relative order of equal records.
+        if (a[left] <= a[right]) temp[out++] = a[left++];
+        else temp[out++] = a[right++];
+    }
+    while (left <= mid) temp[out++] = a[left++];
+    while (right <= end) temp[out++] = a[right++];
+    // start is essential when this call handles only a subrange.
+    for (int k = 0; k < temp.length; k++) a[start + k] = temp[k];
+}
+```
+
+Call `mergeSort(a, 0, a.length - 1)`. An empty array gives the range `0..-1`, which immediately returns. Splitting changes range boundaries; merging writes values.
+
+## The operation that identifies each algorithm
+
+| Algorithm | What you compare | What you move | Guaranteed after the step |
+|---|---|---|---|
+| Linear | `a[i] == key` | Nothing; advance `i` | Earlier indexes did not match |
+| Binary | Midpoint value against key | Nothing; change bounds | Discarded range cannot contain key |
+| Bubble | Neighbours `a[j]`, `a[j+1]` | Swap an inverted pair | A full pass fixes the largest active value |
+| Selection | Candidate against current minimum | One final swap, or none | Next smallest value is fixed on the left |
+| Insertion | Held key against earlier prefix values | Right shifts, then insert key | Prefix through `i` is sorted |
+| Merge | Front unread values of two sorted runs | Copy to temp, then copy back | The merged range is sorted |
+
+## Count the right thing
+
+| Count | Exact rule in these implementations | Example |
+|---|---|---|
+| Selection comparisons | `n(n-1)/2`, regardless of input order | 9 values: 36 comparisons |
+| Selection actual swaps | At most `n-1`; skip self-swaps | Supplied 9-value example: 6 swaps |
+| Optimized bubble best case | `n-1` comparisons, 0 swaps | `[1,2,3,4]`: 3 comparisons, stop |
+| Insertion shifts | One per earlier value greater than held key | Insert 2 into `[3,5,7]`: 3 shifts |
+| Merge of two nonempty runs, total `m` | At most `m-1` key comparisons | `[2,7]` + `[3,5]`: 3 comparisons |
+| Merge writes | `m` temp writes and `m` copy-back writes | Four values: 8 writes in total |
+
+A **probe** means visiting one search position. A key comparison tests values. A loop-bound check tests an index. These are different counting conventions: state the convention before giving an exact total.
+
+## Boundary and stability reminders
+
+- Binary search uses inclusive bounds here: `low <= high`. Exclude the failed midpoint with `mid + 1` or `mid - 1`; merely assigning `low = mid` can stall.
+- Evaluate `j >= 0` before `a[j] > current` in insertion sort. Java short-circuiting protects `a[-1]`.
+- Stable: equal records keep their original relative order. Bubble needs strict `>`; insertion needs strict `>`; merge chooses LEFT on `<=`.
+- Selection's distant swap can reverse equal records, even when the comparison is strict.
+- Iterative search/simple sorts use constant auxiliary space. Their recursive versions may need a call stack; do not copy the iterative space answer automatically.
+- Standard array merge sort uses `O(n)` temporary storage plus `O(log n)` stack space; total auxiliary space is `O(n)`.
+
+## Descending order: change the decision, not the whole algorithm
+
+| Algorithm | Descending decision |
+|---|---|
+| Binary search | If `a[mid] > key`, keep the right half; if smaller, keep the left |
+| Bubble | Swap when `a[j] < a[j+1]` |
+| Selection | Select the maximum remaining value |
+| Insertion | Shift while `a[j] < current` |
+| Merge | Choose LEFT when `a[left] >= a[right]` |
+
+## Read a bar chart correctly
+
+Height is the value; horizontal position is the index. Searching highlights bars without moving them. Sorting moves values between positions. A sorted ascending chart has non-decreasing heights, not necessarily distinct heights.
+
+For `[7,3,5,2]`, bubble's first pass gives `[3,5,2,7]`; selection's first pass gives `[2,3,5,7]`. The same final sorted order does **not** imply the same intermediate movements.
+
+## Trace formats
+
+**Search:** record `low`, `mid`, `high`, probed value, and next range.
+
+**Simple sorts:** record the array after every complete pass; show intermediate swaps when requested.
+
+**Merge sort:** draw the split tree, then list merges in the order recursive calls return.
+
+Return to the [chapter overview](/docs/sem3/csi247/04-sorting-and-searching).

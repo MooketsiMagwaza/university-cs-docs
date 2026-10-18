@@ -49,6 +49,28 @@ const config = {
         destination: '/docs/:semester/:course/:topic/review',
         permanent: true,
       },
+      // Course-level playground pages moved under /docs/playgrounds, so a course folder holds only its overview, topics and resources.
+      {
+        source: '/docs/sem3/csi247/java-playground',
+        destination: '/docs/playgrounds/java',
+        permanent: true,
+      },
+      {
+        source: '/docs/sem3/csi243/playground',
+        destination: '/docs/playgrounds/haskell',
+        permanent: true,
+      },
+      // The CSI243 lab pages are the last lessons of their topic's Notes.
+      ...[
+        ['03-defining-functions', 'lab-01'],
+        ['04-making-choices', 'lab-02'],
+        ['06-lists-tuples', 'lab-03a'],
+        ['06-lists-tuples', 'lab-03'],
+      ].map(([topic, lab]) => ({
+        source: `/docs/sem3/csi243/${topic}/${lab}`,
+        destination: `/docs/sem3/csi243/${topic}/notes/${lab}`,
+        permanent: true,
+      })),
       {
         source: '/docs/sem3/csi243/decoding-questions',
         destination: '/docs/sem3/csi243/01-functional-thinking/review',
@@ -97,6 +119,62 @@ const config = {
       {
         source: '/docs/sem3/csi243/03-defining-functions/input-processing',
         destination: '/docs/sem3/csi243/03-defining-functions/notes/input-processing',
+        permanent: true,
+      },
+      // The CSI213 sub-topic pages are the lessons of their topic's Notes.
+      ...[
+        ['01-set-theory', ['definitions', 'algebra', 'combinatorics', 'summations']],
+        ['02-probability', ['sample-space-events', 'axioms', 'outcomes']],
+        ['03-conditional-probability', ['conditional-prob', 'laws-bayes', 'independent-events']],
+        ['04-random-var-distributions', ['random-var', 'expectation-variance']],
+        ['05-discrete-distributions', ['bernoulli-binomial', 'poisson', 'geometric-negative-binomial', 'hypergeometric']],
+        ['06-continuous-distributions', ['continuous-exponential', 'normal-standardization', 'reliability-hazard']],
+        ['07-regression-analysis', ['MLS-OLS', 'ANOVA']],
+      ].flatMap(([topic, lessons]) => lessons.map((lesson) => ({
+        source: `/docs/sem3/csi213/${topic}/${lesson}`,
+        destination: `/docs/sem3/csi213/${topic}/notes/${lesson}`,
+        permanent: true,
+      }))),
+      // The CSI323 topic folders are numbered, like every other course.
+      ...[
+        ['trees-and-bsts', '01-trees-and-bsts'],
+        ['heaps-and-priority-queues', '02-heaps-and-priority-queues'],
+        ['hash-tables', '03-hash-tables'],
+        ['graphs', '04-graphs'],
+      ].flatMap(([oldFolder, newFolder]) => ['', '/review', '/questions', '/resources'].map((page) => ({
+        source: `/docs/sem5/csi323/${oldFolder}${page}`,
+        destination: `/docs/sem5/csi323/${newFolder}${page}`,
+        permanent: true,
+      }))),
+      // The CSI247 topic folders are numbered 01 to 13, like every other course. Each row: old folder, new folder, extra pages.
+      ...[
+        ['java-fundamentals', '01-java-fundamentals', ['/notes/arrays-and-objects', '/notes/classes-and-objects', '/notes/methods-parameters-scope', '/notes/strings-control-io', '/notes/values-primitives-references']],
+        ['recursion', '02-recursion', []],
+        ['time-complexity', '03-time-complexity', []],
+        ['sorting-and-searching', '04-sorting-and-searching', ['/notes/binary-search', '/notes/bubble-and-selection-sort', '/notes/bubble-sort', '/notes/choosing-an-algorithm', '/notes/insertion-sort', '/notes/linear-search', '/notes/merge-sort', '/notes/selection-sort', '/cheat-sheet']],
+        ['packages', '05-packages', ['/notes/built-in-packages-and-imports', '/notes/compiling-and-running', '/notes/creating-a-package', '/cheat-sheet']],
+        ['object-oriented-programming', '06-object-oriented-programming', ['/notes/abstract-classes-and-interfaces', '/notes/encapsulation-and-abstraction', '/notes/inheritance-and-super', '/notes/overriding-and-polymorphism']],
+        ['generics', '07-generics', ['/notes/bounds-and-comparable', '/notes/generic-classes', '/notes/generic-methods-and-interfaces', '/notes/why-generics', '/notes/wildcards-and-variance']],
+        ['collections', '08-collections', ['/notes/choosing-a-collection', '/notes/core-interfaces', '/notes/framework-and-generics', '/notes/iteration-and-algorithms']],
+        ['linked-lists-traversals', '09-linked-lists-traversals', []],
+        ['stacks-and-queues', '10-stacks-and-queues', []],
+        ['hash-tables', '11-hash-tables', []],
+        ['trees', '12-trees', []],
+        ['graphs', '13-graphs', []],
+      ].flatMap(([oldFolder, newFolder, extraPages]) => ['', '/review', '/questions', '/resources', ...extraPages].map((page) => ({
+        source: `/docs/sem3/csi247/${oldFolder}${page}`,
+        destination: `/docs/sem3/csi247/${newFolder}${page}`,
+        permanent: true,
+      }))),
+      // The overview and resources of the legacy Linear Structures folder repeated the linked-list and stack chapters.
+      {
+        source: '/docs/sem3/csi247/linear-structures',
+        destination: '/docs/sem3/csi247/09-linked-lists-traversals',
+        permanent: true,
+      },
+      {
+        source: '/docs/sem3/csi247/linear-structures/resources',
+        destination: '/docs/sem3/csi247/09-linked-lists-traversals/resources',
         permanent: true,
       },
     ];

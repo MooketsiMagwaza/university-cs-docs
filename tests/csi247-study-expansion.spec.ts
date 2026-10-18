@@ -3,7 +3,7 @@ test.use({reducedMotion:'reduce'});
 test.setTimeout(150_000);
 
 test('full chapters inherit site fonts and surface tokens in both themes',async({page})=>{
-  await page.goto('/docs/sem3/csi247/sorting-and-searching/notes/merge-sort');
+  await page.goto('/docs/sem3/csi247/04-sorting-and-searching/notes/merge-sort');
   for(const dark of [false,true]) {
     await page.evaluate(value=>document.documentElement.classList.toggle('dark',value),dark);
     const chapter=page.locator('.csi247-chapter');
@@ -38,7 +38,7 @@ test('full chapters inherit site fonts and surface tokens in both themes',async(
 });
 
 test('merge value trees and final decisions preserve both fronts and build one output',async({page})=>{
-  await page.goto('/docs/sem3/csi247/sorting-and-searching/notes/merge-sort');
+  await page.goto('/docs/sem3/csi247/04-sorting-and-searching/notes/merge-sort');
   const split=page.locator('[data-merge-tree="split"]');
   const returned=page.locator('[data-merge-tree="return"]');
   await expect(split.locator('[data-values="63,29,72,85,18,49,3,54"]')).toHaveCount(1);
@@ -65,9 +65,9 @@ test('merge value trees and final decisions preserve both fronts and build one o
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
 
-for(const chapter of ['sorting-and-searching','packages']) for(const support of ['cheat-sheet','questions','review','resources']) {
+for(const [chapter,folder] of [['sorting-and-searching','04-sorting-and-searching'],['packages','05-packages']]) for(const support of ['cheat-sheet','questions','review','resources']) {
   test(`${chapter}/${support} has substantive support material`,async({page})=>{
-    await page.goto(`/docs/sem3/csi247/${chapter}/${support}`);
+    await page.goto(`/docs/sem3/csi247/${folder}/${support}`);
     const article=page.locator('article').first();
     expect((await article.innerText()).length).toBeGreaterThan(2200);
     await expect(article.locator('h2')).not.toHaveCount(0);

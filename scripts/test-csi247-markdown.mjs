@@ -12,7 +12,7 @@ assert.equal(chapterMarkdown('<a href="java&#x73;cript:unsafe()">text</a>'),'tex
 assert.equal(chapterMarkdown('<p>\\|</p>'),String.raw`\\\|`);
 assert.equal(chapterMarkdown('<pre>if (a &lt; b) {\n  print("```");\n}</pre>'),'````\nif (a < b) {\n  print("```");\n}\n````');
 assert(chapterMarkdown('<table><tr><th>A</th></tr><tr><td>x|y</td></tr></table>').includes('| x\\|y |'));
-const guide=getFullChapterMarkdown('/docs/sem3/csi247/sorting-and-searching/notes/merge-sort');
+const guide=getFullChapterMarkdown('/docs/sem3/csi247/04-sorting-and-searching/notes/merge-sort');
 assert(guide.includes('Fully annotated Java'));
 assert(guide.includes('temp[k]'));
 assert(guide.includes('Diagram:'));

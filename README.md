@@ -207,7 +207,7 @@ The MDX compiler reads JSX before KaTeX reads LaTeX, so a few rules prevent buil
 
 ## The Haskell practice runner
 
-CSI243 includes a runner that executes a teaching subset of Haskell in the browser, using `lib/haskell-simulator.ts`. It powers the practice page at `/docs/sem3/csi243/playground` and the "Try it yourself" blocks inside notes.
+CSI243 includes a runner that executes a teaching subset of Haskell in the browser, using `lib/haskell-simulator.ts`. It powers the playground at `/docs/playgrounds/haskell` and the "Try it yourself" blocks inside notes.
 
 - **Supported today**: numbers, Booleans, strings, characters, tuples and lists; arithmetic, comparison and Boolean operators; one-line function definitions, lambdas and operator sections; `if`/`then`/`else`; finite and lazy ranges; list comprehensions; the common list functions such as `map`, `filter`, `zip`, `zipWith`, folds and scans; and `main = do` blocks using `let`, `print` and `putStrLn`.
 - **Not supported**: pattern-matching equations, guards, `where`, modules and imports, user-defined types, type classes, and input functions such as `getLine`. The runner says **Course subset** so its feedback is never mistaken for a real GHC diagnostic. Use GHCi or a compiled `.hs` file for those.

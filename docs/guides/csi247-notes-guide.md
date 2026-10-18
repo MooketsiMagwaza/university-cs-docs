@@ -10,15 +10,20 @@ CSI247 lives in `content/docs/sem3/csi247/`. Each topic folder currently holds o
 
 | Topic folder | Today |
 |---|---|
-| `java-fundamentals` | index, questions, review, resources |
-| `recursion` | index, questions, review, resources |
-| `time-complexity` | index, questions, review, resources |
-| `sorting-and-searching` | index, questions, review, resources |
-| `arrays-and-arraylists` | index, questions, review, resources |
-| `collections` | index, questions, review, resources |
-| `linked-lists-traversals` | index, questions, review, resources |
-| `stacks-and-queues` | index, questions, review, resources |
-| `linear-structures` | Hidden in `meta.json`; overlaps with the two topics above |
+| `01-java-fundamentals` | index, notes, questions, review, resources |
+| `02-recursion` | index, questions, review, resources |
+| `03-time-complexity` | index, questions, review, resources |
+| `04-sorting-and-searching` | index, notes, cheat-sheet, questions, review, resources |
+| `05-packages` | index, notes, cheat-sheet, questions, review, resources |
+| `06-object-oriented-programming` | index, notes, questions, review, resources |
+| `07-generics` | index, notes, questions, review, resources |
+| `08-collections` | index, notes, questions, review, resources |
+| `09-linked-lists-traversals` | index, questions, review, resources |
+| `10-stacks-and-queues` | index, questions, review, resources |
+| `11-hash-tables`, `12-trees`, `13-graphs` | index, questions, review, resources |
+| `linear-structures`, `arrays-and-arraylists` | Hidden legacy folders (review and questions still to move) |
+
+The table shows which pages each folder has now (2026-10-17); a folder with no `notes` page is still waiting for its lessons.
 
 The goal is to give every topic the same shape CSI243 chapters have, with real lesson notes at the centre.
 
@@ -60,9 +65,9 @@ content/docs/sem3/csi247/<topic>/
 
 Rules for folders and names:
 
-- **Do not rename existing topic folders unless it is agreed first.** Renaming changes public URLs, and quiz and flashcard data paths mirror the folder names. If you do rename, add redirects in `next.config.mjs` (CSI243 did this for moved notes), update every internal link, and move the matching data files.
-- Lesson files use kebab-case names that say what the lesson teaches. Number the lesson titles in frontmatter (`"3. Writing Recursive Functions"`), as CSI243 does.
-- Add each new folder or page to the right `meta.json`, otherwise it will not appear in the sidebar. The course-level `meta.json` already lists the topics; keep `linear-structures` hidden or merge its content into `linked-lists-traversals` and `stacks-and-queues`, but do not leave two copies of the same material live.
+- **The thirteen topic folders are fixed** (decided 2026-10-17, CSI247-01): `01-java-fundamentals`, `02-recursion`, `03-time-complexity`, `04-sorting-and-searching`, `05-packages`, `06-object-oriented-programming`, `07-generics`, `08-collections`, `09-linked-lists-traversals`, `10-stacks-and-queues`, `11-hash-tables`, `12-trees`, `13-graphs`. Do not rename them without agreeing first: renaming changes public URLs, and quiz and flashcard data paths mirror the folder names. If you do rename, add redirects in `next.config.mjs` and aliases in `content/progress/aliases.json`, update every internal link, and move the matching data files.
+- Lesson files use kebab-case names that say what the lesson teaches. **Do not number the title.** Write `title: "Writing Recursive Functions"`: the sidebar adds the topic and lesson number from the folder name and the order in `notes/meta.json` (`6.3 Writing Recursive Functions`, docs/content-standard.md section 2.1.1).
+- Add each new folder or page to the right `meta.json`, otherwise it will not appear in the sidebar. The legacy folders `linear-structures` and `arrays-and-arraylists` are not in the course `meta.json` and stay hidden only until their review and practice questions have moved into chapters 08, 09 and 10 (see CSI247-10 in WORK_ORDERS.md); then delete them. Do not leave two copies of the same material live.
 
 ## 3. Anatomy of each page type
 

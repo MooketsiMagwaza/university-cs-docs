@@ -16,11 +16,14 @@ const routes = [
   ['packages', 'compiling-and-running', 'build', 4],
 ] as const;
 
+// The chapter name is also the folder of its generated files; its documentation page is in a numbered topic folder.
+const pageFolder = { 'sorting-and-searching': '04-sorting-and-searching', packages: '05-packages' } as const;
+
 for (const [chapter, slug, kind, steps] of routes) {
   test(`${slug}: full chapter, whole-run map, quiz, and mobile themes`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto(`/docs/sem3/csi247/${chapter}/notes/${slug}`);
+    await page.goto(`/docs/sem3/csi247/${pageFolder[chapter]}/notes/${slug}`);
     const article = page.locator('.csi247-chapter').filter({ has: page.locator(`[data-map-kind="${kind}"]`) });
     const sections = article.locator('.chapter-content > section');
     await expect(sections.first()).toHaveAttribute('id', chapter === 'sorting-and-searching' ? /plain-language$/ : /visual-map$/);
@@ -68,7 +71,7 @@ for (const [chapter, slug, kind, steps] of routes) {
 
 test('code toolbar copies only source and reference diagrams have full-run evidence', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto('/docs/sem3/csi247/sorting-and-searching/notes/insertion-sort');
+  await page.goto('/docs/sem3/csi247/04-sorting-and-searching/notes/insertion-sort');
   const panel = page.locator('#insertion-sort-annotated-java .code-panel').first();
   const expected = await panel.locator('pre').textContent();
   await panel.getByRole('button', { name: 'Copy code' }).click();

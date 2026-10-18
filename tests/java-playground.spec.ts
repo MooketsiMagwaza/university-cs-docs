@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('runs Java safely, reports exact diagnostics, and recovers after limits', async ({ page }) => {
-  await page.goto('/docs/sem3/csi247/java-playground');
+  await page.goto('/docs/playgrounds/java');
   const editor = page.getByLabel('Java code');
   const run = page.getByRole('button', { name: 'Run Java' });
 

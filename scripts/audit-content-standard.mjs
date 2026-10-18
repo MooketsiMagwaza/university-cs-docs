@@ -135,10 +135,44 @@ function pagesOf(directory) {
 const findings = [];
 const add = (course, rule, where, message) => findings.push({ course, rule, where, message });
 
+/**
+ * Sidebar labels (docs/content-standard.md, section 2.1.1). A title carries no number of its own, because the sidebar,
+ * the breadcrumb, the topic tabs and the pager add it (lib/topic-pages.ts). Keep this pattern the same as TYPED_NUMBER there.
+ */
+const TYPED_NUMBER = /^\s*(?:\d+(?:\.\d+)+\s+|\d+[.):]\s+)/;
+const COURSE_TITLE = /^[A-Z]{3}\d{3}: \S/;
+
+function auditLabel(course, where, title, what) {
+  if (TYPED_NUMBER.test(title)) add(course, 'label-typed-number', where, `${what} title "${title}" has a typed number; the sidebar numbers it`);
+  if (/\((?:wip|draft|todo)\)/i.test(title)) add(course, 'label-status', where, `${what} title "${title}" carries a status marker`);
+}
+
+/**
+ * The topic Overview layout (docs/content-standard.md, section 2.1.2): a title that names the topic, then
+ * <LearningObjectives>, <Prerequisites> (each draws its own heading) and "## Pages in this topic", in that order.
+ */
+const GENERIC_OVERVIEW_TITLE = /^(?:topic \d+ overview|chapter \d+ overview|chapter overview|topic overview|overview)$/i;
+
+function auditOverview(course, file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const where = rel(file);
+  const { title = '' } = frontmatter(source);
+  if (GENERIC_OVERVIEW_TITLE.test(title.trim())) add(course, 'overview-title', where, `title "${title}" should be the topic's name`);
+  const objectives = source.search(/<LearningObjectives/);
+  const prerequisites = source.search(/<Prerequisites/);
+  const pages = source.search(/^##\s+Pages in this topic\s*$/im);
+  if (objectives < 0) add(course, 'overview-layout', where, 'no LearningObjectives list');
+  if (prerequisites < 0) add(course, 'overview-layout', where, 'no Prerequisites list');
+  if (pages < 0) add(course, 'overview-layout', where, 'missing "## Pages in this topic"');
+  if (objectives >= 0 && prerequisites >= 0 && objectives > prerequisites) add(course, 'overview-layout', where, 'Prerequisites comes before LearningObjectives');
+  if (prerequisites >= 0 && pages >= 0 && prerequisites > pages) add(course, 'overview-layout', where, '"## Pages in this topic" comes before Prerequisites');
+}
+
 function auditNotesPage(course, file) {
   const source = fs.readFileSync(file, 'utf8');
   const where = rel(file);
   const { title = '', description = '' } = frontmatter(source);
+  auditLabel(course, where, title, 'lesson');
   if (!title || GENERIC_TITLES.has(title.toLowerCase())) add(course, 'notes-title', where, `title "${title}" does not name the lesson`);
   if (!description) add(course, 'notes-description', where, 'no description');
   const headings = [...source.matchAll(/^##\s+(.+)$/gm)].map((match) => match[1].trim().toLowerCase());
@@ -174,6 +208,12 @@ function auditTopic(course, directory) {
   if (!pages) {
     add(course, 'topic-meta', where, 'no meta.json');
     return;
+  }
+  auditLabel(course, rel(path.join(directory, 'meta.json')), readJson(path.join(directory, 'meta.json')).title ?? '', 'topic');
+  const overview = path.join(directory, 'index.mdx');
+  if (fs.existsSync(overview)) {
+    auditLabel(course, rel(overview), frontmatter(fs.readFileSync(overview, 'utf8')).title ?? '', 'Overview');
+    auditOverview(course, overview);
   }
   const known = pages.filter((page) => TOPIC_PAGES.includes(page.replace(/\.mdx$/, '')));
   for (const page of pages) {
@@ -233,6 +273,9 @@ for (const semester of fs.readdirSync(docsRoot).filter((entry) => /^sem\d+$/.tes
     const course = `${semester}/${courseName}`;
     courses.push(course);
 
+    const courseMeta = path.join(courseDir, 'meta.json');
+    const courseTitle = fs.existsSync(courseMeta) ? readJson(courseMeta).title ?? '' : '';
+    if (!COURSE_TITLE.test(courseTitle)) add(course, 'label-course-title', rel(courseMeta), `course title "${courseTitle}" is not "CODE: Title"`);
     const pages = pagesOf(courseDir) ?? [];
     const topics = [];
     for (const page of pages) {
@@ -259,7 +302,7 @@ if (asJson) {
   process.stdout.write(`${JSON.stringify({ courses, findings }, null, 2)}\n`);
 } else {
   const groups = {
-    structure: ['topic-folder-name', 'topic-meta', 'topic-extra-page', 'topic-missing-page', 'topic-order', 'course-extra-page', 'course-missing-page', 'course-separator', 'course-no-topics', 'canvas-file'],
+    structure: ['topic-folder-name', 'topic-meta', 'topic-extra-page', 'topic-missing-page', 'topic-order', 'course-extra-page', 'course-missing-page', 'course-separator', 'course-no-topics', 'canvas-file', 'label-typed-number', 'label-status', 'label-course-title', 'overview-title', 'overview-layout'],
     notes: ['notes-title', 'notes-description', 'notes-repeated-title', 'notes-quiz', 'retired-component', 'unlisted-component'],
     assessment: ['assessment-component'],
     generated: ['generated'],

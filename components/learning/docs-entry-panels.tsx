@@ -15,7 +15,7 @@ import {
 
 const semesters = [
   {
-    label: 'Semester I (WIP)',
+    label: 'Semester I',
     eyebrow: 'Foundations',
     status: 'In progress',
     href: '/docs/sem1',
@@ -23,7 +23,7 @@ const semesters = [
     courses: ['CSI131', 'CSI141', 'CSI161', 'MAT111', 'COM141'],
   },
   {
-    label: 'Semester II (WIP)',
+    label: 'Semester II',
     eyebrow: 'Application',
     status: 'In progress',
     href: '/docs/sem2',

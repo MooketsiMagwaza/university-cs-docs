@@ -1,8 +1,8 @@
 import {expect,test} from '@playwright/test';
 
-for (const chapter of ['sorting-and-searching','packages'] as const) {
+for (const [chapter, folder] of [['sorting-and-searching', '04-sorting-and-searching'], ['packages', '05-packages']] as const) {
   test(`${chapter}: resources support written study without video recaps`,async({page}) => {
-    await page.goto(`/docs/sem3/csi247/${chapter}/resources`);
+    await page.goto(`/docs/sem3/csi247/${folder}/resources`);
     await expect(page.getByRole('heading',{name:'Resources',exact:true,level:1})).toBeVisible();
     await expect(page.locator('video,audio')).toHaveCount(0);
     await expect(page.locator('a[href*="/files/sem3/csi247/videos/"]')).toHaveCount(0);
