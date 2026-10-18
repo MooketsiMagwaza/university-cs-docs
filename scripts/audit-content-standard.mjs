@@ -43,6 +43,9 @@ const NOTES_COMPONENTS = new Set([
   'InsertionSortStory', 'LinearSearchStory', 'BinarySearchStory', 'BubbleSortStory', 'SelectionSortStory',
   'MergeSortStory', 'MergeFrontWorkbench', 'MergeRecursionExplorer', 'MergeComplexityFigure',
   'PackageImportStory', 'PackageFolderStory', 'PackageBuildStory',
+  // "Explore it" pictures (TRY-05): the reader moves something and sees the result.
+  'DistributionExplorer', 'Simulation', 'VennDiagram', 'ProbabilityTree', 'CountingCalculator',
+  'Visualise', 'PredictReveal', 'RegressionPlot',
 ]);
 
 // Assessment components belong on assessment pages, never inside notes.

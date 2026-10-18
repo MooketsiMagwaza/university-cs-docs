@@ -44,6 +44,9 @@ import { Simulation } from './interactive/simulation';
 import { VennDiagram } from './interactive/venn-diagram';
 import { ProbabilityTree } from './interactive/probability-tree';
 import { CountingCalculator } from './interactive/counting-calculator';
+import { Visualise } from './interactive/function-visual';
+import { PredictReveal } from './interactive/predict-reveal';
+import { RegressionPlot } from './interactive/regression-plot';
 
 
 import { Callout } from './callouts/callout';
@@ -145,6 +148,9 @@ export function getMDXComponents(components?: MDXComponents) {
     VennDiagram,
     ProbabilityTree,
     CountingCalculator,
+    Visualise,
+    PredictReveal,
+    RegressionPlot,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,
