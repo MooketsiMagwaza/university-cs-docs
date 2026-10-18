@@ -1,9 +1,10 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Play, RotateCcw, TerminalSquare } from 'lucide-react';
 import { runHaskell, type HaskellRunResult } from '@/lib/haskell-simulator';
 import { getPlaygroundData } from '@/lib/playground/data';
+import { tryItParts } from './runnable-code';
 
 // The practice examples live in content/playground-data/haskell.json.
 const examples = getPlaygroundData('haskell').examples;
@@ -11,6 +12,8 @@ const examples = getPlaygroundData('haskell').examples;
 type HaskellPlaygroundProps = {
   title?: string;
   description?: string;
+  /** The starting program, as a fenced block inside the tag. Written as `initialCode="…"` it loses its indentation in MDX. */
+  children?: ReactNode;
   initialCode?: string;
   showExamplePicker?: boolean;
 };
@@ -18,9 +21,11 @@ type HaskellPlaygroundProps = {
 export function HaskellPlayground({
   title = 'Haskell practice runner',
   description = 'Edit a course example, run it in the browser, and inspect the result or diagnostic.',
-  initialCode = examples[0].code,
+  children,
+  initialCode: initialCodeProp,
   showExamplePicker = true,
 }: HaskellPlaygroundProps) {
+  const initialCode = (children ? tryItParts(children).code : undefined) ?? initialCodeProp ?? examples[0].code;
   const exampleSelectId = useId();
   const initialExampleIndex = examples.findIndex((example) => example.code === initialCode);
   const [code, setCode] = useState(initialCode);
