@@ -17,7 +17,7 @@ import { siteConfig } from '@/lib/site';
 import { getPageNeighbours, getTopicTabs } from '@/lib/page-navigation';
 import { DocsPager, TopicTabs } from '@/components/layouts/page-navigation';
 import { Mat221SourceShell } from '@/features/courses/mat221/compat/source-shell';
-import { PageDownloadActions } from '@/components/learning/page-download-actions';
+import { PageDownloadActions, getCsi247StudyGuides } from '@/components/learning/page-download-actions';
 import { FullStudyChapters, getFullChapters, getChapterToc } from '@/features/courses/csi247/study-guides/chapter';
 import {
   Callout as Mat221SourceCallout,
@@ -40,6 +40,8 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const imageUrl = new URL(getPageImage(page).url, siteConfig.url).toString();
   const isMat221 = page.url === '/docs/sem3/mat221' || page.url.startsWith('/docs/sem3/mat221/');
   const isCsi247 = page.url === '/docs/sem3/csi247' || page.url.startsWith('/docs/sem3/csi247/');
+  // The guide downloads sit in the page body, not the "On this page" footer, which is a collapsed popover on phones.
+  const hasStudyGuides = isCsi247 && getCsi247StudyGuides(page.url).length > 0;
   const fullChapters = isCsi247 ? getFullChapters(page.url) : [];
   const hasCustomEntryHeader = page.url === '/docs' || page.url === '/docs/study-tools' || isMat221;
   const pageActions = hasCustomEntryHeader ? undefined : (
@@ -49,7 +51,6 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
         markdownUrl={markdownUrl}
         githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
       />
-      {isCsi247 && <PageDownloadActions pageUrl={page.url} />}
     </div>
   );
   const mdxComponents = getMDXComponents({
@@ -100,6 +101,7 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
       {!hasCustomEntryHeader && <>
         <DocsTitle>{page.data.title}</DocsTitle>
         <DocsDescription>{page.data.description}</DocsDescription>
+        {hasStudyGuides && <div className="ui-page-actions mb-6"><PageDownloadActions pageUrl={page.url} /></div>}
       </>}
       {isMat221 ? <Mat221SourceShell pageUrl={page.url}><MDX components={mdxComponents} /></Mat221SourceShell> : fullChapters.length ? <FullStudyChapters chapters={fullChapters} /> : <DocsBody><MDX components={mdxComponents} /></DocsBody>}
       <DocsPager neighbours={getPageNeighbours(page.url)} />
