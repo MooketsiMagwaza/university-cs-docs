@@ -4,7 +4,8 @@ import { usePathname } from 'next/navigation';
 import { Check, ChevronLeft, ChevronRight, RotateCcw, X } from 'lucide-react';
 import { hashText, pickMessage, quizTone } from '@/features/progress/core';
 import { messages, useRecord } from '@/features/progress';
-import { MathText } from './math-text';
+import { CodeWindow } from './code-window';
+import { RichText } from './rich-text';
 
 type Question = {
   /** A stable id. Without one, an id is derived from the question text. */
@@ -29,21 +30,12 @@ type Question = {
 
 type Prepared = Question & { qid: string; groupName: string };
 
-/** Renders `inline code` spans as <code> and passes everything else through MathText. */
-const RichText = ({ text }: { text: string }) => {
-  const parts = text.split(/(`[^`\n]+`)/g);
-  return (
-    <>
-      {parts.map((part, index) =>
-        part.length > 2 && part.startsWith('`') && part.endsWith('`') ? (
-          <code key={index}>{part.slice(1, -1)}</code>
-        ) : (
-          <MathText key={index} text={part} />
-        ),
-      )}
-    </>
-  );
-};
+/** The language of a question's `code`, from the course in the page path; the window names itself "Code" when unknown. */
+function codeLanguage(pathname: string): string | undefined {
+  if (pathname.includes('/csi243/')) return 'haskell';
+  if (/\/(csi141|csi142|csi247)\//.test(pathname)) return 'java';
+  return undefined;
+}
 
 const DEFAULT_GROUP = 'All questions';
 /** The "how many" menu appears only for quizzes longer than this. */
@@ -282,7 +274,15 @@ export function Quiz({ title = 'Knowledge check', questions = [], quizKey }: Qui
           </div>
         )}
         <p className="ui-quiz-prompt qz-prompt"><RichText text={question.question} /></p>
-        {question.code && <pre className="ui-quiz-code"><code>{question.code}</code></pre>}
+        {question.code && (
+          <CodeWindow language={codeLanguage(pathname)} text={question.code} numbered className="ui-quiz-code">
+            <code>
+              {question.code.replace(/\n$/, '').split('\n').map((line, index) => (
+                <span key={index} className="line">{line}</span>
+              ))}
+            </code>
+          </CodeWindow>
+        )}
         <div className="ui-quiz-options" role="radiogroup" aria-label={`Question ${position + 1}`}>
           {question.options.map((option, optionIndex) => {
             const state = optionState(optionIndex);

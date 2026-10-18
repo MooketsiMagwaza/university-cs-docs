@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Code2, Play, X } from 'lucide-react';
 import { LANGUAGE_META } from '@/lib/playground/examples';
 import type { PlaygroundLanguage } from '@/lib/playground/runners';
 import { CodePlayground } from './code-playground';
+import { RunnableCode, tryItParts } from './runnable-code';
 
 type CodeTryItProps = {
   language: PlaygroundLanguage;
-  code: string;
+  /** The program, as a fenced block inside the tag. Written as `code="…"` it loses its indentation in MDX. */
+  children?: ReactNode;
+  code?: string;
   title?: string;
   description?: string;
   stdin?: string;
@@ -16,15 +19,26 @@ type CodeTryItProps = {
   seed?: string;
 };
 
-/** A static code sample with a "Try it Yourself" button that opens an editable, runnable copy. */
-export function CodeTryIt({
+/**
+ * A Try it yourself example for the notes. JavaScript, Python and SQL run where they stand in a code window; HTML needs
+ * a rendered preview, so it keeps the static sample with a button that opens the playground.
+ */
+export function CodeTryIt(props: CodeTryItProps) {
+  const parts = tryItParts(props.children);
+  const code = props.code ?? parts.code;
+  if (props.language === 'html') return <HtmlTryIt {...props} code={code} />;
+  return <RunnableCode language={props.language} code={code} expected={parts.output} stdin={props.stdin} seed={props.seed} />;
+}
+
+/** A static HTML sample with a "Try it Yourself" button that opens an editable, runnable copy. */
+function HtmlTryIt({
   language,
   code,
   title = 'Try it yourself',
   description = 'Change the example, run it, and compare the result with your prediction.',
   stdin,
   seed,
-}: CodeTryItProps) {
+}: CodeTryItProps & { code: string }) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (isOpen) {

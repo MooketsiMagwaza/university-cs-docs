@@ -164,18 +164,29 @@ discountedRate = taxRate - 0.02
 ghci> taxRate
 0.14
 ghci> discountedRate
-0.12
+0.12000000000000001
 ghci> taxRate
 0.14
 ```
 
-Reading `taxRate` a second time, after `discountedRate` has already used it, gives the same `0.14` as before. Nothing about defining `discountedRate` in terms of `taxRate` put `taxRate` itself at risk of changing.
+GHC shows `0.12000000000000001` rather than `0.12` because a `Double` cannot store 0.14 or 0.02 exactly; that is rounding, not mutation. Reading `taxRate` a second time, after `discountedRate` has already used it, gives the same `0.14` as before. Nothing about defining `discountedRate` in terms of `taxRate` put `taxRate` itself at risk of changing.
 
 ### Why `let x = 3` followed by `let x = 4` is allowed
 
 This is the point where the word **scope** becomes essential. Immutability says one binding cannot change its value. It does **not** say the same spelling can never be used for a different binding.
 
 At the GHCi prompt, these commands are accepted back to back:
+
+<HaskellTryIt session>
+
+```haskell
+let x = 3
+let oldX = x
+let x = 4
+x
+oldX
+(oldX, x)
+```
 
 ```text
 ghci> let x = 3
@@ -188,6 +199,8 @@ ghci> oldX
 ghci> (oldX, x)
 (3,4)
 ```
+
+</HaskellTryIt>
 
 There are now two distinct bindings that happen to use the name `x`. It helps to imagine that the compiler gives them invisible identities:
 
@@ -218,6 +231,8 @@ The inner `x` exists only inside its `let ... in ...` expression. Before that in
 
 Sequential `let` statements in a `do` block use the same idea:
 
+<HaskellTryIt>
+
 ```haskell
 main :: IO ()
 main = do
@@ -226,6 +241,8 @@ main = do
   let x = 4
   print (oldX, x)  -- (3,4)
 ```
+
+</HaskellTryIt>
 
 Each later statement can see names introduced above it. The second `x` begins a newer binding for the statements below; it does not modify the first one. By contrast, writing two definitions for `x` inside the **same declaration group** is not shadowing and is rejected as a duplicate definition:
 
@@ -240,13 +257,17 @@ Use shadowing sparingly in ordinary source files. It is legal and sometimes usef
 
 <HaskellTryIt
   title="Try shadowing without mutation"
-  description="oldX keeps the earlier value. Change either number, run again, and explain why the pair contains both values."
-  code={`main = do
+  description="oldX keeps the earlier value. Change either number, run again, and explain why the pair contains both values.">
+
+```haskell
+main = do
   let x = 3
   let oldX = x
   let x = 4
-  print (oldX, x)`}
-/>
+  print (oldX, x)
+```
+
+</HaskellTryIt>
 
 <QuizRef src="sem3/csi243/01-functional-thinking/notes/functional-thinking" id="check-immutability" />
 
@@ -261,6 +282,8 @@ Use shadowing sparingly in ordinary source files. It is legal and sometimes usef
 
 Effects are not bad. Hidden and uncontrolled effects are difficult to reason about. Haskell marks an action with a type such as `IO ()` or `IO String`.
 
+<HaskellTryIt>
+
 ```haskell
 -- Pure: creates the message as a String.
 greeting :: String -> String
@@ -272,11 +295,11 @@ main = do
   putStrLn (greeting "Naledi")
 ```
 
-Expected output:
-
 ```text
 Hello, Naledi
 ```
+
+</HaskellTryIt>
 
 The design keeps the reusable rule `greeting` independent of the terminal. It can be tested without performing input or output.
 
@@ -292,6 +315,8 @@ The design keeps the reusable rule `greeting` independent of the terminal. It ca
 
 `greeting` never appears on the effectful side of that boundary, no matter how the program grows. Two more pairs, built the same way:
 
+<HaskellTryIt>
+
 ```haskell
 -- Pure: builds the report text from already-known values.
 report :: String -> Integer -> String
@@ -306,6 +331,10 @@ main = putStrLn (report "Naledi" 82)
 Naledi scored 82
 ```
 
+</HaskellTryIt>
+
+<HaskellTryIt>
+
 ```haskell
 -- Pure: works out how many days remain, given two day-of-year numbers.
 daysRemaining :: Integer -> Integer -> Integer
@@ -319,6 +348,8 @@ main = print (daysRemaining 100 130)
 ```text
 30
 ```
+
+</HaskellTryIt>
 
 In both cases the pure function — `report`, `daysRemaining` — could be tested directly at the GHCi prompt with no `main` involved at all:
 
@@ -336,6 +367,8 @@ Only the last line of each program, the one that calls `putStrLn` or `print`, is
 ## Function composition
 
 Composition connects the output of one function to the input of another, using the `.` operator. `(f . g) x` means `f (g x)`: run `g` first, then feed its result into `f`.
+
+<HaskellTryIt>
 
 ```haskell
 import Data.Char (toUpper)
@@ -355,6 +388,8 @@ main = putStrLn (shout "training complete")
 ```text
 TRAINING COMPLETE!
 ```
+
+</HaskellTryIt>
 
 Read `f . g` from right to left: `shout` first applies `map toUpper` (the right-hand function), then feeds that whole result into `addEmphasis` (the left-hand function). `map` reappears here doing the same job as before — applying `toUpper` to every character of the string. Everything in this example is a real Prelude function or an ordinary top-level definition, so it can be typed into a file exactly as shown and run.
 

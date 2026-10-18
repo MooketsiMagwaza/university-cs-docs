@@ -1,0 +1,464 @@
+---
+title: "Zip and zipWith"
+description: "Walk two lists together with zip and zipWith, explain why they stop with the shorter list, build both by hand, and use them for pairs, positions, differences, and dot products."
+---
+
+`map` and `filter` each look at one list. Many problems have **two lists that line up position by position**: names and marks, prices and quantities, this week's reading and last week's. This lesson gives you the functions for that, `zip` and `zipWith`, shows that you can write both yourself with the two-list recursion from Chapter 6, and puts them to work on four jobs that keep coming back: pairing, numbering, comparing neighbours, and dot products.
+
+<LearningObjectives items={[
+  'Pair two lists with zip, split pairs apart with unzip, and say what happens when the lists differ in length',
+  'Read the signature of zipWith and combine two lists with any two-argument function',
+  'Explain why both functions stop with the shorter list, and why that makes zip [1..] safe',
+  'Write zip and zipWith by hand and show how they relate to map',
+  'Choose between map, zip and zipWith for a problem about one list or two',
+]} />
+
+## 1. Pairing with `zip`
+
+`zip` walks two lists together and puts the elements at the same position into a pair:
+
+```haskell
+zip :: [a] -> [b] -> [(a, b)]
+```
+
+<KeyTerm title="zip">Takes two lists and returns a list of pairs: the two first elements together, then the two second elements, and so on. It stops as soon as either list runs out.</KeyTerm>
+
+The two lists may hold different types, because the pair `(a, b)` can:
+
+<HaskellTryIt session>
+
+```haskell
+zip [1,2,3] "abc"
+zip ["Kago","Naledi"] [44,94]
+```
+
+```text
+ghci> zip [1,2,3] "abc"
+[(1,'a'),(2,'b'),(3,'c')]
+ghci> zip ["Kago","Naledi"] [44,94]
+[("Kago",44),("Naledi",94)]
+```
+
+</HaskellTryIt>
+
+When one list is longer, the extra elements have nothing to pair with and are dropped. Change a list below and see where the pairing stops:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (zip [1,2,3] "abc")
+  print (zip [1,2,3] "ab")
+  print (zip "abc" [True,False,True])
+```
+
+```text
+[(1,'a'),(2,'b'),(3,'c')]
+[(1,'a'),(2,'b')]
+[('a',True),('b',False),('c',True)]
+```
+
+</HaskellTryIt>
+
+Stopping with the shorter list is also what makes this safe with an infinite list. `zip` asks each list for one element at a time, and `"abc"` runs out after three, so `[1..]` is only ever asked for three:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (zip [1..] "abc")
+  print (zip [0..] ["x","y","z"])
+```
+
+```text
+[(1,'a'),(2,'b'),(3,'c')]
+[(0,"x"),(1,"y"),(2,"z")]
+```
+
+</HaskellTryIt>
+
+`zip [1..]` (or `zip [0..]`) is the standard way to number the items of a list.
+
+## 2. Taking pairs apart with `unzip`
+
+`unzip` goes the other way. It takes a list of pairs and returns **one pair of lists**:
+
+```haskell
+unzip :: [(a, b)] -> ([a], [b])
+```
+
+<HaskellTryIt session>
+
+```haskell
+unzip [(1,'a'),(2,'b'),(3,'c')]
+```
+
+```text
+ghci> unzip [(1,'a'),(2,'b'),(3,'c')]
+([1,2,3],"abc")
+```
+
+</HaskellTryIt>
+
+`unzip (zip xs ys)` gives back `xs` and `ys` only when they have the same length. If one was longer, `zip` already dropped its extra elements and `unzip` cannot bring them back:
+
+<HaskellTryIt session>
+
+```haskell
+unzip (zip [1,2,3] "ab")
+```
+
+```text
+ghci> unzip (zip [1,2,3] "ab")
+([1,2],"ab")
+```
+
+</HaskellTryIt>
+
+## 3. Combining with a rule: `zipWith`
+
+`zip` always builds a pair. Often you want something else from each pair, such as their sum. `zipWith` takes the rule as its first argument:
+
+```haskell
+zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+```
+
+<KeyTerm title="zipWith">Takes a function of two arguments and two lists, and applies the function to the elements at the same position, giving a list of the results. Like `zip`, it stops with the shorter list.</KeyTerm>
+
+In words: `zipWith` takes **a rule for combining one element from the first list with one element from the second list into a single result**, plus the two lists, and walks them together, first with first, second with second, and so on.
+
+<HaskellTryIt session>
+
+```haskell
+zipWith (+) [1,2,3] [10,20,30]
+zipWith (*) [1,2,3] [4,5,6]
+zipWith max [1,9,3] [5,2,8]
+zipWith (+) [1,2,3] [10,20]
+```
+
+```text
+ghci> zipWith (+) [1,2,3] [10,20,30]
+[11,22,33]
+ghci> zipWith (*) [1,2,3] [4,5,6]
+[4,10,18]
+ghci> zipWith max [1,9,3] [5,2,8]
+[5,9,8]
+ghci> zipWith (+) [1,2,3] [10,20]
+[11,22]
+```
+
+</HaskellTryIt>
+
+The rule can be a named function, an operator, or a lambda, and it does not have to keep the types of its inputs. Try a rule of your own:
+
+<HaskellTryIt>
+
+```haskell
+combine :: Int -> Int -> Int
+combine x y = x * 10 + y
+
+main :: IO ()
+main = do
+  print (zipWith combine [1,2,3] [4,5,6])
+  print (zipWith (+) [1,2,3] [10,20])
+  print (zipWith (\n s -> s ++ show n) [1,2,3] ["a","b","c"])
+```
+
+```text
+[14,25,36]
+[11,22]
+["a1","b2","c3"]
+```
+
+</HaskellTryIt>
+
+The last rule mixes a number and a string into one string. No operator section can say that, because it needs `show` and then `++`, two operations on two different types, which is exactly what a lambda (or a small named function) is for.
+
+## 4. Writing `zip` and `zipWith` yourself
+
+Both use the two-list recursion from Chapter 6. Either list can run out first, so **both empty-list equations are needed**:
+
+```haskell
+myZip :: [a] -> [b] -> [(a, b)]
+myZip [] _ = []
+myZip _ [] = []
+myZip (x:xs) (y:ys) = (x, y) : myZip xs ys
+```
+
+`zipWith` changes only what happens to each pair. Instead of building `(x, y)`, it applies the rule it was given:
+
+```haskell
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+```
+
+Trace `myZipWith (+) [1,2,3] [10,20]`. The first step emits `1 + 10`, the second emits `2 + 20`, and the second list then matches `[]`, so the result is `[11,22]`. The unused `3` is never passed to the rule. Run it, and change the lists to see the other equation fire:
+
+<HaskellTryIt>
+
+```haskell
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+
+main :: IO ()
+main = do
+  print (myZipWith (+) [1,2,3] [10,20])
+  print (myZipWith (\a b -> a ++ "-" ++ b) ["x","y"] ["1","2","3"])
+```
+
+```text
+[11,22]
+["x-1","y-2"]
+```
+
+</HaskellTryIt>
+
+## 5. How `zip`, `zipWith` and `map` fit together
+
+The three are one idea at different levels:
+
+```haskell
+zip = zipWith (,)
+
+zipWith f xs ys = map (uncurry f) (zip xs ys)
+```
+
+`(,)` is the function that builds a pair, so `zipWith (,)` is `zip`. And `uncurry f` turns a function of two arguments, `f :: a -> b -> c`, into a function of one pair, `(a, b) -> c`, which is exactly what `map` needs once `zip` has built the list of pairs. Both routes give the same answer:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (zipWith (+) [1,2,3] [10,20,30])
+  print (map (uncurry (+)) (zip [1,2,3] [10,20,30]))
+  print (zipWith (,) [1,2,3] "abc")
+```
+
+```text
+[11,22,33]
+[11,22,33]
+[(1,'a'),(2,'b'),(3,'c')]
+```
+
+</HaskellTryIt>
+
+## 6. Four jobs for `zip` and `zipWith`
+
+### Pairing names with marks
+
+The curved marks from the grades example in [Mapping and Filtering](/docs/sem3/csi243/07-higher-order/notes/map-and-filter) pair naturally with the students they belong to:
+
+<HaskellTryIt>
+
+```haskell
+students :: [String]
+students = ["Kago", "Naledi", "Thabo", "Lerato", "Mpho", "Boitumelo", "Sipho", "Refilwe"]
+
+curved :: [Int]
+curved = [44, 94, 37, 71, 53, 97, 51, 78]
+
+report :: String -> Int -> String
+report name mark = name ++ ": " ++ show mark
+
+main :: IO ()
+main = do
+  putStrLn "Student reports:"
+  mapM_ putStrLn (zipWith report students curved)
+```
+
+```text
+Student reports:
+Kago: 44
+Naledi: 94
+Thabo: 37
+Lerato: 71
+Mpho: 53
+Boitumelo: 97
+Sipho: 51
+Refilwe: 78
+```
+
+</HaskellTryIt>
+
+`zipWith report students curved` walks the two lists together, giving `report` its name from `students` and its mark from `curved`. `mapM_ putStrLn` then performs one output action for each resulting string; Chapter 9 covers `mapM_` properly.
+
+### Numbering a list
+
+`zip [1..]` pairs each item with its position, and `zipWith` turns each pair into a line:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = mapM_ putStrLn (zipWith (\n item -> show n ++ ". " ++ item) [1..] ["apples", "bread", "milk"])
+```
+
+```text
+1. apples
+2. bread
+3. milk
+```
+
+</HaskellTryIt>
+
+### Comparing neighbours
+
+To compare each element with the one before it, pair the list with **itself shifted by one place**. `drop 1 readings` is the list without its first element, so the second element of the shifted list meets the first of the original, and so on:
+
+<HaskellTryIt>
+
+```haskell
+readings :: [Int]
+readings = [10, 13, 12, 18, 25]
+
+differences :: [Int] -> [Int]
+differences xs = zipWith (-) (drop 1 xs) xs
+
+isSorted :: [Int] -> Bool
+isSorted xs = and (zipWith (<=) xs (drop 1 xs))
+
+main :: IO ()
+main = do
+  print (differences readings)
+  print (isSorted [1,2,2,5])
+  print (isSorted [3,1,2])
+  print (isSorted [])
+```
+
+```text
+[3,-1,6,7]
+True
+False
+True
+```
+
+</HaskellTryIt>
+
+The shifted list is one shorter, so `differences` gives one fewer result than there are readings. Use `drop 1` rather than `tail`: `tail []` is an error, while `drop 1 []` is just `[]`, which is why `isSorted []` is `True` instead of a crash.
+
+### The dot product
+
+Multiply the matching elements, then add them up. This is how you total prices times quantities, and it is the dot product from vectors:
+
+<HaskellTryIt>
+
+```haskell
+dot :: [Int] -> [Int] -> Int
+dot xs ys = sum (zipWith (*) xs ys)
+
+main :: IO ()
+main = do
+  print (dot [1,2,3] [4,5,6])
+  print (dot [2,3] [10,5])
+```
+
+```text
+32
+35
+```
+
+</HaskellTryIt>
+
+## 7. Which one do I need?
+
+| The problem | Use |
+|---|---|
+| Change every element of one list | `map` |
+| Keep some elements of one list | `filter` |
+| Match up two lists, keeping both values | `zip` |
+| Turn two matching elements into one result | `zipWith` |
+| Number the items of a list | `zip [1..]` |
+| Compare each element with its neighbour | `zipWith f (drop 1 xs) xs` |
+| Split a list of pairs into two lists | `unzip` |
+
+## 8. Common mistakes
+
+| Attempt | Problem | Repair |
+|---|---|---|
+| `zipWith (+) [1,2,3] [1,2]` expected to give three results | It stops with the shorter list | Check the lengths first, or accept the shorter result |
+| `zip xs ys` where the two lists should be joined end to end | `zip` pairs elements; `++` joins lists | Use `xs ++ ys` |
+| `zipWith (+) xs` with the second list forgotten | The result is a function waiting for its second list, so printing it fails | Pass both lists |
+| `zipWith (-) (tail xs) xs` on a possibly empty list | `tail []` is an error | Use `drop 1 xs` |
+| `unzip (zip xs ys)` expected to return `xs` and `ys` | Only true when the two lists have the same length | Check the lengths, or keep the originals |
+
+<Callout type="key" title="Remember">
+`zip` pairs two lists position by position; `zipWith f` applies a two-argument rule to each position instead of building a pair. Both stop with the shorter list, which makes `zip [1..]` safe. `zip`, `zipWith` and `map` are one idea: `zip = zipWith (,)` and `zipWith f xs ys = map (uncurry f) (zip xs ys)`.
+</Callout>
+
+## Practice
+
+Predict each result before running it.
+
+1. `zip [1,2,3] "xy"`
+2. `zipWith (-) [10,20,30] [1,2,3]`
+3. `zipWith max [3,1,4] [2,7,1]`
+4. `unzip [(1,'a'),(2,'b')]`
+5. `zip [1..] "ab"`
+
+Then write:
+
+6. `pairs :: [a] -> [(a, a)]` pairing each element with the next, so `pairs [1,2,3,4]` is `[(1,2),(2,3),(3,4)]`.
+7. `totals :: [Int] -> [Int] -> [Int]` multiplying prices by quantities, so `totals [2,3] [10,5]` is `[20,15]`.
+8. `indexed :: [a] -> [(Int, a)]` pairing each element with its position from 0, so `indexed "abc"` is `[(0,'a'),(1,'b'),(2,'c')]`.
+9. `differences :: [Int] -> [Int]`, the gaps between neighbours, so `differences [10,13,12,18]` is `[3,-1,6]`.
+
+<details>
+<summary>Show the answers</summary>
+
+**1 to 5.** `[(1,'x'),(2,'y')]`, `[9,18,27]`, `[3,7,4]`, `([1,2],"ab")`, `[(1,'a'),(2,'b')]`.
+
+**6.**
+
+```haskell
+pairs :: [a] -> [(a, a)]
+pairs xs = zip xs (drop 1 xs)
+```
+
+**7.**
+
+```haskell
+totals :: [Int] -> [Int] -> [Int]
+totals = zipWith (*)
+```
+
+**8.**
+
+```haskell
+indexed :: [a] -> [(Int, a)]
+indexed = zip [0..]
+```
+
+**9.**
+
+```haskell
+differences :: [Int] -> [Int]
+differences xs = zipWith (-) (drop 1 xs) xs
+```
+
+</details>
+
+## Check your understanding
+
+<CheckQuestions>
+  <CheckQuestion question="What does zipWith (+) [1,2,3] [10,20] return, and why does it not fail?">
+    `[11,22]`. `zipWith` stops as soon as either list runs out, so the unpaired `3` is simply left out. Lists of different lengths are not an error.
+  </CheckQuestion>
+  <CheckQuestion question="Why is zip [1..] xs safe when xs is a short list, even though [1..] never ends?">
+    `zip` asks each list for one element at a time and stops when `xs` runs out, so `[1..]` is only ever asked for as many elements as `xs` has. Lazy evaluation never builds the rest.
+  </CheckQuestion>
+  <CheckQuestion question="To add two lists of prices element by element, would you use map, zip or zipWith?">
+    `zipWith (+)`. It takes two lists and a rule that turns each matching pair into one result. `map` works on one list, and `zip` would only build pairs without adding them.
+  </CheckQuestion>
+  <CheckQuestion question="Why does zipWith (-) (drop 1 xs) xs give the differences between neighbours?">
+    `drop 1 xs` is `xs` shifted one place, so each element is paired with the one before it in `xs`. The shifted list is one shorter, so the result has one fewer element than `xs`.
+  </CheckQuestion>
+</CheckQuestions>
+
+Continue with [Folds and Function Composition](/docs/sem3/csi243/07-higher-order/notes/folds-and-composition).
