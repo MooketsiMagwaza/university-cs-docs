@@ -97,9 +97,10 @@ Every topic's `index.mdx` (the Overview tab) has the same sections in the same o
 3. **`<LearningObjectives items={[...]} />`** (it draws its own "Learning objectives" heading): three to six outcomes, each starting with a verb (Explain, Write, Trace, Compare, Prove), the same outcomes the notes teach and Practice tests.
 4. **`<Prerequisites items={[...]} />`** (it draws its own "Prerequisites" heading): the earlier topics or skills this one assumes, named in plain text (the items are strings, not links), or "Nothing beyond the start of the course" for a first topic.
 5. **`## Visual study map`** (optional): the topic's canvas or diagram, when it has one.
-6. **`## Pages in this topic`**: a table with one row for each lesson in Notes (in order, with the question it answers) and one for each of Cheat sheet, Review, Practice and Resources that exists.
+6. **`## Key ideas`** (optional): the one or two ideas the topic turns on, in about a screen: a short table, a comparison or a small code example, with no exercise. It does not repeat a lesson; it says what to carry from one lesson to the next.
+7. **`## Pages in this topic`**: a table with one row for each lesson in Notes (in order, with the question it answers) and one for each of Cheat sheet, Review, Practice and Resources that exists.
 
-An Overview holds no lesson content, quiz or exercise. A longer introduction from an older page moves into the first lesson. The audit reports `overview-title` and `overview-layout`.
+An Overview holds no lesson, quiz or exercise. A longer introduction from an older page moves into the first lesson. The audit reports `overview-title` and `overview-layout`.
 
 ### 2.2 Notes page template
 
