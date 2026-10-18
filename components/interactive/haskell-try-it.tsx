@@ -9,6 +9,8 @@ type HaskellTryItProps = {
   code?: string;
   /** What the program reads when it asks for input (getLine and friends). The reader can change it in the Input box. */
   input?: string;
+  /** The code is a GHCi session: one command per line (a leading `ghci>` is allowed), and the output is the transcript. */
+  session?: boolean;
   /** Kept so older notes still pass them; the code window names itself. */
   title?: string;
   description?: string;
@@ -25,7 +27,7 @@ type HaskellTryItProps = {
  *
  *     </HaskellTryIt>
  */
-export function HaskellTryIt({ children, code, input }: HaskellTryItProps) {
+export function HaskellTryIt({ children, code, input, session }: HaskellTryItProps) {
   const parts = tryItParts(children);
-  return <RunnableCode language="haskell" code={code ?? parts.code} expected={parts.output} stdin={input} />;
+  return <RunnableCode language="haskell" code={code ?? parts.code} expected={parts.output} stdin={input} session={session} />;
 }

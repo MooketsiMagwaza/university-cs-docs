@@ -2,6 +2,7 @@
 
 import { Play, RotateCcw } from 'lucide-react';
 import { Children, isValidElement, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { runSession, sessionCommands, transcriptStream } from '@/lib/ghci-session';
 import { runJava } from '@/lib/java-playground/runner';
 import { getPlaygroundData } from '@/lib/playground/data';
 import { runInWorker, type SqlTable } from '@/lib/playground/runners';
@@ -9,7 +10,8 @@ import { CodeWindow, nodeText } from './code-window';
 
 export type RunnableLanguage = 'haskell' | 'java' | 'javascript' | 'python' | 'sql';
 
-type Line = { stream: 'out' | 'err' | 'info'; text: string };
+/** `in` is a GHCi prompt line (`ghci> 3 + 4`); `out` is what the program printed. */
+type Line = { stream: 'in' | 'out' | 'err' | 'info'; text: string };
 type Outcome = { ok: boolean; lines: Line[]; tables: SqlTable[]; elapsedMs: number };
 
 const LABELS: Record<RunnableLanguage, string> = {
@@ -27,9 +29,17 @@ const info = (text: string): Line => ({ stream: 'info', text });
 async function execute(
   language: RunnableLanguage,
   code: string,
-  options: { stdin?: string; prelude?: string },
+  options: { stdin?: string; prelude?: string; session?: boolean },
   onStatus: (text: string) => void,
 ): Promise<Outcome> {
+  if (language === 'haskell' && options.session) {
+    const { runHaskellWithInput } = await import('@/lib/haskell-simulator');
+    const result = runSession(sessionCommands(code), (source) => runHaskellWithInput(source, ''));
+    const lines: Line[] = result.lines.map((line) => ({ stream: line.stream, text: line.text }));
+    if (result.failure?.hint) lines.push(info(`Hint: ${result.failure.hint}`));
+    return { ok: result.ok, lines, tables: [], elapsedMs: result.elapsedMs };
+  }
+
   if (language === 'haskell') {
     // The interpreter is a large module, so it is fetched when someone first presses Run, not with every page.
     const { runHaskellWithInput } = await import('@/lib/haskell-simulator');
@@ -82,6 +92,8 @@ type RunnableCodeProps = {
   code: string;
   /** The output the page shows for this program; it appears in the Output window until the first run. */
   expected?: string;
+  /** Haskell only: the code is a GHCi session (one command per line), and the output is the transcript. */
+  session?: boolean;
   /** Input the program reads (Python input(), for example). */
   stdin?: string;
   /** Id of a seed dataset (content/playground-data) that runs first, for the SQL, Python and JavaScript examples. */
@@ -92,7 +104,8 @@ type RunnableCodeProps = {
  * A "Try it yourself" example that runs where it stands: a code window with an editable program, Run and Reset
  * buttons, and the Output panel joined beneath it. Ctrl or Cmd + Enter runs it.
  */
-export function RunnableCode({ language, code, expected, stdin, seed }: RunnableCodeProps) {
+export function RunnableCode({ language, code, expected, session, stdin, seed }: RunnableCodeProps) {
+  const label = session && language === 'haskell' ? 'GHCi session' : LABELS[language];
   const [text, setText] = useState(code);
   const [input, setInput] = useState(stdin ?? '');
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -111,7 +124,7 @@ export function RunnableCode({ language, code, expected, stdin, seed }: Runnable
     setRunning(true);
     setStatus('');
     try {
-      const result = await execute(language, text, { stdin: input, prelude }, setStatus);
+      const result = await execute(language, text, { stdin: input, prelude, session }, setStatus);
       if (id === latestRun.current) setOutcome(result);
     } finally {
       if (id === latestRun.current) {
@@ -158,7 +171,7 @@ export function RunnableCode({ language, code, expected, stdin, seed }: Runnable
       <CodeWindow
         kind="code"
         language={language}
-        name={LABELS[language]}
+        name={label}
         tag="Try it yourself"
         text={text}
         bare
@@ -187,12 +200,12 @@ export function RunnableCode({ language, code, expected, stdin, seed }: Runnable
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
-            aria-label={`${LABELS[language]} code you can change and run`}
+            aria-label={`${label} code you can change and run`}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={onKeyDown}
           />
         </div>
-        {readsInput(language, text) && (
+        {!session && readsInput(language, text) && (
           <label className="cw-stdin">
             <span>Input</span>
             <textarea
@@ -213,18 +226,18 @@ export function RunnableCode({ language, code, expected, stdin, seed }: Runnable
           </label>
         )}
       </CodeWindow>
-      <CodeWindow kind="output" name="Output" tag={outcome && !running ? `${outcome.elapsedMs < 10 ? outcome.elapsedMs.toFixed(1) : Math.round(outcome.elapsedMs)} ms` : undefined} text={outputText} bare live copyText={() => outputText}>
+      <CodeWindow kind="output" name={session ? 'GHCi' : 'Output'} tag={outcome && !running ? `${outcome.elapsedMs < 10 ? outcome.elapsedMs.toFixed(1) : Math.round(outcome.elapsedMs)} ms` : undefined} text={outputText} bare live copyText={() => outputText}>
         <div className="cw-out">
           {running ? (
             <p className="cw-out-note">{status || 'Running…'}</p>
           ) : !outcome && expected !== undefined ? (
             <>
               {expected.split('\n').map((line, index) => (
-                <div key={index} className="cw-ln" data-stream="out">
+                <div key={index} className="cw-ln" data-stream={session ? transcriptStream(line) : 'out'}>
                   {line}
                 </div>
               ))}
-              <p className="cw-out-note">This is the output shown for the program as written. Change the code and press Run, or Ctrl + Enter, to see yours.</p>
+              <p className="cw-out-note">{session ? 'This is the session as the page shows it. Change a command and press Run, or Ctrl + Enter, to see yours.' : 'This is the output shown for the program as written. Change the code and press Run, or Ctrl + Enter, to see yours.'}</p>
             </>
           ) : !outcome ? (
             <p className="cw-out-note">Press Run, or Ctrl + Enter, to see the output here. Tab adds spaces; press Esc and then Tab to leave the editor.</p>
