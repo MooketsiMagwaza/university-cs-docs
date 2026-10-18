@@ -73,14 +73,15 @@ Rules for folders and names:
 
 ### Chapter overview (`index.mdx`)
 
-Frontmatter with title `Chapter Overview`, then:
+Every chapter Overview follows the topic Overview layout in `docs/content-standard.md` section 2.1.2:
 
-- A short opening that says what the chapter is for and why it matters in the course.
-- A table of lessons in order: `| Order | Lesson | Main question |`, each lesson linked, each with the single question the lesson answers.
-- A line pointing to practice questions and review after the notes.
-- A `<Checklist>` of the chapter's key rules and a short list of chapter outcomes.
+- The title is the chapter's name as in its `meta.json` (never "Chapter Overview"), with a one-sentence description.
+- An opening paragraph of two or three sentences: what the chapter is for and why it matters.
+- `<LearningObjectives items={[...]} />`, three to six outcomes that start with a verb, then `<Prerequisites items={[...]} />`.
+- `## Visual study map` with the chapter's canvas, when it has one, and an optional `## Key ideas`.
+- `## Pages in this topic`: a two-column table with one row for every lesson in `notes/meta.json` (in order, with the question it answers), then Cheat sheet, Review, Practice and Resources where they exist.
 
-See `content/docs/sem3/csi243/05-recursion/index.mdx`.
+See `content/docs/sem3/csi243/05-recursion/index.mdx` and `content/docs/sem3/csi247/12-trees/index.mdx`.
 
 ### Lesson notes (`notes/*.mdx`)
 
