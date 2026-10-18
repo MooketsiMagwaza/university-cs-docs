@@ -39,6 +39,14 @@ import { BubbleSortStory, SelectionSortStory } from './interactive/simple-sort-s
 import { MergeSortStory } from './interactive/merge-sort-story';
 import { MergeComplexityFigure, MergeFrontWorkbench, MergeRecursionExplorer } from './interactive/merge-sort-deep-dive';
 import { PackageBuildStory, PackageFolderStory, PackageImportStory } from './interactive/package-stories';
+import { DistributionExplorer } from './interactive/distribution-explorer';
+import { Simulation } from './interactive/simulation';
+import { VennDiagram } from './interactive/venn-diagram';
+import { ProbabilityTree } from './interactive/probability-tree';
+import { CountingCalculator } from './interactive/counting-calculator';
+import { Visualise } from './interactive/function-visual';
+import { PredictReveal } from './interactive/predict-reveal';
+import { RegressionPlot } from './interactive/regression-plot';
 
 
 import { Callout } from './callouts/callout';
@@ -135,6 +143,14 @@ export function getMDXComponents(components?: MDXComponents) {
     PackageImportStory,
     PackageFolderStory,
     PackageBuildStory,
+    DistributionExplorer,
+    Simulation,
+    VennDiagram,
+    ProbabilityTree,
+    CountingCalculator,
+    Visualise,
+    PredictReveal,
+    RegressionPlot,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,

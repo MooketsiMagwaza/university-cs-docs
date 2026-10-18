@@ -130,7 +130,7 @@ Each question is an `ExamQuestion` with a Show solution button, the steps as `St
 
 Every fenced code block in the notes is rendered by `components/interactive/code-window.tsx` (the MDX `pre` in `components/mdx.tsx`), styled in `app/styles/code-window.css`. It has three window buttons, the language name (or the fence `title="File.java"`), a copy button, and line numbers from six lines (or with `lineNumbers` on the fence). The language comes from the `language-xxx` class that `rehypeCodeOptions: { addLanguageClass: true }` in `source.config.ts` adds.
 
-A `text` fence straight after code is that code's **Output** panel and joins the window above it; a `text` fence that starts with `ghci>`, `$ ` or `>>> ` is a session transcript and joins it the same way; any other `text` fence on its own is labelled Text. Code never wraps or clips: a long line scrolls sideways inside the window, which can be focused from the keyboard. The quiz `code` field and the flashcards do not use the window yet (TRY-01, TRY-07).
+A `text` fence straight after code is that code's **Output** panel and joins the window above it; a `text` fence that starts with `ghci>`, `$ ` or `>>> ` is a session transcript and joins it the same way; any other `text` fence on its own is labelled Text. Code never wraps or clips: a long line scrolls sideways inside the window, which can be focused from the keyboard. The quiz `code` field is a code window too (the language comes from the course in the page path), and `RichText` renders `inline code` in quiz text and on flashcards.
 
 ### Try it yourself
 
@@ -147,6 +147,182 @@ main = print [x * x | x <- [1..5]]
 
 </HaskellTryIt>
 ````
+
+## Distribution explorer
+
+`<DistributionExplorer />` (`components/interactive/distribution-explorer.tsx`, styled in `app/styles/explorer.css`) lets a reader pick a distribution, move its parameters with sliders, shade an interval with two more sliders, and read off the probability, the mean and the variance beside the formula. It draws the mass or density and the cumulative curve as SVG from the `--ui-*` tokens, and the maths is in `lib/stats/distributions.ts` (tested by `npm run test:distributions`).
+
+```mdx
+<DistributionExplorer family="binomial" start={{ n: 10, p: 0.5 }} />
+<DistributionExplorer families={["geometric", "negative-binomial"]} convention="failures" />
+```
+
+| Prop | Meaning |
+|---|---|
+| `family` | One of `binomial`, `poisson`, `geometric`, `negative-binomial`, `hypergeometric`, `uniform`, `exponential`, `normal` |
+| `families` | A list the reader can switch between (the first is shown first) |
+| `start` | Starting parameter values by key: `n`, `p`, `lambda`, `r`, `N`, `K`, `a`, `b`, `mu`, `sigma` |
+| `convention` | For the geometric and negative binomial only: `trials` (counts up to the success, STA122) or `failures` (counts the failures before it, CSI213 lesson 5.3) |
+
+Set the convention to match the lesson, because the two conventions give different values for the same experiment. The plot has a text description in its `aria-label`, and the readout beneath it gives the same numbers as text.
+
+## Simulation
+
+`<Simulation experiment="..." />` (`components/interactive/simulation.tsx`) runs an experiment 1, 10, 100 or 1000 trials at a time and draws the relative frequencies as bars beside the theoretical probabilities as markers, with a table of counts, relative frequencies and theory under it. It is for showing that frequencies settle on probabilities. The generator is seeded (`lib/stats/random.ts`, mulberry32), so a seed number repeats a run, and Reset starts again from the seed. The experiments are pure functions in `lib/stats/simulate.ts` (tested by `tests/unit/simulation.test.mjs`).
+
+```mdx
+<Simulation experiment="dice" />
+<Simulation experiment="binomial" start={{ n: 10, p: 0.3 }} />
+<Simulation experiment="monte-carlo" mode="conditional" start={{ threshold: 8 }} />
+<Simulation experiment="clt" start={{ sampleSize: 1 }} />
+```
+
+| Prop | Meaning |
+|---|---|
+| `experiment` | `coins` (count heads in several fair coins), `dice` (the sum of two dice), `binomial` (n attempts with success probability p), `lln` (the running frequency of heads, or the running mean of a die, against its limit), `clt` (a histogram of sample means from a skewed source, against the normal curve), `monte-carlo` (random points to estimate π, or a conditional probability from two dice) |
+| `mode` | Pins the version of `lln` (`coin` or `die`) or `monte-carlo` (`pi` or `conditional`). Leave it out and the reader gets a select |
+| `seed` | The starting seed, 2024 by default. The reader can type another |
+| `start` | Starting values: `coins`, `n`, `p`, `sampleSize`, `threshold` (the conditional probability asks for P(first die is 6 given the sum is at least `threshold`)) |
+
+Nothing random happens while the page renders: the first render is an empty run and numbers are drawn only in the click handlers, so the server and the browser agree. A run stops at 20,000 trials. The plot's `aria-label` and the readout and table give the result as text.
+
+## Venn diagram
+
+`<VennDiagram sets={2} />` (`components/interactive/venn-diagram.tsx`) shows two or three overlapping sets. The reader picks an expression from a select (`A ∩ B`, `(A ∪ B)′`, `A and B and not C` and so on), sees its regions shaded, types the number of elements in each region, and reads the count and the probability of the expression. It is for the set operations and De Morgan's laws, and for turning "and", "or" and "not" into counting. The set algebra is in `lib/stats/sets.ts` (tested by `tests/unit/sets-and-trees.test.mjs`).
+
+```mdx
+<VennDiagram sets={2} />
+<VennDiagram sets={3} expression="A and B and not C" notation="c" start={{ ABC: 5, none: 20 }} />
+```
+
+| Prop | Meaning |
+|---|---|
+| `sets` | 2 or 3 |
+| `expression` | The expression shown first, written in words as the menu writes it: `A and B`, `not (A or B)`, `A minus B`, `A and B and not C` |
+| `start` | Starting counts by region key: `A` (A only), `B`, `AB`, `none` (in no set), and for three sets `C`, `AC`, `BC`, `ABC` |
+| `notation` | How the complement is written in the formula: `bar` (CSI213, the default), `c` (STA122) or `prime` |
+
+Shading is not the only cue: the counts in shaded regions are bold, and the label and readout give the expression in words, in LaTeX and as a list of regions.
+
+## Probability tree
+
+`<ProbabilityTree />` (`components/interactive/probability-tree.tsx`) draws a two-stage tree. The reader types P(A), P(B | A) and P(B | not A) and sees the four joint probabilities, P(B) by total probability and P(A | B) by Bayes' theorem, with the formula and the numbers put into it. It is for conditional probability and the base-rate effect. The arithmetic is in `lib/stats/bayes.ts` (tested by `tests/unit/sets-and-trees.test.mjs`: P(A) = 0.01, P(B | A) = 0.95 and P(B | not A) = 0.1 give P(A | B) = 0.0876).
+
+```mdx
+<ProbabilityTree eventA="Disease" eventB="Positive test" start={{ a: 0.01, bGivenA: 0.95, bGivenNotA: 0.1 }} />
+```
+
+| Prop | Meaning |
+|---|---|
+| `eventA`, `eventB` | The names of the two events, shown in a line above the tree and in the sentence under the formula. The tree itself is labelled with the letters A and B |
+| `start` | `a`, `bGivenA`, `bGivenNotA`, each between 0 and 1 |
+| `notation` | How the complement is written in the formula: `bar` (the default), `c` or `prime` |
+
+## Counting calculator
+
+`<CountingCalculator />` (`components/interactive/counting-calculator.tsx`) counts arrangements and selections. The reader sets n and r, ticks "Order matters" and "Repetition allowed", and sees the count, the formula and the working with the numbers put in, and a table of all four counts for the same n and r. The numbers are BigInts (`lib/stats/counting.ts`), so they stay exact: C(52, 5) = 2,598,960. It is for choosing between P(n, r), C(n, r), n^r and C(n + r − 1, r).
+
+```mdx
+<CountingCalculator start={{ n: 52, r: 5 }} />
+<CountingCalculator start={{ n: 5, r: 3 }} ordered />
+```
+
+| Prop | Meaning |
+|---|---|
+| `start` | Starting `n` (1 to 60) and `r` (0 to 30) |
+| `ordered`, `repetition` | Start with "Order matters" or "Repetition allowed" ticked |
+
+Without repetition, an r larger than n has no arrangements, and the calculator says so instead of showing a formula that does not apply.
+
+## Visualise (maths pictures)
+
+`<Visualise kind="..." />` (`components/interactive/function-visual.tsx`, with the shared graph frame, sliders and function box in `graph-frame.tsx`, styled in `app/styles/maths-visuals.css`) gives the maths courses one interactive picture per idea. The function is written in x and read by a safe parser in `lib/maths/expression.ts` (numbers, `x`, `pi`, `e`, `+ - * / ^`, brackets, `sin cos tan exp ln sqrt abs`, and `2x` or `3(x+1)` for a product; it never uses `eval` or `Function`, and a bad expression gives a message in words instead of an error). The reader can edit the function, or pick another from the Examples menu. The numerical parts are in `lib/maths/{calculus,derivative,taylor,transform}.ts` and are tested by `tests/unit/maths.test.mjs` (`node --no-warnings --experimental-strip-types --test tests/unit/maths.test.mjs`).
+
+```mdx
+<Visualise kind="graph" fn="sqrt(x)" />
+<Visualise kind="limit" fn="(x^2 - 4)/(x - 2)" point={2} />
+<Visualise kind="tangent" fn="x^3 - 2*x" interval={[-2, 2]} point={0.5} />
+<Visualise kind="riemann" fn="x^2" interval={[0, 2]} rule="trapezoid" params={{ n: 4 }} />
+<Visualise kind="area-between" fn="2*x" fn2="x^2" interval={[0, 1]} />
+<Visualise kind="revolution" fn="2*x" fn2="x^2" interval={[0, 2]} />
+<Visualise kind="taylor" fn="ln(1 + x)" params={{ degree: 4 }} point={0.5} />
+```
+
+| Kind | What it shows | Readout |
+|---|---|---|
+| `graph` | $y = a\,f(b(x-c)) + d$ with four sliders, the graph of $f$ dashed, and a tracked point | the formula with the numbers put in, what changed, asymptotes or amplitude and period for the functions the notes use, the zeros |
+| `limit` | $f(a-h)$ and $f(a+h)$ as $h$ shrinks, with a table that grows | both sides, $f(a)$, and (once $h$ is small) whether the limit exists, with a hole drawn where there is one |
+| `tangent` | a secant through $(a, f(a))$ and $(a+h, f(a+h))$ turning into the tangent | secant slope, tangent slope, $f'(x)$ as a formula, the tangent line, the gap at $a+h$, and a message at a corner |
+| `riemann` | left, right, midpoint or trapezoid pieces under $f$ on $[a, b]$ | the sum, the exact integral, the error, and a table for n = 4, 10, 100, 1000 |
+| `area-between` | the region between $f$ and $g$, cut where they cross | the area, the integral or the pieces, the signed integral, where the curves meet, and a button that snaps $a$ and $b$ to them |
+| `revolution` | a side view of the solid cut into discs and an end view of one disc (a washer when `fn2` is given) | the volume integral and its value, the volume from $n$ discs, the disc at the chosen $x$ |
+| `taylor` | a function against its Taylor polynomial, with sliders for the degree, the centre and the point | the polynomial, its coefficients, the gap at the point, and where the series converges |
+
+| Prop | Meaning |
+|---|---|
+| `kind` | One of the seven kinds above. Any other value stops the build with a message |
+| `fn` | The function, for example `"x^3 - 2*x"`. For `taylor` it names the series: `"sin(x)"`, `"cos(x)"`, `"exp(x)"`, `"ln(1 + x)"` or `"1/(1 - x)"` |
+| `fn2` | The second function: the lower curve for `area-between`, the inner curve (the hole) for `revolution`; empty for none |
+| `interval` | `[a, b]` for `riemann`, `area-between` and `revolution`; the x range drawn for `tangent` |
+| `point` | Where the limit is taken (`limit`), where the tangent touches (`tangent`), the tracked x (`graph`), the x where the series is compared (`taylor`) |
+| `params` | Starting values: `a`, `b`, `c`, `d` (`graph`), `n` (`riemann`, `revolution`), `h` (`limit`, `tangent`; the nearest step on the slider is used), `degree` and `centre` (`taylor`) |
+| `rule` | `left`, `right`, `midpoint` or `trapezoid` (`riemann`) |
+| `view` | The window as `[xmin, xmax, ymin, ymax]`; left out, it is fitted to the function |
+
+Every plot has a text equivalent: its `aria-label` describes the picture and the numbers, and the readout under it (and the table, where there is one) gives the same values as text. Nothing random happens while the page renders, and every coordinate and printed number is rounded, so the server and the browser write the same HTML. Where a function is not defined (a pole, a log of a negative number) the curve is broken and the readout says so, and an integral of a function that blows up inside the interval is reported as not ordinary instead of being given a wrong number.
+
+## Predict, then reveal
+
+`<PredictReveal src="..." id="..." />` (`components/interactive/predict-reveal.tsx`, which reads the data on the server, and `predict-question.tsx`, the client part) asks the reader to commit to an answer before the answer and the explanation appear. The question is either a choice from options or a number with a stated tolerance; a number can be typed as `2.5`, `8/3` or `8pi/3` (the same safe parser reads it). After the reader presses *Lock in my prediction* the box says right or wrong and shows the explanation, and *Try again* clears it. Committing counts as opening a check question for the progress system. Nothing about the answer is drawn before that, though it is in the page data, as with the quizzes.
+
+```mdx
+<PredictReveal src="sem1/mat111/01-functions/notes" id="shift-direction" />
+```
+
+The questions live in JSON under `content/predict-data/`, mirroring the path of the page, and are loaded by `lib/predict-data.ts`. A wrong path, a missing id or a malformed question stops the build with a message that names the file and the fix. The maths is written with `$...$` (and `**bold**`, `` `code` ``) and is drawn in the browser.
+
+```json
+{
+  "predictions": {
+    "shift-direction": {
+      "type": "choice",
+      "question": "The graph of $y=f(x-3)$ is the graph of $y=f(x)$ moved. Which way?",
+      "options": ["3 units to the left", "3 units to the right", "3 units up"],
+      "correctIndex": 1,
+      "explanation": "Shown after the reader commits.",
+      "optionFeedback": ["Why option 1 is wrong.", "Correct.", "Why option 3 is wrong."]
+    },
+    "left-sum": {
+      "type": "number",
+      "question": "What is the left sum for $\\int_0^2 x^2\\,dx$ with 4 pieces?",
+      "answer": 1.75,
+      "tolerance": 0.001,
+      "unit": "square units",
+      "explanation": "Shown after the reader commits."
+    }
+  }
+}
+```
+
+`optionFeedback` and `unit` are optional; `tolerance` 0 means the exact value. In JSON a backslash is written twice (`\\int`). `tests/unit/maths.test.mjs` checks that every question in the folder is valid and that its stored answer matches a value worked out with the library, so a new question needs a check there.
+
+## Regression plot
+
+`<RegressionPlot points={[[1, 2], [2, 4], ...]} />` (`components/interactive/regression-plot.tsx`, maths in `lib/maths/regression.ts`, tested by `tests/unit/regression.test.mjs`) is a scatter plot with the least-squares line. The reader drags a point, or presses Tab to reach one and moves it with the arrow keys (Shift for four times the step, Delete to remove it), adds a point or an outlier with the buttons, removes one, and watches the slope, the intercept, $r$, $R^2$ and the sums of squares change, with the residuals drawn when the box is ticked. A table gives each point, its fitted value and its residual, which is also the text equivalent of the plot.
+
+```mdx
+<RegressionPlot points={[[1, 2], [2, 4], [3, 5], [4, 4], [5, 5]]} view={[0, 8, 0, 8]} residuals />
+```
+
+| Prop | Meaning |
+|---|---|
+| `points` | The starting points as `[x, y]` pairs |
+| `presets` | Other datasets as `{ label, points }`; the reader picks one from a menu and the starting data stays the first choice |
+| `view` | The window as `[xmin, xmax, ymin, ymax]`. Left out, it is chosen from the data with room around it; a point cannot be moved outside it, so give room when a question asks the reader to move a point far |
+| `residuals` | Start with the residuals drawn |
+| `xLabel`, `yLabel` | Names for the axes (default `x` and `y`) |
+
+If the points have the same x, or there are fewer than two, the plot says why there is no line, and when every y is equal the correlation is reported as not defined.
 
 ## Decoding the questions
 

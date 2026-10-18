@@ -1,0 +1,147 @@
+/* ───────── Maths pictures ─────────
+   components/interactive/{function-visual,regression-plot,predict-question}.tsx
+   Class names: mv-*. These reuse the dx-* classes of explorer.css (the card, the slider rows, the plots, the readout) and
+   the pic-* classes of pictures.css (the fields, the buttons row, the key and the table). Tokens only; the pictures are
+   SVG and take their colours from here. The curve being studied is ink; the second thing (a tangent, a second curve, the
+   Taylor polynomial, the fitted line) is red; dashes and shapes carry the difference as well, not colour alone. */
+
+/* the box where a function is typed */
+.mv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 0 0 12px; }
+.mv-example { margin: 0 0 10px; }
+.mv-fn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 10px; }
+.mv-fn-field { display: flex; align-items: center; gap: 8px; flex: 1 1 300px; min-width: 0; color: var(--ui-text-2); font: 500 13px var(--font-sans); }
+.mv-fn-field span { flex: none; white-space: nowrap; }
+.mv-fn-field input[type='text'],
+.mv-number input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 2px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-r-sm);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: 500 14px var(--font-mono);
+}
+.mv-fn-field input[aria-invalid='true'] { border-color: var(--ui-red); box-shadow: 0 0 0 1px var(--ui-red); }
+.mv-fn-field input:focus-visible,
+.mv-number input:focus-visible,
+.mv-option input:focus-visible { outline: 2px solid var(--ui-line); outline-offset: 2px; }
+.mv-error { flex-basis: 100%; margin: 0 0 8px; color: var(--ui-red); font: 500 12.5px/1.5 var(--font-sans); }
+
+/* the readout: one line of reading per row */
+.mv-readout { flex-direction: column; }
+.mv-readout > div { flex-wrap: wrap; }
+.mv-readout dt { min-width: 8em; }
+.mv-readout dd { min-width: 0; max-width: 100%; overflow-x: auto; font-family: var(--font-sans); }
+.mv-readout dd strong { font-family: var(--font-mono); }
+
+/* the plots */
+.mv-frame { fill: none; stroke: var(--ui-line); stroke-width: 1.5; }
+.mv-axis0 { stroke: var(--ui-line); stroke-width: 1.5; }
+.mv-base { fill: none; stroke: var(--ui-text-2); stroke-width: 2; stroke-dasharray: 6 5; stroke-linejoin: round; }
+.mv-curve-2 { fill: none; stroke: var(--ui-red); stroke-width: 2.25; stroke-linejoin: round; }
+.mv-asymptote { stroke: var(--ui-text-2); stroke-width: 1.25; stroke-dasharray: 2 5; }
+.mv-link { stroke: var(--ui-text-2); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.mv-guide { stroke: var(--ui-text-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.mv-dot { fill: var(--ui-blue); stroke: var(--ui-bg); stroke-width: 1.5; }
+.mv-dot-open { fill: var(--ui-bg); stroke: var(--ui-red); stroke-width: 2.5; }
+.mv-square { fill: var(--ui-bg); stroke: var(--ui-red); stroke-width: 2.5; }
+.mv-hole-dot { fill: var(--ui-bg); stroke: var(--ui-text); stroke-width: 2.5; }
+.mv-secant { fill: none; stroke: var(--ui-text-2); stroke-width: 2; stroke-dasharray: 7 5; }
+.mv-tangent { fill: none; stroke: var(--ui-red); stroke-width: 2.5; }
+.mv-piece { fill: var(--ui-blue-t); stroke: var(--ui-line); stroke-width: 1.25; }
+.mv-piece[data-neg] { fill: var(--ui-red-t); }
+.mv-piece[data-dense] { stroke-width: .5; }
+.mv-region { fill: var(--ui-blue-t); stroke: none; }
+.mv-hole { fill: var(--ui-surface); stroke: none; }
+.mv-outline { stroke: var(--ui-line); stroke-width: 1.5; }
+.mv-slice { fill: none; stroke: var(--ui-line); stroke-width: 1; opacity: .75; }
+.mv-cut { stroke: var(--ui-red); stroke-width: 2.5; }
+.mv-label { fill: var(--ui-text); font: 600 12px var(--font-sans); }
+/* The plot is drawn in a 640-wide box and scaled to its column, so on a phone the writing needs a larger size to stay readable. */
+@media (max-width: 900px) { .mv-label { font-size: 15px; } }
+@media (max-width: 520px) { .mv-label { font-size: 21px; } }
+
+/* the scatter plot: a point is a target you can drag or reach with the keyboard */
+.mv-point { cursor: grab; touch-action: none; outline: none; }
+.mv-point:active { cursor: grabbing; }
+.mv-hit { fill: transparent; }
+.mv-point .mv-dot { fill: var(--ui-blue); stroke: var(--ui-bg); stroke-width: 2; }
+.mv-point:focus-visible .mv-dot,
+.mv-point[data-selected] .mv-dot { stroke: var(--ui-red); stroke-width: 3.5; }
+.mv-fitline { stroke: var(--ui-red); stroke-width: 2.5; }
+.mv-residual { stroke: var(--ui-red); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.mv-centroid { fill: none; stroke: var(--ui-text); stroke-width: 2; }
+
+/* the key under a plot */
+.mv-key-f::before,
+.mv-key-g::before,
+.mv-key-base::before,
+.mv-key-secant::before,
+.mv-key-tangent::before,
+.mv-key-fit::before { width: 16px; height: 0; border-top: 2.5px solid var(--ui-text); vertical-align: 3px; }
+.mv-key-g::before,
+.mv-key-tangent::before,
+.mv-key-fit::before { border-top-color: var(--ui-red); }
+.mv-key-base::before,
+.mv-key-secant::before { border-top: 2.5px dashed var(--ui-text-2); }
+.mv-key-left::before,
+.mv-key-dot::before { width: 9px; height: 9px; border-radius: 50%; background: var(--ui-blue); }
+.mv-key-right::before { width: 9px; height: 9px; border: 2px solid var(--ui-red); background: var(--ui-bg); }
+.mv-key-hole::before { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ui-text); background: var(--ui-bg); }
+.mv-key-area::before,
+.mv-key-neg::before { width: 12px; height: 12px; border: 1.25px solid var(--ui-line); }
+.mv-key-area::before { background: var(--ui-blue-t); }
+.mv-key-neg::before { background: var(--ui-red-t); }
+.mv-key-centre::before { width: 0; height: 12px; border-left: 2px dotted var(--ui-text-2); }
+.mv-key-residual::before { width: 0; height: 12px; border-left: 2px dashed var(--ui-red); }
+.mv-key-centroid::before { content: '+'; margin-right: 5px; font: 700 15px/1 var(--font-mono); color: var(--ui-text); vertical-align: -1px; }
+
+/* predict, then reveal */
+.mv-predict .dx-head h4 { color: var(--ui-text-2); font: 600 12.5px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; }
+.mv-question { margin: 0 0 12px; color: var(--ui-text); font: 500 15px/1.6 var(--font-sans); }
+.mv-question p,
+.mv-reveal p { margin: 0 0 8px; }
+.mv-options { display: grid; gap: 8px; margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+.mv-options legend { margin: 0 0 6px; padding: 0; color: var(--ui-text-2); font: 500 12.5px var(--font-sans); }
+.mv-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-r-sm);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: 500 14px/1.5 var(--font-sans);
+  cursor: pointer;
+}
+.mv-option input { flex: none; width: 17px; height: 17px; margin-top: 3px; accent-color: var(--ui-blue); }
+.mv-option:has(input:checked) { border-color: var(--ui-line); }
+.mv-option[data-state='right'] { border-color: var(--ui-green); background: var(--ui-green-t); }
+.mv-option[data-state='wrong'] { border-color: var(--ui-red); background: var(--ui-red-t); }
+.mv-options:disabled .mv-option { cursor: default; }
+.mv-number { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 14px; }
+.mv-number .pic-field { flex: 0 1 18em; }
+.mv-number .pic-field input { flex: 1; width: auto; }
+.mv-number .pic-note { flex-basis: 100%; margin: 0; }
+.mv-unit { color: var(--ui-text-2); font: 500 13px var(--font-sans); }
+.mv-reveal {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-line-soft);
+  border-left-width: 4px;
+  border-radius: var(--ui-r-sm);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: 400 14px/1.6 var(--font-sans);
+}
+.mv-reveal[data-state='right'] { border-left-color: var(--ui-green); }
+.mv-reveal[data-state='wrong'] { border-left-color: var(--ui-red); }
+.mv-reveal > :last-child { margin-bottom: 0; }
+
+@media (max-width: 640px) {
+  .mv-fn-field { flex-basis: 100%; }
+  .mv-readout dt { min-width: 0; width: 100%; }
+}
