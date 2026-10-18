@@ -1,6 +1,6 @@
 ---
 title: "Mapping and Filtering"
-description: "Recognise the two recursion shapes you already write by hand, replace them with map and filter, and use takeWhile, dropWhile, and zipWith."
+description: "Recognise the two recursion shapes you already write by hand, replace them with map and filter, and use takeWhile and dropWhile."
 ---
 
 
@@ -607,148 +607,11 @@ ghci> takeWhile (\w -> length w <= 3) ["cat","dog","mouse","ox"]
 Ask: does the task care about a *prefix* of the list, or about *every* element? "Keep going until the first number greater than 100" is a `takeWhile`/`dropWhile` question — the process is expected to stop at the first failure. "Keep every number greater than 100, wherever it occurs" is a `filter` question — the whole list must be scanned regardless of what came before. If elements after the first failure genuinely do not matter, `takeWhile` is enough; if they might still hold something you want, you need `filter`.
 </RecognitionStrategy>
 
-## 8. Combining two lists with `zipWith`
+<QuizRef src="sem3/csi243/07-higher-order/notes/map-and-filter" id="check-yourself-takewhile-and-dropwhile" />
 
-`zipWith` applies a two-argument function to corresponding elements of two lists:
+## 8. Two lists at once
 
-```haskell
-zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
-```
-
-In words: `zipWith` takes **a rule for combining one element from the first list with one element from the second list into a single result**, plus the two lists themselves, and walks both lists together, applying the rule pairwise — first with first, second with second, and so on.
-
-```text
-ghci> zipWith (+) [1,2,3] [10,20,30]
-[11,22,33]
-ghci> zipWith (*) [1,2,3] [4,5,6]
-[4,10,18]
-ghci> zipWith max [1,9,3] [5,2,8]
-[5,9,8]
-```
-
-It stops when the shorter list runs out:
-
-```text
-ghci> zipWith (+) [1,2,3] [10,20]
-[11,22]
-```
-
-<HaskellTryIt
-  title="Try zipWith"
-  description="Change the combining function and make the lists different lengths to see exactly where pairing stops.">
-
-```haskell
-combine x y = x * 10 + y
-
-main = do
-  print (zipWith (+) [1,2,3] [10,20])
-  print (zipWith combine [1,2,3] [4,5,6])
-```
-
-</HaskellTryIt>
-
-The combining function does not have to keep both inputs' types, or even produce the same type as either of them — a lambda can mix an `Integer` and a `String` into one `String`:
-
-```text
-ghci> zipWith (\n s -> s ++ show n) [1,2,3] ["a","b","c"]
-["a1","b2","c3"]
-```
-
-No operator section could express this: the rule needs to convert the number with `show` and then combine it with `++`, which is two operations on two different types — exactly the shape a lambda (or a small named function) is for.
-
-The related `zip` pairs elements into tuples, and is just `zipWith` with the pairing function:
-
-```text
-ghci> zip [1,2,3] "abc"
-[(1,'a'),(2,'b'),(3,'c')]
-```
-
-### Building `zip` and `zipWith` by hand
-
-Both functions use the two-list recursion shape from Chapter 6. Either list can run out first, so both empty-list equations are required:
-
-```haskell
-myZip :: [a] -> [b] -> [(a, b)]
-myZip [] _ = []
-myZip _ [] = []
-myZip (x:xs) (y:ys) = (x, y) : myZip xs ys
-```
-
-`zipWith` changes only what happens to each pair. Instead of constructing `(x, y)`, it applies the supplied binary function:
-
-```haskell
-myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
-myZipWith _ [] _ = []
-myZipWith _ _ [] = []
-myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
-```
-
-Trace `myZipWith (+) [1,2,3] [10,20]`: the first step emits `1 + 10`, the second emits `2 + 20`, and the second list then matches `[]`, so the result is `[11,22]`. The unused `3` is never passed to `f`.
-
-### Relationships among `zip`, `map`, and `zipWith`
-
-These definitions expose how the three functions fit together:
-
-```haskell
-zip = zipWith (,)
-
-zipWith f xs ys = map (uncurry f) (zip xs ys)
-
--- Illustrative rather than idiomatic: duplicate xs supplies a second list.
-map f xs = zipWith (\x _ -> f x) xs xs
-```
-
-`uncurry f` changes a curried two-argument function `f :: a -> b -> c` into a function on one pair, `(a, b) -> c`. That makes it exactly the function `map` needs after `zip xs ys` has built a list of pairs.
-
-<HaskellPlayground
-  title="Try a binary function with zipWith"
-  description="Change the combining rule or make the two lists different lengths. The output stops with the shorter list."
-  initialCode={`combine x y = x * 10 + y
-
-main = do
-  print (zipWith combine [1,2,3] [4,5,6])
-  print (zipWith (+) [1,2,3] [10,20])`}
-/>
-
-### Putting `zipWith` to work: turning the curved marks into report lines
-
-The `curved` marks from the grades example earlier in this lesson pair naturally with the students they belong to:
-
-<HaskellTryIt>
-
-```haskell
-students :: [String]
-students = ["Kago", "Naledi", "Thabo", "Lerato", "Mpho", "Boitumelo", "Sipho", "Refilwe"]
-
-curved :: [Int]
-curved = [44, 94, 37, 71, 53, 97, 51, 78]
-
-report :: String -> Int -> String
-report name mark = name ++ ": " ++ show mark
-
-main :: IO ()
-main = do
-  putStrLn "Student reports:"
-  mapM_ putStrLn (zipWith report students curved)
-```
-
-```text
-Student reports:
-Kago: 44
-Naledi: 94
-Thabo: 37
-Lerato: 71
-Mpho: 53
-Boitumelo: 97
-Sipho: 51
-Refilwe: 78
-```
-
-</HaskellTryIt>
-
-`zipWith report students curved` walks the two lists together — `report`'s first argument comes from `students`, its second from `curved`, paired up positionally — producing one `String` per pair. `mapM_ putStrLn` then performs the output action for each of those strings in turn. This is the chapter's first use of an `IO` action itself being built by a higher-order function (`mapM_`) rather than by a `do` block listing each `putStrLn` by hand; it is a brief, self-contained preview, and Chapter 9 covers `mapM_` and its relatives properly.
-
-<QuizRef src="sem3/csi243/07-higher-order/notes/map-and-filter" id="check-yourself-takewhile-dropwhile-and-zipwith" />
+`map` and `filter` each walk one list. When two lists line up position by position, `zip` pairs them and `zipWith` combines them with a rule. They have a lesson of their own: [Zip and zipWith](/docs/sem3/csi243/07-higher-order/notes/zip-and-zipwith).
 
 ## 9. Functions as values
 
@@ -771,7 +634,6 @@ A list of functions, each applied to `5`. Nothing special is required to make th
 | `filter (*2) xs` | `filter` needs a predicate returning `Bool` | `filter even xs` |
 | `takeWhile` used where `filter` was meant | It stops at the first failure | Use `filter` to scan the whole list |
 | `map` expected to shorten the list | `map` preserves length | Use `filter` to remove elements |
-| `zipWith (+) [1,2,3] [1,2]` giving 3 results | It stops at the shorter list | Check the lengths first |
 
 ## 11. Practice
 
@@ -780,7 +642,7 @@ Predict each result before running it.
 1. `map (+3) [1,2,3]`
 2. `filter odd [1..10]`
 3. `takeWhile (<4) [1,2,3,9,1]` and `filter (<4) [1,2,3,9,1]`
-4. `zipWith (*) [1,2,3] [4,5,6]`
+4. `map (*2) (filter even [1..6])`
 5. `map (\f -> f 2) [(*3), (+3)]`
 
 Then write:
@@ -826,9 +688,8 @@ ghci> [x ^ 2 | x <- [1..10], odd x]
   { type: 'must', text: 'I can trace map by hand on a small finite list, one cons cell at a time.' },
   { type: 'must', text: 'I can explain why map (*2) [1..], combined with take, terminates despite [1..] being infinite — because : is lazy and each stage only ever forces one more element than it already has.' },
   { type: 'must', text: 'I can explain how takeWhile differs from filter.' },
-  { type: 'must', text: 'I can use zipWith and say what happens with lists of unequal length.' },
   { type: 'must', text: 'I can rewrite a hand-written list recursion using map or filter.' },
   { type: 'note', text: 'Functions are first-class values: they can be passed, returned, and stored in lists.' }
 ]} />
 
-Continue with [Folds and Function Composition](/docs/sem3/csi243/07-higher-order/notes/folds-and-composition).
+Continue with [Zip and zipWith](/docs/sem3/csi243/07-higher-order/notes/zip-and-zipwith).

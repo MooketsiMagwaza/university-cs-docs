@@ -131,4 +131,38 @@ export const quizData = [
     correctIndex: 1,
     explanation: "Composition reads right to left: (+1) is applied first giving 6, then (*2) gives 12. Reversing the order to ((+1) . (*2)) 5 would give 11 instead.",
   },
+  {
+    "question": "zipWith (+) [1,2,3] [10,20]. What happens, and why?",
+    "options": [
+      "[11,22] — zipWith stops as soon as the shorter list runs out",
+      "A runtime error, because the lists have different lengths",
+      "[11,22,3] — the leftover element from the longer list passes through unchanged",
+      "[11,22,33] — zipWith pads the shorter list with 0"
+    ],
+    "correctIndex": 0,
+    "explanation": "zipWith walks both lists together, applying its function pairwise. Once the second list runs out after two elements, there is nothing left to pair the first list's third element with, so zipWith simply stops there.",
+    "optionFeedback": [
+      "Correct — zipWith produces a result exactly as long as the shorter list, with no error and no complaint.",
+      "Unequal lengths are not an error for zipWith; it silently stops instead of raising an exception.",
+      "zipWith never carries an unpaired element through unchanged — an element with nothing to pair against is simply left out of the result.",
+      "zipWith never invents a padding value such as 0; it strictly needs a genuine element from each list at every position it produces."
+    ]
+  },
+  {
+    "question": "zipWith (\\n s -> s ++ show n) [1,2,3] [\"a\",\"b\",\"c\"] mixes an Integer and a String into one String. Could this combining function have been written as a plain operator section instead?",
+    "options": [
+      "No — it needs two operations (show, then ++) on two different types, which a single-operator section cannot express",
+      "Yes — (++ show) would do exactly the same thing",
+      "Yes — zipWith always requires a section, never a lambda",
+      "No — zipWith cannot accept lambdas at all, only named functions"
+    ],
+    "correctIndex": 0,
+    "explanation": "A section fixes one operand of a single operator. This rule first converts n to a String with show, then combines it with s using ++ — two different operations across two different types, exactly the situation that calls for a lambda instead of a section.",
+    "optionFeedback": [
+      "Correct — show has to run before ++ can combine the results, and a section cannot sequence two operations like that.",
+      "(++ show) does not even type-check as written: show still needs to be applied to n before ++ can combine the two Strings.",
+      "zipWith has no such requirement — it accepts any two-argument function, whether that's a named function, a lambda, or (where the shape allows) a section.",
+      "zipWith accepts lambdas freely, exactly as shown in this example — there is no restriction against them."
+    ]
+  },
 ];
