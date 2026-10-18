@@ -11,6 +11,8 @@
  *   --file <text>       only the notes whose path contains this text
  *   --verbose           list every converted block and every skipped block that looked as if it qualified
  *   --pairs-need-main   do not convert a pair whose program has no `main` (a GHCi-style snippet such as `3 * 20`)
+ *   --lead-ins          also convert a pair with a one-line label between the code and its output ("Exact output:")
+ *   --transcripts       also convert GHCi transcripts (a text fence that starts with `ghci>`) into a session
  *   --scan-json <path>  use a saved result of `scan-haskell-notes.mjs --json` instead of running the scan
  *   --simulator <path>  the interpreter to check with (default lib/haskell-simulator.ts)
  *
@@ -46,6 +48,35 @@
  *   - the text block is not a plain `text` fence one blank line below it (a GHCi transcript, or prose elsewhere);
  *   - a single block has no `main`, or prints nothing.
  * Every other block is left exactly as it is, and the file keeps its own line endings.
+ *
+ * With --lead-ins, a pair whose code and output have exactly one line of prose between them is converted when that
+ * line is a short label: 40 characters or fewer after trimming, ending with a colon, and not markup (a heading, a
+ * list item, a table row, a tag). The label is dropped, because the Output window says what it is. A longer line
+ * is a sentence, and the pair stays as it is. The program still has to print exactly the text shown.
+ *
+ * With --transcripts, a GHCi transcript (a fenced text block whose first line starts with `ghci>`) becomes
+ *
+ *     <HaskellTryIt session>
+ *
+ *     ```haskell
+ *     3 + 4
+ *     let x = 5
+ *     ```
+ *
+ *     ```text
+ *     ghci> 3 + 4
+ *     7
+ *     ghci> let x = 5
+ *     ```
+ *
+ *     </HaskellTryIt>
+ *
+ * (one command per line, then the transcript as the page shows it). The decision is made by running it, with the
+ * code the page runs (lib/ghci-session.ts: sessionCommands and runSession, through the interpreter): the rebuilt
+ * transcript must equal the fence text exactly, ignoring trailing spaces. A transcript that does not reproduce
+ * is skipped, and the skip is filed under its cause (a GHCi command, a name an earlier block defines, an error
+ * GHC words differently, blank lines between the entries, multi-line input, and so on). The fence must also be at
+ * the top of the page (not inside a JSX tag), not indented, and have nothing after the language.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -66,12 +97,16 @@ const flag = (name) => args.includes(name);
 const apply = flag('--apply');
 const verbose = flag('--verbose');
 const pairsNeedMain = flag('--pairs-need-main');
+const leadIns = flag('--lead-ins');
+const transcripts = flag('--transcripts');
 const fileFilter = option('--file', '');
 const scanJson = option('--scan-json', '');
 const simulatorPath = path.resolve(root, option('--simulator', 'lib/haskell-simulator.ts'));
 
 const simulator = await import(pathToFileURL(simulatorPath).href);
 const runHaskellWithInput = simulator.runHaskellWithInput ?? ((source) => simulator.runHaskell(source));
+// The code the page runs for a session (lib/ghci-session.ts): the transcript is rebuilt with it, not with a copy of it.
+const ghci = transcripts ? await import(pathToFileURL(path.join(root, 'lib', 'ghci-session.ts')).href) : null;
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -219,6 +254,7 @@ function makeTracker() {
   return {
     feed,
     depth: () => stack.length + (pending ? 1 : 0),
+    tags: () => [...stack],
     opened: (name) => opened.get(name) ?? 0,
     balanced: () => stack.length === 0 && !pending && !broken && !inDisplayMath,
   };
@@ -256,7 +292,7 @@ function parsePage(source) {
     const match = line.match(FENCE_OPEN);
     if (match && !(match[2][0] === '`' && match[3].includes('`'))) {
       const [lang = '', ...meta] = match[3].trim().split(/\s+/);
-      open = { start: index, end: -1, indent: match[1].length, ticks: match[2], lang, meta: meta.join(' '), depth: tracker.depth(), body: [] };
+      open = { start: index, end: -1, indent: match[1].length, ticks: match[2], lang, meta: meta.join(' '), depth: tracker.depth(), tags: tracker.tags(), body: [] };
       continue;
     }
     tracker.feed(line);
@@ -275,9 +311,102 @@ const run = (code) => {
   try {
     return runHaskellWithInput(code, '');
   } catch (error) {
-    return { ok: false, output: '', diagnostic: { message: `The simulator threw: ${error instanceof Error ? error.message : error}` } };
+    return { ok: false, output: '', elapsedMs: 0, diagnostic: { message: `The simulator threw: ${error instanceof Error ? error.message : error}` } };
   }
 };
+
+const MAX_LABEL = 40;
+// A line that is markup (a heading, a list item, a quote, a table row, a tag, a rule) is not a label for the output.
+const MARKUP_LINE = /^(#|[-*+]\s|>|\||<|\d+[.)]\s|---|===)/;
+
+/**
+ * The one line of prose between a code block and the output block under it, when that is all there is: the gap is a blank
+ * line, one line, a blank line. Returns that line, or null when the gap is anything else.
+ */
+function leadInLine(lines, fence, next) {
+  if (!next || next.start !== fence.end + 4) return null;
+  if (lines[fence.end + 1].trim() !== '' || lines[fence.end + 3].trim() !== '') return null;
+  const text = lines[fence.end + 2].trim();
+  return text === '' ? null : text;
+}
+
+/** Whether a lead-in is a short label that only introduces the output ("Exact output:") and can be dropped. */
+const isShortLabel = (text) => text.length <= MAX_LABEL && text.endsWith(':') && !MARKUP_LINE.test(text);
+
+// ---- GHCi transcripts -------------------------------------------------------------------------------------------
+
+/** Trailing spaces on a line, and blank lines at the end of the text, do not count. */
+const trimmedTranscript = (text) =>
+  text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\s+$/, ''))
+    .join('\n')
+    .replace(/\n+$/, '');
+
+const withoutBlankLines = (text) => text.split('\n').filter((line) => line.trim() !== '').join('\n');
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const isTranscriptStart = (fence) => fence.lang === 'text' && fence.body.length > 0 && /^\s*ghci>/.test(fence.body[0]);
+
+/** The name a "not in scope" message is about, or an empty string. */
+function missingName(message) {
+  const found = message.match(/not in scope:?\s*(?:[A-Za-z ]*:\s*)?[‘'`]?([^\s’'`:()]+)/i);
+  return found ? found[1] : '';
+}
+
+/**
+ * Decides whether a transcript can become a session. It replays the commands with the page's own code (sessionCommands,
+ * runSession) and the interpreter, and requires the rebuilt transcript to equal the fence text. Returns the commands
+ * when it does, and otherwise the cause it does not (a reason that is the same wording for every transcript that
+ * fails the same way) with one example line of detail.
+ */
+function checkTranscript(fence, earlier) {
+  const original = fence.body.join('\n');
+  // The commands are the prompt lines only; the lines under them are results. sessionCommands strips the prompts.
+  const commands = ghci.sessionCommands(fence.body.filter((text) => /^\s*ghci>/.test(text)).join('\n'));
+  if (commands.length === 0) return { reason: 'no commands in the transcript' };
+  if (commands.some((command) => command.includes('```'))) return { reason: 'a command contains a code fence', detail: commands.find((command) => command.includes('```')) };
+
+  const meta = commands.find((command) => /^:/.test(command.trim()));
+  if (meta !== undefined) return { reason: 'uses :type, :load or another GHCi command', detail: meta };
+  if (/^\s*(ghci|Prelude)\|/m.test(original)) return { reason: 'multi-line input (a continuation prompt)' };
+  if (/^\s*ghci>\s*$/m.test(original)) return { reason: 'has an empty prompt line' };
+
+  const result = ghci.runSession(commands, run);
+  const rebuilt = result.lines.map((item) => item.text).join('\n');
+  if (trimmedTranscript(rebuilt) === trimmedTranscript(original)) {
+    // The page will read the first fence back with sessionCommands; it has to give the same commands.
+    const again = ghci.sessionCommands(commands.join('\n'));
+    if (JSON.stringify(again) !== JSON.stringify(commands)) return { reason: 'the commands do not survive being written one per line', detail: commands[0] };
+    return { commands };
+  }
+
+  const showsError = /error:|\*\*\* Exception|Exception:|<interactive>|^\S+\.hs:\d+:\d+|Prelude\.\w+: |[Nn]on-exhaustive/m.test(original);
+  const firstDifference = () => {
+    const shown = trimmedTranscript(original).split('\n');
+    const got = trimmedTranscript(rebuilt).split('\n');
+    for (let i = 0; i < Math.max(shown.length, got.length); i += 1) {
+      if ((shown[i] ?? '') !== (got[i] ?? '')) return `line ${i + 1}: shown ${JSON.stringify(shown[i] ?? '')}, got ${JSON.stringify(got[i] ?? '')}`;
+    }
+    return '';
+  };
+
+  if (!result.ok) {
+    const message = result.failure?.message ?? '';
+    if (/not in scope/i.test(message)) {
+      const name = missingName(message);
+      const definedAbove = name !== '' && earlier.some((block) => block.lang === 'haskell' && new RegExp(`(^|[^\\w'])${escapeRegExp(name)}(?![\\w'])`, 'm').test(block.body.join('\n')));
+      return definedAbove
+        ? { reason: 'needs a definition from an earlier block', detail: `${name} (command: ${result.failure.command})` }
+        : { reason: 'uses a name the interpreter does not have, or one defined off the page', detail: `${name || message.split('\n')[0]} (command: ${result.failure.command})` };
+    }
+    if (showsError) return { reason: 'shows an error GHC words differently from the interpreter', detail: `${result.failure?.command}: ${message.split('\n')[0]}` };
+    return { reason: 'the interpreter stops on a command with an error', detail: `${result.failure?.command}: ${message.split('\n')[0]}` };
+  }
+  if (showsError) return { reason: 'shows an error that the interpreter does not raise', detail: firstDifference() };
+  if (withoutBlankLines(trimmedTranscript(rebuilt)) === withoutBlankLines(trimmedTranscript(original))) return { reason: 'the transcript has blank lines between its entries', detail: firstDifference() };
+  return { reason: 'the interpreter prints something other than the transcript', detail: firstDifference() };
+}
 
 const converted = [];
 const skipped = [];
@@ -287,7 +416,10 @@ let embedsAfter = 0;
 let looksQualified = 0;
 let plainWithoutMain = 0;
 
-const skip = (item, reason) => skipped.push({ ...item, reason });
+const skip = (item, reason, detail = '') => skipped.push({ ...item, reason, detail });
+// Transcripts that are already a Try it yourself example (an earlier run converted them) are counted, not skipped.
+let transcriptsFound = 0;
+let transcriptsAlready = 0;
 
 for (const file of files) {
   const relative = path.relative(root, file).replace(/\\/g, '/');
@@ -300,6 +432,34 @@ for (const file of files) {
 
   const edits = [];
   fences.forEach((fence, at) => {
+    if (transcripts && isTranscriptStart(fence)) {
+      transcriptsFound += 1;
+      if (fence.tags.includes('HaskellTryIt')) {
+        transcriptsAlready += 1;
+        return;
+      }
+      const item = { file: short, line: fence.start + 1, kind: 'transcript' };
+      if (page.mixedEndings) return skip(item, 'the page mixes line endings');
+      if (!page.balanced) return skip(item, 'the page structure was not understood (JSX tags do not balance)');
+      // The fence is replayed first, so a skip for how the fence is written can still say whether the transcript reproduces.
+      const checked = checkTranscript(fence, fences.slice(0, at));
+      item.reproduces = Boolean(checked.commands);
+      const note = checked.commands ? 'it would reproduce' : `does not reproduce: ${checked.reason}`;
+      if (fence.depth > 0) return skip(item, 'inside a JSX component that is still open', `${fence.tags.join(', ') || 'a tag that is not closed'}; ${note}`);
+      if (fence.indent > 0) return skip(item, 'the fence is indented', note);
+      if (fence.meta !== '') return skip(item, 'the fence has more than the language', `${fence.meta}; ${note}`);
+      if (fence.ticks !== '```') return skip(item, 'the fence is written with ~~~ rather than ```', note);
+      if (!checked.commands) return skip(item, checked.reason, checked.detail);
+      edits.push({
+        ...item,
+        first: fence.start,
+        last: fence.end,
+        open: '<HaskellTryIt session>',
+        commands: checked.commands,
+        inner: ['```haskell', ...checked.commands, '```', '', ...lines.slice(fence.start, fence.end + 1)],
+      });
+      return;
+    }
     if (fence.lang !== 'haskell') return;
     const scanned = scanResults.get(`${relative}:${fence.start + 1}`);
     if (!scanned) return;
@@ -331,12 +491,26 @@ for (const file of files) {
     if (isPair) {
       const adjacent = next && next.start === fence.end + 2 && lines[fence.end + 1].trim() === '';
       if (!next || next.lang !== 'text') return skip(item, 'no text block follows');
-      if (!adjacent) return skip(item, 'the text block is not one blank line below the code');
+      // One line of prose between the code and its output: with --lead-ins a short label is dropped, a sentence stays.
+      const leadIn = leadIns && !adjacent ? leadInLine(lines, fence, next) : null;
+      if (leadIn !== null) {
+        item.kind = 'lead-in';
+        if (!isShortLabel(leadIn)) return skip(item, `the line between the code and the output is a sentence, not a label (over ${MAX_LABEL} characters or no colon)`, leadIn);
+      } else if (!adjacent) {
+        return skip(item, 'the text block is not one blank line below the code');
+      }
       if (next.indent > 0 || next.ticks !== '```' || next.meta !== '') return skip(item, 'the text fence is indented or has more than the language');
       const shown = next.body.join('\n');
       if (GHC_WARNING.test(shown)) return skip(item, 'the shown text contains a GHC warning');
       if (printed !== normalise(shown)) return skip(item, 'prints something other than the text block when checked here');
-      edits.push({ ...item, first: fence.start, last: next.end, main: definesMain(code) });
+      edits.push({
+        ...item,
+        first: fence.start,
+        last: next.end,
+        main: definesMain(code),
+        // The label is dropped: the Output window says what it is.
+        ...(leadIn === null ? {} : { dropped: leadIn, inner: [...lines.slice(fence.start, fence.end + 1), '', ...lines.slice(next.start, next.end + 1)] }),
+      });
     } else {
       if (next && next.lang === 'text') return skip(item, 'a text block follows, but not beside the code');
       if (/^(Definitions loaded|No output)/.test(printed) || printed === '') return skip(item, 'prints nothing');
@@ -349,17 +523,20 @@ for (const file of files) {
   // Apply from the bottom up so the line numbers above stay valid. A blank line goes before and after the tag when the neighbours are text.
   const rewritten = [...lines];
   for (const edit of [...edits].sort((a, b) => b.first - a.first)) {
-    const inner = lines.slice(edit.first, edit.last + 1);
+    const inner = edit.inner ?? lines.slice(edit.first, edit.last + 1);
     const before = edit.first > 0 && rewritten[edit.first - 1].trim() !== '' ? [''] : [];
     const after = edit.last + 1 < lines.length && rewritten[edit.last + 1].trim() !== '' ? [''] : [];
-    rewritten.splice(edit.first, edit.last - edit.first + 1, ...before, '<HaskellTryIt>', '', ...inner, '', '</HaskellTryIt>', ...after);
+    rewritten.splice(edit.first, edit.last - edit.first + 1, ...before, edit.open ?? '<HaskellTryIt>', '', ...inner, '', '</HaskellTryIt>', ...after);
   }
   const text = rewritten.join(page.eol);
 
-  // Check the result: the same fenced blocks in the same order, and one more embed for each block converted.
+  // Check the result: the same fenced blocks in the same order (a session adds its command block in front of the
+  // transcript), and one more embed for each block converted.
   const again = parsePage(text);
   const signature = (parsed) => parsed.fences.map((fence) => `${fence.lang}\n${fence.body.join('\n')}`);
-  const same = JSON.stringify(signature(page)) === JSON.stringify(signature(again));
+  const commandBlocks = new Map(edits.filter((edit) => edit.commands).map((edit) => [edit.first, `haskell\n${edit.commands.join('\n')}`]));
+  const expectedSignature = page.fences.flatMap((fence) => (commandBlocks.has(fence.start) ? [commandBlocks.get(fence.start)] : []).concat(signature({ fences: [fence] })));
+  const same = JSON.stringify(expectedSignature) === JSON.stringify(signature(again));
   if (!same || !again.balanced || again.embeds !== page.embeds + edits.length || again.eol !== page.eol) {
     console.error(`Refusing to change ${relative}: the rewritten page does not check out.`);
     process.exitCode = 1;
@@ -375,6 +552,8 @@ for (const file of files) {
 
 const pairs = converted.filter((item) => item.kind === 'pair');
 const singles = converted.filter((item) => item.kind === 'single');
+const withLeadIn = converted.filter((item) => item.kind === 'lead-in');
+const sessions = converted.filter((item) => item.kind === 'transcript');
 const pagesOf = (items) => new Set(items.map((item) => item.file)).size;
 
 const verb = apply ? 'converted' : 'to convert';
@@ -382,22 +561,37 @@ console.log(`Haskell examples ${verb} in ${files.length} notes under ${path.rela
 for (const { short, count } of changedFiles) {
   const here = converted.filter((item) => item.file === short);
   console.log(`  ${short}   ${count}`);
-  if (verbose) for (const item of here) console.log(`      line ${String(item.line).padStart(4)}  ${item.kind}${item.kind === 'pair' && !item.main ? ' (no main)' : ''}`);
+  if (verbose) {
+    for (const item of here) {
+      const note = item.kind === 'pair' && !item.main ? ' (no main)' : item.kind === 'lead-in' ? `   label dropped: ${JSON.stringify(item.dropped)}${item.main ? '' : ' (no main)'}` : item.kind === 'transcript' ? `   ${item.commands.length} commands` : '';
+      console.log(`      line ${String(item.line).padStart(4)}  ${item.kind}${note}`);
+    }
+  }
 }
-
-const reasons = new Map();
-for (const item of skipped) reasons.set(item.reason, [...(reasons.get(item.reason) ?? []), item]);
 
 const line = (label, value, note = '') => console.log(`  ${label.padEnd(58)}${String(value).padStart(5)}${note ? `   ${note}` : ''}`);
 console.log('');
 line(`Pairs (code, then its output) ${verb}`, pairs.length, `in ${pagesOf(pairs)} pages; ${pairs.filter((item) => !item.main).length} have no main`);
 line(`Single blocks (a main that prints, no output shown) ${verb}`, singles.length, `in ${pagesOf(singles)} pages`);
+if (leadIns) line(`Pairs with a label between code and output ${verb}`, withLeadIn.length, `in ${pagesOf(withLeadIn)} pages; ${withLeadIn.filter((item) => !item.main).length} have no main (a GHCi-style snippet)`);
+if (transcripts) line(`GHCi transcripts ${verb} (as a session)`, sessions.length, `in ${pagesOf(sessions)} pages; ${sessions.reduce((sum, item) => sum + item.commands.length, 0)} commands`);
 line('Pages changed', changedFiles.length);
-line('Candidates the scan reports as run and match, on their own', looksQualified, 'pairs and single blocks');
+line('Candidates the scan reports as run and match, on their own', looksQualified, 'pairs, labelled pairs and single blocks');
+if (transcripts) line('GHCi transcripts found', transcriptsFound, `${transcriptsAlready} already a Try it yourself example`);
 line('  skipped', skipped.length);
-for (const [reason, items] of [...reasons].sort((a, b) => b[1].length - a[1].length)) {
-  line(`    ${reason}`, items.length);
-  for (const item of items.slice(0, verbose ? items.length : 2)) console.log(`        ${item.file}:${item.line}  (${item.kind})`);
+
+const kindTitle = { pair: 'pairs', single: 'single blocks', 'lead-in': 'pairs with a line between code and output', transcript: 'GHCi transcripts' };
+for (const kind of ['pair', 'single', 'lead-in', 'transcript']) {
+  const ofKind = skipped.filter((item) => item.kind === kind);
+  if (ofKind.length === 0) continue;
+  line(`  ${kindTitle[kind]} skipped`, ofKind.length);
+  const reasons = new Map();
+  for (const item of ofKind) reasons.set(item.reason, [...(reasons.get(item.reason) ?? []), item]);
+  for (const [reason, items] of [...reasons].sort((a, b) => b[1].length - a[1].length)) {
+    const wouldReproduce = items.filter((item) => item.reproduces).length;
+    line(`    ${reason}`, items.length, wouldReproduce > 0 ? `${wouldReproduce} would otherwise reproduce` : '');
+    for (const item of items.slice(0, verbose ? items.length : 3)) console.log(`        ${item.file}:${item.line}${item.detail ? `   ${item.detail}` : ''}`);
+  }
 }
 line('Plain blocks that run on their own but have no main (left alone)', plainWithoutMain);
 line('HaskellTryIt embeds on the pages', `${embedsBefore} -> ${embedsAfter}`, apply ? 'after writing' : 'if applied');

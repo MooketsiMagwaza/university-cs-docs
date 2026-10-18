@@ -102,6 +102,7 @@ function extractFences(source) {
   const fences = [];
   let open = null;
   let inTryIt = false;
+  let inSession = false;
   lines.forEach((line, index) => {
     if (open) {
       if (new RegExp(`^\\s*${open.ticks}\\s*$`).test(line)) {
@@ -114,9 +115,10 @@ function extractFences(source) {
       return;
     }
     if (/<HaskellTryIt\b/.test(line)) inTryIt = true;
-    if (/<\/HaskellTryIt>/.test(line)) inTryIt = false;
+    if (/<HaskellTryIt\b[^>]*\bsession\b/.test(line)) inSession = true;
+    if (/<\/HaskellTryIt>/.test(line)) inTryIt = inSession = false;
     const match = line.match(/^(\s*)(`{3,})\s*([\w-]*)\s*$/);
-    if (match) open = { indent: match[1].length, ticks: match[2], lang: match[3], line: index + 1, buffer: [], tryIt: inTryIt };
+    if (match) open = { indent: match[1].length, ticks: match[2], lang: match[3], line: index + 1, buffer: [], tryIt: inTryIt, session: inSession };
   });
   return fences;
 }
@@ -160,6 +162,25 @@ for (const file of files) {
     const next = fences[index + 1];
     const previous = fences[index - 1];
 
+    if (fence.lang === 'haskell' && fence.session) {
+      // <HaskellTryIt session>: this fence holds the commands, the text fence after it is the transcript the page shows.
+      const shownSession = next && next.lang === 'text' ? next : undefined;
+      const sessionTranscript = shownSession ? parseTranscript(shownSession.code) : null;
+      if (sessionTranscript) {
+        examples.push({
+          file: relative,
+          line: fence.line,
+          tryIt: true,
+          fenceIndex: index,
+          code: '',
+          shownLine: shownSession.line,
+          transcript: sessionTranscript,
+          shownIsError: ERROR_SHOWN.test(shownSession.code),
+          kind: 'transcript-only',
+        });
+        return;
+      }
+    }
     if (fence.lang === 'haskell') {
       const shown = next && next.lang === 'text' ? next : undefined;
       const transcript = shown ? parseTranscript(shown.code) : null;
@@ -213,7 +234,8 @@ function blocksOf(file) {
     const fences = extractFences(fs.readFileSync(path.join(root, file), 'utf8'));
     pageBlocks.set(
       file,
-      fences.map((fence, index) => (fence.lang === 'haskell' ? { index, code: fence.code, main: definesMain(fence.code) } : null)),
+      // A session's commands are not definitions the page's other examples can use.
+      fences.map((fence, index) => (fence.lang === 'haskell' && !fence.session ? { index, code: fence.code, main: definesMain(fence.code) } : null)),
     );
   }
   return pageBlocks.get(file);
