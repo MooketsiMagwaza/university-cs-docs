@@ -40,6 +40,10 @@ import { MergeSortStory } from './interactive/merge-sort-story';
 import { MergeComplexityFigure, MergeFrontWorkbench, MergeRecursionExplorer } from './interactive/merge-sort-deep-dive';
 import { PackageBuildStory, PackageFolderStory, PackageImportStory } from './interactive/package-stories';
 import { DistributionExplorer } from './interactive/distribution-explorer';
+import { Simulation } from './interactive/simulation';
+import { VennDiagram } from './interactive/venn-diagram';
+import { ProbabilityTree } from './interactive/probability-tree';
+import { CountingCalculator } from './interactive/counting-calculator';
 
 
 import { Callout } from './callouts/callout';
@@ -137,6 +141,10 @@ export function getMDXComponents(components?: MDXComponents) {
     PackageFolderStory,
     PackageBuildStory,
     DistributionExplorer,
+    Simulation,
+    VennDiagram,
+    ProbabilityTree,
+    CountingCalculator,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,

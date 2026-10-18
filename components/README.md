@@ -166,6 +166,74 @@ main = print [x * x | x <- [1..5]]
 
 Set the convention to match the lesson, because the two conventions give different values for the same experiment. The plot has a text description in its `aria-label`, and the readout beneath it gives the same numbers as text.
 
+## Simulation
+
+`<Simulation experiment="..." />` (`components/interactive/simulation.tsx`) runs an experiment 1, 10, 100 or 1000 trials at a time and draws the relative frequencies as bars beside the theoretical probabilities as markers, with a table of counts, relative frequencies and theory under it. It is for showing that frequencies settle on probabilities. The generator is seeded (`lib/stats/random.ts`, mulberry32), so a seed number repeats a run, and Reset starts again from the seed. The experiments are pure functions in `lib/stats/simulate.ts` (tested by `tests/unit/simulation.test.mjs`).
+
+```mdx
+<Simulation experiment="dice" />
+<Simulation experiment="binomial" start={{ n: 10, p: 0.3 }} />
+<Simulation experiment="monte-carlo" mode="conditional" start={{ threshold: 8 }} />
+<Simulation experiment="clt" start={{ sampleSize: 1 }} />
+```
+
+| Prop | Meaning |
+|---|---|
+| `experiment` | `coins` (count heads in several fair coins), `dice` (the sum of two dice), `binomial` (n attempts with success probability p), `lln` (the running frequency of heads, or the running mean of a die, against its limit), `clt` (a histogram of sample means from a skewed source, against the normal curve), `monte-carlo` (random points to estimate π, or a conditional probability from two dice) |
+| `mode` | Pins the version of `lln` (`coin` or `die`) or `monte-carlo` (`pi` or `conditional`). Leave it out and the reader gets a select |
+| `seed` | The starting seed, 2024 by default. The reader can type another |
+| `start` | Starting values: `coins`, `n`, `p`, `sampleSize`, `threshold` (the conditional probability asks for P(first die is 6 given the sum is at least `threshold`)) |
+
+Nothing random happens while the page renders: the first render is an empty run and numbers are drawn only in the click handlers, so the server and the browser agree. A run stops at 20,000 trials. The plot's `aria-label` and the readout and table give the result as text.
+
+## Venn diagram
+
+`<VennDiagram sets={2} />` (`components/interactive/venn-diagram.tsx`) shows two or three overlapping sets. The reader picks an expression from a select (`A ∩ B`, `(A ∪ B)′`, `A and B and not C` and so on), sees its regions shaded, types the number of elements in each region, and reads the count and the probability of the expression. It is for the set operations and De Morgan's laws, and for turning "and", "or" and "not" into counting. The set algebra is in `lib/stats/sets.ts` (tested by `tests/unit/sets-and-trees.test.mjs`).
+
+```mdx
+<VennDiagram sets={2} />
+<VennDiagram sets={3} expression="A and B and not C" notation="c" start={{ ABC: 5, none: 20 }} />
+```
+
+| Prop | Meaning |
+|---|---|
+| `sets` | 2 or 3 |
+| `expression` | The expression shown first, written in words as the menu writes it: `A and B`, `not (A or B)`, `A minus B`, `A and B and not C` |
+| `start` | Starting counts by region key: `A` (A only), `B`, `AB`, `none` (in no set), and for three sets `C`, `AC`, `BC`, `ABC` |
+| `notation` | How the complement is written in the formula: `bar` (CSI213, the default), `c` (STA122) or `prime` |
+
+Shading is not the only cue: the counts in shaded regions are bold, and the label and readout give the expression in words, in LaTeX and as a list of regions.
+
+## Probability tree
+
+`<ProbabilityTree />` (`components/interactive/probability-tree.tsx`) draws a two-stage tree. The reader types P(A), P(B | A) and P(B | not A) and sees the four joint probabilities, P(B) by total probability and P(A | B) by Bayes' theorem, with the formula and the numbers put into it. It is for conditional probability and the base-rate effect. The arithmetic is in `lib/stats/bayes.ts` (tested by `tests/unit/sets-and-trees.test.mjs`: P(A) = 0.01, P(B | A) = 0.95 and P(B | not A) = 0.1 give P(A | B) = 0.0876).
+
+```mdx
+<ProbabilityTree eventA="Disease" eventB="Positive test" start={{ a: 0.01, bGivenA: 0.95, bGivenNotA: 0.1 }} />
+```
+
+| Prop | Meaning |
+|---|---|
+| `eventA`, `eventB` | The names of the two events, shown in a line above the tree and in the sentence under the formula. The tree itself is labelled with the letters A and B |
+| `start` | `a`, `bGivenA`, `bGivenNotA`, each between 0 and 1 |
+| `notation` | How the complement is written in the formula: `bar` (the default), `c` or `prime` |
+
+## Counting calculator
+
+`<CountingCalculator />` (`components/interactive/counting-calculator.tsx`) counts arrangements and selections. The reader sets n and r, ticks "Order matters" and "Repetition allowed", and sees the count, the formula and the working with the numbers put in, and a table of all four counts for the same n and r. The numbers are BigInts (`lib/stats/counting.ts`), so they stay exact: C(52, 5) = 2,598,960. It is for choosing between P(n, r), C(n, r), n^r and C(n + r − 1, r).
+
+```mdx
+<CountingCalculator start={{ n: 52, r: 5 }} />
+<CountingCalculator start={{ n: 5, r: 3 }} ordered />
+```
+
+| Prop | Meaning |
+|---|---|
+| `start` | Starting `n` (1 to 60) and `r` (0 to 30) |
+| `ordered`, `repetition` | Start with "Order matters" or "Repetition allowed" ticked |
+
+Without repetition, an r larger than n has no arrangements, and the calculator says so instead of showing a formula that does not apply.
+
 ## Decoding the questions
 
 Every review page ends with a `## Decoding the questions` section that teaches how to read a question before answering it. `<CommandWords />` shows the shared table of command words (define, explain, compare and so on), and `<DecodeQuestion>` works through a real question from the topic. Course-specific dictionaries live in `content/decoding/<course>.json`.
