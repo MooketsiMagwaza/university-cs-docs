@@ -4,6 +4,7 @@ const useProductionBuild = process.env.PLAYWRIGHT_USE_BUILD === '1';
 
 export default defineConfig({
   testDir: './tests',
+  testMatch: '**/*.spec.ts',
   timeout: 300_000,
   expect: { timeout: 180_000 },
   fullyParallel: false,
