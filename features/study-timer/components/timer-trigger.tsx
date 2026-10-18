@@ -3,6 +3,7 @@
 import { Pause, TimerReset } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { isEscapeForTimer } from '../timer-dom';
 import { useStudyTimer } from '../timer-provider';
 import { formatTimer } from '../timer-types';
 import { TimerPopover } from './timer-popover';
@@ -19,7 +20,9 @@ function anchorStyle(button: HTMLElement): CSSProperties {
   const width = Math.min(320, window.innerWidth - EDGE * 2);
   const preferredLeft = rect.right - width;
   const left = Math.min(Math.max(EDGE, preferredLeft), window.innerWidth - width - EDGE);
-  return { top: rect.bottom + GAP, left, width };
+  const top = rect.bottom + GAP;
+  // A tall popover (label, list of blocks) must not run off the bottom of a short screen; it scrolls instead.
+  return { top, left, width, maxHeight: Math.max(160, window.innerHeight - top - EDGE) };
 }
 
 export function TimerTrigger() {
@@ -45,7 +48,11 @@ export function TimerTrigger() {
       if (!rootRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      // Leave the key alone when something else already used it (a search dialog closing itself).
+      if (!isEscapeForTimer(event)) return;
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
     };
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('keydown', onKeyDown);

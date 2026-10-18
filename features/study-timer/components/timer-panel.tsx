@@ -15,6 +15,7 @@ import {
 import { useMemo } from 'react';
 import { useStudyTimer } from '../timer-provider';
 import { formatTimer, type TimerPhase } from '../timer-types';
+import { TimerLabel } from './timer-label';
 
 const phases: Array<[TimerPhase, string]> = [
   ['focus', 'Focus'],
@@ -46,7 +47,14 @@ export function TimerPanel({ fullscreen = false }: { fullscreen?: boolean }) {
   }
 
   return (
-    <section className={`study-panel pomodoro-panel phase-${state.phase} ${fullscreen ? 'pomodoro-fullscreen' : ''}`} aria-labelledby={fullscreen ? 'fullscreen-timer-heading' : 'pomodoro-heading'}>
+    <section
+      className={`study-panel pomodoro-panel phase-${state.phase} ${fullscreen ? 'pomodoro-fullscreen' : ''}`}
+      aria-labelledby={fullscreen ? 'fullscreen-timer-heading' : 'pomodoro-heading'}
+      // Full screen covers the page, so it is a dialog: the page-turning keys then leave the arrow keys alone.
+      role={fullscreen ? 'dialog' : undefined}
+      aria-modal={fullscreen ? true : undefined}
+      data-state={fullscreen ? 'open' : undefined}
+    >
       <div className="study-panel-header">
         <h2 className="study-panel-title" id={fullscreen ? 'fullscreen-timer-heading' : 'pomodoro-heading'}>Pomodoro timer</h2>
         <span className="study-panel-stats">{state.completedBlocks} {state.completedBlocks === 1 ? 'block' : 'blocks'} · {state.focusedMinutes} min today</span>
@@ -77,6 +85,7 @@ export function TimerPanel({ fullscreen = false }: { fullscreen?: boolean }) {
             </div>
           </div>
         </div>
+        <TimerLabel id={fullscreen ? 'timer-fullscreen-label' : 'timer-panel-label'} />
       </div>
 
       <div className="pomodoro-controls">
