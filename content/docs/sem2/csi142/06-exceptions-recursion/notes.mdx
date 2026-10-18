@@ -14,19 +14,162 @@ An exception represents an unusual condition that interrupts normal control flow
 
 `try` contains risky code, `catch` handles a compatible exception, and `finally` performs cleanup when needed. Catch the narrowest useful type and provide a meaningful response. Do not catch `Exception` only to hide the failure. Use try-with-resources for files and other `AutoCloseable` resources.
 
+Try it: predict every line, including when `finally` runs, then run the program. Change the divisors to `{0}` and predict the output again.
+
+<JavaTryIt>
+
+```java
+public class Main {
+    static int divide(int a, int b) {
+        if (b == 0) {
+            throw new IllegalArgumentException("divisor must not be zero");
+        }
+        return a / b;
+    }
+
+    public static void main(String[] args) {
+        int[] divisors = {4, 0, 5};
+        for (int d : divisors) {
+            try {
+                System.out.println("20 / " + d + " = " + divide(20, d));
+            } catch (IllegalArgumentException ex) {
+                System.out.println("Could not divide: " + ex.getMessage());
+            } finally {
+                System.out.println("done with " + d);
+            }
+        }
+    }
+}
+```
+
+```text
+20 / 4 = 5
+done with 4
+Could not divide: divisor must not be zero
+done with 0
+20 / 5 = 4
+done with 5
+```
+
+</JavaTryIt>
+
 Checked exceptions are part of a method’s compile-time contract; unchecked exceptions generally represent programming errors or invalid arguments. Validate at the boundary and document what callers should expect.
 
 ## Recursion
 
 Every recursive method needs a base case and a recursive case that moves closer to it. For factorial, `factorial(0)` returns 1 and `factorial(n)` returns `n * factorial(n - 1)` for positive `n`. Trace the call stack for a small input. If the input does not progress, the method may never terminate; deep recursion may exhaust the stack.
 
+Try it: follow the calls down to the base case and the returns back up, and write the stack on paper. Then change `4` to `6` and predict the last line before you run it.
+
+<JavaTryIt>
+
+```java
+public class Main {
+    static int factorial(int n) {
+        if (n == 0) {
+            return 1;
+        }
+        System.out.println("factorial(" + n + ") calls factorial(" + (n - 1) + ")");
+        int result = n * factorial(n - 1);
+        System.out.println("factorial(" + n + ") returns " + result);
+        return result;
+    }
+
+    public static void main(String[] args) {
+        System.out.println("answer: " + factorial(4));
+    }
+}
+```
+
+```text
+factorial(4) calls factorial(3)
+factorial(3) calls factorial(2)
+factorial(2) calls factorial(1)
+factorial(1) calls factorial(0)
+factorial(1) returns 1
+factorial(2) returns 2
+factorial(3) returns 6
+factorial(4) returns 24
+answer: 24
+```
+
+</JavaTryIt>
+
 ## Tests and debugging
 
 A unit test isolates a method and checks an observable result. Include normal, boundary, empty, invalid, and error-path cases. When a test fails, reduce the input to the smallest failing case, inspect the first incorrect state, and fix the cause rather than the symptom.
 
+Try it: two of these tests fail. Find the smallest failing input, fix the loop condition in `sum`, and run it again until all three tests pass.
+
+<JavaTryIt>
+
+```java
+public class Main {
+    static int sum(int[] values) {
+        int total = 0;
+        for (int i = 0; i < values.length - 1; i++) {
+            total += values[i];
+        }
+        return total;
+    }
+
+    static void check(String name, int expected, int actual) {
+        if (expected == actual) {
+            System.out.println(name + ": pass");
+        } else {
+            System.out.println(name + ": FAIL, expected " + expected + " but got " + actual);
+        }
+    }
+
+    public static void main(String[] args) {
+        check("empty", 0, sum(new int[] {}));
+        check("one item", 5, sum(new int[] {5}));
+        check("three items", 6, sum(new int[] {1, 2, 3}));
+    }
+}
+```
+
+```text
+empty: pass
+one item: FAIL, expected 5 but got 0
+three items: FAIL, expected 6 but got 3
+```
+
+</JavaTryIt>
+
 ## Common mistakes
 
 - Catching an exception and continuing with invalid state.
+
+Try it: the program catches the bad mark and carries on, but the average it prints is wrong. Find why and fix it so that only the marks that were read are counted; the average should be 65.
+
+<JavaTryIt>
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        String[] typed = {"72", "abc", "58"};
+        int total = 0;
+        for (String text : typed) {
+            try {
+                total += Integer.parseInt(text);
+            } catch (NumberFormatException ex) {
+                System.out.println("Skipping bad mark: " + text);
+            }
+        }
+        System.out.println("Total: " + total);
+        System.out.println("Average: " + total / typed.length);
+    }
+}
+```
+
+```text
+Skipping bad mark: abc
+Total: 130
+Average: 43
+```
+
+</JavaTryIt>
 - Returning from `finally` and masking an exception.
 - Omitting a recursive base case.
 - Testing only the happy path.
