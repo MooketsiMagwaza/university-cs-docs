@@ -1,0 +1,2224 @@
+---
+title: "Dependent Computation Patterns"
+description: "Choose the next contextual computation with bind, trace list branching and translate do notation into ordinary functions."
+---
+
+Independent inputs can be combined without seeing their payloads. A dependent computation instead uses a successful payload to decide the next contextual step. Lists expose this distinction particularly clearly: a value may choose not only the next answer but how many answers exist.
+
+<LearningObjectives items={[
+  'Derive bind types and distinguish dependency from ordinary mapping',
+  'Trace list bind, nested contexts and flattening',
+  'Choose between applicative combination and dependent sequencing',
+  'Translate do blocks while preserving scope, failure and branch order',
+  'Check Monad laws and compose contextual functions',
+]} />
+
+Read [Functor and Applicative Patterns](/docs/sem3/csi243/09-polymorphism/notes/functor-and-applicative-patterns) first. [Maybe and Writing Instances](/docs/sem3/csi243/09-polymorphism/notes/maybe-and-instances), [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth) and [Either in Depth](/docs/sem3/csi243/09-polymorphism/notes/either-in-depth) already teach specialised safe functions and failure chains. Here we extend them into generic and list patterns. For external effects, see [I/O Sequencing and Loops](/docs/sem3/csi243/03-defining-functions/notes/io-sequencing-and-loops).
+
+## 1. Bind: a payload chooses the next context
+
+Bind passes a successful payload to a function that already returns a contextual result. Unlike mapping, it does not put another outer wrapper around that returned result. The instance determines absence, errors, branching or effects. Monad has Applicative as a superclass, and Applicative has Functor; bind is the extra operation that can use the preceding payload to choose the next computation.
+
+**Template:** `value >>= next` has type `Monad m => m a -> (a -> m b) -> m b`. Match the same constructor m on both sides of the continuation, its input with a and its final payload with b. The reverse-argument spelling is `next =<< value`. Return and pure introduce the same successful value for the standard instances here; neither means exit the enclosing function.
+
+### Variation: generic Maybe instantiation
+
+The continuation returns a list as its optional payload.
+
+<HaskellTryIt>
+
+```haskell
+follow :: Monad m => (a -> m b) -> m a -> m b
+follow next value = value >>= next
+
+main :: IO ()
+main = print (follow (\n -> Just [n,n+1]) (Just (3 :: Int)))
+```
+
+```text
+Just [3,4]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Here m = Maybe, a = Int, b = [Int]. The continuation returns the final wrapper directly.
+
+### Variation: generic Either instantiation
+
+Change both payload types while retaining the error type.
+
+<HaskellTryIt>
+
+```haskell
+follow :: Monad m => (a -> m b) -> m a -> m b
+follow next value = value >>= next
+
+main :: IO ()
+main = print (follow (\s -> if null s then Left "empty" else Right (length s)) (Right "cat" :: Either String String))
+```
+
+```text
+Right 3
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Here m = Either String, a = String and b = Int. The successful text selects the length computation.
+
+### Variation: generic list instantiation
+
+Each payload chooses several possible results.
+
+<HaskellTryIt>
+
+```haskell
+follow :: Monad m => (a -> m b) -> m a -> m b
+follow next value = value >>= next
+
+main :: IO ()
+main = print (follow (\n -> [n,n*10]) [1,2 :: Int])
+```
+
+```text
+[1,10,2,20]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Here m = [], a = b = Int. The branch for 1 precedes the branch for 2.
+
+### Variation: reverse bind with absence
+
+Put the continuation before its source.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\n -> Just (n+1)) =<< (Nothing :: Maybe Int))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The reverse spelling still preserves absence without calling the continuation.
+
+### Variation: reverse bind with an error
+
+Fix the same error type on both steps.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\n -> Right (n*2)) =<< (Left "input" :: Either String Int))
+```
+
+```text
+Left "input"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The existing reason is returned even though the continuation would succeed.
+
+### Variation: reverse bind with branches
+
+Only the written argument order changes.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\n -> [n,n+1]) =<< [2,4 :: Int])
+```
+
+```text
+[2,3,4,5]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The branch for 2 is [2,3], followed by the branch for 4 as [4,5].
+
+### Exam question 1: derive a general bind type (5 marks)
+
+Give the most general type of `follow next value = value >>= next` and instantiate it when next has type `Char -> [String]`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" asks for a signature; instantiate means substitute the payload and constructor types.
+
+</Step>
+
+<Step title="2. Plan">
+
+The continuation fixes m = [], a = Char and b = String.
+
+</Step>
+
+<Step title="3. Solution">
+
+`follow :: Monad m => (a -> m b) -> m a -> m b`. At this use it has type `(Char -> [String]) -> [Char] -> [String]`.
+
+</Step>
+
+<Step title="4. Check">
+
+Following a function over "ab" visits a then b and concatenates the two lists of strings.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** A continuation returning a plain Int where Maybe Int is required produces `Couldn't match` in GHC. Use fmap for a pure transformation, or wrap a successful continuation result. Binding Maybe to an Either-producing function similarly mixes constructors; choose or convert one context.
+
+**Practice:** Rewrite `follow next value` using the reverse-argument bind operator.
+
+<details>
+<summary>Answer</summary>
+
+`next =<< value`. The continuation still has type a -> m b, not m a -> b.
+
+</details>
+
+## 2. List bind is ordered branching
+
+For a list, bind applies the continuation to every element and joins its result lists. A branch can produce zero, one or many results. An empty branch removes that branch only; later source alternatives still get their own turn.
+
+**Template:** `xs >>= next = concatMap next xs`, equivalently `[y | x <- xs, y <- next x]`. Its equations are `[] >>= next = []` and `(x:xs) >>= next = next x ++ (xs >>= next)`. Keep input order and each branch's output order.
+
+### Variation: variable branch sizes
+
+Different source values choose differently sized results.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([1,3 :: Int] >>= (\n -> [1..n]))
+```
+
+```text
+[1,1,2,3]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** For 1 emit [1]; for 3 emit [1,2,3]; append in that order. The two 1s remain separate occurrences.
+
+### Variation: one branch disappears
+
+The failed alternative does not abort the entire list.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([0,2,3 :: Int] >>= (\n -> if even n then [n,n+1] else []))
+```
+
+```text
+[0,1,2,3]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Zero gives [0,1], two gives [2,3], and odd three gives []. Earlier successful branches remain.
+
+### Variation: empty source
+
+No continuation call is made.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (([] :: [Int]) >>= (\n -> [n,n+1]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The empty-source equation returns []; no seed value or placeholder is created.
+
+### Exam question 2: trace ordered branches (5 marks)
+
+Evaluate `[2,0,1 :: Int] >>= (\n -> [n,n-1])`. State the type and show the branch concatenation.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for the complete ordered result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use concatMap: write each result list before appending.
+
+</Step>
+
+<Step title="3. Solution">
+
+The branches are [2,1], [0,-1] and [1,0]. Their concatenation is `[2,1,0,-1,1,0] :: [Int]`.
+
+</Step>
+
+<Step title="4. Check">
+
+There are three source values with two outputs each, so six values. Bind does not sort or remove repeats.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Confusing bind with map gives nested lists instead of a flat result; this is a semantic mismatch that can still compile. A continuation such as `\n -> n+1` returns Int, not [Int], and GHC includes `Couldn't match`. Use `\n -> [n+1]` for one branch output.
+
+**Practice:** Rewrite `[1,2 :: Int] >>= (\n -> [n,n])` as a comprehension.
+
+<details>
+<summary>Answer</summary>
+
+`[y | n <- [1,2 :: Int], y <- [n,n]]`, giving [1,1,2,2].
+
+</details>
+
+## 3. Mapping a contextual function, bind and join
+
+If next returns a context, fmap retains an extra outer context: `fmap next value :: m (m b)`. Bind returns `m b` by combining the two contextual layers according to the instance. This is not arbitrary unwrapping: a list still has many answers, an error still has its reason, and a missing result still has no payload.
+
+**Templates:** `value >>= next = join (fmap next value)` and `join nested = nested >>= id`. The library join is in Control.Monad and has type `Monad m => m (m a) -> m a`. The small definition below displays the same general operation without needing an import.
+
+### Variation: nested Maybe
+
+Compare mapping, binding and flattening the mapped result.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+next :: Int -> Maybe Int
+next n = if n > 3 then Just n else Nothing
+
+main :: IO ()
+main = print ((fmap next (Just 2), Just 2 >>= next, flatten (fmap next (Just 2))))
+```
+
+```text
+(Just Nothing,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Next rejects 2. Mapping wraps that Nothing in Just; bind and flatten return Nothing directly.
+
+### Variation: nested Either
+
+An outer success may contain an inner failure.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+next :: Int -> Either String Int
+next n = if n > 3 then Right n else Left "small"
+
+main :: IO ()
+main = print ((fmap next (Right 2 :: Either String Int), (Right 2 :: Either String Int) >>= next, flatten (fmap next (Right 2 :: Either String Int))))
+```
+
+```text
+(Right (Left "small"),Left "small",Left "small")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Mapping wraps the inner reason as a right payload. Bind and flatten expose that failure in the one remaining Either layer.
+
+### Variation: nested lists
+
+A list continuation produces a list for every source element.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+next :: Int -> [Int]
+next n = [n,n+10]
+
+main :: IO ()
+main = print ((fmap next [1,2], [1,2] >>= next, flatten (fmap next [1,2])))
+```
+
+```text
+([[1,11],[2,12]],[1,11,2,12],[1,11,2,12])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Map retains the two branch lists; bind and flatten append them in order.
+
+### Variation: flatten outer absence
+
+There is no inner result to inspect.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+main :: IO ()
+main = print (flatten (Nothing :: Maybe (Maybe Int)))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Outer Nothing makes bind return Nothing.
+
+### Variation: flatten nested success
+
+Both layers contain successful payloads.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+main :: IO ()
+main = print (flatten (Just (Just (4 :: Int))))
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Bind supplies the inner Just 4 to id, which returns it directly.
+
+### Variation: flatten outer error
+
+An outer error wins without an inner computation.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+main :: IO ()
+main = print (flatten (Left "outer" :: Either String (Either String Int)))
+```
+
+```text
+Left "outer"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Bind propagates the outer Left unchanged.
+
+### Variation: flatten nested Either success
+
+Both Either layers are right.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+main :: IO ()
+main = print (flatten (Right (Right (4 :: Int)) :: Either String (Either String Int)))
+```
+
+```text
+Right 4
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The outer bind supplies Right 4 to id; exactly one layer remains.
+
+### Variation: flatten empty outer list
+
+There are no branch lists.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+main :: IO ()
+main = print (flatten ([] :: [[Int]]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The empty source gives an empty result.
+
+### Variation: flatten empty inner lists
+
+There are branches but none produces a payload.
+
+<HaskellTryIt>
+
+```haskell
+flatten :: Monad m => m (m a) -> m a
+flatten nested = nested >>= id
+
+main :: IO ()
+main = print (flatten [[],[] :: [Int]])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Each empty list contributes nothing; concatenation gives [].
+
+### Exam question 3: remove exactly one layer (5 marks)
+
+Derive the type of `flatten (Just (Just "ok"))` and contrast it with `fmap id (Just (Just "ok"))`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Derive" asks to match the nested constructor shape; contrast asks which layer remains.
+
+</Step>
+
+<Step title="2. Plan">
+
+For flatten, m = Maybe and a = String. Mapping id does not combine layers.
+
+</Step>
+
+<Step title="3. Solution">
+
+Flatten returns `Just "ok" :: Maybe String`. Fmap id returns `Just (Just "ok") :: Maybe (Maybe String)`.
+
+</Step>
+
+<Step title="4. Check">
+
+Flattening Just Nothing instead gives Nothing. It does not invent a string to fill absence.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Wrapping a bind continuation result again gives m (m b), which may type-check at the wrong signature or give `Couldn't match` at the intended one. Return the continuation result directly. Join requires matching nested constructors: Maybe [Int] is not Maybe (Maybe Int).
+
+**Practice:** What is `flatten [[],[4],[5,6 :: Int]]`?
+
+<details>
+<summary>Answer</summary>
+
+[4,5,6]. The empty branch contributes nothing, then the later branches are appended.
+
+</details>
+
+## 4. Four independent-versus-dependent decisions
+
+Use Applicative when contextual inputs are specified independently. Use bind when a successful payload selects the next contextual computation. A dependency in the final ordinary arithmetic alone does not require bind: a lifted function can calculate from all successful arguments.
+
+**Decision template:** write the required inputs first. If the second can be written without the first payload, use `combine <$> first <*> second`. If the second is `next x` for an x obtained from first, use `first >>= \x -> next x`. In each contrast below, independent and dependent functions answer different specifications; they are not interchangeable rewrites.
+
+### Contrast: two fields versus a selected lookup
+
+Two supplied optional fields can be paired independently. Selecting a table entry by the first payload needs bind. The lookup operation itself is prerequisite material.
+
+### Variation: both fields exist
+
+Use an existing lookup key.
+
+<HaskellTryIt>
+
+```haskell
+independent :: Maybe String -> Maybe Int -> Maybe (String,Int)
+independent name mark = (,) <$> name <*> mark
+
+dependent :: Maybe String -> Maybe Int
+dependent name = name >>= \key -> lookup key [("Ada",70),("Bo",80)]
+
+main :: IO ()
+main = print ((independent (Just "Ada") (Just 9), dependent (Just "Ada")))
+```
+
+```text
+(Just ("Ada",9),Just 70)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The independent mark is the supplied 9. The dependent lookup uses "Ada" to select 70.
+
+### Variation: present but unknown key
+
+The optional name exists, but the selected search may fail.
+
+<HaskellTryIt>
+
+```haskell
+independent :: Maybe String -> Maybe Int -> Maybe (String,Int)
+independent name mark = (,) <$> name <*> mark
+
+dependent :: Maybe String -> Maybe Int
+dependent name = name >>= \key -> lookup key [("Ada",70),("Bo",80)]
+
+main :: IO ()
+main = print ((independent (Just "Cy") (Just 9), dependent (Just "Cy")))
+```
+
+```text
+(Just ("Cy",9),Nothing)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Pairing does not search a table. The dependent continuation searches for Cy and finds no entry.
+
+### Variation: missing first input
+
+Both operations see outer absence.
+
+<HaskellTryIt>
+
+```haskell
+independent :: Maybe String -> Maybe Int -> Maybe (String,Int)
+independent name mark = (,) <$> name <*> mark
+
+dependent :: Maybe String -> Maybe Int
+dependent name = name >>= \key -> lookup key [("Ada",70),("Bo",80)]
+
+main :: IO ()
+main = print ((independent Nothing (Just 9), dependent Nothing))
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Application cannot pair a missing name; bind does not call lookup without a key.
+
+### Exam question 4: choose a lookup dependency (5 marks)
+
+A Maybe String stores a selected student name. Write a function returning their optional mark from a supplied association list. Explain why pairing two independent results does not satisfy this task.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" asks for a definition; the name payload determines the search.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use bind so lookup receives String rather than Maybe String.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+selectedMark :: Maybe String -> [(String,Int)] -> Maybe Int
+selectedMark name table = name >>= \key -> lookup key table
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Just "Ada" with [("Ada",70)] gives Just 70; an unknown name or Nothing gives Nothing.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Calling lookup with the whole Maybe String instead of its String payload causes a type mismatch (GHC key phrase `Couldn't match`). Keep lookup inside the continuation. Pairing a supplied mark is a different specification and does not perform a search.
+
+**Practice:** For the table [("Ada",70)], compare an independent pair built from Just "Cy" and Just 5 with a dependent lookup selected by Just "Cy".
+
+<details>
+<summary>Answer</summary>
+
+The pair is Just ("Cy",5), but the selected lookup is Nothing. Presence of a key does not prove that key exists in the table.
+
+</details>
+
+### Contrast: two validated numbers versus a chosen validation
+
+Two Either inputs can be added independently. A successful first payload can instead determine a new check. Error priority still follows the standard Either instance; independence does not imply error accumulation.
+
+### Variation: valid independent inputs
+
+The selected check can still fail.
+
+<HaskellTryIt>
+
+```haskell
+independent :: Either String Int -> Either String Int -> Either String Int
+independent first second = (+) <$> first <*> second
+
+dependent :: Either String Int -> Either String Int
+dependent first = first >>= \n ->
+  if n > 5 then Right (n * 2) else Left "too small"
+
+main :: IO ()
+main = print ((independent (Right 3) (Right 4), dependent (Right 3)))
+```
+
+```text
+(Right 7,Left "too small")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Addition needs no extra check; the dependent rule rejects the successful payload 3.
+
+### Variation: first failure
+
+The continuation is skipped.
+
+<HaskellTryIt>
+
+```haskell
+independent :: Either String Int -> Either String Int -> Either String Int
+independent first second = (+) <$> first <*> second
+
+dependent :: Either String Int -> Either String Int
+dependent first = first >>= \n ->
+  if n > 5 then Right (n * 2) else Left "too small"
+
+main :: IO ()
+main = print ((independent (Left "first") (Left "second"), dependent (Left "first")))
+```
+
+```text
+(Left "first",Left "first")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Independent combination retains its first error. Bind returns the same existing error without choosing a later check.
+
+### Variation: dependent success
+
+Change the payload so the chosen check passes.
+
+<HaskellTryIt>
+
+```haskell
+independent :: Either String Int -> Either String Int -> Either String Int
+independent first second = (+) <$> first <*> second
+
+dependent :: Either String Int -> Either String Int
+dependent first = first >>= \n ->
+  if n > 5 then Right (n * 2) else Left "too small"
+
+main :: IO ()
+main = print ((independent (Right 8) (Left "second"), dependent (Right 8)))
+```
+
+```text
+(Left "second",Right 16)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The independent second input fails. The dependent path instead uses 8 to select and compute Right 16.
+
+### Exam question 5: independent does not mean accumulate (5 marks)
+
+Two independent validators both return Left, with reasons "first" and "second". Compare applicative addition with bind to a continuation chosen from the first success.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" requires both behaviour and the reason.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the first-left equation for Either application and the left equation for bind.
+
+</Step>
+
+<Step title="3. Solution">
+
+Applicative addition returns Left "first". Bind also returns Left "first" and never calls the continuation. The equality of errors does not prove the specifications are identical on success.
+
+</Step>
+
+<Step title="4. Check">
+
+With Right 3 and Right 4, independent addition gives Right 7; a continuation checking n > 5 can reject 3 instead.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Expecting Either application to collect both failures is a wrong-output error, not a GHC rejection. Keep the first reason. If a dependent continuation returns bare n*2 when its signature requires Either String Int, wrap success with Right or pure.
+
+**Practice:** For first = Right 8 and second = Right 1, compare independent addition with the rule requiring first payload greater than 5 and then doubling it.
+
+<details>
+<summary>Answer</summary>
+
+Independent addition returns Right 9; the dependent rule returns Right 16. The latter does not use the supplied second result.
+
+</details>
+
+### Contrast: fixed Cartesian choices versus a dependent range
+
+Independent list inputs give every pair. A range whose upper limit is the earlier element has a different branch size for each element.
+
+### Variation: different branch sizes
+
+The source contains 1 and 3.
+
+<HaskellTryIt>
+
+```haskell
+independent :: [Int] -> [(Int,Int)]
+independent xs = (,) <$> xs <*> [1,2]
+
+dependent :: [Int] -> [(Int,Int)]
+dependent xs = xs >>= \x -> [ (x,y) | y <- [1..x] ]
+
+main :: IO ()
+main = print ((independent [1,3], dependent [1,3]))
+```
+
+```text
+([(1,1),(1,2),(3,1),(3,2)],[(1,1),(3,1),(3,2),(3,3)])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The fixed second list has two choices for every x. The selected ranges have one and three choices.
+
+### Variation: empty dependent branch
+
+Zero has no range from 1 to itself.
+
+<HaskellTryIt>
+
+```haskell
+independent :: [Int] -> [(Int,Int)]
+independent xs = (,) <$> xs <*> [1,2]
+
+dependent :: [Int] -> [(Int,Int)]
+dependent xs = xs >>= \x -> [ (x,y) | y <- [1..x] ]
+
+main :: IO ()
+main = print ((independent [0,2], dependent [0,2]))
+```
+
+```text
+([(0,1),(0,2),(2,1),(2,2)],[(2,1),(2,2)])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The independent branch for zero still has two pairs. The dependent range [1..0] is empty.
+
+### Variation: no source alternatives
+
+Neither construction invents an x.
+
+<HaskellTryIt>
+
+```haskell
+independent :: [Int] -> [(Int,Int)]
+independent xs = (,) <$> xs <*> [1,2]
+
+dependent :: [Int] -> [(Int,Int)]
+dependent xs = xs >>= \x -> [ (x,y) | y <- [1..x] ]
+
+main :: IO ()
+main = print ((independent [], dependent []))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Both are empty because their outer source is empty; this boundary alone cannot distinguish the specifications.
+
+### Exam question 6: count dependent pairs (5 marks)
+
+Write a list computation producing (x,y) for x from [1,3] and y from 1 through x. Give its result length and explain why a fixed [1,2] second argument is wrong.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" asks for a construction with a varying inner domain.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind x before forming [1..x], then map the pair constructor over the selected range.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+pairs :: [(Int,Int)]
+pairs = [1,3] >>= \x -> map (\y -> (x,y)) [1..x]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The result is [(1,1),(3,1),(3,2),(3,3)], length 1+3 = 4. Fixed [1,2] would include (1,2) and omit (3,3).
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Replacing [1..x] with one fixed range may compile but changes branch membership. GHC cannot diagnose a wrong specification. Bind x before forming its range and keep the outer generator order.
+
+**Practice:** Compare the fixed [1,2] Cartesian rule and the dependent [1..x] rule on source [1].
+
+<details>
+<summary>Answer</summary>
+
+The fixed rule gives [(1,1),(1,2)]; the dependent rule gives [(1,1)]. The second result is excluded because 2 exceeds x.
+
+</details>
+
+### Contrast: two positions versus an index selected by a value
+
+Two supplied lists can form independent pairs. A first list can instead supply positions into a second list. The next branch must then use the selected position; it is not a Cartesian pairing of positions and all data.
+
+For this policy, indices must be non-negative; oversized indices contribute no result. We use take/drop to avoid partial indexing. Negative indices are outside this function's stated domain.
+
+### Variation: selected position
+
+Use one position with two available values.
+
+<HaskellTryIt>
+
+```haskell
+independent :: [Int] -> [String] -> [(Int,String)]
+independent indices values = (,) <$> indices <*> values
+
+dependent :: [Int] -> [String] -> [String]
+dependent indices values = indices >>= \i -> take 1 (drop i values)
+
+main :: IO ()
+main = print ((independent [1] ["a","b"], dependent [1] ["a","b"]))
+```
+
+```text
+([(1,"a"),(1,"b")],["b"])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Cartesian pairing includes both texts. Drop 1 then take 1 selects only b.
+
+### Variation: oversized index
+
+A dependent branch can disappear.
+
+<HaskellTryIt>
+
+```haskell
+independent :: [Int] -> [String] -> [(Int,String)]
+independent indices values = (,) <$> indices <*> values
+
+dependent :: [Int] -> [String] -> [String]
+dependent indices values = indices >>= \i -> take 1 (drop i values)
+
+main :: IO ()
+main = print ((independent [3] ["a","b"], dependent [3] ["a","b"]))
+```
+
+```text
+([(3,"a"),(3,"b")],[])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The pair builder does no indexing. Drop 3 exhausts the values, so the selected branch is empty.
+
+### Variation: repeated index
+
+The same branch is visited twice.
+
+<HaskellTryIt>
+
+```haskell
+independent :: [Int] -> [String] -> [(Int,String)]
+independent indices values = (,) <$> indices <*> values
+
+dependent :: [Int] -> [String] -> [String]
+dependent indices values = indices >>= \i -> take 1 (drop i values)
+
+main :: IO ()
+main = print ((independent [0,0] ["a"], dependent [0,0] ["a"]))
+```
+
+```text
+([(0,"a"),(0,"a")],["a","a"])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Both source occurrences survive; the dependent calculation selects a twice.
+
+### Exam question 7: repair wrong sequencing (5 marks)
+
+A student writes `indices >> values` to select the indexed values. Explain why it is wrong and give the dependent selection for non-negative indices.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" requires the meaning of ignoring a payload, not just another expression.
+
+</Step>
+
+<Step title="2. Plan">
+
+List sequencing ignores each index and repeats all values for every source occurrence. The continuation must use i instead.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `indices >>= \i -> take 1 (drop i values)`. This chooses zero or one result per supplied non-negative index.
+
+</Step>
+
+<Step title="4. Check">
+
+For [1] and ["a","b"], the wrong code gives ["a","b"]; the repair gives ["b"].
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Passing the complete first context to a next function expecting its payload produces `Couldn't match`. Extract using bind. Conversely, using bind just because the final arithmetic mentions both variables is unnecessary when the two contextual inputs are independent. Wrong sequencing may compile and silently repeat, discard or select the wrong results.
+
+**Practice:** Classify: pair two supplied Maybe fields; search by a Maybe key; list all pairs from fixed lists; create a range ending at each source value.
+
+<details>
+<summary>Answer</summary>
+
+Applicative, bind, Applicative, bind respectively. Ask whether a later contextual input must be constructed using a preceding payload.
+
+</details>
+
+## 5. Do notation is a readable bind tree
+
+Do notation groups contextual steps; it is not restricted to IO. A bound variable is a payload, visible in subsequent lines. Desugaring makes scope and branching explicit. These examples use variable patterns only, so they need no refutable-pattern failure mechanism.
+
+**Templates:** `do { x <- first; rest } = first >>= \x -> rest`; `do { final } = final`. With two bindings, nest the second bind inside the first lambda. The final expression must already be contextual. A let in do adds an ordinary local definition, not an additional contextual step.
+
+### Variation: Maybe success
+
+Use a payload that passes the selected check.
+
+<HaskellTryIt>
+
+```haskell
+written :: Maybe Int -> Maybe Int
+written source = do
+  x <- source
+  y <- if x > 2 then Just (x * 2) else Nothing
+  pure (x + y)
+
+expanded :: Maybe Int -> Maybe Int
+expanded source = source >>= \x ->
+  (if x > 2 then Just (x * 2) else Nothing) >>= \y ->
+    pure (x + y)
+
+main :: IO ()
+main = print ((written (Just 3), expanded (Just 3)))
+```
+
+```text
+(Just 9,Just 9)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Bind x=3, then y=6, then pure 9; both forms retain one Maybe layer.
+
+### Variation: Maybe first failure
+
+Remove the source payload.
+
+<HaskellTryIt>
+
+```haskell
+written :: Maybe Int -> Maybe Int
+written source = do
+  x <- source
+  y <- if x > 2 then Just (x * 2) else Nothing
+  pure (x + y)
+
+expanded :: Maybe Int -> Maybe Int
+expanded source = source >>= \x ->
+  (if x > 2 then Just (x * 2) else Nothing) >>= \y ->
+    pure (x + y)
+
+main :: IO ()
+main = print ((written Nothing, expanded Nothing))
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first bind short-circuits, so neither x nor y is supplied.
+
+### Variation: Maybe chosen failure
+
+The source succeeds but its continuation does not.
+
+<HaskellTryIt>
+
+```haskell
+written :: Maybe Int -> Maybe Int
+written source = do
+  x <- source
+  y <- if x > 2 then Just (x * 2) else Nothing
+  pure (x + y)
+
+expanded :: Maybe Int -> Maybe Int
+expanded source = source >>= \x ->
+  (if x > 2 then Just (x * 2) else Nothing) >>= \y ->
+    pure (x + y)
+
+main :: IO ()
+main = print ((written (Just 1), expanded (Just 1)))
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** x=1 chooses Nothing, skipping the final pure computation.
+
+### Variation: Either success
+
+Use an even payload.
+
+<HaskellTryIt>
+
+```haskell
+written :: Either String Int -> Either String Int
+written source = do
+  x <- source
+  y <- if even x then Right (x + 1) else Left "odd"
+  pure (x * y)
+
+expanded :: Either String Int -> Either String Int
+expanded source = source >>= \x ->
+  (if even x then Right (x + 1) else Left "odd") >>= \y ->
+    pure (x * y)
+
+main :: IO ()
+main = print ((written (Right 2), expanded (Right 2)))
+```
+
+```text
+(Right 6,Right 6)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Bind x=2 and y=3; both return Right (2*3).
+
+### Variation: Either existing error
+
+Preserve the original reason.
+
+<HaskellTryIt>
+
+```haskell
+written :: Either String Int -> Either String Int
+written source = do
+  x <- source
+  y <- if even x then Right (x + 1) else Left "odd"
+  pure (x * y)
+
+expanded :: Either String Int -> Either String Int
+expanded source = source >>= \x ->
+  (if even x then Right (x + 1) else Left "odd") >>= \y ->
+    pure (x * y)
+
+main :: IO ()
+main = print ((written (Left "input"), expanded (Left "input")))
+```
+
+```text
+(Left "input",Left "input")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Neither continuation is reached, so the reason is not replaced by "odd".
+
+### Variation: Either later error
+
+Use an odd successful payload.
+
+<HaskellTryIt>
+
+```haskell
+written :: Either String Int -> Either String Int
+written source = do
+  x <- source
+  y <- if even x then Right (x + 1) else Left "odd"
+  pure (x * y)
+
+expanded :: Either String Int -> Either String Int
+expanded source = source >>= \x ->
+  (if even x then Right (x + 1) else Left "odd") >>= \y ->
+    pure (x * y)
+
+main :: IO ()
+main = print ((written (Right 3), expanded (Right 3)))
+```
+
+```text
+(Left "odd",Left "odd")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** x=3 selects the failing second step; the final multiplication is skipped.
+
+### Variation: list branching
+
+Each x selects a separate range.
+
+<HaskellTryIt>
+
+```haskell
+written :: [Int] -> [(Int,Int)]
+written source = do
+  x <- source
+  y <- [1..x]
+  pure (x,y)
+
+expanded :: [Int] -> [(Int,Int)]
+expanded source = source >>= \x ->
+  [1..x] >>= \y ->
+    pure (x,y)
+
+main :: IO ()
+main = print ((written [1,2], expanded [1,2]))
+```
+
+```text
+([(1,1),(2,1),(2,2)],[(1,1),(2,1),(2,2)])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The x=1 branch emits one pair; x=2 emits two, with y varying fastest.
+
+### Variation: list empty inner branch
+
+A failed inner branch does not erase later outer alternatives.
+
+<HaskellTryIt>
+
+```haskell
+written :: [Int] -> [(Int,Int)]
+written source = do
+  x <- source
+  y <- [1..x]
+  pure (x,y)
+
+expanded :: [Int] -> [(Int,Int)]
+expanded source = source >>= \x ->
+  [1..x] >>= \y ->
+    pure (x,y)
+
+main :: IO ()
+main = print ((written [0,1], expanded [0,1]))
+```
+
+```text
+([(1,1)],[(1,1)])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The range for zero is empty; the x=1 branch still produces its pair.
+
+### Variation: list empty source
+
+There is no bound x to continue with.
+
+<HaskellTryIt>
+
+```haskell
+written :: [Int] -> [(Int,Int)]
+written source = do
+  x <- source
+  y <- [1..x]
+  pure (x,y)
+
+expanded :: [Int] -> [(Int,Int)]
+expanded source = source >>= \x ->
+  [1..x] >>= \y ->
+    pure (x,y)
+
+main :: IO ()
+main = print ((written [], expanded []))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The outer bind returns [], so the inner range is never formed.
+
+### Exam question 8: desugar with scope intact (5 marks)
+
+Rewrite `do { x <- [1,2 :: Int]; y <- [x,x+10]; pure (x+y) }` using binds, and give its result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" asks to preserve the use of x inside the second step.
+
+</Step>
+
+<Step title="2. Plan">
+
+The second bind must be inside the lambda binding x.
+
+</Step>
+
+<Step title="3. Solution">
+
+`[1,2 :: Int] >>= \x -> [x,x+10] >>= \y -> pure (x+y)`. The results are [2,12,4,14].
+
+</Step>
+
+<Step title="4. Check">
+
+For x=1, y=1 or 11 gives 2 or 12; for x=2, y=2 or 12 gives 4 or 14.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Putting the second bind outside the first lambda loses x, producing `Variable not in scope`. If x is fixed to Int, ending a Maybe Int do block with bare x+1 omits the final context; GHC includes `Couldn't match`. Use pure (x+1).
+
+**Practice:** Does swapping the two bindings preserve a dependency on x?
+
+<details>
+<summary>Answer</summary>
+
+No. A line constructing [1..x] cannot precede the line that binds x. Independent bindings can be expressed applicatively, but list reordering can also change output order.
+
+</details>
+
+## 6. Let, payload bindings and return
+
+A do binding with an arrow obtains a payload from a contextual step. A let defines an ordinary local expression and has no contextual failure or branch of its own. Pure and return introduce a contextual result; return does not exit the surrounding block.
+
+**Templates:** `do { x <- source; let y = f x; pure y }` is `source >>= \x -> let y = f x in pure y`. Use `<-` for an m a source, and `let` for an ordinary a expression. Both names are in scope only in the following part of the block.
+
+### Variation: ordinary local calculation
+
+The optional source supplies a payload; let supplies only arithmetic.
+
+<HaskellTryIt>
+
+```haskell
+written :: Maybe Int
+written = do
+  x <- Just 4
+  let y = x * 3
+  pure (y + 1)
+
+main :: IO ()
+main = print written
+```
+
+```text
+Just 13
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Bind x=4, name y=12 with let, then return the contextual result Just 13. Let itself does not add a Maybe layer.
+
+### Variation: let can name a contextual value
+
+The variable itself remains Maybe Int until bound.
+
+<HaskellTryIt>
+
+```haskell
+written :: Maybe Int
+written = do
+  let optional = Just 4
+  x <- optional
+  pure (x + 1)
+
+main :: IO ()
+main = print written
+```
+
+```text
+Just 5
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Optional is Maybe Int, not Int. The arrow binding supplies x=4; only then does x+1 make sense.
+
+### Variation: return is not an exit
+
+A discarded successful return is followed by another computation.
+
+<HaskellTryIt>
+
+```haskell
+written :: Maybe Int
+written = do
+  x <- Just 3
+  return (x + 100)
+  pure (x + 1)
+
+main :: IO ()
+main = print written
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The intermediate return produces a successful value which is discarded. It does not prevent the final expression from returning Just 4.
+
+### Exam question 9: repair a missing wrapper (5 marks)
+
+Repair `result :: Maybe Int; result = do { x <- Just 4; y <- x+1; y }`. Explain both repairs.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Repair" asks for a well-typed do block with the intended arithmetic result.
+
+</Step>
+
+<Step title="2. Plan">
+
+x+1 is plain Int, so name it with let. The final expression must be Maybe Int, so use pure.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+result :: Maybe Int
+result = do
+  x <- Just 4
+  let y = x + 1
+  pure y
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The result is Just 5. Alternatively bind y from Just (x+1), then end with pure y; that adds a contextual step but gives the same value here.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Using an arrow for x+1 treats Int as a context and gives `Couldn't match` in a fixed Maybe Int example. Using `let x = Just 4` then arithmetic on x asks for Num on Maybe. Bind a payload before arithmetic. A plain final variable lacks the required contextual result type.
+
+**Practice:** Does `return 99` followed by `pure 7` necessarily return 99?
+
+<details>
+<summary>Answer</summary>
+
+No. In a successful Maybe sequence the intermediate value is discarded, so the final result is Just 7.
+
+</details>
+
+## 7. Discarding a payload: sequencing siblings
+
+Sometimes a contextual step matters but its payload does not. Sequencing keeps the context's failure, branching or effects while ignoring that payload. It does not simply remove the step.
+
+**Templates:** `first >> second = first >>= \_ -> second`. For the standard compatible instances here, `first *> second` gives the same result, using only Applicative. The sibling `first <* second` retains the first payload instead, while still combining the contexts. Their types are `m a -> m b -> m b` for bind sequencing, `f a -> f b -> f b` for right-retaining application, and `f a -> f b -> f a` for left-retaining application. The type of the ignored payload may differ from the retained one.
+
+### Variation: Maybe sequencing
+
+Compare all three operations with successful inputs.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((Just "label" >> Just (7 :: Int), Just "label" *> Just (7 :: Int), Just "label" <* Just (7 :: Int)))
+```
+
+```text
+(Just 7,Just 7,Just "label")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first two discard "label"; the last keeps it. All require both optional steps to succeed.
+
+### Variation: Either sequencing
+
+An ignored payload does not mean an ignored failure.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((Left "first" :: Either String String) >> Right (7 :: Int), (Right "ok" :: Either String String) *> Left "second" :: Either String Int, (Right "ok" :: Either String String) <* (Left "second" :: Either String Int)))
+```
+
+```text
+(Left "first",Left "second",Left "second")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first operation preserves its existing error. Both applicative siblings preserve the second error even when the chosen payload would otherwise come from the first input.
+
+### Variation: list sequencing
+
+Discarded values still control multiplicity.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (([1,2 :: Int] >> [10,20 :: Int], [1,2 :: Int] *> [10,20 :: Int], [1,2 :: Int] <* [10,20 :: Int]))
+```
+
+```text
+([10,20,10,20],[10,20,10,20],[1,1,2,2])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Each source alternative visits every second alternative. Keeping the second values repeats [10,20]; keeping the first repeats each source value twice.
+
+### Variation: Maybe missing first step
+
+Compare all siblings when the discarded source is absent.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((Nothing :: Maybe String) >> Just (7 :: Int), (Nothing :: Maybe String) *> Just (7 :: Int), (Nothing :: Maybe String) <* Just (7 :: Int)))
+```
+
+```text
+(Nothing,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** No operation can retain an answer from a failed combination. Ignoring a payload does not ignore its absence.
+
+### Variation: Maybe missing second step
+
+Even retaining the first payload still requires the second success.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((Just "ok" >> (Nothing :: Maybe Int), Just "ok" *> (Nothing :: Maybe Int), Just "ok" <* (Nothing :: Maybe Int)))
+```
+
+```text
+(Nothing,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The second step fails in all three operations; none can return the first success as if the second had passed.
+
+### Variation: Either successful steps
+
+Compare retained payload types on success.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((Right "ok" :: Either String String) >> Right (7 :: Int), (Right "ok" :: Either String String) *> Right (7 :: Int), (Right "ok" :: Either String String) <* Right (7 :: Int)))
+```
+
+```text
+(Right 7,Right 7,Right "ok")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first two retain the right input payload; the final operation retains the left input payload.
+
+### Variation: Either two failed steps
+
+First failure has priority for all three spellings.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((Left "first" :: Either String String) >> (Left "second" :: Either String Int), (Left "first" :: Either String String) *> (Left "second" :: Either String Int), (Left "first" :: Either String String) <* (Left "second" :: Either String Int)))
+```
+
+```text
+(Left "first",Left "first",Left "first")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first error survives, independent of which successful payload the operator would retain.
+
+### Variation: list empty first input
+
+No outer branch can visit the second list.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((([] :: [Int]) >> [10,20 :: Int], ([] :: [Int]) *> [10,20 :: Int], ([] :: [Int]) <* [10,20 :: Int]))
+```
+
+```text
+([],[],[])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Zero outer alternatives means zero combinations in every case.
+
+### Variation: list empty second input
+
+Each existing first alternative meets zero second alternatives.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (([1,2 :: Int] >> ([] :: [Int]), [1,2 :: Int] *> ([] :: [Int]), [1,2 :: Int] <* ([] :: [Int])))
+```
+
+```text
+([],[],[])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** No complete pair of choices exists, so neither payload-retaining choice produces output.
+
+### Exam question 10: ignored values still branch (5 marks)
+
+Evaluate `[1,2,3 :: Int] >> ["x","y"]`. Explain why it is not just ["x","y"].
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" requires order and multiplicity.
+
+</Step>
+
+<Step title="2. Plan">
+
+Expand sequencing to a bind whose continuation ignores the source payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+`[1,2,3] >>= \_ -> ["x","y"]` gives `["x","y","x","y","x","y"]`. There are three calls to the same continuation.
+
+</Step>
+
+<Step title="4. Check">
+
+Changing the first list to [] gives [], not ["x","y"]. A discarded payload still comes from an actual branch.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Using >> when the continuation needs x loses its value; referring to an unbound x gives `Variable not in scope`. Use `>>= \x -> ...`. Expecting a left failure to be ignored just because its payload is discarded is a semantic error; sequencing keeps failure.
+
+**Practice:** Compare `Just 1 <* Nothing` with `Just 1 *> Nothing` at appropriate Maybe types.
+
+<details>
+<summary>Answer</summary>
+
+Both give Nothing. The retained payload choice matters only if both contextual inputs succeed.
+
+</details>
+
+## 8. The Monad laws
+
+The laws describe how successful introduction and dependent sequencing fit together. They allow refactoring without changing which failures or branches survive. A method can compile while violating these behavioural promises. For these finite total examples, Eq checks the answers; the Monad class does not require Eq.
+
+**Templates:**
+
+- Left identity: `pure x >>= k = k x`.
+- Right identity: `value >>= pure = value`.
+- Associativity: `(value >>= k) >>= h = value >>= (\x -> k x >>= h)`.
+
+Associativity is regrouping, not swapping k and h. The continuation input and output types must still line up. Each variation below checks all three laws in order.
+
+### Variation: Maybe law checks
+
+Use a continuation that could fail on another input.
+
+<HaskellTryIt>
+
+```haskell
+k :: Int -> Maybe Int
+k x = if x > 0 then Just (x + 1) else Nothing
+
+h :: Int -> Maybe Int
+h x = Just (x * 2)
+
+main :: IO ()
+main = do
+  let value = Just 2
+  print (((pure 2 :: Maybe Int) >>= k) == k 2)
+  print ((value >>= pure) == value)
+  print (((value >>= k) >>= h) == (value >>= (\x -> k x >>= h)))
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Left identity gives Just 3. Right identity preserves Just 2. Associativity gives Just 6 along both routes.
+
+### Variation: Either law checks
+
+Check an existing failure as well as pure introduction.
+
+<HaskellTryIt>
+
+```haskell
+k :: Int -> Either String Int
+k x = if x > 0 then Right (x + 1) else Left "non-positive"
+
+h :: Int -> Either String Int
+h x = Right (x * 2)
+
+main :: IO ()
+main = do
+  let value = Left "earlier" :: Either String Int
+  print (((pure 2 :: Either String Int) >>= k) == k 2)
+  print ((value >>= pure) == value)
+  print (((value >>= k) >>= h) == (value >>= (\x -> k x >>= h)))
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Left identity gives Right 3. Right identity and both association routes preserve Left "earlier", never replacing its reason.
+
+### Variation: list law checks
+
+Use a branching continuation whose order is observable.
+
+<HaskellTryIt>
+
+```haskell
+k :: Int -> [Int]
+k x = [x,x+10]
+
+h :: Int -> [Int]
+h x = [x * 2]
+
+main :: IO ()
+main = do
+  let value = [1,2 :: Int]
+  print (((pure 2 :: [Int]) >>= k) == k 2)
+  print ((value >>= pure) == value)
+  print (((value >>= k) >>= h) == (value >>= (\x -> k x >>= h)))
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Left identity gives [2,12]. Right identity gives [1,2]. Both association routes give [2,22,4,24], preserving the outer branch order.
+
+### Exam question 11: associativity is not reordering (5 marks)
+
+Use list continuations `k x = [x,x+10]` and `h x = [x*2]` to explain associativity on [1]. Is swapping k and h justified?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" requires the two lawful groupings and a check on the proposed swap.
+
+</Step>
+
+<Step title="2. Plan">
+
+Both lawful groupings apply k first and h second. Swapping changes the continuation order.
+
+</Step>
+
+<Step title="3. Solution">
+
+Both `([1] >>= k) >>= h` and `[1] >>= (\x -> k x >>= h)` give [2,22]. But `([1] >>= h) >>= k` gives [2,12].
+
+</Step>
+
+<Step title="4. Check">
+
+The different second result, 22 versus 12, refutes the swap. Associativity preserves order, not commutativity.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Assuming compiler acceptance proves the laws confuses types with values; no GHC diagnostic need occur. Swapping continuation order can compile yet change answers, as above. If one step changes types, an attempted swap can additionally cause `Couldn't match`.
+
+**Practice:** Use right identity to simplify `value >>= (\x -> pure x)`.
+
+<details>
+<summary>Answer</summary>
+
+It is value for a lawful instance. On [] it stays []; on Nothing it stays Nothing; on Left "bad" it retains that reason.
+
+</details>
+
+## 9. Compose functions that return a context
+
+Ordinary composition cannot directly connect `a -> m b` with `b -> m c`: the first produces m b, while the next wants b. **Kleisli composition** means composing such contextual functions by using bind between them.
+
+**Template:** `chainSteps first next x = first x >>= next`, with type `Monad m => (a -> m b) -> (b -> m c) -> a -> m c`. Control.Monad supplies this left-to-right spelling as `first >=> next` and the reversed spelling as `next <=< first`. The hand-written definition below makes the mechanism explicit.
+
+### Variation: Maybe composition
+
+A missing search stops the later transformation.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\key -> lookup key [("Ada",4 :: Int)]) (\n -> Just (n * 3)) "Ada")
+```
+
+```text
+Just 12
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first function maps a String to Maybe Int; the second consumes its Int payload to produce Maybe Int.
+
+### Variation: Either composition
+
+The second function can change the success type.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> if n > 0 then Right n else Left "non-positive") (\n -> Right (show n)) (3 :: Int) :: Either String String)
+```
+
+```text
+Right "3"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first result is Right 3, then the continuation produces Right "3". Ordinary composition would feed an Either value to show instead of its payload, changing the specification.
+
+### Variation: list composition
+
+The two functions can both branch.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> [n,n+1]) (\x -> [x,x*10]) (2 :: Int))
+```
+
+```text
+[2,20,3,30]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** First branch to 2 and 3; each produces itself and ten times itself. Joining preserves that order.
+
+### Variation: Maybe composition first fails
+
+The first function rejects its argument.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> if n > 0 then Just n else Nothing) (\n -> Just (n*2)) (0 :: Int))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The continuation is not called without a successful first payload.
+
+### Variation: Maybe composition second fails
+
+The first function succeeds before the chosen step rejects.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> Just n) (\n -> if even n then Just n else Nothing) (3 :: Int))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first result supplies 3; the second rejects oddness.
+
+### Variation: Either composition first fails
+
+The original error must be retained.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> if n > 0 then Right n else Left "first") (\n -> Right (n*2)) (0 :: Int) :: Either String Int)
+```
+
+```text
+Left "first"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first Left stops the chain; no second payload is calculated.
+
+### Variation: Either composition second fails
+
+A successful first value selects the later check.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> Right n) (\n -> if even n then Right n else Left "second") (3 :: Int) :: Either String Int)
+```
+
+```text
+Left "second"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first result is Right 3; the second check fails with its own reason.
+
+### Variation: list composition empty first branch
+
+The first function supplies no possible values.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> if n > 0 then [n] else []) (\x -> [x,x+1]) (0 :: Int))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** No first payload exists, so no branch reaches the continuation.
+
+### Variation: list composition filtered second branches
+
+Only one of the first function results survives.
+
+<HaskellTryIt>
+
+```haskell
+chainSteps :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+chainSteps first next x = first x >>= next
+
+main :: IO ()
+main = print (chainSteps (\n -> [n,n+1]) (\x -> if even x then [x*10] else []) (2 :: Int))
+```
+
+```text
+[20]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** First emit 2 and 3; the second function maps 2 to [20] and 3 to [], leaving [20].
+
+### Exam question 12: repair ordinary composition (5 marks)
+
+Given `first :: String -> Maybe Int` and `next :: Int -> Maybe Bool`, explain why `next . first` is wrong and give the correct composition type and definition.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks for the mismatched middle types, then a repair.
+
+</Step>
+
+<Step title="2. Plan">
+
+Ordinary composition would need the first result to be Int, but it is Maybe Int. Bind supplies its successful payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+`combined :: String -> Maybe Bool` with `combined input = first input >>= next`. Equivalently use first >=> next from Control.Monad.
+
+</Step>
+
+<Step title="4. Check">
+
+If first returns Nothing, combined returns Nothing. If first returns Just 4, combined is exactly next 4; no extra Maybe layer is introduced.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Ordinary composition at incompatible middle types is rejected with `Couldn't match`. Writing fmap next . first may compile but has result Maybe (Maybe Bool), adding a layer rather than combining steps. Use bind or the contextual composition operators.
+
+**Practice:** What is the general result type of composing a -> Either e b with b -> Either e c?
+
+<details>
+<summary>Answer</summary>
+
+a -> Either e c. The same e is required throughout; changing the success payload types does not change the error type.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Bind gives a successful payload to a contextual continuation; mapping retains an extra layer when the mapped function already returns a context. List bind joins ordered branches, including empty and repeated branches. Independent inputs combine applicatively; selected lookups, checks and ranges use bind. Do notation nests those binds while preserving scope. Let names plain expressions, and pure or return introduces a result without exiting. Sequencing can discard payloads while retaining failure or multiplicity. Monad laws allow regrouping, not reordering.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="How does the continuation type distinguish bind from mapping?">
+
+Bind takes a -> m b, while mapping takes a -> b. Bind returns m b directly.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does one empty list branch abort every later branch?">
+
+No. It contributes no results; later source alternatives are still visited.
+
+</CheckQuestion>
+
+<CheckQuestion question="When does a successful first value require bind?">
+
+When its payload selects a subsequent contextual computation, such as a lookup or a varying range.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does return exit a Maybe do block?">
+
+No. It introduces success. A later expression can still determine the block's final result.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does associativity allow?">
+
+Regrouping binds while keeping the same continuation order and dependencies, not swapping the steps.
+
+</CheckQuestion>
+
+</CheckQuestions>
+

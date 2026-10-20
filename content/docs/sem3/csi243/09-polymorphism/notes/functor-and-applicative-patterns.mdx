@@ -1,0 +1,2072 @@
+---
+title: "Functor and Applicative Patterns"
+description: "Derive contextual types, check Functor laws, write a Tree instance and combine independent results with Applicative."
+---
+
+Lists, optional results and results carrying errors support a shared way to transform their successful values. This lesson develops that pattern, then combines independent results using functions inside those same contexts.
+
+<LearningObjectives items={[
+  'Distinguish type constructors from concrete types and read the class relationships',
+  'Derive fmap types and check identity and composition',
+  'Write and justify a Functor instance for a recursive tree',
+  'Lift binary and ternary functions with Maybe, Either and lists',
+  'Trace the exact Test1 Fibonacci expression and its failure policy',
+]} />
+
+Read [Maybe and Writing Instances](/docs/sem3/csi243/09-polymorphism/notes/maybe-and-instances), [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth) and [Either in Depth](/docs/sem3/csi243/09-polymorphism/notes/either-in-depth) first. Their constructors, safe producers, eliminators and specialised chains are prerequisites; here we generalise the operations and reason about their laws.
+
+## 1. Type constructors and class relationships
+
+`Int` is a type of values. `Maybe` needs a type argument before it describes values: `Maybe Int`. `Either` needs two; fixing its error type gives `Either String`, which still needs the success type. A **kind** describes the type arguments a constructor expects; `Type` means a type of ordinary values here.
+
+**Template:** match `f a` by choosing a one-argument constructor f and then its payload type a.
+
+| Expression | Kind / role |
+|---|---|
+| `Int`, `Maybe Int`, `Either String Int` | `Type`: complete types |
+| `Maybe`, `[]`, `Either String` | `Type -> Type`: one type argument remains |
+| `Either` | `Type -> Type -> Type`: two arguments remain |
+| `Just`, `Left`, `Right` | Value constructors, used in expressions |
+
+These interfaces already exist; read them rather than redeclaring them. A superclass supplies operations that the subclass must also support.
+
+```haskell
+class Functor f where
+  fmap :: (a -> b) -> f a -> f b
+
+class Functor f => Applicative f where
+  pure :: a -> f a
+  (<*>) :: f (a -> b) -> f a -> f b
+
+class Applicative m => Monad m where
+  (>>=) :: m a -> (a -> m b) -> m b
+```
+
+Every Monad must also have compatible Applicative and Functor instances; the reverse implications do not follow. The letters f and m range over constructors, not just Maybe.
+
+Haskell Functor is not a parameterised module. A module functor in languages supporting it takes modules as parameters; a higher-order function takes functions as values. See [Modules and Abstraction Practice](/docs/sem3/csi243/08-modules-types/notes/modules-and-abstraction-practice) for the module terminology. This generic definition instantiates at three constructors:
+
+### Variation: list instantiation
+
+Choose f = [] and a = Int.
+
+<HaskellTryIt>
+
+```haskell
+keepShape :: Functor f => f a -> f a
+keepShape = fmap id
+
+main :: IO ()
+main = print (keepShape [2,5 :: Int])
+```
+
+```text
+[2,5]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** List mapping applies id to each element, retaining both values.
+
+### Variation: optional instantiation
+
+The whole list is now one payload.
+
+<HaskellTryIt>
+
+```haskell
+keepShape :: Functor f => f a -> f a
+keepShape = fmap id
+
+main :: IO ()
+main = print (keepShape (Just [2,5 :: Int]))
+```
+
+```text
+Just [2,5]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Here f = Maybe and a = [Int]. The outer constructor is retained.
+
+### Variation: fixed error parameter
+
+Choose f = Either String and a = Int.
+
+<HaskellTryIt>
+
+```haskell
+keepShape :: Functor f => f a -> f a
+keepShape = fmap id
+
+main :: IO ()
+main = print (keepShape (Left "offline" :: Either String Int))
+```
+
+```text
+Left "offline"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Fixing String leaves the final type argument available; left reasons are preserved.
+
+### Exam question 1: identify the constructor (5 marks)
+
+State f, a and the result type in `keepShape (Right True :: Either String Bool)`. Explain why its Functor constructor is not `Either String Bool`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" asks for substitutions; "explain" asks why they fit f a.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate the fixed error parameter from the final payload parameter.
+
+</Step>
+
+<Step title="3. Solution">
+
+`f = Either String`, `a = Bool`, result `Either String Bool`. The constructor still awaiting one argument is Either String; Either String Bool is complete.
+
+</Step>
+
+<Step title="4. Check">
+
+Mapping id returns Right True, confirming the payload and error types stay fixed.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** `instance Functor (Tree Int)` gives a complete type where a constructor is required; GHC reports a kind mismatch, with key phrase `Expected kind`. Use `instance Functor Tree`. A type constructor and a value constructor also occupy different roles.
+
+**Practice:** What is f when `f a = [[Char]]`?
+
+<details>
+<summary>Answer</summary>
+
+For the outer list context, f = [] and a = [Char]. Each string is one payload.
+
+</details>
+
+## 2. Generic mapping and its infix spelling
+
+`fmap` changes payloads while retaining the outer context. The instance identifies those payloads: each element for lists, a present value for Maybe, and the right side only for Either e. This compares the general abstraction across types rather than repeating safe-function design.
+
+**Template:** `fmap transform value`, equivalently `transform <$> value`. Substitute into `(a -> b) -> f a -> f b`. The function input must match a; the result is still in f, now with payload b. `<$>` is infix fmap, not application of a contextual function.
+
+### Variation: list type change
+
+Change numeric elements into text.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (show <$> [2,5 :: Int])
+```
+
+```text
+["2","5"]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Each number is shown separately. The output remains a two-element list.
+
+### Variation: empty list
+
+Use the empty boundary.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fmap show ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** There is no element to transform; the result has type [String].
+
+### Variation: nested list payloads
+
+Each string is one list element.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length <$> ["ab","","cat"])
+```
+
+```text
+[2,0,3]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The three payload lengths are 2, 0 and 3, in the original order.
+
+### Variation: optional pair
+
+Transform a pair to its first field.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fst <$> Just (True,"label"))
+```
+
+```text
+Just True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The payload changes from (Bool,String) to Bool.
+
+### Variation: absent pair
+
+Keep the transformation but remove presence.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fst <$> (Nothing :: Maybe (Bool,String)))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** There is no pair to supply to fst; the result is Maybe Bool.
+
+### Variation: present list
+
+Reverse one payload list.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (reverse <$> Just [1,3,2 :: Int])
+```
+
+```text
+Just [2,3,1]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Reverse sees the entire list, not each individual integer.
+
+### Variation: right-side mapping
+
+Fix the error type as String.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length <$> (Right "cat" :: Either String String))
+```
+
+```text
+Right 3
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Only the right type changes from String to Int.
+
+### Variation: left preservation
+
+The reason happens to have the same type as the success payload.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length <$> (Left "missing" :: Either String String))
+```
+
+```text
+Left "missing"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Fmap still does not apply length to the reason: Either String is fixed.
+
+### Variation: different error type
+
+Use a numeric error parameter.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (not <$> (Right False :: Either Int Bool))
+```
+
+```text
+Right True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The successful Boolean is negated; the error type stays Int.
+
+### Exam question 2: derive a mapped type (5 marks)
+
+Derive the type of `length <$> (Right "abc" :: Either String String)`. Would mapping change `Left "abc"` into `Left 3`?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Derive" asks for the instantiated operation, not a guess from the output.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use length at String -> Int and fix f = Either String.
+
+</Step>
+
+<Step title="3. Solution">
+
+At this use fmap has type `(String -> Int) -> Either String String -> Either String Int`. The value is Right 3. A left input remains Left "abc".
+
+</Step>
+
+<Step title="4. Check">
+
+Right "" becomes Right 0, while the error parameter remains String.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** `fmap length (Right 3 :: Either String Int)` has a function-input mismatch: GHC includes `Couldn't match`. Supply a String payload or choose a function on Int. Mapping does not remove wrappers or transform left reasons.
+
+**Practice:** Why do `map length ["a","bc"]` and `fmap length ["a","bc"]` agree?
+
+<details>
+<summary>Answer</summary>
+
+Both produce [1,2]. For the list instance fmap is map; fmap additionally generalises to other constructors.
+
+</details>
+
+## 3. The Functor identity law
+
+Mapping with a function that changes nothing must leave the entire value unchanged. GHC checks an instance's method types, not whether it keeps this promise.
+
+**Template:** `fmap id value = value`, equivalently `fmap id = id`. The following equality tests need Eq only for testing; Functor itself does not require Eq. Tests on finite total data provide evidence, not a universal proof.
+
+### Variation: list identity
+
+Repeated elements must remain repeated.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fmap id [3,3,1 :: Int] == [3,3,1])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Id retains each occurrence, position and list length.
+
+### Variation: absent identity
+
+Check the empty-context boundary.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fmap id (Nothing :: Maybe Int) == Nothing)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Both sides are Nothing; mapping must not invent a payload.
+
+### Variation: error identity
+
+Check that a reason is not changed.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fmap id (Left "bad" :: Either String Int) == Left "bad")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Both sides carry exactly the same left reason.
+
+### Exam question 3: refute a proposed map (5 marks)
+
+A proposed list mapping applies the supplied function and then reverses the result. Use identity to show why it is unlawful.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Show" requires a counterexample calculation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose distinct elements; a singleton would hide reversal.
+
+</Step>
+
+<Step title="3. Solution">
+
+`reverse (map id [1,2]) = [2,1]`, but `id [1,2] = [1,2]`. The identity law fails.
+
+</Step>
+
+<Step title="4. Check">
+
+An empty list passes despite the fault, showing why boundary checks alone are insufficient.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Reversal after mapping type-checks but produces a wrong value; no GHC error identifies this law failure. Remove the reversal. Adding an Eq constraint to the mapping method is also wrong: arbitrary payloads need no equality to be mapped.
+
+**Practice:** Does identity passing on [7,7] validate reversal after mapping?
+
+<details>
+<summary>Answer</summary>
+
+No. Reversal preserves that particular list. The counterexample [7,8] still refutes identity.
+
+</details>
+
+## 4. The Functor composition law
+
+Mapping twice must agree with mapping the combined function once. `g . h` applies h first, then g; this allows reliable refactoring.
+
+**Template:** `fmap (g . h) value = fmap g (fmap h value)`, where h has type a -> b, g has type b -> c, and value has type f a. Both results have type f c.
+
+### Variation: numeric composition
+
+Compare one pass with two passes.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fmap ((+1) . (*2)) [1,3 :: Int] == fmap (+1) (fmap (*2) [1,3]))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Both sides give [3,7]: double first, then increment.
+
+### Variation: type-changing composition
+
+The intermediate payload is String.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fmap (length . show) (Just (12 :: Int)) == fmap length (fmap show (Just (12 :: Int))))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Show makes "12", then length makes 2; both sides give Just 2.
+
+### Variation: composition on failure
+
+Neither ordinary function receives an argument.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fmap (length . show) (Left "bad" :: Either String Int) == fmap length (fmap show (Left "bad" :: Either String Int)))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Both routes retain Left "bad" at the final right type Int.
+
+### Exam question 4: combine two mappings (5 marks)
+
+Rewrite `fmap length (fmap reverse ["ab","c"])` using one fmap and derive the result type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" asks for equivalent behaviour with the stated operation count.
+
+</Step>
+
+<Step title="2. Plan">
+
+The inner reverse is first, so the composite is length . reverse.
+
+</Step>
+
+<Step title="3. Solution">
+
+`fmap (length . reverse) ["ab","c"] :: [Int]`. Reverse preserves the String payload type; length changes it to Int.
+
+</Step>
+
+<Step title="4. Check">
+
+Reverse "ab" is "ba", length 2; "c" has length 1. Both routes return [2,1].
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** `reverse . length` applies reverse to an Int and is rejected with `Couldn't match`. Use length . reverse. Three passing tests do not prove a custom instance lawful on every shape.
+
+**Practice:** Rewrite `fmap not (fmap even [1,2,3 :: Int])`.
+
+<details>
+<summary>Answer</summary>
+
+`fmap (not . even) [1,2,3 :: Int]`, giving [True,False,True].
+
+</details>
+
+## 5. A hand-written Tree Functor
+
+A tree can store a payload at each node while leaves mark empty branches. Mapping must transform every payload and recur down both subtrees, preserving branch positions. It does not mirror, rebalance or sort.
+
+**Template:** put the constructor awaiting its payload type in the instance head, write an equation for every data constructor, recur through recursive fields and transform payload fields.
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+
+instance Functor Tree where
+  fmap _ Leaf = Leaf
+  fmap f (Node l x r) = Node (fmap f l) (f x) (fmap f r)
+```
+
+### Variation: empty tree
+
+A Leaf has no payload to transform.
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+
+instance Functor Tree where
+  fmap _ Leaf = Leaf
+  fmap f (Node l x r) = Node (fmap f l) (f x) (fmap f r)
+
+main :: IO ()
+main = print (fmap length (Leaf :: Tree String))
+```
+
+```text
+Leaf
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The Leaf equation retains the empty branch at type Tree Int.
+
+### Variation: one node changes type
+
+Map from text lengths to Int.
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+
+instance Functor Tree where
+  fmap _ Leaf = Leaf
+  fmap f (Node l x r) = Node (fmap f l) (f x) (fmap f r)
+
+main :: IO ()
+main = print (fmap length (Node Leaf "cat" Leaf))
+```
+
+```text
+Node Leaf 3 Leaf
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Both recursive Leaf calls stay Leaf; the centre payload becomes 3.
+
+### Variation: asymmetric shape and laws
+
+An unequal branch shape exposes missed recursion or swapped fields.
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+
+instance Functor Tree where
+  fmap _ Leaf = Leaf
+  fmap f (Node l x r) = Node (fmap f l) (f x) (fmap f r)
+
+t :: Tree Int
+t = Node (Node Leaf 2 Leaf) 4 Leaf
+
+main :: IO ()
+main = print ((fmap (+1) t, fmap id t == t, fmap ((+1) . (*2)) t == fmap (+1) (fmap (*2) t)))
+```
+
+```text
+(Node (Node Leaf 3 Leaf) 5 Leaf,True,True)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The left child 2 becomes 3 and root 4 becomes 5. The two law checks agree on this asymmetric shape.
+
+For all finite total trees, justify the laws by structural induction. Identity returns Leaf at the base case. At `Node l x r`, the subtree identity hypotheses and `id x = x` reconstruct the same node. For composition, both sides return Leaf at the base. At a node the composition hypotheses equate the two recursive fields, and `(g . h) x = g (h x)` equates the centre payload; the complete constructors agree.
+
+See [Proofs of Programs I](/docs/sem3/csi243/10-reasoning-revision/notes/proofs-of-programs-i) for the proof layout. This Functor instance does not invent pure, application or bind: those need further compatible choices of behaviour.
+
+### Exam question 5: custom-instance law check (5 marks)
+
+A Tree mapping swaps its mapped left and right branches at every node. Does it obey identity? Give a counterexample and repair.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Does" needs a decision supported by a law calculation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose an asymmetric tree and apply the proposed map to id.
+
+</Step>
+
+<Step title="3. Solution">
+
+For `t = Node (Node Leaf 1 Leaf) 2 Leaf`, swapping gives `Node Leaf 2 (Node Leaf 1 Leaf)`, which differs from t. Repair the equation to `Node (fmap f l) (f x) (fmap f r)`.
+
+</Step>
+
+<Step title="4. Check">
+
+A single node hides the defect because both children are Leaf. The asymmetric example checks positions as well as values.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Returning the original l as a Tree b subtree leaves Tree a where Tree b is needed; GHC includes `Couldn't match type`. Recur with fmap f l. Swapping correctly mapped branches can compile but fails identity; retain the original positions.
+
+**Practice:** Predict `fmap null (Node Leaf "" Leaf)`.
+
+<details>
+<summary>Answer</summary>
+
+`Node Leaf True Leaf :: Tree Bool`. Empty text is a payload, not an empty branch.
+
+</details>
+
+## 6. Pure: introduce a successful context
+
+`pure` puts an ordinary value into a chosen Applicative context: one possibility for lists, presence for Maybe, success for Either. It does not validate the payload or recover an existing failure.
+
+**Template:** `pure payload :: Context PayloadType`. The result annotation or surrounding expression fixes f in `pure :: Applicative f => a -> f a`. If the payload is itself contextual, pure adds another layer.
+
+Each runnable variation uses `pure (const payload) <*> seed`, where seed is one successful unit value (`[()]`, `Just ()` or `Right ()`). Here `const payload` ignores its unit argument and returns payload. This gives the same introduction as `pure payload` by the Applicative laws; the concrete seed makes the chosen context visible. Application itself is explained in Sections 7 to 9.
+
+### Variation: singleton possibility
+
+Choose the list instance.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const (7 :: Int)) <*> [()] :: [Int])
+```
+
+```text
+[7]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** List pure introduces exactly one alternative.
+
+### Variation: one empty payload
+
+Distinguish one empty list from no alternatives.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const ([] :: [Int])) <*> [()] :: [[Int]])
+```
+
+```text
+[[]]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The outer singleton contains the entire empty payload.
+
+### Variation: text possibility
+
+A string becomes one alternative.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const "ok") <*> [()] :: [String])
+```
+
+```text
+["ok"]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** This is a list of strings, not just the character list "ok".
+
+### Variation: optional introduction
+
+Choose Maybe.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const True) <*> Just () :: Maybe Bool)
+```
+
+```text
+Just True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Pure is Just for Maybe.
+
+### Variation: present empty text
+
+An empty value is still present.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const "") <*> Just () :: Maybe String)
+```
+
+```text
+Just ""
+```
+
+</HaskellTryIt>
+
+**Walk-through:** No validation occurs; pure wraps the empty string.
+
+### Variation: nested optional introduction
+
+The payload is already optional.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const (Nothing :: Maybe Int)) <*> Just () :: Maybe (Maybe Int))
+```
+
+```text
+Just Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Pure introduces outer presence; it does not flatten inner absence.
+
+### Variation: Either success
+
+Fix the error type to String.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const (8 :: Int)) <*> Right () :: Either String Int)
+```
+
+```text
+Right 8
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The error type is fixed but no error value is needed.
+
+### Variation: Either text success
+
+Use Int for the error type.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const "ok") <*> Right () :: Either Int String)
+```
+
+```text
+Right "ok"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The right payload is String; the unseen error parameter remains Int.
+
+### Variation: nested Either
+
+An inner Left can be an outer successful payload.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pure (const (Left "inner" :: Either String Int)) <*> Right () :: Either String (Either String Int))
+```
+
+```text
+Right (Left "inner")
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Pure wraps the whole supplied value in Right without interpreting its inner constructor.
+
+### Exam question 6: supply the missing wrapper (5 marks)
+
+Repair `answer :: Either String Int; answer = 4` using Applicative. What is `pure answer :: Maybe (Either String Int)`?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Repair" means respect the declared contextual result type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Introduce a successful context around the Int payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `answer = pure 4`, giving Right 4. The second expression chooses Maybe as its new outer context.
+
+</Step>
+
+<Step title="4. Check">
+
+The second result is Just (Right 4), rather than Right (Just 4). The outer annotation determines wrapper order.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** A bare `4 :: Either String Int` asks for a numeric instance of Either (key GHC phrase `No instance for`). Use pure 4. A bare `print (pure 4)` gives no chosen context; annotate the result. Pure does not terminate later sequencing.
+
+**Practice:** Compare `pure [] :: Maybe [Int]` with `Nothing :: Maybe [Int]`.
+
+<details>
+<summary>Answer</summary>
+
+The first is Just [], a successful empty payload; the second is absence.
+
+</details>
+
+## 7. Maybe application: a contextual function
+
+Mapping takes an ordinary function; application takes a function already inside the context and an argument in that same context. For Maybe both must be present.
+
+**Template:** `wrappedFunction <*> wrappedArgument` has specialised type `Maybe (a -> b) -> Maybe a -> Maybe b`. The equations are `Nothing <*> _ = Nothing` and `Just f <*> value = fmap f value`. Application associates to the left: `u <*> v <*> w` means `(u <*> v) <*> w`.
+
+### Variation: present function and argument
+
+The first payload is a function.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (Just (*3) <*> Just (4 :: Int))
+```
+
+```text
+Just 12
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The instance applies *3 to 4 and retains the resulting 12 inside Just.
+
+### Variation: missing function
+
+Only the function position is absent.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((Nothing :: Maybe (Int -> Int)) <*> Just 4)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first equation returns Nothing without needing an argument.
+
+### Variation: missing argument
+
+The ordinary function exists inside Just.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (Just length <*> (Nothing :: Maybe String))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The second equation maps length over Nothing, still giving Nothing.
+
+### Exam question 7: mapping or application (5 marks)
+
+Explain why `fmap (Just (+1)) (Just 4)` is ill-typed. Repair it in two ways.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks for the incompatible input shape; "repair" asks for working definitions.
+
+</Step>
+
+<Step title="2. Plan">
+
+Fmap needs a plain function; application accepts a contextual one.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `fmap (+1) (Just (4 :: Int))` or `Just (+1) <*> Just (4 :: Int)`. Both produce Just 5.
+
+</Step>
+
+<Step title="4. Check">
+
+The first function is Int -> Int; the second is Maybe (Int -> Int). The operator determines which is required.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** A contextual function supplied to fmap gives `Couldn't match` in GHC. The opposite mismatch occurs when a plain function is supplied to application; wrap it using pure or use mapping. Missing function and missing argument both give Nothing via different equations.
+
+**Practice:** Evaluate `pure reverse <*> Just "abc"` and give its type.
+
+<details>
+<summary>Answer</summary>
+
+Just "cba" :: Maybe String. The argument fixes pure to Maybe; the wrapped reverse consumes the successful string.
+
+</details>
+
+## 8. Either application: which failure survives?
+
+For Either e both operands share one fixed error type. Application preserves the first left result encountered by its left-to-right combination structure. It does not accumulate all errors or promise eager evaluation of independent arguments.
+
+**Template:** `Left e <*> _ = Left e`; `Right f <*> value = fmap f value`. A left function result wins; if that position succeeds, an argument error wins instead.
+
+### Variation: both successful
+
+Wrap the ordinary function with Right.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((Right (*2) :: Either String (Int -> Int)) <*> Right 6)
+```
+
+```text
+Right 12
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The right-function equation maps *2 over Right 6.
+
+### Variation: argument failed
+
+The function position succeeds.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((Right (*2) :: Either String (Int -> Int)) <*> Left "argument")
+```
+
+```text
+Left "argument"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Mapping *2 preserves the argument reason unchanged.
+
+### Variation: both failed
+
+Make the error priority observable.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((Left "function" :: Either String (Int -> Int)) <*> Left "argument")
+```
+
+```text
+Left "function"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first equation retains the function-side reason; it does not join the strings.
+
+### Exam question 8: two independent errors (5 marks)
+
+Predict `(,) <$> (Left "name" :: Either String String) <*> (Left "mark" :: Either String Int)`. Would swapping the inputs preserve the same reason?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Predict" asks for constructor and payload; swapping also changes the pair type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Mapping the pair constructor over the first Left preserves it; application then retains that left-function result.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is Left "name" :: Either String (String,Int). Swapping the inputs gives Left "mark" :: Either String (Int,String).
+
+</Step>
+
+<Step title="4. Check">
+
+Replacing the first input with Right "Ada" lets Left "mark" win. This checks each failure position.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Expecting both errors is a wrong value, not a compiler error; the standard Either instance does not concatenate reasons. Mixing Either String with Either Int in one application gives `Couldn't match type`. Choose or convert to one common error representation.
+
+**Practice:** Predict `pure (+) <*> Right 2 <*> Left "second" :: Either String Int`.
+
+<details>
+<summary>Answer</summary>
+
+Left "second". The first application succeeds with a partial addition; the second propagates its argument reason.
+
+</details>
+
+## 9. List application: the Cartesian product
+
+Lists represent alternatives here. Apply the first function to every argument, then the next function to every argument, in order. Cartesian application means every combination is included; it differs from pairing positions with zipWith.
+
+**Template:** `fs <*> xs = [f x | f <- fs, x <- xs]`. The function generator is outermost. On finite lists the number of results is `length fs * length xs`.
+
+### Variation: several functions
+
+Use two functions and two arguments to expose order.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([(+10),(*2)] <*> [1,3 :: Int])
+```
+
+```text
+[11,13,2,6]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** First +10 yields 11 and 13; then *2 yields 2 and 6. Positional pairing would give only 11 and 6.
+
+### Variation: no functions
+
+The outer generator is empty.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (([] :: [Int -> Int]) <*> [1,2])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** No function is available, so there are no combinations.
+
+### Variation: no arguments
+
+Each inner generator is empty.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([(+1),(*2)] <*> ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Each function produces an empty result list; joining them still gives [].
+
+### Exam question 9: Cartesian order and type (5 marks)
+
+State the type and ordered result of `(,) <$> [1,2 :: Int] <*> "ab"`. Compare it with zip.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Ordered" means justify the sequence as well as membership.
+
+</Step>
+
+<Step title="2. Plan">
+
+Mapping (,) produces two partially applied pair constructors. Each visits both characters.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is `[(1,'a'),(1,'b'),(2,'a'),(2,'b')] :: [(Int,Char)]`. In contrast `zip [1,2] "ab"` gives `[(1,'a'),(2,'b')]`.
+
+</Step>
+
+<Step title="4. Check">
+
+There are 2*2 = 4 Cartesian pairs and min(2,2) = 2 positional pairs.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Using zipWith-style output for ordinary list application is a semantic error; GHC accepts the expression but gives all combinations. Use zipWith for matching positions. Control.Applicative.ZipList is a distinct wrapper with positional application; ordinary [a] retains Cartesian behaviour.
+
+**Practice:** Are duplicates removed in `[(+1)] <*> [4,4 :: Int]`?
+
+<details>
+<summary>Answer</summary>
+
+No: the result is [5,5]. List alternatives preserve occurrences, not just distinct values.
+
+</details>
+
+## 10. Lift binary and ternary functions
+
+A curried function takes one argument and returns a function waiting for the rest. Mapping a binary function over the first context produces contextual functions ready for application. Only print the fully applied result: intermediate payload functions have no Show instance.
+
+**Templates:** `combine <$> first <*> second`, equivalently `pure combine <*> first <*> second` or `liftA2 combine first second` from Control.Applicative. The runnable blocks define these helpers directly with the same general signatures, so each program is self-contained. For three arguments use `combine3 <$> first <*> second <*> third` or `liftA3 combine3 first second third`.
+
+For `combine :: a -> b -> c`, mapping gives `f (b -> c)` and the next application gives `f c`. For `combine3 :: a -> b -> c -> d`, the intermediate types are `f (b -> c -> d)`, `f (c -> d)` and `f d`. Independent inputs can be specified without inspecting each other's successful payloads.
+
+### Variation: binary Maybe
+
+Use subtraction so operand order matters.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((-) <$> Just (10 :: Int) <*> Just 3)
+```
+
+```text
+Just 7
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Mapping fixes the first subtraction operand at 10; application supplies 3, giving 10 - 3.
+
+### Variation: binary Either
+
+Use the named liftA2 spelling.
+
+<HaskellTryIt>
+
+```haskell
+import Prelude hiding (liftA2)
+
+liftA2 :: Applicative f => (a -> b -> c) -> f a -> f b -> f c
+liftA2 f x y = f <$> x <*> y
+
+main :: IO ()
+main = print (liftA2 (++) (Right "Ada" :: Either String String) (Right "!"))
+```
+
+```text
+Right "Ada!"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The successful strings are concatenated in order; this equals (++) mapped over the first and applied to the second.
+
+### Variation: binary list spellings
+
+Compare three equivalent forms on the same inputs.
+
+<HaskellTryIt>
+
+```haskell
+import Prelude hiding (liftA2)
+
+liftA2 :: Applicative f => (a -> b -> c) -> f a -> f b -> f c
+liftA2 f x y = f <$> x <*> y
+
+main :: IO ()
+main = print (((+) <$> [1,2 :: Int] <*> [10,20], pure (+) <*> [1,2 :: Int] <*> [10,20], liftA2 (+) [1,2 :: Int] [10,20]))
+```
+
+```text
+([11,21,12,22],[11,21,12,22],[11,21,12,22])
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Each form pairs 1 with 10 and 20, then 2 with 10 and 20.
+
+### Variation: ternary Maybe
+
+Add a third independent argument.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x y z -> x + y * z) <$> Just (2 :: Int) <*> Just 3 <*> Just 4)
+```
+
+```text
+Just 14
+```
+
+</HaskellTryIt>
+
+**Walk-through:** After mapping, the payload waits for y and z. Supply 3 then 4, giving 2 + 3*4 = 14.
+
+### Variation: ternary Either
+
+Let the middle and final arguments both fail.
+
+<HaskellTryIt>
+
+```haskell
+liftA3 :: Applicative f => (a -> b -> c -> d) -> f a -> f b -> f c -> f d
+liftA3 f x y z = f <$> x <*> y <*> z
+
+main :: IO ()
+main = print (liftA3 (\x y z -> x + y + z) (Right 1 :: Either String Int) (Left "middle") (Left "last"))
+```
+
+```text
+Left "middle"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The middle reason propagates through the final application.
+
+### Variation: ternary lists
+
+The final generator varies fastest.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x y z -> x + y + z) <$> [1,2 :: Int] <*> [10] <*> [100,200])
+```
+
+```text
+[111,211,112,212]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** For x=1 the totals are 111 and 211; for x=2 they are 112 and 212. There are 2*1*2 results.
+
+### Variation: binary Maybe first absent
+
+Keep the second field present.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((,) <$> (Nothing :: Maybe String) <*> Just (7 :: Int))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Mapping the pair constructor over Nothing leaves no contextual function.
+
+### Variation: binary Maybe second absent
+
+The function position becomes present before the second fails.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((,) <$> Just "Ada" <*> (Nothing :: Maybe Int))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Mapping gives Just ((,) "Ada"), then the absent mark prevents pairing.
+
+### Variation: binary Either first failed
+
+Both failures are independent.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((-) <$> (Left "first" :: Either String Int) <*> Left "second")
+```
+
+```text
+Left "first"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first Left propagates through mapping and application.
+
+### Variation: binary Either second failed
+
+The first success supplies a subtraction operand.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((-) <$> (Right 9 :: Either String Int) <*> Left "second")
+```
+
+```text
+Left "second"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The right partial subtraction exists, so the argument error is retained.
+
+### Variation: binary list empty input
+
+Use an empty second list with a non-empty first list.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((,) <$> [1,2 :: Int] <*> ([] :: [Bool]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Each contextual pair function has no Boolean alternatives to apply to.
+
+### Variation: binary list singleton
+
+A single alternative in each input produces one pair.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((,) <$> [True] <*> ["ok"])
+```
+
+```text
+[(True,"ok")]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** One function times one argument gives exactly one heterogeneous pair.
+
+### Variation: ternary Maybe first absent
+
+The failure is before either supplied later field.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x y z -> x+y+z) <$> (Nothing :: Maybe Int) <*> Just 2 <*> Just 3)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Mapping cannot create a function; both later applications retain absence.
+
+### Variation: ternary Maybe final absent
+
+The partial function survives until the last argument.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x y z -> x+y+z) <$> Just (1 :: Int) <*> Just 2 <*> Nothing)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first two successes leave a function waiting for z. No z means no final total.
+
+### Variation: ternary Either first failure
+
+Move the first failure earlier than the middle case.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x y z -> x+y+z) <$> (Left "first" :: Either String Int) <*> Left "middle" <*> Right 3)
+```
+
+```text
+Left "first"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first reason wins at every later application.
+
+### Variation: ternary Either all successful
+
+Use a heterogeneous triple constructor.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((,,) <$> (Right "Ada" :: Either String String) <*> Right (70 :: Int) <*> Right True)
+```
+
+```text
+Right ("Ada",70,True)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Each argument fills one field of the ordinary triple constructor.
+
+### Variation: ternary list empty middle
+
+A zero-sized input cancels every combination.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x y z -> x+y+z) <$> [1,2 :: Int] <*> [] <*> [100,200])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The intermediate function list becomes empty at the middle input, leaving no final functions.
+
+### Variation: ternary list singleton
+
+All three positions have exactly one choice.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((,,) <$> [True] <*> ["ok"] <*> [3 :: Int])
+```
+
+```text
+[(True,"ok",3)]
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The result has 1*1*1 = 1 triple; each payload retains its own type.
+
+### Exam question 10: complete three contextual arguments (5 marks)
+
+Repair `total x y z = (+) <$> x <*> y + z` for three independent Maybe Int inputs. Give a signature and applicative definition.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Repair" asks to retain all contextual inputs and failure behaviour.
+
+</Step>
+
+<Step title="2. Plan">
+
+The first two applications leave Maybe Int, which ordinary addition cannot consume. Begin with a three-argument ordinary function.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+total :: Maybe Int -> Maybe Int -> Maybe Int -> Maybe Int
+total x y z = (\a b c -> a + b + c) <$> x <*> y <*> z
+```
+
+</Step>
+
+<Step title="4. Check">
+
+On Just 1, Just 2 and Just 3 the result is Just 6. Any absent argument gives Nothing.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Printing `(+) <$> Just 2` asks for Show on a function: the key GHC phrase is `No instance for (Show`. Supply the remaining contextual argument. Ordinary + on Maybe results similarly asks for an unavailable Num instance; lift the operation.
+
+**Practice:** Write `liftA2 (,) x y` using only pure and application.
+
+<details>
+<summary>Answer</summary>
+
+`pure (,) <*> x <*> y`. The two payloads may have different types.
+
+</details>
+
+## 11. Applicative laws and compatible mapping
+
+An Applicative instance needs coherent behaviour as well as correct method types. Its laws let us regroup contextual application without changing results. They say nothing about automatic parallel execution.
+
+**Law templates:**
+
+- Identity: `pure id <*> v = v`.
+- Composition: `pure (.) <*> u <*> v <*> w = u <*> (v <*> w)`.
+- Homomorphism: `pure f <*> pure x = pure (f x)`.
+- Interchange: `u <*> pure y = pure ($ y) <*> u`.
+- Compatibility: `fmap f x = pure f <*> x`.
+
+For composition, u has type `f (b -> c)`, v has type `f (a -> b)` and w has type `f a`. One constructor f is used throughout. Each variation checks all five laws in this order. Compare only fully applied results, never the functions themselves. In homomorphism and interchange the programs spell the pure values using their concrete forms (Just, Right or singleton lists). These are the same law instances, with successful constructors written explicitly.
+
+### Variation: Maybe law checks
+
+Change the context while retaining all five law shapes.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let u = Just (+1)
+      v = Just (*2)
+      w = Just 3 :: Maybe Int
+  print ((pure id <*> w) == w)
+  print ((pure (.) <*> u <*> v <*> w) == (u <*> (v <*> w)))
+  print ((pure (+1) <*> Just 3 :: Maybe Int) == Just 4)
+  print ((u <*> Just 4) == (pure ($ 4) <*> u))
+  print (fmap (+1) w == (pure (+1) <*> w))
+```
+
+```text
+True
+True
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Composition gives Just 7 on both sides, interchange gives Just 5, and homomorphism gives Just 4. Identity and compatibility retain equal contexts and payloads.
+
+### Variation: Either law checks
+
+Change the context while retaining all five law shapes.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let u = Right (+1)
+      v = Right (*2)
+      w = Left "bad" :: Either String Int
+  print ((pure id <*> w) == w)
+  print ((pure (.) <*> u <*> v <*> w) == (u <*> (v <*> w)))
+  print ((pure (+1) <*> Right 3 :: Either String Int) == Right 4)
+  print ((u <*> (Right 4 :: Either String Int)) == (pure ($ 4) <*> u))
+  print (fmap (+1) w == (pure (+1) <*> w))
+```
+
+```text
+True
+True
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Identity, composition and mapping preserve Left "bad". Homomorphism gives Right 4 and interchange gives Right 5.
+
+### Variation: list law checks
+
+Change the context while retaining all five law shapes.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let u = [(+1),(*3)]
+      v = [(*2)]
+      w = [1,2] :: [Int]
+  print ((pure id <*> w) == w)
+  print ((pure (.) <*> u <*> v <*> w) == (u <*> (v <*> w)))
+  print ((pure (+1) <*> [3] :: [Int]) == [4])
+  print ((u <*> [4]) == (pure ($ 4) <*> u))
+  print (fmap (+1) w == (pure (+1) <*> w))
+```
+
+```text
+True
+True
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Composition gives [3,5,6,12] on each side; interchange gives [5,12]. Homomorphism gives [4]. The other checks preserve the same order and occurrences.
+
+### Exam question 11: law versus compiler guarantee (5 marks)
+
+A student says implementing pure and application proves the Applicative laws. Explain the mistake and give an identity check that might expose a fault.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" separates type correctness from behavioural promises.
+
+</Step>
+
+<Step title="2. Plan">
+
+A method signature constrains types, not which values or order the implementation produces.
+
+</Step>
+
+<Step title="3. Solution">
+
+GHC may accept an unlawful instance. Check `pure id <*> [1,2 :: Int] == [1,2]` for list behaviour: a reversing or duplicating implementation would fail. A universal justification still needs reasoning from the equations.
+
+</Step>
+
+<Step title="4. Check">
+
+Standard list pure gives [id]; applying that single function returns the original two elements in order.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** Comparing functions directly requests Eq on functions, giving `No instance for (Eq` in GHC. Compare fully applied results. Finite passing tests are evidence rather than proof. Replacing list pure with [] would make identity fail on every non-empty list.
+
+**Practice:** Check homomorphism for (*2) and 3 at Maybe Int.
+
+<details>
+<summary>Answer</summary>
+
+`pure (*2) <*> pure 3 = Just 6`, and `pure ((*2) 3) = Just 6`.
+
+</details>
+
+## 12. The exact Test1 Either Fibonacci expression
+
+Test1 09 uses Fibonacci with an explicit negative-input reason. Here we explain its contextual combination; the algorithm design and accumulator alternative belong to [Designing Recursive Numeric Algorithms](/docs/sem3/csi243/05-recursion/notes/numeric-recursion-by-example).
+
+**Template:** combine two `Either String Integer` results by mapping ordinary addition over the first and applying the resulting contextual partial function to the second. The exact source expression is `(+) <$> fibonacci (n - 1) <*> fibonacci (n - 2)`.
+
+### Variation: negative boundary
+
+Retain the exact supplied failure message.
+
+<HaskellTryIt>
+
+```haskell
+fibonacci :: Integer -> Either String Integer
+fibonacci n
+  | n < 0 = Left "fibonacci requires a non-negative index"
+  | n == 0 = Right 0
+  | n == 1 = Right 1
+  | otherwise = (+) <$> fibonacci (n - 1) <*> fibonacci (n - 2)
+
+main :: IO ()
+main = print (fibonacci (-1))
+```
+
+```text
+Left "fibonacci requires a non-negative index"
+```
+
+</HaskellTryIt>
+
+**Walk-through:** The first guard succeeds; neither recursive call is reached.
+
+### Variation: both bases
+
+Test zero and one together.
+
+<HaskellTryIt>
+
+```haskell
+fibonacci :: Integer -> Either String Integer
+fibonacci n
+  | n < 0 = Left "fibonacci requires a non-negative index"
+  | n == 0 = Right 0
+  | n == 1 = Right 1
+  | otherwise = (+) <$> fibonacci (n - 1) <*> fibonacci (n - 2)
+
+main :: IO ()
+main = print ((fibonacci 0, fibonacci 1))
+```
+
+```text
+(Right 0,Right 1)
+```
+
+</HaskellTryIt>
+
+**Walk-through:** Zero matches the second guard and one the third; neither uses application.
+
+### Variation: recursive combination
+
+Use a small non-base value.
+
+<HaskellTryIt>
+
+```haskell
+fibonacci :: Integer -> Either String Integer
+fibonacci n
+  | n < 0 = Left "fibonacci requires a non-negative index"
+  | n == 0 = Right 0
+  | n == 1 = Right 1
+  | otherwise = (+) <$> fibonacci (n - 1) <*> fibonacci (n - 2)
+
+main :: IO ()
+main = print (fibonacci 4)
+```
+
+```text
+Right 3
+```
+
+</HaskellTryIt>
+
+**Walk-through:** At 2 combine Right 1 and Right 0 to get Right 1. At 3 combine Right 1 and Right 1 to get Right 2. At 4 combine Right 2 and Right 1 to get Right 3.
+
+Derive the recursive expression in order:
+
+| Part | Type |
+|---|---|
+| `(+)` at this use | `Integer -> Integer -> Integer` |
+| `fibonacci (n - 1)` | `Either String Integer` |
+| `(+) <$> fibonacci (n - 1)` | `Either String (Integer -> Integer)` |
+| `fibonacci (n - 2)` | `Either String Integer` |
+| After application | `Either String Integer` |
+
+Both recursive arguments are chosen from n; the second is not selected by inspecting the first successful Fibonacci value. On non-negative input the base guards prevent calls below zero: the recursive case begins only at n at least 2. Thus normal valid calls do not demonstrate internal error priority. If two independent subresults were Left "first" and Left "second", this same combination would retain Left "first", as Section 8 demonstrates. That is a property of Either application, not an error encountered by fibonacci 4.
+
+Applicative spelling does not remove repeated subproblems or guarantee concurrent computation.
+
+### Exam question 12: type the recursive expression (5 marks)
+
+Derive the intermediate types in the Test1 Fibonacci recursive expression. Why is ordinary application in place of application with `<*>` wrong?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Derive" means keep track of the remaining argument. "Why" asks about the wrapper.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use Integer for both numeric payloads and Either String for the constructor.
+
+</Step>
+
+<Step title="3. Solution">
+
+Mapping gives `Either String (Integer -> Integer)`, not an ordinary function. Application with `<*>` supplies an `Either String Integer` and returns `Either String Integer`. Ordinary application would try to call an Either value as a function.
+
+</Step>
+
+<Step title="4. Check">
+
+At n=2, Right 1 maps to Right ((+) 1), then application to Right 0 gives Right 1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs:** A bare integer in a base case omits Right and asks for a Num instance of Either (key phrase `No instance for`). Replacing application with mapping supplies a contextual value where a plain function is needed (`Couldn't match`). Repair from the intermediate types.
+
+**Practice:** Rewrite the recursive expression with pure, then predict fibonacci 5.
+
+<details>
+<summary>Answer</summary>
+
+`pure (+) <*> fibonacci (n - 1) <*> fibonacci (n - 2)`. At 5 the results are Right 3 and Right 2, giving Right 5.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Functor maps an ordinary function over a context and obeys identity and composition. A Tree mapping preserves branches and transforms every payload. Applicative adds pure and application: lift a curried function and supply contextual arguments. Maybe requires presence, Either preserves the first left reason, and lists enumerate every combination in function-first order. The Test1 Fibonacci expression combines independently specified recursive results; its wrappers remain present in every intermediate type.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is the Functor constructor Either e rather than Either e a?">
+
+Fixing e leaves one payload argument available; Either e a is already a complete type.
+
+</CheckQuestion>
+
+<CheckQuestion question="What distinguishes mapping from application?">
+
+Mapping receives a plain function. Application receives a function in the same context as its argument.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does Either application collect every error?">
+
+No. A left function result wins; if that position is right, a left argument result is retained.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does a compiling Tree instance still need law reasoning?">
+
+A branch-swapping map can have the required type while changing the tree under fmap id.
+
+</CheckQuestion>
+
+<CheckQuestion question="Is ordinary list application positional?">
+
+No. It visits every argument for every function. ZipWith supplies positional combination.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
