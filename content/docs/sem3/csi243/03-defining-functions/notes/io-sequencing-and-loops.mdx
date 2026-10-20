@@ -1,0 +1,2316 @@
+---
+title: "IO Sequencing and Loops"
+description: "Trace action results, character and line input, sequencing combinators, validated loops and exact formatted reports."
+---
+
+This lesson extends [Input, Bindings, and Processing](/docs/sem3/csi243/03-defining-functions/notes/input-processing), [A Complete Haskell Program](/docs/sem3/csi243/03-defining-functions/notes/complete-program) and [Terminal Output: putStrLn, print, and show](/docs/sem3/csi243/03-defining-functions/notes/output). Use those for the first pipeline; here we follow the results of actions through longer sequences and repeated interactions.
+
+<LearningObjectives items={[
+  'Check action and result types, bindings and final do expressions',
+  'Trace character and line input including unconsumed newlines',
+  'Translate sequencing and write conditional actions and recursive loops',
+  'Choose between collecting and discarding lists of action results',
+  'Produce exact decimal reports without changing the numeric value'
+]} />
+
+Input boxes contain only supplied characters. Output fences contain only program output, excluding terminal echo. A real line break in an input attribute separates supplied lines. EOF is different from an empty line; see [Text and File IO Practice](/docs/sem3/csi243/03-defining-functions/notes/text-and-file-io-practice).
+
+## 1. Action types, bindings and the last expression
+
+`IO a` describes an action with a result of type `a`. `IO ()` still performs effects; its result is unit. The last statement in a `do` block must be an action expression and supplies the whole block's result. Use `<-` to perform an action and bind its result, and `let` to name a pure expression. Naming an action with `let` is also legal, but does not perform it. Names in one `let` group can refer to one another in either written order; a later separate statement is not in scope earlier.
+
+**Template.** `do { x <- action; let y = calculate x; finalAction y }`. `x` is the result, not an action. `finalAction y` determines the block result type.
+
+### Variation: a helper returns useful data
+
+<HaskellTryIt>
+
+```haskell
+answer :: IO Int
+answer = do
+  let n = 6
+  pure (n * 7)
+main :: IO ()
+main = do
+  x <- answer
+  print x
+```
+
+```text
+42
+```
+
+</HaskellTryIt>
+
+The helper returns 42 without output. `print` displays it and gives `main` unit as its result.
+
+### Variation: name an action and execute it twice
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let say = putStrLn "ready"
+  say
+  say
+```
+
+```text
+ready
+ready
+```
+
+</HaskellTryIt>
+
+The binding prints nothing. Each later action statement performs the described output.
+
+### Variation: forward reference inside one let group
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let total = base + 2
+      base = 5 :: Int
+  print total
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+Both names share the same recursive binding group, so `total` can use `base`.
+
+### Exam question: Action types, bindings and the last expression (5 marks)
+
+Write `next :: IO Int` returning 10 from the pure value 9, and display its result in `main`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write". The helper must produce an `IO Int` result equal to 10; main must display that result, so its final action has type `IO ()`.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use a pure binding for 9, `pure` as the final `IO Int` expression, then bind and print in `main`.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+next :: IO Int
+next = do
+  let n = 9
+  pure (n + 1)
+main :: IO ()
+main = do
+  n <- next
+  print n
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+`next` produces 10; the caller prints `10`. Its output action ends with unit.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Ending with a binding such as `x <- getLine` is rejected: key phrase `The last statement in a 'do' block must be an expression`. Add a final action. Using a name before a later separate binding gives `Variable not in scope`. Returning an Int where `main :: IO ()` promises unit gives `Couldn't match type`.
+
+**Practice.** What are the types of `pure True :: IO Bool` and the value bound from it?
+
+<details>
+<summary>Answer</summary>
+
+The action has type `IO Bool`; its result has type `Bool`. Neither inherently prints anything.
+
+</details>
+
+## 2. getChar reads one character
+
+`getChar :: IO Char` consumes exactly one character, including a space or newline, and leaves the remainder unread. In a line-buffered terminal you may need Enter before characters become available. That does not make `getChar` return a whole line. At EOF it raises an IO exception.
+
+**Template.** `do { c <- getChar; useCharacter c }`; the final use must produce an action.
+
+### Variation: letter
+
+<HaskellTryIt input="A">
+
+```haskell
+main :: IO ()
+main = do
+  c <- getChar
+  print c
+```
+
+```text
+'A'
+```
+
+</HaskellTryIt>
+
+`print` displays a Char with single quotes.
+
+### Variation: space is not skipped
+
+<HaskellTryIt input=" ">
+
+```haskell
+main :: IO ()
+main = do
+  c <- getChar
+  print (c == ' ')
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+A space is a real input character.
+
+### Variation: successive characters
+
+<HaskellTryIt input="ab">
+
+```haskell
+main :: IO ()
+main = do
+  a <- getChar
+  b <- getChar
+  print [b,a]
+```
+
+```text
+"ba"
+```
+
+</HaskellTryIt>
+
+The two results are reversed into a String, whose printed representation has double quotes.
+
+### Exam question: getChar reads one character (5 marks)
+
+For stdin `xy`, read one character and display it twice without quotes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "read" and only one character may be consumed. The two output copies must come from that same result; the second input character is irrelevant.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read only once; build a two-character String and write it as text.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  c <- getChar
+  putStrLn [c,c]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+Output is `xx` and a newline; `y` is still unread.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `putStrLn c` cannot accept `c :: Char`: key phrase `Couldn't match type`. Use `[c]` or `putChar c`. Assuming Enter is discarded is a logic error with no compiler diagnostic.
+
+**Practice.** What remains after one character read from `"z\nnext\n"`?
+
+<details>
+<summary>Answer</summary>
+
+The result is `'z'`; the unread stream is `"\nnext\n"`.
+
+</details>
+
+## 3. putChar writes one character
+
+`putChar :: Char -> IO ()` writes one character without quotes or an added newline. `putStr [c]` writes the same characters as `putChar c`. `print c` instead uses the `Show Char` representation and ends the line.
+
+**Template.** `putChar character >> putChar '\n'` writes one visible character then explicitly ends the line.
+
+### Variation: explicit line ending
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  putChar 'Q'
+  putChar '\n'
+```
+
+```text
+Q
+```
+
+</HaskellTryIt>
+
+The second action supplies the newline.
+
+### Variation: three output forms
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  putChar 'A'
+  putStr "A"
+  print 'A'
+```
+
+```text
+AA'A'
+```
+
+</HaskellTryIt>
+
+The first two writes leave the cursor on the same line; the quoted Char from `print` follows them.
+
+### Variation: newline is a character
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  putChar 'x'
+  putChar '\n'
+  putChar 'y'
+  putChar '\n'
+```
+
+```text
+x
+y
+```
+
+</HaskellTryIt>
+
+Four actions write two letters and two line endings.
+
+### Exam question: putChar writes one character (5 marks)
+
+Using only `putChar` for output, write `OK` followed by a newline.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command restricts output to `putChar`. The required stream has three characters: O, K and newline, and each needs its own character action.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Sequence three character actions in the required order.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  putChar 'O'
+  putChar 'K'
+  putChar '\n'
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+The stream contains O, K and newline, without quotes.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `putChar "OK"` supplies a String instead of Char: key phrase `Couldn't match type`. Use separate character writes or `putStr`. Forgetting the explicit newline is a formatting error, not a compiler error.
+
+**Practice.** Does `putChar '!'` add a newline?
+
+<details>
+<summary>Answer</summary>
+
+No; `print '!'` adds both representation quotes and a newline.
+
+</details>
+
+## 4. getLine and leftover newlines
+
+`getLine :: IO String` consumes a line terminator but returns only the preceding characters. It preserves spaces and returns `""` for an empty line. After a character read, the next line read obtains the remainder of that same line. It does not automatically advance to the next nonempty line.
+
+**Template.** `do { c <- getChar; rest <- getLine; next <- getLine; ... }`. `rest` may be empty or contain several characters.
+
+### Variation: spaces within a line
+
+<HaskellTryIt input="Ada Lovelace">
+
+```haskell
+main :: IO ()
+main = do
+  s <- getLine
+  print s
+```
+
+```text
+"Ada Lovelace"
+```
+
+</HaskellTryIt>
+
+The internal space survives; the terminator does not.
+
+### Variation: empty remainder
+
+<HaskellTryIt input="A
+Bob">
+
+```haskell
+main :: IO ()
+main = do
+  c <- getChar
+  rest <- getLine
+  name <- getLine
+  print (c,rest,name)
+```
+
+```text
+('A',"","Bob")
+```
+
+</HaskellTryIt>
+
+The first line read meets the leftover newline immediately. The next reads Bob.
+
+### Variation: discard a nonempty remainder
+
+<HaskellTryIt input="yes
+next">
+
+```haskell
+main :: IO ()
+main = do
+  c <- getChar
+  _ <- getLine
+  next <- getLine
+  print (c,next)
+```
+
+```text
+('y',"next")
+```
+
+</HaskellTryIt>
+
+The discarded text is `es`; discarding one character alone would be insufficient.
+
+### Exam question: getLine and leftover newlines (5 marks)
+
+Read a character command from its own line, discard the rest of that line, then print the next line as a name.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "read" with two different input units: one character from a command line, then a complete name line. Leftover command text must not become the name.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Discard the whole remainder with `getLine`, even if the command line holds extra text.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  _ <- getChar
+  _ <- getLine
+  name <- getLine
+  putStrLn name
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+For `x extra` then `Ada`, output is `Ada`. A command line containing only `x` also works.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** An extra `getChar` consumes only one character and can leave more text behind. Conversely, discarding another line after a complete `getLine` loses real data. These are logic errors with no GHC diagnostic; track the unread stream explicitly.
+
+**Practice.** What does reading a line containing two spaces return?
+
+<details>
+<summary>Answer</summary>
+
+The two-character String `"  "`, not `""`.
+
+</details>
+
+## 5. readLn parses a typed line
+
+`readLn :: Read a => IO a` reads a line and parses its Haskell representation at a chosen type. `Read` names the parsing capability. It is approximately `getLine >>= (pure . read)`. Malformed input raises an exception; use the existing `readMaybe` parser from [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth) for recovery. A line of text is not automatically safe merely because it is entered by a user.
+
+**Template.** `n <- (readLn :: IO Int)`. Alternatively use `text <- getLine` then `let n = read text :: Int` when valid input is guaranteed.
+
+### Variation: signed integer
+
+<HaskellTryIt input="-3">
+
+```haskell
+main :: IO ()
+main = do
+  n <- (readLn :: IO Int)
+  print (n * 2)
+```
+
+```text
+-6
+```
+
+</HaskellTryIt>
+
+The result is numeric negative three, so doubling gives negative six.
+
+### Variation: Boolean constructor
+
+<HaskellTryIt input="True">
+
+```haskell
+main :: IO ()
+main = do
+  b <- (readLn :: IO Bool)
+  print (not b)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+`True` is the Haskell constructor spelling.
+
+### Variation: structured input
+
+<HaskellTryIt input="[1,2,3]">
+
+```haskell
+main :: IO ()
+main = do
+  xs <- (readLn :: IO [Int])
+  print (sum xs)
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+The entire list is parsed from one line; its sum is six.
+
+### Exam question: readLn parses a typed line (5 marks)
+
+Read two valid integer lines and display their sum. Explain the malformed-input policy.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "read" and the two supplied lines are valid integer representations. The result is one numeric sum; a separate explanation must state that this version does not recover from malformed text.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Annotate both reads as `IO Int`, add their results and print. This version assumes valid input.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  a <- (readLn :: IO Int)
+  b <- (readLn :: IO Int)
+  print (a + b)
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+Inputs 4 and -1 print `3`. Malformed input raises an exception rather than retrying.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `readLn :: Int` omits the IO wrapper: key phrase `Couldn't match`. Use `IO Int`. `read "oops" :: Int` deliberately fails with key exception phrase `no parse`; do not put this crash in a runnable block.
+
+**Practice.** How does `readLn :: IO String` differ from `getLine`?
+
+<details>
+<summary>Answer</summary>
+
+It expects a Haskell String literal including source quotes. `getLine` returns the entered line directly.
+
+</details>
+
+## 6. pure supplies a result, not an exit
+
+For IO, `pure :: a -> IO a` makes an action which produces a value without additional effects. `pure` and `return` have the same role here. Neither prints the value nor stops later actions. Prefer `pure` in new code and recognise `return` in older solutions. `pure () :: IO ()` is the do-nothing action.
+
+**Template.** `do { x <- pure value; next x }`; use `pure ()` for an empty effect branch.
+
+### Variation: number result
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  x <- (pure 12 :: IO Int)
+  print (x + 1)
+```
+
+```text
+13
+```
+
+</HaskellTryIt>
+
+The bound result is an ordinary number.
+
+### Variation: unit does not exit
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn "before"
+  pure ()
+  putStrLn "after"
+```
+
+```text
+before
+after
+```
+
+</HaskellTryIt>
+
+The middle action produces unit and execution continues.
+
+### Variation: return text without printing it
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  s <- (pure "ok" :: IO String)
+  print (length s)
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The String is data. Only the final action writes output.
+
+### Exam question: pure supplies a result, not an exit (5 marks)
+
+A student uses `pure ()` to stop before printing "work". Repair the design so "work" is printed only if `go` is true.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "repair". The intended condition is Boolean `go`, and the only required effect is printing work when go is true. Returning unit does not implement that choice.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Select the work action with `if`; place any dependent work inside the selected branch.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+run :: Bool -> IO ()
+run go = if go then putStrLn "work" else pure ()
+main :: IO ()
+main = run False
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+False produces no output, while true prints `work`. No imagined early return is needed.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Expecting `pure ()` to stop is a logic error, with no GHC message. Ending `main :: IO ()` with `pure (3 :: Int)` instead gives a type error: key phrase `Couldn't match type`. Print 3 or return unit.
+
+**Practice.** What does `do { pure "hidden"; putStrLn "visible" }` print?
+
+<details>
+<summary>Answer</summary>
+
+Only `visible` and a newline. The unused String result is discarded.
+
+</details>
+
+## 7. return supplies a result, not an exit
+
+For IO, `return :: a -> IO a` makes an action which produces a value without additional effects. `pure` and `return` have the same role here. Neither prints the value nor stops later actions. Prefer `pure` in new code and recognise `return` in older solutions. `pure () :: IO ()` is the do-nothing action.
+
+**Template.** `do { x <- return value; next x }`; use `return ()` for an empty effect branch.
+
+### Variation: number result
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  x <- (return 12 :: IO Int)
+  print (x + 1)
+```
+
+```text
+13
+```
+
+</HaskellTryIt>
+
+The bound result is an ordinary number.
+
+### Variation: unit does not exit
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  putStrLn "before"
+  return ()
+  putStrLn "after"
+```
+
+```text
+before
+after
+```
+
+</HaskellTryIt>
+
+The middle action produces unit and execution continues.
+
+### Variation: return text without printing it
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  s <- (return "ok" :: IO String)
+  print (length s)
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The String is data. Only the final action writes output.
+
+### Exam question: return supplies a result, not an exit (5 marks)
+
+A student uses `return ()` to stop before printing "work". Repair the design so "work" is printed only if `go` is true.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "repair". The original program confuses returning an action result with stopping. A Boolean must select the output action explicitly.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Select the work action with `if`; place any dependent work inside the selected branch.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+run :: Bool -> IO ()
+run go = if go then putStrLn "work" else pure ()
+main :: IO ()
+main = run False
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+False produces no output, while true prints `work`. No imagined early return is needed.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Expecting `return ()` to stop is a logic error, with no GHC message. Ending `main :: IO ()` with `return (3 :: Int)` instead gives a type error: key phrase `Couldn't match type`. Print 3 or return unit.
+
+**Practice.** What does `do { return "hidden"; putStrLn "visible" }` print?
+
+<details>
+<summary>Answer</summary>
+
+Only `visible` and a newline. The unused String result is discarded.
+
+</details>
+
+## 8. Discarding sequencing with >>
+
+For IO, `(>>) :: IO a -> IO b -> IO b` performs the left action, discards its result and then performs the right action. The combined result comes from the right. This specifies effect order, not strict evaluation of every pure subexpression. Consecutive unbound action statements in `do` use this pattern.
+
+**Template.** `firstAction >> secondAction`; equivalently `do { firstAction; secondAction }`.
+
+### Variation: ordered writes
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = putStrLn "first" >> putStrLn "second"
+```
+
+```text
+first
+second
+```
+
+</HaskellTryIt>
+
+The first message is written before the second.
+
+### Variation: consume and discard input
+
+<HaskellTryIt input="secret">
+
+```haskell
+main :: IO ()
+main = getLine >> putStrLn "discarded"
+```
+
+```text
+discarded
+```
+
+</HaskellTryIt>
+
+The input effect happens although its String result is ignored.
+
+### Variation: keep the final result
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  n <- (putStrLn "start" >> pure (8 :: Int))
+  print n
+```
+
+```text
+start
+8
+```
+
+</HaskellTryIt>
+
+The combined action has type `IO Int`. It discards the first unit result, not the last number.
+
+### Exam question: Discarding sequencing with >> (5 marks)
+
+Rewrite `do { getLine; putStrLn "done" }` without `do` and give the type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "rewrite". The input result is unused, so only action order matters.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Apply the discard-result template directly.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = getLine >> putStrLn "done"
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+Input `abc` is consumed; output is `done` and a newline. The type is `IO ()`.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `getLine >> length` supplies a function instead of an action: key phrase `Couldn't match`. To use the read result, use `>>=` and a function returning an action.
+
+**Practice.** What result does `pure True >> pure (7 :: Int) :: IO Int` produce?
+
+<details>
+<summary>Answer</summary>
+
+7, without printing it. The left Boolean result is discarded.
+
+</details>
+
+## 9. Dependent sequencing with >>=
+
+For IO, `(>>=) :: IO a -> (a -> IO b) -> IO b` performs an action, supplies its result to a function and performs the action that function returns. The function receives `a`, not `IO a`. A `<-` line followed by the remaining `do` statements expresses this same dependency.
+
+**Template.** `action >>= \x -> nextAction x`; equivalently `do { x <- action; nextAction x }`.
+
+### Variation: echo a result
+
+<HaskellTryIt input="hello">
+
+```haskell
+main :: IO ()
+main = getLine >>= putStrLn
+```
+
+```text
+hello
+```
+
+</HaskellTryIt>
+
+The obtained String becomes the argument of `putStrLn`.
+
+### Variation: calculate from the result
+
+<HaskellTryIt input="cat">
+
+```haskell
+main :: IO ()
+main = getLine >>= \s -> print (length s)
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The function creates an output action using the line length.
+
+### Variation: choose the next effect
+
+<HaskellTryIt input="no">
+
+```haskell
+main :: IO ()
+main = getLine >>= \s -> if s == "yes" then putStrLn "accepted" else putStrLn "declined"
+```
+
+```text
+declined
+```
+
+</HaskellTryIt>
+
+The result chooses the declined branch.
+
+### Exam question: Dependent sequencing with >>= (5 marks)
+
+Without `do`, read a line and display its reverse.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write"; output depends on the text obtained, so `>>` is insufficient.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use a lambda to calculate a reversed String and create an output action.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = getLine >>= \s -> putStrLn (reverse s)
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+Input `abc` prints `cba`; an empty input line produces a blank output line.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `getLine >>= reverse` returns a String where an IO action is required: key phrase `Couldn't match type`. Write `\s -> putStrLn (reverse s)`. Bind does not automatically turn any pure function into an effect.
+
+**Practice.** Write `getLine >>= \s -> print (length s)` using `do`.
+
+<details>
+<summary>Answer</summary>
+
+`do { s <- getLine; print (length s) }`.
+
+</details>
+
+## 10. Conditional actions with when
+
+`when :: Bool -> IO () -> IO ()` in this lesson performs its action when the condition is true; otherwise it performs `pure ()`. Import it from `Control.Monad`. Its sibling uses the opposite condition. Both are for optional unit-result effects; an `if` expression is needed when branches must return useful data.
+
+**Template.** `when condition action`; for several actions use `when condition $ do ...`.
+
+### Variation: selected branch
+
+<HaskellTryIt>
+
+```haskell
+import Control.Monad (when)
+main :: IO ()
+main = when True (putStrLn "selected")
+```
+
+```text
+selected
+```
+
+</HaskellTryIt>
+
+The condition selects the output action.
+
+### Variation: skipped branch
+
+<HaskellTryIt>
+
+```haskell
+import Control.Monad (when)
+main :: IO ()
+main = do
+  when False (putStrLn "hidden")
+  putStrLn "end"
+```
+
+```text
+end
+```
+
+</HaskellTryIt>
+
+The condition skips the first output, and the later action still runs.
+
+### Variation: conditional block
+
+<HaskellTryIt>
+
+```haskell
+import Control.Monad (when)
+main :: IO ()
+main = when True $ do
+  putStrLn "one"
+  putStrLn "two"
+```
+
+```text
+one
+two
+```
+
+</HaskellTryIt>
+
+Both writes belong to one selected unit-result action.
+
+### Exam question: Conditional actions with when (5 marks)
+
+Use `when` to print "warning" exactly when a Boolean `bad` is true.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "use" and the contract is a single optional output effect.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use `bad` directly with `when`, or its negation with `unless`.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+import Control.Monad (when)
+warn :: Bool -> IO ()
+warn bad = when bad (putStrLn "warning")
+main :: IO ()
+main = warn True
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+True prints `warning`; false prints nothing.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `when True (pure (3 :: Int))` has an incorrect action result type: key phrase `Couldn't match type`. Discard the number and finish with `pure ()`, or choose a value-producing `if` instead.
+
+**Practice.** Rewrite `when b action` with `if`.
+
+<details>
+<summary>Answer</summary>
+
+`if b then action else pure ()`.
+
+</details>
+
+## 11. Conditional actions with unless
+
+`unless :: Bool -> IO () -> IO ()` in this lesson performs its action when the condition is false; otherwise it performs `pure ()`. Import it from `Control.Monad`. Its sibling uses the opposite condition. Both are for optional unit-result effects; an `if` expression is needed when branches must return useful data.
+
+**Template.** `unless condition action`; for several actions use `unless condition $ do ...`.
+
+### Variation: selected branch
+
+<HaskellTryIt>
+
+```haskell
+import Control.Monad (unless)
+main :: IO ()
+main = unless False (putStrLn "selected")
+```
+
+```text
+selected
+```
+
+</HaskellTryIt>
+
+The condition selects the output action.
+
+### Variation: skipped branch
+
+<HaskellTryIt>
+
+```haskell
+import Control.Monad (unless)
+main :: IO ()
+main = do
+  unless True (putStrLn "hidden")
+  putStrLn "end"
+```
+
+```text
+end
+```
+
+</HaskellTryIt>
+
+The condition skips the first output, and the later action still runs.
+
+### Variation: conditional block
+
+<HaskellTryIt>
+
+```haskell
+import Control.Monad (unless)
+main :: IO ()
+main = unless False $ do
+  putStrLn "one"
+  putStrLn "two"
+```
+
+```text
+one
+two
+```
+
+</HaskellTryIt>
+
+Both writes belong to one selected unit-result action.
+
+### Exam question: Conditional actions with unless (5 marks)
+
+Use `unless` to print "warning" exactly when a Boolean `bad` is true.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "use" and the contract is a single optional output effect.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use `bad` directly with `when`, or its negation with `unless`.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+import Control.Monad (unless)
+warn :: Bool -> IO ()
+warn bad = unless (not bad) (putStrLn "warning")
+main :: IO ()
+main = warn True
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+True prints `warning`; false prints nothing.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `unless True (pure (3 :: Int))` has an incorrect action result type: key phrase `Couldn't match type`. Discard the number and finish with `pure ()`, or choose a value-producing `if` instead.
+
+**Practice.** Rewrite `unless b action` with `if`.
+
+<details>
+<summary>Answer</summary>
+
+`if b then pure () else action`.
+
+</details>
+
+## 12. Prompt until valid
+
+A recursive action can obtain fresh input on each call, retry on failure and return the accepted value on success. Reuse `readMaybe` from [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth); here the new issue is when to repeat the IO. The following complete program requires a mark in 0 to 100 inclusive. Termination depends on eventually receiving valid input. EOF raises an exception in this simple version; endlessly invalid lines cause endless retries.
+
+**Template.** `ask = do { s <- getLine; case parse s of { valid -> pure value; invalid -> message >> ask } }`. Recurse only in the retry branch.
+
+### Variation: valid immediately
+
+<HaskellTryIt input="50">
+
+```haskell
+import Text.Read (readMaybe)
+ask :: IO Int
+ask = do
+  putStrLn "Mark (0..100):"
+  s <- getLine
+  case readMaybe s :: Maybe Int of
+    Just n | n >= 0 && n <= 100 -> pure n
+    _ -> do
+      putStrLn "Invalid"
+      ask
+main :: IO ()
+main = do
+  n <- ask
+  putStrLn ("Accepted: " ++ show n)
+```
+
+```text
+Mark (0..100):
+Accepted: 50
+```
+
+</HaskellTryIt>
+
+The parse and range check succeed, so no retry occurs.
+
+### Variation: malformed then lower boundary
+
+<HaskellTryIt input="oops
+0">
+
+```haskell
+import Text.Read (readMaybe)
+ask :: IO Int
+ask = do
+  putStrLn "Mark (0..100):"
+  s <- getLine
+  case readMaybe s :: Maybe Int of
+    Just n | n >= 0 && n <= 100 -> pure n
+    _ -> do
+      putStrLn "Invalid"
+      ask
+main :: IO ()
+main = do
+  n <- ask
+  putStrLn ("Accepted: " ++ show n)
+```
+
+```text
+Mark (0..100):
+Invalid
+Mark (0..100):
+Accepted: 0
+```
+
+</HaskellTryIt>
+
+The first call retries. The next accepts zero and returns it to main.
+
+### Variation: out of range then upper boundary
+
+<HaskellTryIt input="101
+100">
+
+```haskell
+import Text.Read (readMaybe)
+ask :: IO Int
+ask = do
+  putStrLn "Mark (0..100):"
+  s <- getLine
+  case readMaybe s :: Maybe Int of
+    Just n | n >= 0 && n <= 100 -> pure n
+    _ -> do
+      putStrLn "Invalid"
+      ask
+main :: IO ()
+main = do
+  n <- ask
+  putStrLn ("Accepted: " ++ show n)
+```
+
+```text
+Mark (0..100):
+Invalid
+Mark (0..100):
+Accepted: 100
+```
+
+</HaskellTryIt>
+
+101 parses but fails validation. 100 satisfies both bounds.
+
+### Exam question: Prompt until valid (5 marks)
+
+Explain why replacing the retry call with `pure 0` changes the specification.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "explain". Compare the returned result and consumption of later input.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Trace the invalid branch; distinguish retrying from supplying a default.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+-- In ask, the invalid branch must be:
+-- _ -> putStrLn "Invalid" >> ask
+-- Replacing ask with pure 0 would silently accept a default.
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+For `oops` then `75`, the correct program returns 75. The default version returns 0 and leaves 75 unread.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Calling `ask` after every branch repeats after success too: a logic error with no GHC diagnostic. Combining a valid branch `pure n :: IO Int` with only `putStrLn "Invalid" :: IO ()` gives `Couldn't match type`; follow the message with `ask`.
+
+**Practice.** Two invalid lines precede a valid line. Count prompts and error messages.
+
+<details>
+<summary>Answer</summary>
+
+Three prompts, two `Invalid` lines and one final accepted report.
+
+</details>
+
+## 13. Sentinel loops and carried state
+
+A sentinel is a reserved input meaning stop. Test it before parsing data, and do not include it in the calculation. Carry changing totals as recursive parameters rather than attempting mutation. In this complete program `stop` is case-sensitive, negative numbers are valid data, and blank or malformed lines are rejected without changing the total. Valid input must eventually include the sentinel; EOF is not handled here.
+
+**Template.** `loop state = readAction >>= \x -> if isStop x then finish state else loop (update state x)`. Invalid data can recurse with unchanged state.
+
+### Variation: stop first
+
+<HaskellTryIt input="stop">
+
+```haskell
+import Text.Read (readMaybe)
+loop :: Int -> IO ()
+loop total = do
+  s <- getLine
+  if s == "stop"
+    then print total
+    else case readMaybe s :: Maybe Int of
+      Nothing -> putStrLn "Invalid" >> loop total
+      Just n -> loop (total + n)
+main :: IO ()
+main = loop 0
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The initial state is printed without processing any numbers.
+
+### Variation: mixed signs
+
+<HaskellTryIt input="5
+-2
+stop">
+
+```haskell
+import Text.Read (readMaybe)
+loop :: Int -> IO ()
+loop total = do
+  s <- getLine
+  if s == "stop"
+    then print total
+    else case readMaybe s :: Maybe Int of
+      Nothing -> putStrLn "Invalid" >> loop total
+      Just n -> loop (total + n)
+main :: IO ()
+main = loop 0
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The successive totals are 0, 5 and 3. The sentinel prints 3.
+
+### Variation: invalid data preserves state
+
+<HaskellTryIt input="oops
+7
+stop">
+
+```haskell
+import Text.Read (readMaybe)
+loop :: Int -> IO ()
+loop total = do
+  s <- getLine
+  if s == "stop"
+    then print total
+    else case readMaybe s :: Maybe Int of
+      Nothing -> putStrLn "Invalid" >> loop total
+      Just n -> loop (total + n)
+main :: IO ()
+main = loop 0
+```
+
+```text
+Invalid
+7
+```
+
+</HaskellTryIt>
+
+The invalid call keeps zero, and the next valid call adds seven.
+
+### Exam question: Sentinel loops and carried state (5 marks)
+
+Change the sentinel program to count valid numbers instead of summing them.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "change". Keep the existing parse and stop policy; change only the update.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Initialise count at zero, preserve it after invalid data and increment it for each valid number.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+import Text.Read (readMaybe)
+countLoop :: Int -> IO ()
+countLoop count = do
+  text <- getLine
+  if text == "stop"
+    then print count
+    else case readMaybe text :: Maybe Int of
+      Nothing -> putStrLn "Invalid" >> countLoop count
+      Just _ -> countLoop (count + 1)
+main :: IO ()
+main = countLoop 0
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+`5`, `-2`, `stop` gives 2. `stop` alone gives 0; invalid lines do not increase it.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Parsing `stop` with `read` before checking the sentinel can fail with key exception phrase `no parse`. Resetting with `loop 0` after each datum is a logic error; pass the updated accumulator.
+
+**Practice.** Can zero be both a reserved numeric sentinel and ordinary data in the same position?
+
+<details>
+<summary>Answer</summary>
+
+Not without another distinguishing rule. State which role zero has, or use a text sentinel such as `stop`.
+
+</details>
+
+## 14. mapM and lists of actions
+
+`mapM` takes an action-producing function and ordinary inputs, performs the actions from left to right and collects their results into an ordered list. Its IO-specialised type is `(a -> IO b) -> [a] -> IO [b]`. `map putStrLn messages :: [IO ()]` builds action descriptions without performing output. For IO, `mapM f xs = sequence (map f xs)` and `mapM_ f xs = sequence_ (map f xs)`. All element actions must have the same result type, even when results will be discarded.
+
+**Template.** `mapM makeAction inputs`; choose an underscore version when only effects are wanted.
+
+### Variation: collect numbers
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  xs <- mapM (\n -> pure (n * 2)) [1,2,3]
+  print xs
+```
+
+```text
+[2,4,6]
+```
+
+</HaskellTryIt>
+
+Each action result occupies the corresponding position in the collected list.
+
+### Variation: effects and returned results
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  xs <- mapM (\s -> putStrLn s >> pure (length s)) ["a","cat"]
+  print xs
+```
+
+```text
+a
+cat
+[1,3]
+```
+
+</HaskellTryIt>
+
+Messages are effects. The returned numbers or Booleans are different values, printed afterwards as a list.
+
+### Variation: empty list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  xs <- mapM (\n -> pure (n + 1)) ([] :: [Int])
+  print xs
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There are no element effects and the result list is empty.
+
+### Variation: read once for each labelled input
+
+<HaskellTryIt input="2
+5">
+
+```haskell
+main :: IO ()
+main = do
+  ns <- mapM (\label -> putStrLn label >> (readLn :: IO Int)) ["First:","Second:"]
+  print (sum ns)
+```
+
+```text
+First:
+Second:
+7
+```
+
+</HaskellTryIt>
+
+The first action prints its label and reads 2. The second reads 5 after its label. `mapM` collects `[2,5]` and the pure sum is 7. Reusing the action-producing function does not reuse the first input result.
+
+### Exam question: mapM and lists of actions (5 marks)
+
+Use `mapM` to print Ada then Bo and return their lengths in a list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "use". Output order is fixed, and the requirement states whether result data must survive.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Make each output an action returning its String length, then collect the lengths.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+names :: IO [Int]
+names = mapM (\s -> putStrLn s >> pure (length s)) ["Ada","Bo"]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+The output is Ada then Bo, each on its own line. The result is `[3,2]`; that list is not automatically printed.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `print (map putStrLn ["Ada"])` tries to show IO actions: key phrase `No instance for`. Execute them instead. A raw list of actions used where `IO ()` is required gives `Couldn't match type`.
+
+**Practice.** Compare `sequence [getLine,getLine]` and `sequence_ [getLine,getLine]`.
+
+<details>
+<summary>Answer</summary>
+
+Both read two lines. The first returns a list of the two Strings; the second discards them and returns unit.
+
+</details>
+
+## 15. mapM_ and lists of actions
+
+`mapM_` takes an action-producing function and ordinary inputs, performs the actions from left to right and discards their results, returning unit. Its IO-specialised type is `(a -> IO b) -> [a] -> IO ()`. `map putStrLn messages :: [IO ()]` builds action descriptions without performing output. For IO, `mapM f xs = sequence (map f xs)` and `mapM_ f xs = sequence_ (map f xs)`. All element actions must have the same result type, even when results will be discarded.
+
+**Template.** `mapM_ makeAction inputs`; choose an underscore version when only effects are wanted.
+
+### Variation: ordered output
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = mapM_ putStrLn ["first","second"]
+```
+
+```text
+first
+second
+```
+
+</HaskellTryIt>
+
+Both actions execute once in list order.
+
+### Variation: discard useful-looking results
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = mapM_ (\n -> print n >> pure True) [2,4]
+```
+
+```text
+2
+4
+```
+
+</HaskellTryIt>
+
+Boolean results disappear; the print effects still occur.
+
+### Variation: empty list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  mapM_ print ([] :: [Int])
+  putStrLn "finished"
+```
+
+```text
+finished
+```
+
+</HaskellTryIt>
+
+An empty traversal has no element actions, so only the following message appears.
+
+### Variation: consume several inputs for effects
+
+<HaskellTryIt input="Ada
+CS">
+
+```haskell
+main :: IO ()
+main = mapM_ (\label -> do
+  putStrLn label
+  text <- getLine
+  print (length text)) ["Name:","Code:"]
+```
+
+```text
+Name:
+3
+Code:
+2
+```
+
+</HaskellTryIt>
+
+Each input is processed immediately by its own action. The unit results are discarded; input and output effects still occur in order.
+
+### Exam question: mapM_ and lists of actions (5 marks)
+
+Use `mapM_` to print Ada then Bo without retaining a result list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "use". Output order is fixed, and the requirement states whether result data must survive.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Make each output an action, then discard its result after performing it.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+names :: IO ()
+names = mapM_ putStrLn ["Ada","Bo"]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+The output is Ada then Bo, each on its own line. The result is unit.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `print (map putStrLn ["Ada"])` tries to show IO actions: key phrase `No instance for`. Execute them instead. A raw list of actions used where `IO ()` is required gives `Couldn't match type`.
+
+**Practice.** Compare `sequence [getLine,getLine]` and `sequence_ [getLine,getLine]`.
+
+<details>
+<summary>Answer</summary>
+
+Both read two lines. The first returns a list of the two Strings; the second discards them and returns unit.
+
+</details>
+
+## 16. sequence and lists of actions
+
+`sequence` takes a list of actions, performs the actions from left to right and collects their results into an ordered list. Its IO-specialised type is `[IO a] -> IO [a]`. `map putStrLn messages :: [IO ()]` builds action descriptions without performing output. For IO, `mapM f xs = sequence (map f xs)` and `mapM_ f xs = sequence_ (map f xs)`. All element actions must have the same result type, even when results will be discarded.
+
+**Template.** `sequence actions`; choose an underscore version when only effects are wanted.
+
+### Variation: collect numbers
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  xs <- sequence [pure (2 :: Int), pure 4, pure 6]
+  print xs
+```
+
+```text
+[2,4,6]
+```
+
+</HaskellTryIt>
+
+Each action result occupies the corresponding position in the collected list.
+
+### Variation: effects and returned results
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  xs <- sequence [putStrLn "a" >> pure True, putStrLn "b" >> pure False]
+  print xs
+```
+
+```text
+a
+b
+[True,False]
+```
+
+</HaskellTryIt>
+
+Messages are effects. The returned numbers or Booleans are different values, printed afterwards as a list.
+
+### Variation: empty list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  xs <- sequence ([] :: [IO Int])
+  print xs
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There are no element effects and the result list is empty.
+
+### Variation: execute two input actions
+
+<HaskellTryIt input="Ada
+Bo">
+
+```haskell
+main :: IO ()
+main = do
+  names <- sequence [getLine,getLine]
+  print names
+```
+
+```text
+["Ada","Bo"]
+```
+
+</HaskellTryIt>
+
+The list contains two descriptions of the same input operation, not one String twice. Performing them reads two distinct lines.
+
+### Exam question: sequence and lists of actions (5 marks)
+
+Use `sequence` to print Ada then Bo and return their lengths in a list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "use". Output order is fixed, and the requirement states whether result data must survive.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Make each output an action returning its String length, then collect the lengths.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+names :: IO [Int]
+names = sequence [putStrLn "Ada" >> pure 3,putStrLn "Bo" >> pure 2]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+The output is Ada then Bo, each on its own line. The result is `[3,2]`; that list is not automatically printed.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `print (map putStrLn ["Ada"])` tries to show IO actions: key phrase `No instance for`. Execute them instead. A raw list of actions used where `IO ()` is required gives `Couldn't match type`.
+
+**Practice.** Compare `sequence [getLine,getLine]` and `sequence_ [getLine,getLine]`.
+
+<details>
+<summary>Answer</summary>
+
+Both read two lines. The first returns a list of the two Strings; the second discards them and returns unit.
+
+</details>
+
+## 17. sequence_ and lists of actions
+
+`sequence_` takes a list of actions, performs the actions from left to right and discards their results, returning unit. Its IO-specialised type is `[IO a] -> IO ()`. `map putStrLn messages :: [IO ()]` builds action descriptions without performing output. For IO, `mapM f xs = sequence (map f xs)` and `mapM_ f xs = sequence_ (map f xs)`. All element actions must have the same result type, even when results will be discarded.
+
+**Template.** `sequence_ actions`; choose an underscore version when only effects are wanted.
+
+### Variation: ordered output
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = sequence_ [putStrLn "first",putStrLn "second"]
+```
+
+```text
+first
+second
+```
+
+</HaskellTryIt>
+
+Both actions execute once in list order.
+
+### Variation: discard useful-looking results
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = sequence_ [print (2 :: Int) >> pure True,print (4 :: Int) >> pure False]
+```
+
+```text
+2
+4
+```
+
+</HaskellTryIt>
+
+Boolean results disappear; the print effects still occur.
+
+### Variation: empty list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  sequence_ ([] :: [IO ()])
+  putStrLn "finished"
+```
+
+```text
+finished
+```
+
+</HaskellTryIt>
+
+An empty traversal has no element actions, so only the following message appears.
+
+### Variation: discard two read results
+
+<HaskellTryIt input="unused one
+unused two">
+
+```haskell
+main :: IO ()
+main = do
+  sequence_ [getLine,getLine]
+  putStrLn "two consumed"
+```
+
+```text
+two consumed
+```
+
+</HaskellTryIt>
+
+Both lines are consumed and discarded. The final message appears only afterwards.
+
+### Exam question: sequence_ and lists of actions (5 marks)
+
+Use `sequence_` to print Ada then Bo without retaining a result list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "use". Output order is fixed, and the requirement states whether result data must survive.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Make each output an action, then discard its result after performing it.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+names :: IO ()
+names = sequence_ [putStrLn "Ada",putStrLn "Bo"]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+The output is Ada then Bo, each on its own line. The result is unit.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `print (map putStrLn ["Ada"])` tries to show IO actions: key phrase `No instance for`. Execute them instead. A raw list of actions used where `IO ()` is required gives `Couldn't match type`.
+
+**Practice.** Compare `sequence [getLine,getLine]` and `sequence_ [getLine,getLine]`.
+
+<details>
+<summary>Answer</summary>
+
+Both read two lines. The first returns a list of the two Strings; the second discards them and returns unit.
+
+</details>
+
+## 18. Exact reports with printf
+
+`printf` from `Text.Printf` inserts arguments into placeholders. `%s` inserts text, `%d` an integer and `%.2f` a floating value with exactly two digits after the decimal point, the formatting family required beside Test1 11. It adds no newline unless the format contains `\n`. Formatting changes the text representation, not the numeric binding. Annotate numeric arguments to fix overloaded types. This section deliberately avoids delicate binary floating-point tie cases.
+
+**Template.** `printf "%s: %d items, %.2f total\n" label count amount`. Match argument number, order and kind; these examples use an `IO ()` result.
+
+### Variation: trailing zero
+
+<HaskellTryIt>
+
+```haskell
+import Text.Printf (printf)
+main :: IO ()
+main = printf "Mean: %.2f\n" (7.5 :: Double)
+```
+
+```text
+Mean: 7.50
+```
+
+</HaskellTryIt>
+
+The original value is 7.5; the representation has the required two fractional digits.
+
+### Variation: three placeholder kinds
+
+<HaskellTryIt>
+
+```haskell
+import Text.Printf (printf)
+main :: IO ()
+main = printf "%s: %d, %.2f\n" "Balance" (3 :: Int) (-2.25 :: Double)
+```
+
+```text
+Balance: 3, -2.25
+```
+
+</HaskellTryIt>
+
+The arguments fill String, integer and decimal positions in order.
+
+### Variation: formatting versus rounding
+
+<HaskellTryIt>
+
+```haskell
+import Text.Printf (printf)
+main :: IO ()
+main = do
+  let x = 1.234 :: Double
+  printf "Display: %.2f\n" x
+  print x
+  print (round x :: Int)
+```
+
+```text
+Display: 1.23
+1.234
+1
+```
+
+</HaskellTryIt>
+
+Formatting leaves x unchanged. `round` separately converts to an integral result.
+
+### Exam question: Exact reports with printf (5 marks)
+
+Read two valid Double lines and print their mean after `Average: ` with exactly two fractional digits.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write"; the output contract specifies text formatting as well as arithmetic.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read two annotated actions, calculate the mean and format it with `%.2f`.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+import Text.Printf (printf)
+main :: IO ()
+main = do
+  a <- (readLn :: IO Double)
+  b <- (readLn :: IO Double)
+  printf "Average: %.2f\n" ((a + b) / 2)
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+Inputs 7 and 8 give `Average: 7.50`; -2 and 0 give `Average: -1.00`.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `show` does not guarantee two fractional digits. Integer `round` loses fractional information. These are logic errors without a compiler message. Placeholder/argument mismatches can fail during formatting; match them explicitly rather than relying on the compiler to catch every format String error.
+
+**Practice.** What does `printf "%.2f\n" (0 :: Double)` output?
+
+<details>
+<summary>Answer</summary>
+
+`0.00` followed by a newline; ordinary `print` would show `0.0`.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+An action and its result have different types. The final expression determines a do block's result. `pure` and `return` do not exit. Track leftover input when mixing character and line reads. `>>` discards a result; `>>=` uses it to choose the next action. Conditional effects return unit, recursive loops need an explicit stopping policy, and traversal combinators either collect or discard their results. Formatting affects text, not the original number.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="Does let a = getLine read input?">
+    No. It names an action; a later action statement must perform it.
+  </CheckQuestion>
+
+  <CheckQuestion question="Why can a line read immediately after getChar return an empty String?">
+    A newline may be the next unread character. The line read consumes it and returns the empty remainder.
+  </CheckQuestion>
+
+  <CheckQuestion question="Which combinator executes a list of actions and retains results?">
+    `sequence`. Its underscore sibling performs the same element effects but discards the results.
+  </CheckQuestion>
+
+  <CheckQuestion question="Does pure () prevent later output?">
+    No. Choose branches or recursion to control which actions happen.
+  </CheckQuestion>
+
+  <CheckQuestion question="Does %.2f change a Double to an integer?">
+    No. It produces text with two fractional digits; it does not change the Double.
+  </CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Text and File IO Practice](/docs/sem3/csi243/03-defining-functions/notes/text-and-file-io-practice).

@@ -1,0 +1,1277 @@
+---
+title: "Comprehension Exam Practice"
+description: "Solve eighteen comprehension exam questions with plans, candidate tables, complete programs and checks."
+---
+
+Try each question on paper before opening the answer. These questions apply the twelve shapes in [Comprehension Templates](/docs/sem3/csi243/06-lists-tuples/notes/comprehension-templates). The reasoning matters: a correct list in the wrong order loses the meaning of the generators. Every solution program is independent; its opening comment repeats the task so it can be copied into a Haskell file.
+
+<LearningObjectives items={[
+  'Read command words and choose the required output shape',
+  'Evaluate comprehensions with ordered candidate tables',
+  'Convert between comprehension, recursion and higher-order forms',
+  'Write factors, prime and perfect-number searches with precise bounds',
+  'Build tuple products, flatten lists, rotate lists and preserve matrix rows',
+]} />
+
+## 1. An answering template
+
+```text
+Read: identify the command word, inputs, output type and restrictions.
+Plan: choose sources, patterns, tests and output; fix their order.
+Solve: write the definition or trace, not just a guessed result.
+Check: use a tiny input and a boundary or empty input; inspect order and count.
+```
+
+For ?evaluate?, give values in generation order. For ?write?, give a function of the requested type. For ?rewrite?, preserve order, duplicates and edge cases. For ?count?, count branches without enumerating their outputs. For ?find the error?, identify the fault, explain it and provide a repaired expression. Negative numbers in constructor arguments need parentheses, for example `Just (-2)`. Printed strings have quotes; printed numeric lists have no spaces after commas.
+
+## 2. Questions and worked answers
+
+### Exam question 1: evaluate the ordered differences (5 marks)
+
+Evaluate `[x-y | x <- [1,3], y <- [0,2], x /= y]`, showing the order of the candidates.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate asks for the list, with a trace. The output is subtraction, not a pair. The guard compares the original values.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the independent-generator template. Hold x fixed through both y values, test, then subtract. A higher-order check uses outer concatMap and inner map/filter.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Evaluate [x-y | x <- [1,3], y <- [0,2], x /= y], showing the order of the candidates.
+main :: IO ()
+main = do
+  print [x-y | x <- [1,3], y <- [0,2], x /= y]
+  print (concatMap (\x -> map (\y -> x-y) (filter (\y -> x /= y) [0,2])) [1,3])
+```
+
+```text
+[1,-1,3,1]
+[1,-1,3,1]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `(x,y) = (1,0)` | unequal: True | `1` |
+| `(1,2)` | True | `-1` |
+| `(3,0)` | True | `3` |
+| `(3,2)` | True | `1` |
+
+All four candidates pass, so both implementations retain four results, including the repeated 1.
+
+</Step>
+
+<Step title="4. Check">
+
+A one-by-one source `[1]` and `[2]` would give `[-1]`. The displayed count is two times two, and the 3 branch starts only after the 1 branch ends.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: write a filtered transformation (4 marks)
+
+Write `adjust :: [Int] -> [Int]` adding 5 only to positive even inputs, omitting all other inputs.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write requires a definition. Positive and even are both requirements. Adding five belongs to the output, after selection.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one generator and two tests. Translate as map (+5) after a filter combining positivity and parity.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write adjust :: [Int] -> [Int] adding 5 only to positive even inputs, omitting all other inputs.
+adjust :: [Int] -> [Int]
+adjust xs = [x+5 | x <- xs, x > 0, even x]
+
+main :: IO ()
+main = do
+  print (adjust [-2,0,2,3,4])
+  print (map (+5) (filter (\x -> x > 0 && even x) [-2,0,2,3,4]))
+  print (adjust [])
+```
+
+```text
+[7,9]
+[7,9]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `x = -2,0` | positivity fails | none |
+| `x = 2` | True, True | `7` |
+| `x = 3` | True, False | none |
+| `x = 4` | True, True | `9` |
+| empty input | no candidates | none |
+
+Filtering the transformed values would ask a different question. Only 2 and 4 from the original source are kept.
+
+</Step>
+
+<Step title="4. Check">
+
+On `[1,2]` only 2 contributes, giving `[7]`. The program also checks empty input.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: recursion to comprehension and back (6 marks)
+
+Rewrite the recursion `keep [] = []; keep (x:xs) = if x < 0 then (-x):keep xs else keep xs` as a comprehension, then write an equivalent recursion with guards.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Rewrite requires equivalent definitions, including ordering and empty behaviour. The recursion selects negative inputs and negates them.
+
+</Step>
+
+<Step title="2. Plan">
+
+Match cons-with-transformation to an output expression, and the conditional to a test. The skip branch adds nothing.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Rewrite the recursion keep [] = []; keep (x:xs) = if x < 0 then (-x):keep xs else keep xs as a comprehension, then write an equivalent recursion with guards.
+keepC :: [Int] -> [Int]
+keepC xs = [-x | x <- xs, x < 0]
+
+keepR :: [Int] -> [Int]
+keepR [] = []
+keepR (x:xs)
+  | x < 0 = (-x) : keepR xs
+  | otherwise = keepR xs
+
+main :: IO ()
+main = do
+  print (keepC [-2,0,-1,3])
+  print (keepR [-2,0,-1,3])
+  print (keepC [])
+  print (keepR [])
+```
+
+```text
+[2,1]
+[2,1]
+[]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| head `-2`, tail `[0,-1,3]` | negative: keep | `2` before recursive result |
+| head `0` | not negative: skip | none |
+| head `-1` | negative: keep | `1` before recursive result |
+| head `3` | not negative: skip | none |
+| `[]` | base case | empty tail |
+
+The cons operations preserve the surviving order. The higher-order equivalent is `map negate (filter (<0) xs)`.
+
+</Step>
+
+<Step title="4. Check">
+
+Both definitions give `[1]` on `[-1]` and `[]` on `[0]`. The explicit base case agrees with the comprehension on empty input.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: rewrite with map and filter (5 marks)
+
+Rewrite `[length w + 1 | w <- ws, length w >= 2, w /= "no"]` using map and filter, and explain the order.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Rewrite asks for the same output for each ws. The tests refer to original words; outputs are numbers.
+
+</Step>
+
+<Step title="2. Plan">
+
+Combine the tests in a filter, then map length plus one over surviving words. Do not try to test words after transforming them to Int.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Rewrite [length w + 1 | w <- ws, length w >= 2, w /= "no"] using map and filter, and explain the order.
+sizes :: [String] -> [Int]
+sizes ws = map (\w -> length w+1) (filter (\w -> length w >= 2 && w /= "no") ws)
+
+main :: IO ()
+main = do
+  print (sizes ["a","no","yes","ok"])
+  print [length w+1 | w <- ["a","no","yes","ok"], length w >= 2, w /= "no"]
+  print (sizes [])
+```
+
+```text
+[4,3]
+[4,3]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `w = "a"` | length test False | none |
+| `w = "no"` | True, False | none |
+| `w = "yes"` | True, True | `4` |
+| `w = "ok"` | True, True | `3` |
+
+Filtering keeps `["yes","ok"]`, then mapping gives `[4,3]`. The two different two-letter words need different treatment.
+
+</Step>
+
+<Step title="4. Check">
+
+On `["no","go"]` the result is `[3]`; on empty input it is `[]`. This checks the exclusion as well as the threshold.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: count without listing (5 marks)
+
+Without listing tuples, count `[(x,y) | x <- [1..5], y <- [1..x], odd y]` and justify your answer.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Count asks for a scalar. This is a dependent generator with a test on y, so a fixed product of source lengths does not apply.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each x count odd integers from 1 to x: 1, 1, 2, 2, 3. Add the counts. For positive x the count is (x+1) div 2.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Without listing tuples, count [(x,y) | x <- [1..5], y <- [1..x], odd y] and justify your answer.
+main :: IO ()
+main = do
+  print (sum [(x+1) `div` 2 | x <- [1..5]])
+  print (length [(x,y) | x <- [1..5], y <- [1..x], odd y])
+```
+
+```text
+9
+9
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `x = 1; y = 1` | True | count 1 |
+| `x = 2; y = 1,2` | True, False | count 1 |
+| `x = 3; y = 1,2,3` | True, False, True | count 2 |
+| `x = 4; y = 1,2,3,4` | True, False, True, False | count 2 |
+| `x = 5; y = 1,2,3,4,5` | True, False, True, False, True | count 3 |
+
+The answer is 1 + 1 + 2 + 2 + 3 = 9. The length call is a check after the counting argument, rather than a substitute for it.
+
+</Step>
+
+<Step title="4. Check">
+
+With outer bound 1 there is one survivor. With bound 0 there are none. The higher-order count is `sum (map (\x -> length (filter odd [1..x])) [1..5])`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: find the scope error (4 marks)
+
+Explain and repair `[(x,y) | y <- [x..3], x <- [1..3]]`, assuming no outer x is defined. Preserve the intended dependent range.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Find the error requires a fault, explanation and repaired code. The first source refers to x before its generator introduces it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Move the x generator first. The diagnostic includes `Variable not in scope: x`; it is a scope failure, not an empty-result case.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Explain and repair [(x,y) | y <- [x..3], x <- [1..3]], assuming no outer x is defined. Preserve the intended dependent range.
+main :: IO ()
+main = do
+  print [(x,y) | x <- [1..3], y <- [x..3]]
+  print (concatMap (\x -> map (\y -> (x,y)) [x..3]) [1..3])
+```
+
+```text
+[(1,1),(1,2),(1,3),(2,2),(2,3),(3,3)]
+[(1,1),(1,2),(1,3),(2,2),(2,3),(3,3)]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `x = 1; y = 1,2,3` | all pass | three pairs |
+| `x = 2; y = 2,3` | all pass | two pairs |
+| `x = 3; y = 3` | pass | one pair |
+
+The repaired expression introduces x before using it. Moving only the output fields cannot repair the source scope.
+
+</Step>
+
+<Step title="4. Check">
+
+Bound 1 yields `[(1,1)]`. Row lengths 3 + 2 + 1 confirm six outputs for bound 3.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: build a table with two generators (5 marks)
+
+Write `timesTable :: Int -> Int -> [(Int,Int,Int)]` containing `(r,c,r*c)` for rows 1 to m and columns 1 to n, in row order.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a function of two limits. Row order means the row generator must be outermost. The result is a flat list of triples.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use two generators, row first and column second. Return all three fields as one tuple. Positive bounds are inclusive; nonpositive bounds generate no entries.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write timesTable :: Int -> Int -> [(Int,Int,Int)] containing (r,c,r*c) for rows 1 to m and columns 1 to n, in row order.
+timesTable :: Int -> Int -> [(Int,Int,Int)]
+timesTable m n = [(r,c,r*c) | r <- [1..m], c <- [1..n]]
+
+main :: IO ()
+main = do
+  print (timesTable 2 3)
+  print (timesTable 0 3)
+```
+
+```text
+[(1,1,1),(1,2,2),(1,3,3),(2,1,2),(2,2,4),(2,3,6)]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `r = 1; c = 1,2,3` | all pass | `(1,1,1),(1,2,2),(1,3,3)` |
+| `r = 2; c = 1,2,3` | all pass | `(2,1,2),(2,2,4),(2,3,6)` |
+| `m = 0` | no rows | none |
+
+The higher-order version is `concatMap (\r -> map (\c -> (r,c,r*c)) [1..n]) [1..m]`. Neither form creates a nested matrix.
+
+</Step>
+
+<Step title="4. Check">
+
+At m = 1 and n = 1 the sole result is `(1,1,1)`. For positive limits there are m times n entries; the displayed call has six.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: factors with an explicit domain (5 marks)
+
+Write `factors :: Int -> [Int]` returning positive factors of n in increasing order. Return `[]` when n is not positive.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for positive divisors only. The explicit nonpositive convention avoids the infinite set of divisors of zero.
+
+</Step>
+
+<Step title="2. Plan">
+
+Generate d from 1 through n and keep zero remainders. If n is not positive, the ascending range is empty and mod is never reached.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write factors :: Int -> [Int] returning positive factors of n in increasing order. Return [] when n is not positive.
+factors :: Int -> [Int]
+factors n = [d | d <- [1..n], n `mod` d == 0]
+
+main :: IO ()
+main = do
+  print (factors 12)
+  print (factors 1)
+  print (factors 0)
+  print (factors (-3))
+```
+
+```text
+[1,2,3,4,6,12]
+[1]
+[]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `n = 12; d = 1,2,3,4` | all divide exactly | `1,2,3,4` |
+| `d = 5` | False | none |
+| `d = 6` | True | `6` |
+| `d = 7,8,9,10,11` | all False | none |
+| `d = 12` | True | `12` |
+| `n = 1; d = 1` | True | `1` |
+| `n = 0 or -3` | no candidates | none |
+
+The equivalent is `filter (\d -> mod n d == 0) [1..n]`. Starting at 1 protects division from zero.
+
+</Step>
+
+<Step title="4. Check">
+
+For a positive n, both 1 and n must appear; factors 1 must contain only one occurrence of 1. The program checks the nonpositive convention too.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: isPrime and the boundary at one (6 marks)
+
+Write `isPrime :: Int -> Bool` using a comprehension. A prime is a positive integer greater than 1 whose only positive factors are 1 and itself.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a Boolean function, not a list of primes. The definition excludes negatives, zero and one.
+
+</Step>
+
+<Step title="2. Plan">
+
+Require n > 1, then check that the increasing factor list is exactly [1,n]. Use the factors template, and && to avoid unnecessary work for small n.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write isPrime :: Int -> Bool using a comprehension. A prime is a positive integer greater than 1 whose only positive factors are 1 and itself.
+isPrime :: Int -> Bool
+isPrime n = n > 1 && [d | d <- [1..n], n `mod` d == 0] == [1,n]
+
+main :: IO ()
+main = do
+  print (map isPrime [-2,0,1,2,4,5])
+  print [n | n <- [1..10], isPrime n]
+```
+
+```text
+[False,False,False,True,False,True]
+[2,3,5,7]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `n = -2,0,1` | n > 1: False | False, no factor search needed |
+| `n = 2; d = 1,2` | both divide | factors `[1,2]`: True |
+| `n = 4; d = 1,2,3,4` | True, True, False, True | factors `[1,2,4]`: False |
+| `n = 5; d = 1,2,3,4,5` | True, False, False, False, True | factors `[1,5]`: True |
+| prime search `n = 1..10` | pass at 2,3,5,7 only | `[2,3,5,7]` |
+
+The higher-order factor expression is `filter (\d -> mod n d == 0) [1..n]`. The outer prime search is `filter isPrime [1..10]`. This simple version prioritises a clear definition over speed.
+
+</Step>
+
+<Step title="4. Check">
+
+2 is the smallest prime; 1 must be False. For 9 the internal divisor 3 makes the factor list `[1,3,9]`, so it is False.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: perfect numbers (7 marks)
+
+Write `perfects :: Int -> [Int]` giving all positive perfect numbers at most the bound. A number is perfect when it equals the sum of its positive proper divisors (divisors smaller than itself).
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a bounded list. Proper excludes n itself; including n would spoil the definition. Bounds are inclusive.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each n in 1 through limit, sum divisors d in 1 through n-1. Keep n when that sum equals n. This is a nested comprehension used inside a test.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write perfects :: Int -> [Int] giving all positive perfect numbers at most the bound. A number is perfect when it equals the sum of its positive proper divisors (divisors smaller than itself).
+perfects :: Int -> [Int]
+perfects limit = [n | n <- [1..limit], sum [d | d <- [1..n-1], n `mod` d == 0] == n]
+
+main :: IO ()
+main = do
+  print (perfects 6)
+  print (perfects 30)
+  print (perfects 1)
+  print (perfects 0)
+```
+
+```text
+[6]
+[6,28]
+[]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `n = 1; d` absent | sum 0 /= 1 | none |
+| `n = 2..5` | divisor sums 1,1,3,1 differ from n | none |
+| `n = 6; d = 1..5` | divisibility True,True,True,False,False | sum `[1,2,3]` = 6: emit 6 |
+| `n = 7..15` | proper-divisor sums 1,7,4,8,1,16,1,10,9 | none equal n |
+| `n = 16..27` | sums 15,1,21,1,22,11,14,1,36,6,16,13 | none equal n |
+| `n = 28; d = 1..27` | pass at 1,2,4,7,14; all others fail | sum 28: emit 28 |
+| `n = 29,30` | sums 1,42 | neither equals n |
+
+The higher-order equivalent is `filter (\n -> sum (filter (\d -> mod n d == 0) [1..n-1]) == n) [1..limit]`. Every candidate is checked; ordinary primes cannot pass because their only proper divisor is 1.
+
+</Step>
+
+<Step title="4. Check">
+
+At bound 5 there is no result; at 6 the inclusive endpoint is retained. At bound 1 the inner list is empty and sum [] is 0, so 1 is correctly rejected.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: Pythagorean triples with order fixed (7 marks)
+
+Write `triples :: Int -> [(Int,Int,Int)]` giving positive Pythagorean triples with `a <= b <= c <= n`, ordered first by c, then b, then a.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write requires a search function. The inequalities specify positive ordered sides and the requested enumeration order fixes generator order.
+
+</Step>
+
+<Step title="2. Plan">
+
+Generate c first, b from 1 to c, and a from 1 to b. Keep equality of squared side sums. Do not accidentally put a first: that changes ordering.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write triples :: Int -> [(Int,Int,Int)] giving positive Pythagorean triples with a <= b <= c <= n, ordered first by c, then b, then a.
+triples :: Int -> [(Int,Int,Int)]
+triples n = [(a,b,c) | c <- [1..n], b <- [1..c], a <- [1..b], a*a+b*b == c*c]
+
+main :: IO ()
+main = do
+  print (triples 10)
+  print (triples 4)
+  print (triples 0)
+```
+
+```text
+[(3,4,5),(6,8,10)]
+[]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `c = 1..4` | all squared tests fail | none |
+| `c = 5` | only (a,b) = (3,4) passes | `(3,4,5)` |
+| `c = 6..9` | all squared tests fail | none |
+| `c = 10` | only (a,b) = (6,8) passes | `(6,8,10)` |
+
+The grouped table includes all candidates in each triangular range. At c = 5 the successful equation is 9 + 16 = 25; at c = 10 it is 36 + 64 = 100. Nonprimitive multiples are allowed. The equivalent is `concatMap (\c -> concatMap (\b -> map (\a -> (a,b,c)) (filter (\a -> a*a+b*b == c*c) [1..b])) [1..c]) [1..n]`.
+
+</Step>
+
+<Step title="4. Check">
+
+Bound 4 is too small for a positive integer right triangle. At bound 5 the first solution appears. Both listed triples obey all inequalities and the required c ordering.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: zip3-like alignment (6 marks)
+
+Write `align3 :: [a] -> [b] -> [c] -> [(a,b,c)]` using a comprehension and zip, without using zip3. Stop at the shortest input.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a polymorphic function. Matching positions means alignment, not all combinations of the three lists.
+
+</Step>
+
+<Step title="2. Plan">
+
+Zip ys with zs, then zip that paired list with xs. Unpack the nested tuple pattern (x,(y,z)) and emit a flat triple.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write align3 :: [a] -> [b] -> [c] -> [(a,b,c)] using a comprehension and zip, without using zip3. Stop at the shortest input.
+align3 :: [a] -> [b] -> [c] -> [(a,b,c)]
+align3 xs ys zs = [(x,y,z) | (x,(y,z)) <- zip xs (zip ys zs)]
+
+main :: IO ()
+main = do
+  print (align3 [1,2,3] "ab" [True,False,True])
+  print (align3 ([] :: [Int]) "a" [True])
+```
+
+```text
+[(1,'a',True),(2,'b',False)]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `(x,(y,z)) = (1,('a',True))` | pattern matches | `(1,'a',True)` |
+| `(2,('b',False))` | matches | `(2,'b',False)` |
+| unpaired remaining values | zip stops | none |
+
+The equivalent is `map (\(x,(y,z)) -> (x,y,z)) (zip xs (zip ys zs))`. Every source candidate matches the nested tuple pattern.
+
+</Step>
+
+<Step title="4. Check">
+
+Lengths 3, 2 and 3 yield 2 outputs. A singleton in each input gives one triple. An empty input anywhere makes a zipped stage empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: Cartesian product with duplicates (5 marks)
+
+Write `cartesian :: [a] -> [b] -> [(a,b)]` using a comprehension. Preserve duplicates and complete all second-list values for each first-list value.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for the product of two lists. Duplicates are explicitly significant, and the requested order fixes the first argument as the outer source.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use two independent generators, then pair their values. There is no selection test. Use concatMap and map for the second implementation.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write cartesian :: [a] -> [b] -> [(a,b)] using a comprehension. Preserve duplicates and complete all second-list values for each first-list value.
+cartesian :: [a] -> [b] -> [(a,b)]
+cartesian xs ys = [(x,y) | x <- xs, y <- ys]
+
+main :: IO ()
+main = do
+  print (cartesian [1,1] "ab")
+  print (concatMap (\x -> map (\y -> (x,y)) "ab") [1,1])
+  print (cartesian [1] ("" :: String))
+```
+
+```text
+[(1,'a'),(1,'b'),(1,'a'),(1,'b')]
+[(1,'a'),(1,'b'),(1,'a'),(1,'b')]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| first `x = 1; y = a,b` | both pass | `(1,'a'),(1,'b')` |
+| second `x = 1; y = a,b` | both pass | `(1,'a'),(1,'b')` |
+| empty y source | no pairs | none |
+
+There are four outputs despite only two distinct pair values. Removing duplicates would change the specification.
+
+</Step>
+
+<Step title="4. Check">
+
+For finite lists the length is length xs times length ys. Here it is 2 times 2. Either empty source makes that product zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 14: flatten while transforming (5 marks)
+
+Write `flattenDoubled :: [[Int]] -> [Int]` doubling every number and flattening rows in their original order. Empty rows contribute nothing.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a flat list, not a matrix. Every number contributes; there is no positivity or parity restriction.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a dependent inner generator drawing from the current row. The output is twice x; flatten each completed row using concatMap.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write flattenDoubled :: [[Int]] -> [Int] doubling every number and flattening rows in their original order. Empty rows contribute nothing.
+flattenDoubled :: [[Int]] -> [Int]
+flattenDoubled xss = [2*x | xs <- xss, x <- xs]
+
+main :: IO ()
+main = do
+  print (flattenDoubled [[1,-2],[],[3]])
+  print (concatMap (map (*2)) [[1,-2],[],[3]])
+  print (flattenDoubled [])
+```
+
+```text
+[2,-4,6]
+[2,-4,6]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values or recursive state, in order | Test or action | Contribution |
+|---|---|---|
+| `xs = [1,-2]; x = 1,-2` | both pass | `2,-4` |
+| `xs = []; x` absent | no candidates | none |
+| `xs = [3]; x = 3` | pass | `6` |
+
+The equivalent is `concatMap (map (*2)) xss`. Nested output such as `[[2*x | x <- xs] | xs <- xss]` would preserve rows and answer a different question.
+
+</Step>
+
+<Step title="4. Check">
+
+For `[[],[]]` the output is `[]`. For `[[5]]` it is `[10]`, not `[[10]]`. The negative candidate is doubled rather than filtered.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 15: rotations and the empty convention (7 marks)
+
+Write `rotations :: [a] -> [[a]]` listing all left rotations, starting with the unchanged list. Use one result per position, preserve duplicates, and define the result for empty input to be `[]`.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a polymorphic nested list. A left rotation moves a prefix to the end. The empty convention is stated because some other specifications choose one empty rotation.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each cut position i from zero to length xs minus one, put drop i xs before take i xs. A zero-based range avoids repeating the unchanged list at position length xs.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write rotations :: [a] -> [[a]] listing all left rotations, starting with the unchanged list. Use one result per position, preserve duplicates, and define the result for empty input to be [].
+rotations :: [a] -> [[a]]
+rotations xs = [drop i xs ++ take i xs | i <- [0..length xs-1]]
+
+main :: IO ()
+main = do
+  print (rotations "abc")
+  print (rotations [1,1])
+  print (rotations ([] :: [Int]))
+  print (map (\i -> drop i "abc" ++ take i "abc") [0..2])
+```
+
+```text
+["abc","bca","cab"]
+[[1,1],[1,1]]
+[]
+["abc","bca","cab"]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `xs = "abc"; i = 0` | no test: pass | `"abc" ++ "" = "abc"` |
+| `i = 1` | pass | `"bc" ++ "a" = "bca"` |
+| `i = 2` | pass | `"c" ++ "ab" = "cab"` |
+| `xs = [1,1]; i = 0,1` | both pass | `[1,1]` twice |
+| `xs = []; i` absent from `[0..-1]` | no candidates | none |
+
+The equivalent is `map (\i -> drop i xs ++ take i xs) [0..length xs-1]`. Every cut preserves element order within its two pieces. Repeated rotations are deliberately retained.
+
+</Step>
+
+<Step title="4. Check">
+
+A singleton `[7]` gives `[[7]]`; the number of rotations of a finite list equals its length. The empty source gives zero candidates. Using a final index of length xs would incorrectly add a duplicate unchanged rotation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 16: failed patterns and successful tests (5 marks)
+
+Evaluate `[x+1 | Just x <- [Nothing,Just 0,Just 2,Nothing,Just (-1)], x >= 0]`, distinguishing pattern failure from test failure.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate asks for values; distinguishing failures requires explaining why each omitted candidate disappears. The pattern extracts the number before the test can use it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the refutable-pattern template. Nothing contributes an empty list; Just x reaches the nonnegative test. Transform only the survivors.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Evaluate [x+1 | Just x <- [Nothing,Just 0,Just 2,Nothing,Just (-1)], x >= 0], distinguishing pattern failure from test failure.
+main :: IO ()
+main = do
+  print [x+1 | Just x <- [Nothing,Just 0,Just 2,Nothing,Just (-1)], x >= 0]
+  print (concatMap (\v -> case v of { Just x -> if x >= 0 then [x+1] else []; Nothing -> [] }) [Nothing,Just 0,Just 2,Nothing,Just (-1)])
+```
+
+```text
+[1,3]
+[1,3]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| first `Nothing` | pattern fails; no test | none |
+| `Just 0` | matches; True | `1` |
+| `Just 2` | matches; True | `3` |
+| second `Nothing` | pattern fails | none |
+| `Just (-1)` | matches; False | none |
+
+The result is `[1,3]`. Replacing the generator pattern with a partial helper would lose the safe-skip behaviour unless the helper handles Nothing explicitly.
+
+</Step>
+
+<Step title="4. Check">
+
+With only `[Nothing]` the result is empty. With `[Just 0]` it is `[1]`, confirming that the boundary passes and the output adds one.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 17: let and a conditional result (5 marks)
+
+Write `classify :: [Int] -> [(Int,String)]` pairing each input with "large" if its square exceeds 4 and "small" otherwise. Name the square with let inside the comprehension.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a pair per input. Exceeds means greater than, not greater than or equal. The local square must be named, but it must not filter inputs.
+
+</Step>
+
+<Step title="2. Plan">
+
+Generate x, bind s = x*x, and return a pair whose second field uses if. The condition belongs to the output, not a separate qualifier.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write classify :: [Int] -> [(Int,String)] pairing each input with "large" if its square exceeds 4 and "small" otherwise. Name the square with let inside the comprehension.
+classify :: [Int] -> [(Int,String)]
+classify xs = [(x,if s > 4 then "large" else "small") | x <- xs, let s = x*x]
+
+main :: IO ()
+main = do
+  print (classify [-3,-2,0,2,3])
+  print (classify [])
+```
+
+```text
+[(-3,"large"),(-2,"small"),(0,"small"),(2,"small"),(3,"large")]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = -3; s = 9` | no guard; condition True | `(-3,"large")` |
+| `x = -2; s = 4` | condition False | `(-2,"small")` |
+| `x = 0; s = 0` | condition False | `(0,"small")` |
+| `x = 2; s = 4` | condition False | `(2,"small")` |
+| `x = 3; s = 9` | condition True | `(3,"large")` |
+
+All candidates pass the generator. The equivalent is `map (\x -> let s = x*x in (x,if s > 4 then "large" else "small")) xs`. Notice that the expression let needs in, unlike the qualifier let.
+
+</Step>
+
+<Step title="4. Check">
+
+For `[2]`, square 4 takes the small branch. Negative -3 still has square 9. The empty-input check yields no pairs. These examples use small Int inputs to avoid overflow.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 18: transpose with a stated width (6 marks)
+
+Write `transposeRect :: Int -> [[a]] -> [[a]]` using nested comprehensions. The first argument is a nonnegative width; assume every row has exactly that many entries. Keep columns in order. For no rows, return one empty column per stated position.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a polymorphic matrix transformation. The explicit width makes even an empty matrix unambiguous. The rectangular-input precondition makes indexing safe.
+
+</Step>
+
+<Step title="2. Plan">
+
+For column j from zero through width minus one, collect row !! j for every row. The outer output is an inner list, so columns remain separate.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Write transposeRect :: Int -> [[a]] -> [[a]] using nested comprehensions. The first argument is a nonnegative width; assume every row has exactly that many entries. Keep columns in order. For no rows, return one empty column per stated position.
+transposeRect :: Int -> [[a]] -> [[a]]
+transposeRect width rows = [[row !! j | row <- rows] | j <- [0..width-1]]
+
+main :: IO ()
+main = do
+  print (transposeRect 2 [[1,2],[3,4],[5,6]])
+  print (transposeRect 0 ([[],[]] :: [[Int]]))
+  print (transposeRect 2 ([] :: [[Int]]))
+```
+
+```text
+[[1,3,5],[2,4,6]]
+[]
+[[],[]]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `j = 0; row = [1,2],[3,4],[5,6]` | all indices valid | column `[1,3,5]` |
+| `j = 1; same rows` | all indices valid | column `[2,4,6]` |
+| width 0 | no j candidates | no columns |
+| width 2; no rows | j = 0,1 pass; no inner candidates | two empty columns |
+
+The equivalent is `map (\j -> map (\row -> row !! j) rows) [0..width-1]`. The given width, rather than head rows, supplies column positions. No indexing is attempted if there are no rows.
+
+</Step>
+
+<Step title="4. Check">
+
+At width 1 with `[[7],[8]]` the result is `[[7,8]]`. Width zero gives no columns. Ragged inputs violate the precondition and may fail on !!; they are outside this specification.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Common exam errors and repairs
+
+| Error | Consequence or GHC diagnostic fragment | Repair |
+|---|---|---|
+| A numeric expression used as a test on Int | expected Bool, got Int | Compare it with a value |
+| A dependent source placed before its binding | `Variable not in scope` | Bind names left to right |
+| Semicolons between qualifiers | parse error on input `;` | Use commas |
+| `let ... in` as a qualifier | parse error | Omit in in qualifier lets |
+| A zero divisor tested by mod before nonzero is checked | runtime `divide by zero` | Check nonzero first |
+| Including n in its own proper-divisor list | perfect-number definition is wrong | End that range at n-1 |
+| Three independent sources for a zip-like specification | wrong count and order, but valid code | Generate from aligned zipped values |
+| Filtering instead of using if in the output | missing output elements | Choose a value for each candidate |
+| Flattening a matrix when rows must remain | flat list instead of nested list | Put the inner comprehension in the output |
+
+The diagnostic fragments above are recognisable parts, not full transcripts: GHC also includes source locations and type context. Logical errors often compile without any diagnostic, so types alone do not check the specification.
+
+## Summary
+
+<Callout type="key" title="Remember">
+Read the command word and fix the required shape first. Then choose source order, patterns, tests and output. Trace each branch before concatenating. Count dependent rows by adding their survivor counts. State domains and empty conventions for factors, primes, perfect numbers and rotations. Match positions with zip; generate independent choices with extra generators. Check boundaries, duplicates, empty sources and exact printing.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is one not prime in the solution?">
+The explicit n greater than 1 condition rejects it. Its sole positive factor is 1, not two distinct factors 1 and n.
+</CheckQuestion>
+
+<CheckQuestion question="Why must a perfect-number search exclude the candidate itself from its divisors?">
+The definition sums proper divisors only. Including n changes the test and incorrectly rejects positive perfect numbers.
+</CheckQuestion>
+
+<CheckQuestion question="How many rotations of a three-element list are generated, even if all its elements are equal?">
+Three. Each valid cut position contributes one rotation; duplicates are retained.
+</CheckQuestion>
+
+<CheckQuestion question="Why are nested and flat comprehensions different for empty inner rows?">
+Nested output retains each empty list as a row. A second generator has no candidates in that row and emits nothing.
+</CheckQuestion>
+
+<CheckQuestion question="What must a full find-the-error answer include?">
+Identify the fault, explain the scope, syntax, type or logic rule it breaks, and show a corrected expression checked on a small input.
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Text and List Library](/docs/sem3/csi243/06-lists-tuples/notes/text-and-list-library).

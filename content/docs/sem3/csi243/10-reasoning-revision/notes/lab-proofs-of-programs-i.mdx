@@ -1,0 +1,749 @@
+---
+title: "Lab: Proofs of Programs I"
+description: "Ten proof tasks on lists, numbers, binary trees and mutually recursive types. Every solution is written out from the first thought to the last line: what the claim says, which variable to induct on and why, where the proof sticks and what repairs it."
+---
+
+## Objectives
+
+1. Prove properties of recursive functions by structural induction.
+2. Choose the induction variable, the lemmas and the cases from the shape of the definitions.
+3. Prove properties of binary trees with two inductive hypotheses, and of mutually recursive types with claims that depend on each other.
+
+## Background
+
+Read [Proofs of Programs I](/docs/sem3/csi243/10-reasoning-revision/notes/proofs-of-programs-i) first. It gives the method and the lemmas that these tasks use. This page is for practice: try each task on paper, then open the solution and compare **how it was reached**, not only what it says.
+
+## How every solution is written
+
+Each solution follows the same seven steps, which are the seven questions from the lesson. The thinking is part of the answer: a proof that is correct but cannot say why it inducts on `xs` is not yet understood.
+
+<Steps title="The seven steps of a solution">
+  <Step title="1. Read the claim">
+    Say it in words. Test it on one small input. If it fails there, the claim is false and no proof exists.
+  </Step>
+  <Step title="2. Collect the equations">
+    List every function that appears and the labelled equations that define it. They are the only rules besides arithmetic.
+  </Step>
+  <Step title="3. Choose what to induct on">
+    Find the argument the functions take apart. Say why that one and not another.
+  </Step>
+  <Step title="4. Base case">
+    Rewrite both sides until they meet.
+  </Step>
+  <Step title="5. Hypothesis">
+    Write it out in full, so you can see exactly what it lets you replace.
+  </Step>
+  <Step title="6. Step">
+    Name the goal, start from the more complicated side, and mark the line where the hypothesis is used. If a line will not move, say what is blocking it.
+  </Step>
+  <Step title="7. Check and conclude">
+    Every line has a reason, every constructor has a case, and the claim is stated as proved.
+  </Step>
+</Steps>
+
+## The definitions used in the tasks
+
+Everything a solution may rely on is in this block. The first group is the same as in the lesson.
+
+```haskell
+-- lists
+length []     = 0                            -- (L1)
+length (_:xs) = 1 + length xs                -- (L2)
+sum []        = 0                            -- (S1)
+sum (x:xs)    = x + sum xs                   -- (S2)
+[]     ++ ys  = ys                           -- (A1)
+(x:xs) ++ ys  = x : (xs ++ ys)               -- (A2)
+reverse []     = []                          -- (R1)
+reverse (x:xs) = reverse xs ++ [x]           -- (R2)
+map _ []       = []                          -- (M1)
+map f (x:xs)   = f x : map f xs              -- (M2)
+(f . g) x      = f (g x)                     -- (K)
+filter _ []    = []                          -- (F1)
+filter p (x:xs)
+  | p x        = x : filter p xs             -- (F2)
+  | otherwise  = filter p xs                 -- (F3)
+sumAcc [] acc     = acc                      -- (U1)
+sumAcc (x:xs) acc = sumAcc xs (acc + x)      -- (U2)
+
+-- binary trees
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+size Leaf         = 0                                    -- (Z1)
+size (Node l _ r) = size l + 1 + size r                  -- (Z2)
+height Leaf         = 0                                  -- (H1)
+height (Node l _ r) = 1 + max (height l) (height r)      -- (H2)
+mirror Leaf         = Leaf                               -- (W1)
+mirror (Node l x r) = Node (mirror r) x (mirror l)       -- (W2)
+inorder Leaf         = []                                -- (I1)
+inorder (Node l x r) = inorder l ++ [x] ++ inorder r     -- (I2)
+
+-- mutually recursive lists
+data EvenList a = ENil | ECons a (OddList a)
+data OddList a  = OCons a (EvenList a)
+lengthE ENil         = 0                                 -- (LE1)
+lengthE (ECons _ os) = 1 + lengthO os                    -- (LE2)
+lengthO (OCons _ es) = 1 + lengthE es                    -- (LO1)
+mapE _ ENil         = ENil                               -- (ME1)
+mapE f (ECons x os) = ECons (f x) (mapO f os)            -- (ME2)
+mapO f (OCons x es) = OCons (f x) (mapE f es)            -- (MO1)
+```
+
+The results you may quote without reproving them:
+
+| Name | Statement | Where |
+|---|---|---|
+| Length of an append | `length (xs ++ ys) = length xs + length ys` | Equational Reasoning |
+| Lemma 1 | `xs ++ [] = xs` | Proofs of Programs I |
+| Lemma 2 | `(xs ++ ys) ++ zs = xs ++ (ys ++ zs)` | Proofs of Programs I |
+| Lemma 3 | `reverse (xs ++ ys) = reverse ys ++ reverse xs` | Proofs of Programs I |
+| Singleton | `reverse [x] = [x]` and `length [x] = 1` | from (R1), (R2), (A1), (L1), (L2) |
+
+Note that `++` is right associative, so `inorder l ++ [x] ++ inorder r` means `inorder l ++ ([x] ++ inorder r)`.
+
+## Part A: lists
+
+## Task 1: the sum of an append
+
+**Claim.** For all lists `xs` and `ys` of numbers, `sum (xs ++ ys) = sum xs + sum ys`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 1">
+  <Step title="1. Read the claim">
+    The sum of two lists joined together is the sum of the first plus the sum of the second. Try `xs = [1,2]`, `ys = [3]`: `sum [1,2,3] = 6` and `sum [1,2] + sum [3] = 3 + 3 = 6`. It holds, so it is worth proving.
+  </Step>
+  <Step title="2. Collect the equations">
+    `sum`: (S1), (S2). `++`: (A1), (A2). No other function appears.
+  </Step>
+  <Step title="3. Choose what to induct on">
+    There are two lists, so there is a choice. The left side is `sum (xs ++ ys)`. To make progress `sum` needs to see a cons, and the cons has to come out of `xs ++ ys`. Equation (A2) produces one only when `xs` is a cons. So the list that unlocks both functions is `xs`. Induct on `xs`; `ys` stays arbitrary.
+  </Step>
+  <Step title="4. Base case: xs = []">
+    ```text
+    sum ([] ++ ys)
+    = sum ys                       -- (A1)
+
+    sum [] + sum ys
+    = 0 + sum ys                   -- (S1)
+    = sum ys                       -- arithmetic
+    ```
+    Both sides are `sum ys`.
+  </Step>
+  <Step title="5. Hypothesis">
+    For this `xs`: `sum (xs ++ ys) = sum xs + sum ys`.
+  </Step>
+  <Step title="6. Step: show it for x:xs">
+    The goal is `sum ((x:xs) ++ ys) = sum (x:xs) + sum ys`. The left side is the more complicated one, so start there and unfold:
+
+    ```text
+    sum ((x:xs) ++ ys)
+    = sum (x : (xs ++ ys))         -- (A2)
+    = x + sum (xs ++ ys)           -- (S2)
+    ```
+
+    Now `sum (xs ++ ys)` appears, which is the left side of the hypothesis. Replace it:
+
+    ```text
+    = x + (sum xs + sum ys)        -- IH
+    = (x + sum xs) + sum ys        -- associativity of +
+    = sum (x:xs) + sum ys          -- (S2), backwards
+    ```
+
+    The last line is the right side of the goal.
+  </Step>
+  <Step title="7. Check and conclude">
+    There are two constructors and both are covered. Every line names a rule. The claim holds for every finite `xs`, whatever `ys` is.
+  </Step>
+</Steps>
+
+</details>
+
+## Task 2: reversing does not change the length
+
+**Claim.** For every list `xs`, `length (reverse xs) = length xs`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 2">
+  <Step title="1. Read the claim">
+    Reversing moves elements around but neither adds nor removes any. Test: `length (reverse [1,2,3]) = length [3,2,1] = 3 = length [1,2,3]`. Plausible.
+  </Step>
+  <Step title="2. Collect the equations">
+    `length`: (L1), (L2). `reverse`: (R1), (R2). Because (R2) contains `++`, expect (A1), (A2) and facts about `++` to matter.
+  </Step>
+  <Step title="3. Choose what to induct on">
+    There is only one list, `xs`, and `reverse` takes it apart. Induct on `xs`.
+  </Step>
+  <Step title="4. Base case: xs = []">
+    ```text
+    length (reverse [])
+    = length []                    -- (R1)
+    ```
+    This is the right side.
+  </Step>
+  <Step title="5. Hypothesis">
+    For this `xs`: `length (reverse xs) = length xs`.
+  </Step>
+  <Step title="6. Step: show it for x:xs">
+    The goal is `length (reverse (x:xs)) = length (x:xs)`. Unfold the left side:
+
+    ```text
+    length (reverse (x:xs))
+    = length (reverse xs ++ [x])         -- (R2)
+    ```
+
+    **Here the proof would stop** if all I had were (L1) and (L2): the expression is the length of an append, and neither equation looks inside `++`. But I already know a fact with exactly this shape, the length of an append. Using it, with `reverse xs` as the first list and `[x]` as the second:
+
+    ```text
+    = length (reverse xs) + length [x]   -- length of an append
+    = length xs + length [x]             -- IH
+    = length xs + 1                      -- singleton: length [x] = 1
+    = 1 + length xs                      -- commutativity of +
+    = length (x:xs)                      -- (L2), backwards
+    ```
+  </Step>
+  <Step title="7. Check and conclude">
+    Both constructors are covered. The only fact imported from outside was the length of an append, and it was named where it was used. The claim holds for every finite list.
+  </Step>
+</Steps>
+
+</details>
+
+## Task 3: map fusion
+
+**Claim.** For all functions `f` and `g` and every list `xs`, `map (f . g) xs = map f (map g xs)`. Mapping the composed function in one pass is the same as mapping `g` and then mapping `f`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 3">
+  <Step title="1. Read the claim">
+    Two passes over a list against one pass with the composition. Test with `f = (+1)`, `g = (*2)`, `xs = [1,2]`: `map ((+1) . (*2)) [1,2] = [3,5]`, and `map (+1) (map (*2) [1,2]) = map (+1) [2,4] = [3,5]`. They agree.
+  </Step>
+  <Step title="2. Collect the equations">
+    `map`: (M1), (M2). Composition: (K), `(f . g) x = f (g x)`.
+  </Step>
+  <Step title="3. Choose what to induct on">
+    `map` takes apart its list argument, and the list is `xs` on both sides. Induct on `xs`. The functions `f` and `g` stay arbitrary: they are never taken apart.
+  </Step>
+  <Step title="4. Base case: xs = []">
+    ```text
+    map (f . g) []
+    = []                           -- (M1)
+
+    map f (map g [])
+    = map f []                     -- (M1), on the inner map
+    = []                           -- (M1)
+    ```
+  </Step>
+  <Step title="5. Hypothesis">
+    For this `xs`: `map (f . g) xs = map f (map g xs)`.
+  </Step>
+  <Step title="6. Step: show it for x:xs">
+    Neither side is simpler than the other: both have to be unfolded. When that happens, reduce both sides separately until they reach the same expression, and say that is what you are doing. The left side:
+
+    ```text
+    map (f . g) (x:xs)
+    = (f . g) x : map (f . g) xs         -- (M2)
+    = f (g x) : map (f . g) xs           -- (K)
+    = f (g x) : map f (map g xs)         -- IH
+    ```
+
+    The right side:
+
+    ```text
+    map f (map g (x:xs))
+    = map f (g x : map g xs)             -- (M2), on the inner map
+    = f (g x) : map f (map g xs)         -- (M2), on the outer map
+    ```
+
+    Both sides reduce to `f (g x) : map f (map g xs)`, so they are equal.
+  </Step>
+  <Step title="7. Check and conclude">
+    Both constructors are covered and the hypothesis was used once, on the tail. The claim holds for every finite list and every `f` and `g`.
+  </Step>
+</Steps>
+
+</details>
+
+## Task 4: an accumulator version of sum
+
+Here is a sum that carries a running total:
+
+```haskell
+sumAcc :: [Int] -> Int -> Int
+sumAcc []     acc = acc                      -- (U1)
+sumAcc (x:xs) acc = sumAcc xs (acc + x)      -- (U2)
+```
+
+**Claim.** For every list `xs`, `sumAcc xs 0 = sum xs`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 4">
+  <Step title="1. Read the claim">
+    Starting a running total at `0` and adding each element should give the same as `sum`. Test: `sumAcc [1,2,3] 0`: `sumAcc [2,3] 1`, then `sumAcc [3] 3`, then `sumAcc [] 6 = 6`, and `sum [1,2,3] = 6`.
+  </Step>
+  <Step title="2. Collect the equations">
+    `sumAcc`: (U1), (U2). `sum`: (S1), (S2).
+  </Step>
+  <Step title="3. Choose what to induct on">
+    `sumAcc` takes apart its first argument, so `xs`.
+  </Step>
+  <Step title="4. First attempt, and where it sticks">
+    Try the claim exactly as stated. The base case works: `sumAcc [] 0 = 0 = sum []`. For the step the goal is `sumAcc (x:xs) 0 = sum (x:xs)`, and:
+
+    ```text
+    sumAcc (x:xs) 0
+    = sumAcc xs (0 + x)            -- (U2)
+    ```
+
+    The hypothesis says `sumAcc xs 0 = sum xs`. But the call here is `sumAcc xs (0 + x)`, with a **different** running total. The hypothesis is about total `0` only, so it cannot be used. The claim is too weak.
+  </Step>
+  <Step title="5. Generalise">
+    The recursive call changes the accumulator, so the claim must hold for **every** accumulator. Prove the stronger statement
+
+    ```text
+    sumAcc xs acc = sum xs + acc        for every xs and every acc
+    ```
+
+    and take `acc = 0` at the end. The hypothesis now reads: for this `xs` and for **every** `acc`, `sumAcc xs acc = sum xs + acc`.
+  </Step>
+  <Step title="6. Base case and step of the stronger claim">
+    Base case, `xs = []`:
+
+    ```text
+    sumAcc [] acc
+    = acc                          -- (U1)
+
+    sum [] + acc
+    = 0 + acc                      -- (S1)
+    = acc                          -- arithmetic
+    ```
+
+    Step, `x:xs`. The goal is `sumAcc (x:xs) acc = sum (x:xs) + acc`. Left side:
+
+    ```text
+    sumAcc (x:xs) acc
+    = sumAcc xs (acc + x)          -- (U2)
+    = sum xs + (acc + x)           -- IH, used with the accumulator acc + x
+    ```
+
+    Right side:
+
+    ```text
+    sum (x:xs) + acc
+    = (x + sum xs) + acc           -- (S2)
+    = sum xs + (acc + x)           -- commutativity and associativity of +
+    ```
+
+    Both sides are `sum xs + (acc + x)`.
+  </Step>
+  <Step title="7. Check and conclude">
+    The stronger claim holds for every `xs` and `acc`. With `acc = 0`: `sumAcc xs 0 = sum xs + 0 = sum xs`. The step that made this work was using the hypothesis at a different accumulator, `acc + x`, which is only possible because the claim was for every one.
+  </Step>
+</Steps>
+
+</details>
+
+## Task 5: filter distributes over an append
+
+**Claim.** For every predicate `p` and all lists `xs` and `ys`, `filter p (xs ++ ys) = filter p xs ++ filter p ys`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 5">
+  <Step title="1. Read the claim">
+    Filtering a joined list should give the filtered first part followed by the filtered second part. Test: `p = even`, `xs = [1,2]`, `ys = [3,4]`: `filter even [1,2,3,4] = [2,4]`, and `filter even [1,2] ++ filter even [3,4] = [2] ++ [4] = [2,4]`.
+  </Step>
+  <Step title="2. Collect the equations">
+    `filter`: (F1), (F2), (F3). `++`: (A1), (A2).
+  </Step>
+  <Step title="3. Choose what to induct on">
+    As in Task 1, the cons has to come out of `xs ++ ys`, and (A2) gives one only when `xs` is a cons. Induct on `xs`; `p` and `ys` stay arbitrary.
+  </Step>
+  <Step title="4. Base case: xs = []">
+    ```text
+    filter p ([] ++ ys)
+    = filter p ys                  -- (A1)
+
+    filter p [] ++ filter p ys
+    = [] ++ filter p ys            -- (F1)
+    = filter p ys                  -- (A1)
+    ```
+  </Step>
+  <Step title="5. Hypothesis">
+    For this `xs`: `filter p (xs ++ ys) = filter p xs ++ filter p ys`.
+  </Step>
+  <Step title="6. Step: show it for x:xs">
+    Unfold the left side once. This part does not depend on whether `p x` holds:
+
+    ```text
+    filter p ((x:xs) ++ ys)
+    = filter p (x : (xs ++ ys))    -- (A2)
+    ```
+
+    Now (F2) and (F3) differ, depending on `p x`, so the proof splits. Every choice of `x` falls into one of the two cases, and each case gets its own line of reasoning.
+
+    **Case `p x = True`.** Left side:
+
+    ```text
+    filter p (x : (xs ++ ys))
+    = x : filter p (xs ++ ys)               -- (F2)
+    = x : (filter p xs ++ filter p ys)      -- IH
+    ```
+
+    Right side:
+
+    ```text
+    filter p (x:xs) ++ filter p ys
+    = (x : filter p xs) ++ filter p ys      -- (F2)
+    = x : (filter p xs ++ filter p ys)      -- (A2)
+    ```
+
+    The two agree.
+
+    **Case `p x = False`.** Left side:
+
+    ```text
+    filter p (x : (xs ++ ys))
+    = filter p (xs ++ ys)                   -- (F3)
+    = filter p xs ++ filter p ys            -- IH
+    ```
+
+    Right side:
+
+    ```text
+    filter p (x:xs) ++ filter p ys
+    = filter p xs ++ filter p ys            -- (F3)
+    ```
+
+    The two agree.
+  </Step>
+  <Step title="7. Check and conclude">
+    Two constructors, and inside the step two cases that together cover every value of `p x`. The claim holds for every finite `xs`.
+  </Step>
+</Steps>
+
+</details>
+
+## Part B: binary trees
+
+Two hypotheses appear in every step from here on: the tree `Node l x r` contains two smaller trees, `l` and `r`, so the claim may be assumed for both.
+
+## Task 6: mirroring does not change the height
+
+**Claim.** For every tree `t`, `height (mirror t) = height t`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 6">
+  <Step title="1. Read the claim">
+    Swapping the two sides of every node turns the tree into its reflection. A reflection should be exactly as tall. Test with `Node (Node Leaf 1 Leaf) 2 Leaf`: its height is `2`, and its mirror `Node Leaf 2 (Node Leaf 1 Leaf)` also has height `2`.
+  </Step>
+  <Step title="2. Collect the equations">
+    `height`: (H1), (H2). `mirror`: (W1), (W2).
+  </Step>
+  <Step title="3. Choose what to induct on">
+    Both functions take apart the tree, so induct on `t`. There are two constructors, `Leaf` and `Node l x r`. `Leaf` contains no smaller tree, so it is the base case. `Node l x r` contains two, so the step will have two hypotheses.
+  </Step>
+  <Step title="4. Base case: t = Leaf">
+    ```text
+    height (mirror Leaf)
+    = height Leaf                  -- (W1)
+    ```
+    This is the right side.
+  </Step>
+  <Step title="5. Hypotheses">
+    For the two subtrees at once: `height (mirror l) = height l` and `height (mirror r) = height r`.
+  </Step>
+  <Step title="6. Step: t = Node l x r">
+    The goal is `height (mirror (Node l x r)) = height (Node l x r)`. Unfold the left side:
+
+    ```text
+    height (mirror (Node l x r))
+    = height (Node (mirror r) x (mirror l))                    -- (W2)
+    = 1 + max (height (mirror r)) (height (mirror l))          -- (H2)
+    ```
+
+    Both subtrees are mirrored here, so both hypotheses apply, one to each argument of `max`:
+
+    ```text
+    = 1 + max (height r) (height l)                            -- IH for r, and IH for l
+    = 1 + max (height l) (height r)                            -- max is commutative
+    = height (Node l x r)                                      -- (H2), backwards
+    ```
+  </Step>
+  <Step title="7. Check and conclude">
+    Both constructors are covered and both hypotheses were used. The one fact from outside was that `max a b = max b a`, which is why the order of the swapped subtrees does not matter.
+  </Step>
+</Steps>
+
+</details>
+
+## Task 7: the inorder list has one element per node
+
+**Claim.** For every tree `t`, `length (inorder t) = size t`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 7">
+  <Step title="1. Read the claim">
+    `inorder` lists the values left subtree first, then the node, then the right subtree. Each node contributes exactly one value, so the list is as long as the tree is large. Test with `Node (Node Leaf 1 Leaf) 2 Leaf`: `inorder` gives `[1,2]`, length `2`, and `size` is `2`.
+  </Step>
+  <Step title="2. Collect the equations">
+    `length`: (L1), (L2). `size`: (Z1), (Z2). `inorder`: (I1), (I2). Because (I2) uses `++`, the length-of-an-append fact will be needed.
+  </Step>
+  <Step title="3. Choose what to induct on">
+    The tree `t`: `inorder` and `size` both take it apart.
+  </Step>
+  <Step title="4. Base case: t = Leaf">
+    ```text
+    length (inorder Leaf)
+    = length []                    -- (I1)
+    = 0                            -- (L1)
+
+    size Leaf
+    = 0                            -- (Z1)
+    ```
+  </Step>
+  <Step title="5. Hypotheses">
+    `length (inorder l) = size l` and `length (inorder r) = size r`.
+  </Step>
+  <Step title="6. Step: t = Node l x r">
+    The goal is `length (inorder (Node l x r)) = size (Node l x r)`. Unfold the left side. Remember that `++` is right associative:
+
+    ```text
+    length (inorder (Node l x r))
+    = length (inorder l ++ ([x] ++ inorder r))                 -- (I2)
+    ```
+
+    This is the length of an append, with `inorder l` as the first list and `[x] ++ inorder r` as the second. Use the fact once, and the part `[x] ++ inorder r` is itself an append, so use it again:
+
+    ```text
+    = length (inorder l) + length ([x] ++ inorder r)           -- length of an append
+    = length (inorder l) + (length [x] + length (inorder r))   -- length of an append, again
+    ```
+
+    Now each hypothesis has a place to go, and `length [x]` is `1`:
+
+    ```text
+    = size l + (1 + size r)                                    -- IH for l, singleton, IH for r
+    = size l + 1 + size r                                      -- associativity of +
+    = size (Node l x r)                                        -- (Z2), backwards
+    ```
+  </Step>
+  <Step title="7. Check and conclude">
+    Both constructors are covered, both hypotheses were used, and the list fact was used twice because the append is nested. The claim holds for every finite tree.
+  </Step>
+</Steps>
+
+</details>
+
+## Task 8: mirroring reverses the inorder list
+
+**Claim.** For every tree `t`, `inorder (mirror t) = reverse (inorder t)`. This is the hardest tree task: it needs both hypotheses and three list results.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 8">
+  <Step title="1. Read the claim">
+    Mirroring puts the right subtree on the left, so reading the tree left to right gives the elements backwards. Test with `Node (Node Leaf 1 Leaf) 2 (Node Leaf 3 Leaf)`: `inorder` gives `[1,2,3]`. The mirror is `Node (Node Leaf 3 Leaf) 2 (Node Leaf 1 Leaf)` and its `inorder` is `[3,2,1]`, which is `reverse [1,2,3]`.
+  </Step>
+  <Step title="2. Collect the equations">
+    `inorder`: (I1), (I2). `mirror`: (W1), (W2). `reverse`: (R1), (R2). The tools for `++` and `reverse`: Lemma 2 (associativity), Lemma 3 (reverse of an append), and `reverse [x] = [x]`.
+  </Step>
+  <Step title="3. Choose what to induct on">
+    The tree `t`. Two constructors, so a base case and a step with two hypotheses.
+  </Step>
+  <Step title="4. Base case: t = Leaf">
+    ```text
+    inorder (mirror Leaf)
+    = inorder Leaf                 -- (W1)
+    = []                           -- (I1)
+
+    reverse (inorder Leaf)
+    = reverse []                   -- (I1)
+    = []                           -- (R1)
+    ```
+  </Step>
+  <Step title="5. Hypotheses">
+    `inorder (mirror l) = reverse (inorder l)` and `inorder (mirror r) = reverse (inorder r)`.
+  </Step>
+  <Step title="6. Step: t = Node l x r">
+    The goal is `inorder (mirror (Node l x r)) = reverse (inorder (Node l x r))`. Both sides are complicated, so reduce each to a common form.
+
+    **Left side.** Unfold `mirror`, then `inorder`:
+
+    ```text
+    inorder (mirror (Node l x r))
+    = inorder (Node (mirror r) x (mirror l))                          -- (W2)
+    = inorder (mirror r) ++ ([x] ++ inorder (mirror l))               -- (I2)
+    = reverse (inorder r) ++ ([x] ++ reverse (inorder l))             -- IH for r, and IH for l
+    ```
+
+    That is as far as it goes: the hypotheses are used up. Remember this shape, `reverse (inorder r) ++ ([x] ++ reverse (inorder l))`, as the target.
+
+    **Right side.** Unfold `inorder`:
+
+    ```text
+    reverse (inorder (Node l x r))
+    = reverse (inorder l ++ ([x] ++ inorder r))                       -- (I2)
+    ```
+
+    This is `reverse` of an append, which is Lemma 3. The first list is `inorder l` and the second is `[x] ++ inorder r`:
+
+    ```text
+    = reverse ([x] ++ inorder r) ++ reverse (inorder l)               -- Lemma 3
+    ```
+
+    The first part is again `reverse` of an append, so use Lemma 3 once more, with `[x]` and `inorder r`:
+
+    ```text
+    = (reverse (inorder r) ++ reverse [x]) ++ reverse (inorder l)     -- Lemma 3
+    = (reverse (inorder r) ++ [x]) ++ reverse (inorder l)             -- singleton: reverse [x] = [x]
+    ```
+
+    The brackets are on the wrong side compared with the target, so move them with Lemma 2:
+
+    ```text
+    = reverse (inorder r) ++ ([x] ++ reverse (inorder l))             -- Lemma 2
+    ```
+
+    This is exactly the shape the left side reached.
+  </Step>
+  <Step title="7. Check and conclude">
+    Both sides reduce to `reverse (inorder r) ++ ([x] ++ reverse (inorder l))`, so they are equal. Both constructors are covered and both hypotheses were used, on the left side. The list lemmas were not extra work: they are the ones from the lesson, used exactly where a step needed them.
+  </Step>
+</Steps>
+
+</details>
+
+## Part C: mutual recursion, and claims that fail
+
+## Task 9: mapping preserves the length of alternating lists
+
+**Claim.** (a) For every `EvenList` `es` and function `f`, `lengthE (mapE f es) = lengthE es`. (b) For every `OddList` `os` and function `f`, `lengthO (mapO f os) = lengthO os`.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 9">
+  <Step title="1. Read the claim">
+    Applying a function to every element of an alternating list keeps the same shape, so the length should not change. Test with `es = ECons 1 (OCons 2 ENil)` and `f = (+1)`: `mapE f es = ECons 2 (OCons 3 ENil)`, and both have `lengthE` equal to `2`.
+  </Step>
+  <Step title="2. Collect the equations">
+    `lengthE`: (LE1), (LE2). `lengthO`: (LO1). `mapE`: (ME1), (ME2). `mapO`: (MO1).
+  </Step>
+  <Step title="3. Choose what to induct on, and notice a problem">
+    Take claim (a). The functions take apart an `EvenList`, and the cases are `ENil` and `ECons x os`. In the case `ECons x os`, the recursive field `os` is an **`OddList`**, and `mapE` calls `mapO` on it, so the step will need claim (b) for `os`. Claim (b) in turn has the case `OCons x es` whose field `es` is an `EvenList`, and it will need claim (a). Neither claim can be proved first.
+
+    So the two claims are proved **together**, with three cases: `ENil`, `ECons x os` and `OCons x es`. In each case the hypothesis is the **other** claim, applied to the recursive field.
+  </Step>
+  <Step title="4. Case ENil (claim a)">
+    ```text
+    lengthE (mapE f ENil)
+    = lengthE ENil                 -- (ME1)
+    ```
+    This is the right side. No smaller value, so no hypothesis.
+  </Step>
+  <Step title="5. Case ECons x os (claim a), assuming claim b for os">
+    The hypothesis is: `lengthO (mapO f os) = lengthO os`.
+
+    ```text
+    lengthE (mapE f (ECons x os))
+    = lengthE (ECons (f x) (mapO f os))        -- (ME2)
+    = 1 + lengthO (mapO f os)                  -- (LE2)
+    = 1 + lengthO os                           -- hypothesis (b) for os
+    = lengthE (ECons x os)                     -- (LE2), backwards
+    ```
+  </Step>
+  <Step title="6. Case OCons x es (claim b), assuming claim a for es">
+    The hypothesis is: `lengthE (mapE f es) = lengthE es`.
+
+    ```text
+    lengthO (mapO f (OCons x es))
+    = lengthO (OCons (f x) (mapE f es))        -- (MO1)
+    = 1 + lengthE (mapE f es)                  -- (LO1)
+    = 1 + lengthE es                           -- hypothesis (a) for es
+    = lengthO (OCons x es)                     -- (LO1), backwards
+    ```
+  </Step>
+  <Step title="7. Check and conclude">
+    Every constructor of both types has a case: `ENil`, `ECons` and `OCons`. The case for `ECons` used claim (b) and the case for `OCons` used claim (a), which is what proving them together means. Every value of either type is a finite alternating chain ending at `ENil`, so the three cases cover it and both claims hold.
+  </Step>
+</Steps>
+
+</details>
+
+## Task 10: when the claim is false
+
+**Claim A.** For all lists `xs` and `ys`, `reverse (xs ++ ys) = reverse xs ++ reverse ys`.
+
+**Claim B, with a proof.** A student "proves" `reverse xs = xs` like this. Find the line that is wrong, and say what that tells you about the claim.
+
+```text
+Base case:  reverse [] = []                      -- (R1)
+Step:       reverse (x:xs)
+            = reverse xs ++ [x]                  -- (R2)
+            = xs ++ [x]                          -- IH
+            = x : xs                             -- ???
+```
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Task 10">
+  <Step title="1. Read claim A, and test it first">
+    The claim says reversing a joined list reverses each part in place. Test the smallest interesting case, `xs = [1]` and `ys = [2]`: `reverse ([1] ++ [2]) = reverse [1,2] = [2,1]`, but `reverse [1] ++ reverse [2] = [1] ++ [2] = [1,2]`. They differ, so claim A is **false**. One counterexample is a complete refutation; no induction is needed or possible.
+  </Step>
+  <Step title="2. See where a proof attempt would break">
+    It is worth seeing why, because that points to the right statement. Induct on `xs`. The base case works: both sides reduce to `reverse ys`, using Lemma 1 on the right. In the step:
+
+    ```text
+    reverse ((x:xs) ++ ys)
+    = reverse (x : (xs ++ ys))           -- (A2)
+    = reverse (xs ++ ys) ++ [x]          -- (R2)
+    = (reverse xs ++ reverse ys) ++ [x]  -- IH
+    ```
+
+    while the right side is:
+
+    ```text
+    reverse (x:xs) ++ reverse ys
+    = (reverse xs ++ [x]) ++ reverse ys  -- (R2)
+    ```
+
+    In the first, `[x]` ends up after `reverse ys`; in the second, before it. The two are different lists, so the step cannot be completed. The element that was at the front of `xs` belongs at the back of the result, after both reversed parts, and that is what Lemma 3 says: `reverse (xs ++ ys) = reverse ys ++ reverse xs`. The failed step has told us the order of the two parts was wrong.
+  </Step>
+  <Step title="3. Find the faulty line in claim B's proof">
+    Read each line against its reason. `reverse (x:xs) = reverse xs ++ [x]` is (R2): correct. `= xs ++ [x]` replaces `reverse xs` by `xs` using the hypothesis: correct, if the hypothesis is the claim itself. The last line, `xs ++ [x] = x : xs`, has no valid reason. It says appending `x` at the end gives the same list as consing it at the front, which is false: with `x = 1` and `xs = [2]`, `[2] ++ [1] = [2,1]` but `1 : [2] = [1,2]`.
+  </Step>
+  <Step title="4. What that tells us">
+    The failed line is not a slip in the algebra. It is the claim itself being false: `reverse [1,2] = [2,1]`, which is not `[1,2]`. A step that cannot be completed is a signal to test the claim before trying harder.
+  </Step>
+  <Step title="5. Check and conclude">
+    Claim A is false, refuted by one counterexample, and its failed proof points to the true statement (Lemma 3). The proof of claim B breaks on a line with no reason, and claim B is false too. In both cases the habit that exposed it was the same: test the claim on a small input first, and never leave a line without a reason.
+  </Step>
+</Steps>
+
+</details>
+
+## Checking your own proof
+
+Before handing a proof in, go through this list:
+
+- The claim is stated, and the variable you induct on is named.
+- Every constructor of the type has a case. For a mutual proof, every constructor of **every** type in the family.
+- Every recursive field in a step has its hypothesis written out, and each one is used.
+- Every line has a reason, and each reason names an equation, the hypothesis, a lemma or an arithmetic law.
+- You rewrote one side into the other (or both into a common form). You did not start from the claim.
+- Any lemma you used is stated and proved, or comes from the table above.
+
+Continue with [Proof Patterns](/docs/sem3/csi243/10-reasoning-revision/notes/proof-patterns).

@@ -1,0 +1,1348 @@
+---
+title: "Case Exam Practice"
+description: "Answer twenty exam questions on case matching, guarded fall-through, pattern guards, conversions, scope and completeness."
+---
+
+Attempt each question on paper before opening its answer. Every answer explains the command word, chooses a matching template, traces the decision and checks a boundary input. Read [Case by Example](/docs/sem3/csi243/04-making-choices/notes/case-by-example) for the templates and the full guard rules.
+
+<LearningObjectives items={[
+  'Trace patterns and guards without skipping failed alternatives',
+  'Write complete case definitions from a specification',
+  'Convert equations, conditionals and guards while preserving behaviour',
+  'Find scope, type, coverage and layout mistakes',
+]} />
+
+## 1. How to earn the tracing marks
+
+Name the scrutinee; try alternatives in order; record the successful pattern's bindings; evaluate its guards in order; substitute into the chosen result. For guarded fall-through, explicitly say that matching continues with the **next alternative on the original value**.
+
+For "write", give a type and a definition. For "trace", show failed attempts as well as the winning branch. For "find the error", name the defect, give a witness if relevant, and repair the code. The comments at the top of runnable solutions can serve as the question header when you copy a program to a file; keep only the comment when preparing a blank attempt.
+
+## 2. Guards inside case: nine questions
+
+### Exam question: first true wins
+
+Trace `award 95` and state its printed result. (4 marks)
+
+```haskell
+award :: Int -> String
+award x = case x of
+  n
+    | n >= 50 -> "pass"
+    | n >= 80 -> "distinction"
+    | otherwise -> "fail"
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" requires the guard order, not the best-sounding grade. The input is 95.
+
+</Step>
+
+<Step title="2. Plan">
+
+A variable pattern always matches. Test guards exactly as written.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: first true wins
+award :: Int -> String
+award x = case x of
+  n
+    | n >= 50 -> "pass"
+    | n >= 80 -> "distinction"
+    | otherwise -> "fail"
+
+main :: IO ()
+main = print (award 95)
+```
+
+```text
+"pass"
+```
+
+</HaskellTryIt>
+
+Bind `n = 95`. The first guard `95 >= 50` is true. Select `"pass"` immediately. The second guard would be true but is never selected.
+
+</Step>
+
+<Step title="4. Check">
+
+For the intended distinction rule, move `n >= 80` before `n >= 50`. Check 80 and 79 to verify the boundary.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: trace fall-through to the next alternative
+
+Trace `pick [-3,8]` through every attempted pattern and guard. (6 marks)
+
+```haskell
+pick :: [Int] -> String
+pick xs = case xs of
+  (x:_)
+    | x > 10 -> "large"
+    | x > 0 -> "positive"
+  [] -> "empty"
+  (_:y:_) -> "has second"
+  _ -> "other"
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "trace" requires what happens after all guards fail. Do not stop when the first cons pattern fits.
+
+</Step>
+
+<Step title="2. Plan">
+
+Preserve the original scrutinee while moving between alternatives.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: trace fall-through to the next alternative
+pick :: [Int] -> String
+pick xs = case xs of
+  (x:_)
+    | x > 10 -> "large"
+    | x > 0 -> "positive"
+  [] -> "empty"
+  (_:y:_) -> "has second"
+  _ -> "other"
+
+main :: IO ()
+main = print (pick [-3,8])
+```
+
+```text
+"has second"
+```
+
+</HaskellTryIt>
+
+The first pattern matches, binding `x = -3`. Test `-3 > 10`: false. Test `-3 > 0`: false. No guards remain, so try the next alternative on `[-3,8]`. The pattern `[]` fails. `(_:y:_)` matches, binding `y = 8` and an empty final tail. Return `"has second"`; the last wildcard is skipped.
+
+</Step>
+
+<Step title="4. Check">
+
+For `[-3]`, the guarded pattern still fails its tests, `[]` fails and the two-cons pattern fails; the last wildcard returns `"other"`. This confirms that fall-through does not inspect only the tail.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: tuple fields in guards
+
+Write `winner :: (Int, Int) -> String`: `"first"` if the first score is greater, `"second"` if the second is greater, otherwise `"tie"`. Use one tuple alternative with guards. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" asks for a definition; the guards must use the fields bound by the tuple.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind `(a,b)` once. Use two strict comparisons followed by `otherwise`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: tuple fields in guards
+winner :: (Int, Int) -> String
+winner pair = case pair of
+  (a,b)
+    | a > b -> "first"
+    | b > a -> "second"
+    | otherwise -> "tie"
+
+main :: IO ()
+main = print (winner (3,7), winner (4,4))
+```
+
+```text
+("second","tie")
+```
+
+</HaskellTryIt>
+
+For `(3,7)`, bind both names; `3 > 7` fails and `7 > 3` succeeds. For `(4,4)`, both comparisons fail and `otherwise` succeeds.
+
+</Step>
+
+<Step title="4. Check">
+
+`winner (7,3)` gives `"first"`, covering the guard not selected by the printed pair. Every pair matches the pattern; `otherwise` covers the remaining equality case.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: a guarded cons is not enough
+
+Find an input that makes `unsafeHead` crash, explain why, and repair it to return `Nothing` whenever there is no positive head. (5 marks)
+
+```haskell
+-- Incorrect: guarded coverage is incomplete.
+unsafeHead :: [Int] -> Maybe Int
+unsafeHead xs = case xs of
+  (x:_) | x > 0 -> Just x
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Find" needs a concrete witness. "Repair" needs a definition covering both structural and guarded failure.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `[]` to show structural failure and `[0]` to show guarded failure. Add a later catch-all.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: a guarded cons is not enough
+positiveHead :: [Int] -> Maybe Int
+positiveHead xs = case xs of
+  (x:_) | x > 0 -> Just x
+  _ -> Nothing
+
+main :: IO ()
+main = do
+  print (positiveHead [])
+  print (positiveHead [0])
+  print (positiveHead [3,9])
+```
+
+```text
+Nothing
+Nothing
+Just 3
+```
+
+</HaskellTryIt>
+
+In the original, `[]` fails the cons pattern and has no next alternative. `[0]` matches the cons but fails `0 > 0`, again with no next alternative. The key run-time text is `Non-exhaustive patterns in case`. The repair covers both paths.
+
+</Step>
+
+<Step title="4. Check">
+
+With `[-1]` the repair falls through to `Nothing`. With `[3,9]`, `x = 3` passes the guard and returns `Just 3`; the later element is irrelevant.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: Maybe with a guarded payload
+
+Write `nonNegative :: Maybe Int -> Maybe Int`, keeping only present values at least zero, using a guarded `Just` alternative. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Keeping" means returning `Just n`, not merely `n`. Zero must be retained.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `Just n` to expose the field, `n >= 0` to test it, and a catch-all for every failure.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Maybe with a guarded payload
+nonNegative :: Maybe Int -> Maybe Int
+nonNegative m = case m of
+  Just n | n >= 0 -> Just n
+  _ -> Nothing
+
+main :: IO ()
+main = do
+  print (nonNegative (Just 0))
+  print (nonNegative (Just (-3)))
+  print (nonNegative Nothing)
+```
+
+```text
+Just 0
+Nothing
+Nothing
+```
+
+</HaskellTryIt>
+
+For `Just 0`, the constructor matches and the guard succeeds. For `Just (-3)`, the constructor matches but the guard fails, so `_` returns `Nothing`. For `Nothing`, the constructor pattern fails before the guard is tested.
+
+</Step>
+
+<Step title="4. Check">
+
+Replacing `>=` by `>` would wrongly discard `Just 0`. The shown boundary check detects that mistake.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: guards on a custom constructor
+
+Given `data Ticket = Cancelled | Active Int`, write `usable :: Ticket -> Bool`, true exactly for an active ticket with a positive remaining count. Use a case guard. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The stored integer matters only for `Active`. Cancelled tickets are always unusable.
+
+</Step>
+
+<Step title="2. Plan">
+
+Test the field under its constructor pattern; use one catch-all to cover cancellation and non-positive counts.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: guards on a custom constructor
+data Ticket = Cancelled | Active Int
+
+usable :: Ticket -> Bool
+usable ticket = case ticket of
+  Active remaining | remaining > 0 -> True
+  _ -> False
+
+main :: IO ()
+main = print (usable (Active 2), usable (Active 0), usable Cancelled)
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+`Active 2` matches and passes. `Active 0` matches but its guard fails, then the wildcard returns false. `Cancelled` fails the first pattern outright and also reaches false.
+
+</Step>
+
+<Step title="4. Check">
+
+`Active (-1)` must also return `False`. A variable pattern named `active` would not mean the constructor `Active`; case matters.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: a pattern guard plus a Boolean guard
+
+Trace `credit "b"` and `credit "missing"`. Explain exactly which qualifier fails. (5 marks)
+
+```haskell
+credit :: String -> Maybe Int
+credit key = case key of
+  k
+    | Just v <- lookup k [("a",3),("b",-3)], v > 0 -> Just v
+    | otherwise -> Nothing
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" asks about two different failure paths: a found negative value and an absent key.
+
+</Step>
+
+<Step title="2. Plan">
+
+A comma-separated sequence needs every qualifier to succeed; evaluate left to right.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: a pattern guard plus a Boolean guard
+credit :: String -> Maybe Int
+credit key = case key of
+  k
+    | Just v <- lookup k [("a",3),("b",-3)], v > 0 -> Just v
+    | otherwise -> Nothing
+
+main :: IO ()
+main = do
+  print (credit "b")
+  print (credit "missing")
+  print (credit "a")
+```
+
+```text
+Nothing
+Nothing
+Just 3
+```
+
+</HaskellTryIt>
+
+For `"b"`, `k` matches, lookup returns `Just (-3)` and binds `v = -3`. The Boolean qualifier fails, so `otherwise` returns `Nothing`. For `"missing"`, lookup returns `Nothing`; `Just v` fails, and `v > 0` is skipped. For `"a"`, both qualifiers succeed and return `Just 3`.
+
+</Step>
+
+<Step title="4. Check">
+
+A successful pattern guard is not the same as the whole guarded result succeeding. The printed positive case checks the complete success path.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: convert function guards in both directions
+
+Rewrite `level` using case guards, then state how to reverse your conversion. (4 marks)
+
+```haskell
+level :: Int -> Int
+level n
+  | n < 0 = -1
+  | n == 0 = 0
+  | otherwise = 1
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" requires equivalent behaviour and the same order, not a different classification.
+
+</Step>
+
+<Step title="2. Plan">
+
+Introduce a variable alternative; preserve the tests; change each guard separator from `=` to `->`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: convert function guards in both directions
+level :: Int -> Int
+level input = case input of
+  n
+    | n < 0 -> -1
+    | n == 0 -> 0
+    | otherwise -> 1
+
+main :: IO ()
+main = print (level (-2), level 0, level 5)
+```
+
+```text
+(-1,0,1)
+```
+
+</HaskellTryIt>
+
+The variable pattern binds every input. Negative input succeeds first; zero fails the first test and succeeds second; positive input reaches `otherwise`. To reverse it, remove `case input of n`, make `n` the function parameter, and replace guard arrows with equals signs.
+
+</Step>
+
+<Step title="4. Check">
+
+The triple checks every outcome. Do not change the initial definition `level input = ...`; that equals sign remains necessary.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: repair case guard punctuation and type
+
+Fix both errors in the following definition and explain the relevant GHC diagnostics. (4 marks)
+
+```haskell
+-- Incorrect: equals after a case guard, and an Int used as a test.
+bad :: Int -> Int
+bad x = case x of
+  n | n = 1
+  _ -> 0
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Fix both" means a syntax repair alone is insufficient. The guard is required to be Boolean.
+
+</Step>
+
+<Step title="2. Plan">
+
+First replace `=` after the guard with `->`. Then replace the bare integer guard with an explicit nonzero test.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: repair case guard punctuation and type
+fixed :: Int -> Int
+fixed x = case x of
+  n | n /= 0 -> 1
+  _ -> 0
+
+main :: IO ()
+main = print (fixed 0, fixed 4)
+```
+
+```text
+(0,1)
+```
+
+</HaskellTryIt>
+
+The original syntax gives `parse error on input '='`. After changing that separator alone, the bare `n` has type `Int`, so the diagnostic includes `Couldn't match expected type 'Bool' with actual type 'Int'`. The repaired test is Boolean.
+
+</Step>
+
+<Step title="4. Check">
+
+At zero, the variable matches but the guard fails, so `_` gives `0`. At four, the guard succeeds and gives `1`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Patterns, conversions and complete definitions
+
+### Exam question: multiple equations to case and back
+
+Rewrite the following as one equation using `case`, and state the reverse conversion. (4 marks)
+
+```haskell
+points :: [Int] -> Int
+points [] = 0
+points [x] = x
+points (x:y:rest) = x + y
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" requires preserving both pattern order and bound names. The third pattern means at least two elements.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a fresh list parameter and move each argument pattern to an alternative, replacing `=` with `->`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: multiple equations to case and back
+points :: [Int] -> Int
+points xs = case xs of
+  [] -> 0
+  [x] -> x
+  (x:y:rest) -> x + y
+
+main :: IO ()
+main = print (points [], points [7], points [3,4,9])
+```
+
+```text
+(0,7,7)
+```
+
+</HaskellTryIt>
+
+The empty list matches first. `[7]` fails empty and binds `x = 7` in the second alternative. `[3,4,9]` fails the exact lengths, then binds `x = 3`, `y = 4`, `rest = [9]`. To reverse, move the alternative patterns back into argument positions and replace arrows with equals signs.
+
+</Step>
+
+<Step title="4. Check">
+
+Check `[3,4]`: the third alternative still matches with `rest = []`, returning `7`. It does not require a third element.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: nested if to case
+
+Rewrite `if x > 0 then "positive" else if x == 0 then "zero" else "negative"` using `case compare x 0 of`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "rewrite" requests one equivalent expression with three outcomes.
+
+</Step>
+
+<Step title="2. Plan">
+
+`compare` turns less than, equality and greater than into `LT`, `EQ`, `GT`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: nested if to case
+signWord :: Int -> String
+signWord x = case compare x 0 of
+  LT -> "negative"
+  EQ -> "zero"
+  GT -> "positive"
+
+main :: IO ()
+main = print (signWord (-2), signWord 0, signWord 6)
+```
+
+```text
+("negative","zero","positive")
+```
+
+</HaskellTryIt>
+
+At `-2`, compare yields `LT`, so select the first alternative. At zero, `LT` fails and `EQ` matches. At six, both earlier constructors fail and `GT` matches.
+
+</Step>
+
+<Step title="4. Check">
+
+The order of comparison matters: `compare 0 x` reverses `LT` and `GT`. The negative and positive checks catch that error.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: complete the missing alternatives
+
+Complete `flag :: Maybe Bool -> Int`, returning 0 for absence, 1 for present false and 2 for present true. Use explicit patterns, without a wildcard. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Complete" requires covering the whole input type. `Just` contains another two-constructor type.
+
+</Step>
+
+<Step title="2. Plan">
+
+List `Nothing`, `Just False`, `Just True`; these are all possible fully defined shapes.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: complete the missing alternatives
+flag :: Maybe Bool -> Int
+flag m = case m of
+  Nothing -> 0
+  Just False -> 1
+  Just True -> 2
+
+main :: IO ()
+main = print (flag Nothing, flag (Just False), flag (Just True))
+```
+
+```text
+(0,1,2)
+```
+
+</HaskellTryIt>
+
+Absence matches first. Present false fails `Nothing` and matches the second. Present true fails both earlier patterns and matches the third.
+
+</Step>
+
+<Step title="4. Check">
+
+There is no fourth constructor to add. A pattern `Just b` placed first would already match both present cases, hiding later present alternatives.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: non-exhaustive literal matching
+
+Find a crashing input and repair `shortName` so all unknown codes return `"?"`. (4 marks)
+
+```haskell
+-- Incorrect: no default code.
+shortName :: Int -> String
+shortName n = case n of
+  1 -> "one"
+  2 -> "two"
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Find" requires a witness, not just the phrase "non-exhaustive". "Repair" requires a result for every other integer.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose `0`, which fails both literals, then add a final wildcard.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: non-exhaustive literal matching
+shortName :: Int -> String
+shortName n = case n of
+  1 -> "one"
+  2 -> "two"
+  _ -> "?"
+
+main :: IO ()
+main = print (shortName 0, shortName 2)
+```
+
+```text
+("?","two")
+```
+
+</HaskellTryIt>
+
+The original call on `0` fails both alternatives and reaches the end. The key run-time text is `Non-exhaustive patterns in case`. With `-Wincomplete-patterns`, the warning includes `Pattern match(es) are non-exhaustive`. In the repair, `0` reaches `_`, while `2` matches the second literal.
+
+</Step>
+
+<Step title="4. Check">
+
+Any other integer, including `-1`, reaches the default. Put the wildcard last so it does not hide the named codes.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: write from a tuple specification
+
+Write `access :: (Bool, Bool) -> String` for `(hasCard, knowsPin)`: both true gives `"open"`, a missing card gives `"card needed"`, and a card with false PIN gives `"PIN needed"`. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "write" requests a function over a single pair. The no-card outcome ignores the PIN field.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the successful combination first, a no-card wildcard pattern second, then the remaining card/PIN combination.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: write from a tuple specification
+access :: (Bool, Bool) -> String
+access credentials = case credentials of
+  (True,True) -> "open"
+  (False,_) -> "card needed"
+  (True,False) -> "PIN needed"
+
+main :: IO ()
+main = do
+  print (access (True,True))
+  print (access (False,True))
+  print (access (True,False))
+```
+
+```text
+"open"
+"card needed"
+"PIN needed"
+```
+
+</HaskellTryIt>
+
+The first input matches immediately. The second fails on the first field, then matches `(False,_)`. The third fails the first pattern on its second field and the second pattern on its first field, then matches the last alternative.
+
+</Step>
+
+<Step title="4. Check">
+
+`(False,False)` also matches `(False,_)`, returning `"card needed"`. That is the fourth Boolean combination, so coverage is complete.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: write from a list specification
+
+Write `ends2 :: [Int] -> Maybe (Int, Int)`, returning the first two elements as a pair when they exist. Do not use `head`, `tail` or indexing. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"First two" means at least two, not exactly two. The result is an optional pair.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a two-cons pattern and ignore the remaining tail; use a catch-all for shorter lists.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: write from a list specification
+ends2 :: [Int] -> Maybe (Int, Int)
+ends2 xs = case xs of
+  (x:y:_) -> Just (x,y)
+  _ -> Nothing
+
+main :: IO ()
+main = do
+  print (ends2 [4,7,9])
+  print (ends2 [4])
+  print (ends2 [])
+```
+
+```text
+Just (4,7)
+Nothing
+Nothing
+```
+
+</HaskellTryIt>
+
+`[4,7,9]` matches with `x = 4`, `y = 7`; the tail is ignored. `[4]` and `[]` lack two cons cells, so both reach the wildcard.
+
+</Step>
+
+<Step title="4. Check">
+
+`ends2 [4,7]` must also give `Just (4,7)`. Using `[x,y]` would wrongly reject a three-element list, which the first printed test detects.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: lookup with a default
+
+Write `stock :: String -> [(String, Int)] -> Int`, returning the stored count for a key or zero when the key is absent. Use `case` on `lookup`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The input table is an association list. The output is an `Int`, so absence must become a numeric default.
+
+</Step>
+
+<Step title="2. Plan">
+
+Match `Nothing` and `Just count` from the lookup result.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: lookup with a default
+stock :: String -> [(String, Int)] -> Int
+stock key table = case lookup key table of
+  Nothing -> 0
+  Just count -> count
+
+main :: IO ()
+main = print (stock "pen" [("pen",3)], stock "ink" [("pen",3)])
+```
+
+```text
+(3,0)
+```
+
+</HaskellTryIt>
+
+For `"pen"`, lookup gives `Just 3`; `Nothing` fails and the second alternative binds `count = 3`. For `"ink"`, lookup gives `Nothing` and the first alternative supplies zero.
+
+</Step>
+
+<Step title="4. Check">
+
+An empty table always yields `Nothing`. A stored zero and an absent key have the same final result, as the specification permits.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: a type with several field shapes
+
+Given `data Load = Empty | Bag Int | Crate Int Int`, write `weight :: Load -> Int`: empty weighs zero, a bag weighs its field, a crate weighs the product of its fields. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The constructors have zero, one and two fields. Each needs a different pattern shape.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write one alternative per constructor; bind all required fields.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: a type with several field shapes
+data Load = Empty | Bag Int | Crate Int Int
+
+weight :: Load -> Int
+weight load = case load of
+  Empty -> 0
+  Bag n -> n
+  Crate count each -> count * each
+
+main :: IO ()
+main = print (weight Empty, weight (Bag 7), weight (Crate 3 4))
+```
+
+```text
+(0,7,12)
+```
+
+</HaskellTryIt>
+
+`Empty` matches first. `Bag 7` fails the first constructor and binds `n = 7`. `Crate 3 4` fails both earlier constructors, binds both fields and computes `12`.
+
+</Step>
+
+<Step title="4. Check">
+
+`Crate 0 9` returns zero by multiplication, not by matching `Empty`. Constructor shape and the eventual numeric result are different questions.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: overlapping alternatives
+
+Predict the result of `overlap [4]`. Explain why the singleton alternative is never selected. (4 marks)
+
+```haskell
+overlap :: [Int] -> String
+overlap xs = case xs of
+  [] -> "empty"
+  (_:_) -> "non-empty"
+  [_] -> "single"
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Predict" asks for actual order, not intended categories. The second and third patterns overlap.
+
+</Step>
+
+<Step title="2. Plan">
+
+Try empty first, then the general cons; a later exact pattern cannot override it.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: overlapping alternatives
+overlap :: [Int] -> String
+overlap xs = case xs of
+  [] -> "empty"
+  (_:_) -> "non-empty"
+  [_] -> "single"
+
+main :: IO ()
+main = print (overlap [4])
+```
+
+```text
+"non-empty"
+```
+
+</HaskellTryIt>
+
+`[4]` fails `[]`, then matches `(_:_)`, so its result is `"non-empty"`. Every singleton also matches that earlier cons pattern. GHC can warn `Pattern match is redundant` for the last alternative. The warning is separate from printed program output.
+
+</Step>
+
+<Step title="4. Check">
+
+Repair by placing `[_]` before `(_:_)`. Then `[4]` gives `"single"` and `[4,5]` still gives `"non-empty"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: fix nested layout
+
+Repair the indentation so the optional value is checked first and the Boolean second. (4 marks)
+
+```haskell
+-- Incorrect: inner and outer alternatives have been mixed.
+answer :: Maybe Bool -> String
+answer value = case value of
+  Just b -> case b of
+  True -> "yes"
+  False -> "no"
+  Nothing -> "missing"
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Repair" asks which case owns each alternative. `Nothing` belongs to `Maybe Bool`; `True` and `False` belong to the inner `Bool`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Indent the Boolean alternatives further than `Just b`, and align `Nothing` with `Just b`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fix nested layout
+answer :: Maybe Bool -> String
+answer value = case value of
+  Just b -> case b of
+    True -> "yes"
+    False -> "no"
+  Nothing -> "missing"
+
+main :: IO ()
+main = print (answer (Just False), answer Nothing)
+```
+
+```text
+("no","missing")
+```
+
+</HaskellTryIt>
+
+For `Just False`, bind `b = False` in the outer case. The inner `True` fails, then `False` gives `"no"`. For `Nothing`, the first outer pattern fails and the second gives `"missing"`. The broken layout can produce a parse error or an incorrectly attached alternative; restoring the intended nesting resolves both concerns.
+
+</Step>
+
+<Step title="4. Check">
+
+An equivalent explicit form is `case value of { Just b -> case b of { True -> "yes"; False -> "no" }; Nothing -> "missing" }`. Braces show the two alternative groups directly.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: nested and as-patterns with local scope
+
+Which alternative matches `Just [2,3]` below, what are the bindings, and why can `extra` not be moved unchanged into a whole-equation `where`? (5 marks)
+
+```haskell
+inspect :: Maybe [Int] -> ([Int], Int)
+inspect value = case value of
+  Just [] -> ([],0)
+  Just whole@(x:_) -> let extra = x + 1 in (whole,extra)
+  Nothing -> ([],0)
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "which" needs the matching alternative and bindings. The scope question asks where `x` is introduced.
+
+</Step>
+
+<Step title="2. Plan">
+
+Match all nested structure before computing the local result. Locate the boundary between equation scope and alternative scope.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: nested and as-patterns with local scope
+inspect :: Maybe [Int] -> ([Int], Int)
+inspect value = case value of
+  Just [] -> ([],0)
+  Just whole@(x:_) -> let extra = x + 1 in (whole,extra)
+  Nothing -> ([],0)
+
+main :: IO ()
+main = print (inspect (Just [2,3]))
+```
+
+```text
+([2,3],3)
+```
+
+</HaskellTryIt>
+
+`Just []` fails on the inner non-empty list. The second alternative matches: `whole = [2,3]`, `x = 2`. The local `extra` is `3`, giving `([2,3],3)`. An equation-level `where` cannot see alternative-bound `x`; moving `extra = x + 1` there would give `Variable not in scope: x`.
+
+</Step>
+
+<Step title="4. Check">
+
+`inspect (Just [])` takes the first alternative, and `inspect Nothing` takes the last. Keep `extra` local, or define a shared helper with its own parameter and call it with `x`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Common errors to check before handing in
+
+| Mistake | What it changes or triggers | Repair |
+|---|---|---|
+| Stop after a guarded pattern matches | Misses possible guard failure and fall-through | Trace all attempted guards before selecting a result |
+| Put a broad guard before a narrow one | The broad true guard wins | Order priority explicitly |
+| Write `=` after a case guard | `parse error on input '='` | Use `->` |
+| Use a bare `Int` as a guard | Expected `Bool`, actual `Int` | Write a Boolean comparison |
+| Omit absence, an empty list or guarded failure | `Non-exhaustive patterns in case` at run time | Add the missing outcomes |
+| Return `_` as if it named a value | `Found hole: _` | Bind a named pattern |
+| Mix result types | `Couldn't match expected type` | Give every result one compatible type |
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+An exam trace follows the code's order, not the intended categories. A matching guarded pattern can still fall through. Case guards use arrows; function guards use equals signs. Nested patterns must match at every layer. Check all constructors, list lengths and boundary values, and keep pattern-bound names inside their scope.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="If n >= 50 precedes n >= 80, which result is selected for 95?">
+
+The first guard's result. A later, more specific condition does not override an earlier true condition.
+
+</CheckQuestion>
+
+<CheckQuestion question="After all guards fail under a cons pattern, what value does the next alternative inspect?">
+
+The original complete list, not its head or tail.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does Nothing cause the Boolean qualifier after Just v in a pattern guard to run?">
+
+No. The pattern guard fails first, so later qualifiers in that sequence are skipped.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is a wildcard default sometimes insufficient evidence that a function is correct?">
+
+It establishes coverage, but its result can still violate the specification or hide intended special alternatives if placed too early. Check meaning and order as well as completeness.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Lab 02: Making Choices](/docs/sem3/csi243/04-making-choices/notes/lab-02).

@@ -1,0 +1,2650 @@
+---
+title: "Recursive List Exam Practice"
+description: "Practise prefix boundaries, two-list policies, accumulator invariants, safe extrema and missing-data algorithms with narrated recursive designs."
+---
+
+Attempt each question on paper before opening its answer. This extends [Designing Recursive List Functions](/docs/sem3/csi243/06-lists-tuples/notes/recursive-list-design), [Recursion on Lists](/docs/sem3/csi243/06-lists-tuples/notes/list-recursion), [Lab 03a: Search, Counting, and Comprehensions](/docs/sem3/csi243/06-lists-tuples/notes/lab-03a) and [Lab 03b: Recursion and Lists (Continued)](/docs/sem3/csi243/06-lists-tuples/notes/lab-03). The sections add neighbouring algorithms and diagnostic questions rather than restating the introductory labs.
+
+<LearningObjectives items={[
+  'Derive prefix algorithms that stop at the first failure',
+  'Specify unequal-list policies for append, interleave and pairing',
+  'Trace an invariant for reverse and extrema accumulators',
+  'Locate missing-data boundaries for head, tail, last, init and indexing',
+  'Write and test recursive answers under no-library restrictions',
+]} />
+
+<Prerequisites items={[
+  'Designing Recursive List Functions and the existing Lab 03 lessons',
+  'Maybe and Either: recognising success and missing results',
+]} />
+
+## 1. How to attempt the questions
+
+Allow six to ten minutes per design question. Award one mark for the signature, two for complete base/step equations, one for a decreasing input, one for the dry run and one for a discriminating boundary test. A library call may calculate the result but does not meet an explicit patterns-and-recursion restriction.
+
+Use this attempt template:
+
+```text
+Read:   what result shape and boundary policy are required?
+Plan:   what information must one call retain for the next?
+Base:   what shape, count or predicate ends the problem?
+Step:   what is emitted, and what becomes smaller?
+Check:  empty, singleton, every branch and a counterexample to a tempting wrong answer
+```
+
+Each variation is a complete executable program. The exam answer then narrates its design and a reduction. Safe wrappers let missing input be tested without a crash; [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth) and [Either in Depth](/docs/sem3/csi243/09-polymorphism/notes/either-in-depth) teach how to consume those results.
+
+## 2. Prefix selection: takeWhile
+
+A prefix predicate consumes consecutive passing heads from the beginning. It stops at the first failure even if later elements would pass. Lab 5 asks for patterns and recursion, so calling takeWhile is not an implementation of that requirement.
+
+### Template and reading guide
+
+```haskell
+takeWhileR :: (a -> Bool) -> [a] -> [a]
+takeWhileR _ [] = []
+takeWhileR p (x:xs)
+  | p x = x : takeWhileR p xs
+  | otherwise = []
+```
+
+p tests the original head. A passing head is copied; a failing one ends the whole prefix. Compare selection: its rejection branch recurses, whereas this one returns [] immediately.
+
+### Worked variation: Later matches excluded
+
+Later matches excluded changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeWhileR :: (a -> Bool) -> [a] -> [a]
+takeWhileR _ [] = []
+takeWhileR p (x:xs)
+  | p x = x : takeWhileR p xs
+  | otherwise = []
+
+main :: IO ()
+main = print (takeWhileR (> 0) [2,3,0,4 :: Int])
+```
+
+```text
+[2,3]
+```
+
+</HaskellTryIt>
+
+2 and 3 pass; zero stops the run before 4.
+
+### Worked variation: First failure and singleton
+
+First failure and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeWhileR :: (a -> Bool) -> [a] -> [a]
+takeWhileR _ [] = []
+takeWhileR p (x:xs)
+  | p x = x : takeWhileR p xs
+  | otherwise = []
+
+main :: IO ()
+main = print ((takeWhileR even [1,2 :: Int], takeWhileR even [4 :: Int]))
+```
+
+```text
+([],[4])
+```
+
+</HaskellTryIt>
+
+A first failure gives []; a passing singleton reaches the empty base.
+
+### Worked variation: All matches and empty
+
+All matches and empty changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeWhileR :: (a -> Bool) -> [a] -> [a]
+takeWhileR _ [] = []
+takeWhileR p (x:xs)
+  | p x = x : takeWhileR p xs
+  | otherwise = []
+
+main :: IO ()
+main = print ((takeWhileR (< 9) [1,2,3 :: Int], takeWhileR (< 9) ([] :: [Int])))
+```
+
+```text
+([1,2,3],[])
+```
+
+</HaskellTryIt>
+
+All passing heads are copied; no heads gives [].
+
+### Worked variation: Characters
+
+Characters changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeWhileR :: (a -> Bool) -> [a] -> [a]
+takeWhileR _ [] = []
+takeWhileR p (x:xs)
+  | p x = x : takeWhileR p xs
+  | otherwise = []
+
+main :: IO ()
+main = print (takeWhileR (/= ' ') "red blue red")
+```
+
+```text
+"red"
+```
+
+</HaskellTryIt>
+
+Copy until the first literal space; the boundary and later words are excluded.
+
+### Exam question: prefix selection: takewhile (6 marks)
+
+Implement takeWhile using patterns and recursion only. Contrast it with filter on [2,0,4]. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use [] for both exhaustion and the first predicate failure. Only the passing branch recurses, giving the maximal initial run.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+takeWhileR :: (a -> Bool) -> [a] -> [a]
+takeWhileR _ [] = []
+takeWhileR p (x:xs)
+  | p x = x : takeWhileR p xs
+  | otherwise = []
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+takeWhileR (> 0) [2,0,4]
+= 2 : takeWhileR (> 0) [0,4]    -- pass
+= 2 : []                       -- fail and stop
+= [2]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Recursing after failure makes a filter, whose result here is [2,4]. Returning the failing suffix is not a prefix selection. Testing only all-pass input hides both mistakes.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict takeWhileR (< 5) [5,1,2].
+
+<details>
+<summary>Answer</summary>
+
+[]; equality fails at the first head, and later matches are irrelevant.
+
+</details>
+
+### Other ways to express the requirement
+
+A case on xs with [] and cons alternatives can express the same guarded recursion. Library takeWhile is equivalent; a comprehension with only p x is not, because it selects later matches.
+
+## 3. Drop a prefix: dropWhile
+
+Dropping while a predicate holds removes only the initial passing run. The first failing head and every later value remain. Later passing values are not dropped because prefix removal has finished.
+
+### Template and reading guide
+
+```haskell
+dropWhileR :: (a -> Bool) -> [a] -> [a]
+dropWhileR _ [] = []
+dropWhileR p whole@(x:xs)
+  | p x = dropWhileR p xs
+  | otherwise = whole
+```
+
+The as-pattern `whole@(x:xs)` names both the current suffix and its pieces. Passing heads are skipped. Returning whole on failure preserves the boundary head.
+
+### Worked variation: Later match retained
+
+Later match retained changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropWhileR :: (a -> Bool) -> [a] -> [a]
+dropWhileR _ [] = []
+dropWhileR p whole@(x:xs)
+  | p x = dropWhileR p xs
+  | otherwise = whole
+
+main :: IO ()
+main = print (dropWhileR (> 0) [2,3,0,4 :: Int])
+```
+
+```text
+[0,4]
+```
+
+</HaskellTryIt>
+
+Skip 2 and 3, then return all of [0,4].
+
+### Worked variation: First failure
+
+First failure changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropWhileR :: (a -> Bool) -> [a] -> [a]
+dropWhileR _ [] = []
+dropWhileR p whole@(x:xs)
+  | p x = dropWhileR p xs
+  | otherwise = whole
+
+main :: IO ()
+main = print (dropWhileR even [1,2,4 :: Int])
+```
+
+```text
+[1,2,4]
+```
+
+</HaskellTryIt>
+
+The first head fails, so nothing is dropped.
+
+### Worked variation: All matches and empty
+
+All matches and empty changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropWhileR :: (a -> Bool) -> [a] -> [a]
+dropWhileR _ [] = []
+dropWhileR p whole@(x:xs)
+  | p x = dropWhileR p xs
+  | otherwise = whole
+
+main :: IO ()
+main = print ((dropWhileR even [2,4 :: Int], dropWhileR even ([] :: [Int])))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+Dropping every head reaches []; empty input is already exhausted.
+
+### Worked variation: Characters and singleton
+
+Characters and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropWhileR :: (a -> Bool) -> [a] -> [a]
+dropWhileR _ [] = []
+dropWhileR p whole@(x:xs)
+  | p x = dropWhileR p xs
+  | otherwise = whole
+
+main :: IO ()
+main = print ((dropWhileR (== ' ') "  red blue", dropWhileR even [4 :: Int]))
+```
+
+```text
+("red blue",[])
+```
+
+</HaskellTryIt>
+
+Only initial spaces disappear; the passing singleton is entirely removed.
+
+### Exam question: drop a prefix: dropwhile (6 marks)
+
+Write dropWhileR and show why dropWhileR (> 0) [2,0,4] retains 4. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Skip a passing head; return the whole current list on first failure, with no further recursion.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+dropWhileR :: (a -> Bool) -> [a] -> [a]
+dropWhileR _ [] = []
+dropWhileR p whole@(x:xs)
+  | p x = dropWhileR p xs
+  | otherwise = whole
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+dropWhileR (> 0) [2,0,4]
+= dropWhileR (> 0) [0,4]      -- skip 2
+= [0,4]                       -- boundary returns whole suffix
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Returning xs at failure loses the boundary head. Continuing to remove later matches changes a prefix algorithm into filtering. An as-pattern does not copy the list; it binds a name for the same suffix.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict dropWhileR (< 0) [-2,0,-3].
+
+<details>
+<summary>Answer</summary>
+
+[0,-3]; zero ends the initial negative run, so the later -3 remains.
+
+</details>
+
+### Other ways to express the requirement
+
+Without an as-pattern, return `(x:xs)` on failure. Library dropWhile has the same behaviour. A filter of failing values would also remove later passing values, so it is not equivalent.
+
+## 4. One-pass predicate splits: span and break
+
+span returns the maximal passing prefix together with the suffix starting at the first failure. break stops at the first success of its supplied predicate, so it is span with the condition negated. Neither partitions all matches across the list.
+
+### Template and reading guide
+
+```haskell
+spanR :: (a -> Bool) -> [a] -> ([a],[a])
+spanR _ [] = ([],[])
+spanR p whole@(x:xs)
+  | p x = (x:front,back)
+  | otherwise = ([],whole)
+  where
+    (front,back) = spanR p xs
+
+breakR :: (a -> Bool) -> [a] -> ([a],[a])
+breakR p = spanR (\x -> not (p x))
+```
+
+The recursive pair is used only when the current head passes. On failure return ([],whole). break negates p because its stopping condition is True rather than False.
+
+### Worked variation: Interior boundary
+
+Interior boundary changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+spanR :: (a -> Bool) -> [a] -> ([a],[a])
+spanR _ [] = ([],[])
+spanR p whole@(x:xs)
+  | p x = (x:front,back)
+  | otherwise = ([],whole)
+  where
+    (front,back) = spanR p xs
+
+breakR :: (a -> Bool) -> [a] -> ([a],[a])
+breakR p = spanR (\x -> not (p x))
+
+main :: IO ()
+main = print ((spanR (> 0) [2,0,4 :: Int], breakR (== 0) [2,0,4 :: Int]))
+```
+
+```text
+(([2],[0,4]),([2],[0,4]))
+```
+
+</HaskellTryIt>
+
+Both locate zero as the boundary and leave later 4 in the suffix.
+
+### Worked variation: No boundary
+
+No boundary changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+spanR :: (a -> Bool) -> [a] -> ([a],[a])
+spanR _ [] = ([],[])
+spanR p whole@(x:xs)
+  | p x = (x:front,back)
+  | otherwise = ([],whole)
+  where
+    (front,back) = spanR p xs
+
+breakR :: (a -> Bool) -> [a] -> ([a],[a])
+breakR p = spanR (\x -> not (p x))
+
+main :: IO ()
+main = print ((spanR even [2,4 :: Int], breakR odd [2,4 :: Int]))
+```
+
+```text
+(([2,4],[]),([2,4],[]))
+```
+
+</HaskellTryIt>
+
+Every value belongs to the prefix and the suffix is empty.
+
+### Worked variation: Immediate boundary
+
+Immediate boundary changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+spanR :: (a -> Bool) -> [a] -> ([a],[a])
+spanR _ [] = ([],[])
+spanR p whole@(x:xs)
+  | p x = (x:front,back)
+  | otherwise = ([],whole)
+  where
+    (front,back) = spanR p xs
+
+breakR :: (a -> Bool) -> [a] -> ([a],[a])
+breakR p = spanR (\x -> not (p x))
+
+main :: IO ()
+main = print ((spanR even [1,2 :: Int], breakR odd [1,2 :: Int]))
+```
+
+```text
+(([],[1,2]),([],[1,2]))
+```
+
+</HaskellTryIt>
+
+The first value stops both prefixes, leaving the whole input as back.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+spanR :: (a -> Bool) -> [a] -> ([a],[a])
+spanR _ [] = ([],[])
+spanR p whole@(x:xs)
+  | p x = (x:front,back)
+  | otherwise = ([],whole)
+  where
+    (front,back) = spanR p xs
+
+breakR :: (a -> Bool) -> [a] -> ([a],[a])
+breakR p = spanR (\x -> not (p x))
+
+main :: IO ()
+main = print ((spanR even ([] :: [Int]), breakR odd [2 :: Int]))
+```
+
+```text
+(([],[]),([2],[]))
+```
+
+</HaskellTryIt>
+
+Empty gives two empty halves; a singleton without a stopping match goes in front.
+
+### Exam question: one-pass predicate splits: span and break (6 marks)
+
+Derive a one-pass span, then implement break using it without library span or break. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Adapt the splitR pair template: replace the count base by the predicate boundary. Negate the condition to convert span to break.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+spanR :: (a -> Bool) -> [a] -> ([a],[a])
+spanR _ [] = ([],[])
+spanR p whole@(x:xs)
+  | p x = (x:front,back)
+  | otherwise = ([],whole)
+  where
+    (front,back) = spanR p xs
+
+breakR :: (a -> Bool) -> [a] -> ([a],[a])
+breakR p = spanR (\x -> not (p x))
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+spanR (> 0) [2,0,4]
+= (2:front,back)            -- pair = spanR (> 0) [0,4]
+spanR (> 0) [0,4]
+= ([],[0,4])                -- fail: preserve whole suffix
+spanR (> 0) [2,0,4]
+= ([2],[0,4])               -- prepend only to front
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Using p unchanged for break selects the wrong boundary. Filtering the suffix replaces splitting by partitioning. Moving the failing head into front violates the initial-run definition.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict breakR (== ' ') "ab cd".
+
+<details>
+<summary>Answer</summary>
+
+`("ab"," cd")`; the stopping space belongs to the suffix.
+
+</details>
+
+### Other ways to express the requirement
+
+`(takeWhile p xs,dropWhile p xs)` gives span's result on finite input. Direct recursion derives both halves together. Library usage and partition are developed in More Higher-Order Functions.
+
+## 5. Append: consume the first list
+
+Append places the entire first list before the second, preserving order and duplicates. When the first ends, the answer is the second list. Their lengths may differ, but their element type must agree.
+
+### Template and reading guide
+
+```haskell
+appendR :: [a] -> [a] -> [a]
+appendR [] ys = ys
+appendR (x:xs) ys = x : appendR xs ys
+```
+
+Keep ys fixed while consuming xs. Each returning cons retains one first-list head. Return ys directly at the base without walking it.
+
+### Worked variation: Unequal lengths
+
+Unequal lengths changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+appendR :: [a] -> [a] -> [a]
+appendR [] ys = ys
+appendR (x:xs) ys = x : appendR xs ys
+
+main :: IO ()
+main = print (appendR [1,2 :: Int] [8])
+```
+
+```text
+[1,2,8]
+```
+
+</HaskellTryIt>
+
+Copy 1 and 2 before attaching [8].
+
+### Worked variation: Empty on either side
+
+Empty on either side changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+appendR :: [a] -> [a] -> [a]
+appendR [] ys = ys
+appendR (x:xs) ys = x : appendR xs ys
+
+main :: IO ()
+main = print ((appendR ([] :: [Int]) [8], appendR [8 :: Int] []))
+```
+
+```text
+([8],[8])
+```
+
+</HaskellTryIt>
+
+Empty first returns second; empty second is the final tail.
+
+### Worked variation: Both empty and singleton
+
+Both empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+appendR :: [a] -> [a] -> [a]
+appendR [] ys = ys
+appendR (x:xs) ys = x : appendR xs ys
+
+main :: IO ()
+main = print ((appendR ([] :: [Int]) [], appendR [1 :: Int] [2]))
+```
+
+```text
+([],[1,2])
+```
+
+</HaskellTryIt>
+
+The first uses the base immediately; the second copies one head.
+
+### Worked variation: Strings and duplicates
+
+Strings and duplicates changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+appendR :: [a] -> [a] -> [a]
+appendR [] ys = ys
+appendR (x:xs) ys = x : appendR xs ys
+
+main :: IO ()
+main = print (appendR "aa" "bc")
+```
+
+```text
+"aabc"
+```
+
+</HaskellTryIt>
+
+Append neither alternates nor removes duplicates.
+
+### Exam question: append: consume the first list (6 marks)
+
+Implement appendR without (++), stating which argument decreases. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Consume the first list because its elements must precede ys. The base is ys and the step is cons of x onto the recursively appended tail.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+appendR :: [a] -> [a] -> [a]
+appendR [] ys = ys
+appendR (x:xs) ys = x : appendR xs ys
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+appendR [1,2] [8]
+= 1 : appendR [2] [8]        -- first head
+= 1 : (2 : appendR [] [8])   -- next head
+= 1 : (2 : [8])             -- return second
+= [1,2,8]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+A base returning [] loses ys. `x ++ ...` supplies an element to list append. `xs : ys` does not join two same-level lists; cons needs one element followed by a list of such elements.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict appendR [2,2] [1,2] and compare it with a set union.
+
+<details>
+<summary>Answer</summary>
+
+[2,2,1,2]. Append preserves order and duplicates; a set represents distinct members.
+
+</details>
+
+### Other ways to express the requirement
+
+`xs ++ ys` and `foldr (:) ys xs` are equivalents when permitted. The existing List_Append download is further independent practice; this derivation explains why the second argument supplies the base.
+
+## 6. Interleave: choose a leftovers policy
+
+Interleaving alternates one value from each list. Here it retains every leftover value after either input ends. This differs from the shortest-input policy of zip; neither unequal-list case may be left implicit.
+
+### Template and reading guide
+
+```haskell
+interleaveR :: [a] -> [a] -> [a]
+interleaveR [] ys = ys
+interleaveR xs [] = xs
+interleaveR (x:xs) (y:ys) = x : y : interleaveR xs ys
+```
+
+Provide a base for either exhaustion direction. Otherwise emit x then y and consume both tails. Total remaining length decreases by two in the continuing equation.
+
+### Worked variation: Equal lengths
+
+Equal lengths changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+interleaveR :: [a] -> [a] -> [a]
+interleaveR [] ys = ys
+interleaveR xs [] = xs
+interleaveR (x:xs) (y:ys) = x : y : interleaveR xs ys
+
+main :: IO ()
+main = print (interleaveR [1,2 :: Int] [8,9])
+```
+
+```text
+[1,8,2,9]
+```
+
+</HaskellTryIt>
+
+Emit 1,8 then 2,9; both inputs end.
+
+### Worked variation: Left longer
+
+Left longer changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+interleaveR :: [a] -> [a] -> [a]
+interleaveR [] ys = ys
+interleaveR xs [] = xs
+interleaveR (x:xs) (y:ys) = x : y : interleaveR xs ys
+
+main :: IO ()
+main = print (interleaveR [1,2,3 :: Int] [8])
+```
+
+```text
+[1,8,2,3]
+```
+
+</HaskellTryIt>
+
+After the pair 1,8 the right-empty base preserves [2,3].
+
+### Worked variation: Right longer
+
+Right longer changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+interleaveR :: [a] -> [a] -> [a]
+interleaveR [] ys = ys
+interleaveR xs [] = xs
+interleaveR (x:xs) (y:ys) = x : y : interleaveR xs ys
+
+main :: IO ()
+main = print (interleaveR [1 :: Int] [8,9,10])
+```
+
+```text
+[1,8,9,10]
+```
+
+</HaskellTryIt>
+
+After the first pair the left-empty base preserves [9,10].
+
+### Worked variation: Empty sides and singleton
+
+Empty sides and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+interleaveR :: [a] -> [a] -> [a]
+interleaveR [] ys = ys
+interleaveR xs [] = xs
+interleaveR (x:xs) (y:ys) = x : y : interleaveR xs ys
+
+main :: IO ()
+main = print ((interleaveR "" "ab", interleaveR "ab" "", interleaveR "a" "b"))
+```
+
+```text
+("ab","ab","ab")
+```
+
+</HaskellTryIt>
+
+Either empty side preserves the other; singleton heads are emitted left then right.
+
+### Exam question: interleave: choose a leftovers policy (6 marks)
+
+Write an interleave that retains leftovers. Test both unequal-length directions. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use two empty-side bases followed by a two-head equation. Expected result length is the sum of both input lengths, which detects lost leftovers.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+interleaveR :: [a] -> [a] -> [a]
+interleaveR [] ys = ys
+interleaveR xs [] = xs
+interleaveR (x:xs) (y:ys) = x : y : interleaveR xs ys
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+interleaveR [1,2,3] [8]
+= 1 : 8 : interleaveR [2,3] []   -- emit pair
+= 1 : 8 : [2,3]                  -- right empty
+= [1,8,2,3]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+A base for only both-empty input leaves unequal lists uncovered and can cause `Non-exhaustive patterns`. Returning [] whenever either ends implements truncation, not the specified retaining policy.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict interleaveR [] [] and interleaveR [1,2] [9,8,7].
+
+<details>
+<summary>Answer</summary>
+
+[] and [1,9,2,8,7]. The final 7 is retained after the left input ends.
+
+</details>
+
+### Other ways to express the requirement
+
+An equivalent role-swapping form is `interleaveR [] ys = ys` and `interleaveR (x:xs) ys = x : interleaveR ys xs`. Total remaining length decreases even though the first argument alone need not shrink at each call.
+
+## 7. Reverse with an accumulator invariant
+
+An accumulator stores the result built so far. For reverse, prepend each consumed head to that accumulator. The invariant says the helper returns the reversal of the remaining input followed by its current accumulator. This explains the algorithm rather than merely labelling a call tail recursive.
+
+### Template and reading guide
+
+```haskell
+reverseR :: [a] -> [a]
+reverseR xs = go xs []
+  where
+    go [] acc = acc
+    go (y:ys) acc = go ys (y:acc)
+```
+
+acc begins empty. Each step transfers a head from the remaining list to the front of acc. At exhaustion acc is the complete answer; no append is needed.
+
+### Worked variation: Several elements
+
+Several elements changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+reverseR :: [a] -> [a]
+reverseR xs = go xs []
+  where
+    go [] acc = acc
+    go (y:ys) acc = go ys (y:acc)
+
+main :: IO ()
+main = print (reverseR [1,2,3 :: Int])
+```
+
+```text
+[3,2,1]
+```
+
+</HaskellTryIt>
+
+acc changes from [] to [1], [2,1], then [3,2,1].
+
+### Worked variation: Empty input
+
+Empty input changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+reverseR :: [a] -> [a]
+reverseR xs = go xs []
+  where
+    go [] acc = acc
+    go (y:ys) acc = go ys (y:acc)
+
+main :: IO ()
+main = print (reverseR ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The helper immediately returns its initial accumulator.
+
+### Worked variation: Singleton and duplicates
+
+Singleton and duplicates changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+reverseR :: [a] -> [a]
+reverseR xs = go xs []
+  where
+    go [] acc = acc
+    go (y:ys) acc = go ys (y:acc)
+
+main :: IO ()
+main = print ((reverseR [7 :: Int], reverseR [2,2,1 :: Int]))
+```
+
+```text
+([7],[1,2,2])
+```
+
+</HaskellTryIt>
+
+One move leaves a singleton unchanged; duplicate cells remain.
+
+### Worked variation: Another element type
+
+Another element type changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+reverseR :: [a] -> [a]
+reverseR xs = go xs []
+  where
+    go [] acc = acc
+    go (y:ys) acc = go ys (y:acc)
+
+main :: IO ()
+main = print (reverseR "abc")
+```
+
+```text
+"cba"
+```
+
+</HaskellTryIt>
+
+a enters first and ends last as b and c are prepended.
+
+### Exam question: reverse with an accumulator invariant (6 marks)
+
+Implement reverse using an accumulator and no reverse or (++). Trace its state. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Start acc as []. Transfer each head to its front and recurse on the tail. Return acc at []; the remaining input decreases by one each step.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+reverseR :: [a] -> [a]
+reverseR xs = go xs []
+  where
+    go [] acc = acc
+    go (y:ys) acc = go ys (y:acc)
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+reverseR [1,2,3]
+= go [1,2,3] []        -- start
+= go [2,3] [1]         -- move 1
+= go [3] [2,1]         -- move 2
+= go [] [3,2,1]        -- move 3
+= [3,2,1]              -- return acc
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+`go ys (acc ++ [y])` builds the original order and traverses a growing prefix. Returning [] at the base discards all work. A tail-position call alone does not imply an unconditional constant-space guarantee in lazy Haskell.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+After consuming two heads of [4,5,6], what are the helper arguments?
+
+<details>
+<summary>Answer</summary>
+
+`go [6] [5,4]`; the consumed prefix has been reversed in acc.
+
+</details>
+
+### Other ways to express the requirement
+
+The append-based reverse is already taught in Recursion on Lists. This form avoids repeated appends. `foldl (flip (:)) [] xs` expresses its state transition; see Complexity by Recurrence for demand and space accounting.
+
+## 8. Safe maximum: use a real seed
+
+A finite non-empty ordered list has a maximum. A safe wrapper returns Nothing for [], then seeds a helper with the actual first value. Inventing zero would incorrectly beat every all-negative input. Result consumption belongs to Maybe in Depth; the design here is the seeded traversal.
+
+### Template and reading guide
+
+```haskell
+maximumR :: Ord a => [a] -> Maybe a
+maximumR [] = Nothing
+maximumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y > best = go y ys
+      | otherwise = go best ys
+```
+
+best is the greatest value in the consumed prefix. The first head establishes the invariant; replace best only with a greater candidate. At [] return the recorded value.
+
+### Worked variation: Ordinary maximum
+
+Ordinary maximum changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+maximumR :: Ord a => [a] -> Maybe a
+maximumR [] = Nothing
+maximumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y > best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print (maximumR [3,9,2 :: Int])
+```
+
+```text
+Just 9
+```
+
+</HaskellTryIt>
+
+Seed 3, replace by 9, keep it against 2.
+
+### Worked variation: All negative
+
+All negative changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+maximumR :: Ord a => [a] -> Maybe a
+maximumR [] = Nothing
+maximumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y > best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print (maximumR [-8,-3,-10 :: Int])
+```
+
+```text
+Just (-3)
+```
+
+</HaskellTryIt>
+
+A real seed permits -3 as the greatest value. Show parenthesises the negative payload of Just.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+maximumR :: Ord a => [a] -> Maybe a
+maximumR [] = Nothing
+maximumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y > best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print ((maximumR ([] :: [Int]), maximumR [7 :: Int]))
+```
+
+```text
+(Nothing,Just 7)
+```
+
+</HaskellTryIt>
+
+[] has no seed; the singleton finishes immediately after seeding.
+
+### Worked variation: Ties and ordered strings
+
+Ties and ordered strings changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+maximumR :: Ord a => [a] -> Maybe a
+maximumR [] = Nothing
+maximumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y > best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print ((maximumR [4,4,1 :: Int], maximumR ["ant","zoo","bee"]))
+```
+
+```text
+(Just 4,Just "zoo")
+```
+
+</HaskellTryIt>
+
+Ties keep best; lexicographic comparison chooses zoo.
+
+### Exam question: safe maximum: use a real seed (6 marks)
+
+Write a recursive safe maximum without maximum, sort or a fixed numeric seed. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Handle [] publicly. For a non-empty list seed from x, then consume xs while retaining the greatest candidate so far.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+maximumR :: Ord a => [a] -> Maybe a
+maximumR [] = Nothing
+maximumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y > best = go y ys
+      | otherwise = go best ys
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+maximumR [-8,-3,-10]
+= Just (go (-8) [-3,-10])    -- seed from input
+= Just (go (-3) [-10])       -- replace
+= Just (go (-3) [])          -- retain
+= Just (-3)                  -- base
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+A zero seed invents Just 0 on [-8,-3]. Using head before handling [] reintroduces partiality. Without Ord a the polymorphic comparison has no promised ordering support.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Give a test distinguishing a real seed from a zero seed.
+
+<details>
+<summary>Answer</summary>
+
+[-8,-3] must give Just (-3), whereas zero-seeding produces an absent value, 0.
+
+</details>
+
+### Other ways to express the requirement
+
+A tail-first recursive maximum can obtain a Maybe answer for xs, use x if that answer is Nothing and otherwise compare x with its payload. The helper version makes the running invariant explicit. Without restrictions, check [] then use `Just (maximum xs)`.
+
+## 9. Safe minimum: reverse the comparison
+
+A minimum has the same non-empty requirement as a maximum but tracks the smallest consumed value. Zero is still an invalid invented seed: it would beat every all-positive input despite not occurring in the list.
+
+### Template and reading guide
+
+```haskell
+minimumR :: Ord a => [a] -> Maybe a
+minimumR [] = Nothing
+minimumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y < best = go y ys
+      | otherwise = go best ys
+```
+
+Use the first actual head as best. The invariant now says smallest consumed value. Replace only with a smaller candidate; consume the tail in both branches.
+
+### Worked variation: All positive
+
+All positive changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+minimumR :: Ord a => [a] -> Maybe a
+minimumR [] = Nothing
+minimumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y < best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print (minimumR [8,3,10 :: Int])
+```
+
+```text
+Just 3
+```
+
+</HaskellTryIt>
+
+Seed 8, replace it by 3, retain it against 10.
+
+### Worked variation: Negative candidate
+
+Negative candidate changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+minimumR :: Ord a => [a] -> Maybe a
+minimumR [] = Nothing
+minimumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y < best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print (minimumR [2,-4,0 :: Int])
+```
+
+```text
+Just (-4)
+```
+
+</HaskellTryIt>
+
+-4 replaces 2 and remains below zero.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+minimumR :: Ord a => [a] -> Maybe a
+minimumR [] = Nothing
+minimumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y < best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print ((minimumR ([] :: [Int]), minimumR [7 :: Int]))
+```
+
+```text
+(Nothing,Just 7)
+```
+
+</HaskellTryIt>
+
+No input means no seed; a singleton already supplies its minimum.
+
+### Worked variation: Ties and strings
+
+Ties and strings changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+minimumR :: Ord a => [a] -> Maybe a
+minimumR [] = Nothing
+minimumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y < best = go y ys
+      | otherwise = go best ys
+
+main :: IO ()
+main = print ((minimumR [2,2,5 :: Int], minimumR ["zoo","ant","bee"]))
+```
+
+```text
+(Just 2,Just "ant")
+```
+
+</HaskellTryIt>
+
+Equality retains the candidate; lexicographic comparison picks ant.
+
+### Exam question: safe minimum: reverse the comparison (6 marks)
+
+Adapt the safe maximum design to minimum and expose a zero-seed error. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Retain Nothing at []. Seed from the first head and change the replacement comparison from `>` to `<`. The rest of the structural design is unchanged.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+minimumR :: Ord a => [a] -> Maybe a
+minimumR [] = Nothing
+minimumR (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys)
+      | y < best = go y ys
+      | otherwise = go best ys
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+minimumR [8,3,10]
+= Just (go 8 [3,10])       -- seed
+= Just (go 3 [10])         -- smaller replaces
+= Just (go 3 [])           -- retain
+= Just 3                  -- base
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Returning Just 0 on [] fabricates an answer. Keeping > still computes a maximum. A very large Int sentinel also fails for a larger value and prevents the function working on other ordered types.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict minimumR [5,9] and explain why zero cannot be the initial candidate.
+
+<details>
+<summary>Answer</summary>
+
+Just 5. Zero is smaller but is not an input value, so it must not enter the candidate set.
+
+</details>
+
+### Other ways to express the requirement
+
+A tail-first Maybe minimum is also valid. Without a restriction, check [] then call minimum. A one-pass min/max function can carry two actual input seeds, updating one with `<` and the other with `>` at each head.
+
+## 10. Safe head: demand one cell
+
+Head needs a first element. The safe definition distinguishes empty from non-empty input and returns the existing first value. It needs no recursive call because no later position is requested; this is the stopping case of indexing at zero.
+
+### Template and reading guide
+
+```haskell
+headR :: [a] -> Maybe a
+headR [] = Nothing
+headR (x:_) = Just x
+```
+
+[] represents missing data; `(x:_)` exposes a head and ignores the rest. The existence of a cell is separate from its element value: an empty inner list can be a valid first element.
+
+### Worked variation: Ordinary head
+
+Ordinary head changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+headR :: [a] -> Maybe a
+headR [] = Nothing
+headR (x:_) = Just x
+
+main :: IO ()
+main = print (headR [8,5,3 :: Int])
+```
+
+```text
+Just 8
+```
+
+</HaskellTryIt>
+
+The first cons supplies 8; later cells do not affect it.
+
+### Worked variation: Empty input
+
+Empty input changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+headR :: [a] -> Maybe a
+headR [] = Nothing
+headR (x:_) = Just x
+
+main :: IO ()
+main = print (headR ([] :: [Int]))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+There is no first cons cell.
+
+### Worked variation: Negative singleton
+
+Negative singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+headR :: [a] -> Maybe a
+headR [] = Nothing
+headR (x:_) = Just x
+
+main :: IO ()
+main = print (headR [-2 :: Int])
+```
+
+```text
+Just (-2)
+```
+
+</HaskellTryIt>
+
+The sole element is the head; Show parenthesises its negative payload.
+
+### Worked variation: Nested list element
+
+Nested list element changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+headR :: [a] -> Maybe a
+headR [] = Nothing
+headR (x:_) = Just x
+
+main :: IO ()
+main = print (headR [[],[1,2 :: Int]])
+```
+
+```text
+Just []
+```
+
+</HaskellTryIt>
+
+The outer list is non-empty and its first element happens to be [].
+
+### Exam question: safe head: demand one cell (6 marks)
+
+Write safe head and explain why head [[]] has data whereas head [] does not. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Inspect the outer list. [] has no first cell; a cons has x regardless of whether x itself is an empty list. No recursive step is needed.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+headR :: [a] -> Maybe a
+headR [] = Nothing
+headR (x:_) = Just x
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+headR [[],[1,2]]
+= Just []                  -- cons case, x = []
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Rejecting an empty first inner list confuses element content with outer shape. The partial definition `firstOnly (x:_) = x` lacks an empty equation; demanding firstOnly [] produces `Non-exhaustive patterns`.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Compare headR "" and headR "x".
+
+<details>
+<summary>Answer</summary>
+
+Nothing and Just 'x'. A String's head is one Char, not a String.
+
+</details>
+
+### Other ways to express the requirement
+
+Prelude head returns an unwrapped element and is partial on []. A safe index at zero selects the same element but can also return its position. Later cells need not be demanded; Lazy Evaluation explains why structural inspection does not force all elements.
+
+## 11. Safe tail: singleton success can be empty
+
+Tail removes one existing first cell and returns the remainder. Empty input has no removable cell. A singleton does have one and its remainder is a valid empty list, so absence and a successful empty result must differ.
+
+### Template and reading guide
+
+```haskell
+tailR :: [a] -> Maybe [a]
+tailR [] = Nothing
+tailR (_:xs) = Just xs
+```
+
+xs is the entire remaining list, not the second element. Return Just xs for every cons, even when xs is []. Only the empty outer input returns Nothing.
+
+### Worked variation: Ordinary tail
+
+Ordinary tail changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+tailR :: [a] -> Maybe [a]
+tailR [] = Nothing
+tailR (_:xs) = Just xs
+
+main :: IO ()
+main = print (tailR [8,5,3 :: Int])
+```
+
+```text
+Just [5,3]
+```
+
+</HaskellTryIt>
+
+Removing the first cell exposes the complete suffix [5,3].
+
+### Worked variation: Empty input
+
+Empty input changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+tailR :: [a] -> Maybe [a]
+tailR [] = Nothing
+tailR (_:xs) = Just xs
+
+main :: IO ()
+main = print (tailR ([] :: [Int]))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+No first cell can be removed.
+
+### Worked variation: Singleton
+
+Singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+tailR :: [a] -> Maybe [a]
+tailR [] = Nothing
+tailR (_:xs) = Just xs
+
+main :: IO ()
+main = print (tailR [7 :: Int])
+```
+
+```text
+Just []
+```
+
+</HaskellTryIt>
+
+A head exists, and its removal successfully leaves [].
+
+### Worked variation: String and nested list
+
+String and nested list changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+tailR :: [a] -> Maybe [a]
+tailR [] = Nothing
+tailR (_:xs) = Just xs
+
+main :: IO ()
+main = print ((tailR "ab", tailR [[],[1 :: Int]]))
+```
+
+```text
+(Just "b",Just [[1]])
+```
+
+</HaskellTryIt>
+
+The remainder keeps its outer list type, whether String or a list of lists.
+
+### Exam question: safe tail: singleton success can be empty (6 marks)
+
+Write safe tail and distinguish a valid empty remainder from failure. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use Nothing only for an originally empty list. A cons pattern returns Just xs immediately, without recursion.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+tailR :: [a] -> Maybe [a]
+tailR [] = Nothing
+tailR (_:xs) = Just xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+tailR [7]
+= Just []                  -- cons case; xs = []
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Returning Nothing for [_] rejects a valid remainder. Returning Just x gives an element rather than a list. A partial tail definition without [] fails with `Non-exhaustive patterns` when the missing case is demanded.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Compare tailR [] with dropR 1 [] under their stated contracts.
+
+<details>
+<summary>Answer</summary>
+
+Nothing versus []. Safe tail requires a removable cell; drop removes up to one, so removing none is valid.
+
+</details>
+
+### Other ways to express the requirement
+
+Prelude tail is partial on []; `drop 1` clips and therefore loses the failure distinction. Returning `(x:xs)` would preserve the head and implement neither tail nor drop-one.
+
+## 12. Safe last: recurse to the singleton
+
+Last must reach the end of a finite list. Singleton is the successful base because its sole element is last; empty has no last. A longer list can discard its current head and ask the same question of its tail.
+
+### Template and reading guide
+
+```haskell
+lastR :: [a] -> Maybe a
+lastR [] = Nothing
+lastR [x] = Just x
+lastR (_:xs) = lastR xs
+```
+
+Place [x] before the general cons equation. Earlier patterns exclude empty and singleton inputs from the final equation, so its tail is non-empty. Removing one head moves towards the singleton base.
+
+### Worked variation: Ordinary last
+
+Ordinary last changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+lastR :: [a] -> Maybe a
+lastR [] = Nothing
+lastR [x] = Just x
+lastR (_:xs) = lastR xs
+
+main :: IO ()
+main = print (lastR [8,5,3 :: Int])
+```
+
+```text
+Just 3
+```
+
+</HaskellTryIt>
+
+Discard 8 then 5; singleton [3] supplies the result.
+
+### Worked variation: Empty input
+
+Empty input changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+lastR :: [a] -> Maybe a
+lastR [] = Nothing
+lastR [x] = Just x
+lastR (_:xs) = lastR xs
+
+main :: IO ()
+main = print (lastR ([] :: [Int]))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+There is no final cell.
+
+### Worked variation: Negative singleton
+
+Negative singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+lastR :: [a] -> Maybe a
+lastR [] = Nothing
+lastR [x] = Just x
+lastR (_:xs) = lastR xs
+
+main :: IO ()
+main = print (lastR [-2 :: Int])
+```
+
+```text
+Just (-2)
+```
+
+</HaskellTryIt>
+
+The successful base returns the sole element.
+
+### Worked variation: Characters and nested elements
+
+Characters and nested elements changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+lastR :: [a] -> Maybe a
+lastR [] = Nothing
+lastR [x] = Just x
+lastR (_:xs) = lastR xs
+
+main :: IO ()
+main = print ((lastR "abc", lastR [[1 :: Int],[]]))
+```
+
+```text
+(Just 'c',Just [])
+```
+
+</HaskellTryIt>
+
+The String ends in Char c; the outer nested list ends in an existing empty list.
+
+### Exam question: safe last: recurse to the singleton (6 marks)
+
+Implement safe last without last, reverse, head or length, and justify the singleton base. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use [] for absence and [x] for success. Discard one head for longer input and recurse on the shorter tail.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+lastR :: [a] -> Maybe a
+lastR [] = Nothing
+lastR [x] = Just x
+lastR (_:xs) = lastR xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+lastR [8,5,3]
+= lastR [5,3]           -- longer list
+= lastR [3]             -- longer list
+= Just 3                -- singleton success
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Without the singleton equation every finite input reaches Nothing. Putting the general cons equation first hides that successful base. A partial last definition without [] fails when a final value is requested from empty input.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Why does lastR [1,2] not return Just 1?
+
+<details>
+<summary>Answer</summary>
+
+The initial list has at least two elements, so 1 is not last. The recursive call on [2] reaches singleton success.
+
+</details>
+
+### Other ways to express the requirement
+
+A seeded helper can retain the latest seen value and replace it at every head, returning it at exhaustion. Prelude last is partial on []. Unlike head, last must inspect the entire spine and cannot reach the end of an infinite list.
+
+## 13. Safe init: retain all but the final cell
+
+Init removes one required final element. Empty input fails, while a singleton succeeds with an empty prefix. Longer lists retain the current head and recursively remove the final element from the tail.
+
+### Template and reading guide
+
+```haskell
+initR :: [a] -> Maybe [a]
+initR [] = Nothing
+initR [_] = Just []
+initR (x:xs) = case initR xs of
+  Nothing -> Nothing
+  Just rest -> Just (x:rest)
+```
+
+The singleton base removes exactly one final cell. The longer equation adds x to the returned prefix. Nothing propagation is exhaustive, although xs is non-empty in this branch on finite defined input.
+
+### Worked variation: Ordinary init
+
+Ordinary init changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+initR :: [a] -> Maybe [a]
+initR [] = Nothing
+initR [_] = Just []
+initR (x:xs) = case initR xs of
+  Nothing -> Nothing
+  Just rest -> Just (x:rest)
+
+main :: IO ()
+main = print (initR [8,5,3 :: Int])
+```
+
+```text
+Just [8,5]
+```
+
+</HaskellTryIt>
+
+Singleton [3] gives Just []; returning calls prepend 5 then 8.
+
+### Worked variation: Empty input
+
+Empty input changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+initR :: [a] -> Maybe [a]
+initR [] = Nothing
+initR [_] = Just []
+initR (x:xs) = case initR xs of
+  Nothing -> Nothing
+  Just rest -> Just (x:rest)
+
+main :: IO ()
+main = print (initR ([] :: [Int]))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+There is no final element to remove.
+
+### Worked variation: Singleton success
+
+Singleton success changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+initR :: [a] -> Maybe [a]
+initR [] = Nothing
+initR [_] = Just []
+initR (x:xs) = case initR xs of
+  Nothing -> Nothing
+  Just rest -> Just (x:rest)
+
+main :: IO ()
+main = print (initR [7 :: Int])
+```
+
+```text
+Just []
+```
+
+</HaskellTryIt>
+
+Removing the one final cell leaves a valid empty prefix.
+
+### Worked variation: String and nested element
+
+String and nested element changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+initR :: [a] -> Maybe [a]
+initR [] = Nothing
+initR [_] = Just []
+initR (x:xs) = case initR xs of
+  Nothing -> Nothing
+  Just rest -> Just (x:rest)
+
+main :: IO ()
+main = print ((initR "abc", initR [[],[1 :: Int]]))
+```
+
+```text
+(Just "ab",Just [[]])
+```
+
+</HaskellTryIt>
+
+All outer elements except the last are preserved, including an empty inner list.
+
+### Exam question: safe init: retain all but the final cell (6 marks)
+
+Implement safe init without init, take, length or reverse. Explain the singleton result. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Return Nothing for []; Just [] for [_]. On longer input solve init for the tail and prepend the current head to its successful prefix.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+initR :: [a] -> Maybe [a]
+initR [] = Nothing
+initR [_] = Just []
+initR (x:xs) = case initR xs of
+  Nothing -> Nothing
+  Just rest -> Just (x:rest)
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+initR [8,5,3]
+= Just (8:rest1)       -- initR [5,3] = Just rest1
+initR [5,3]
+= Just (5:rest2)       -- initR [3] = Just rest2
+initR [3] = Just []    -- remove final cell
+initR [5,3] = Just [5]
+initR [8,5,3] = Just [8,5]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Retaining the singleton head keeps the element meant to be removed. Returning Nothing on singleton confuses success with absence. A partial init demands a missing final cell on [] and fails there.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Compare initR [[],[]] with initR ([] :: [[Int]]).
+
+<details>
+<summary>Answer</summary>
+
+`Just [[]]` and `Nothing`. The first outer list has two real elements and removing its final one leaves one empty inner list.
+
+</details>
+
+### Other ways to express the requirement
+
+Prelude init is partial on []. `take (length xs - 1) xs` agrees on finite non-empty input but returns [] on [] under take's clipping policy, so the failure contract differs. A two-head lookahead pattern can also expose the singleton boundary.
+
+## 14. Two-list pairing and arithmetic: stop at the shorter
+
+Pairwise processing consumes one head from each input and stops when either ends. Pairing may combine different element types; adding or subtracting needs compatible numeric values. This is a different unequal-list policy from interleave retaining leftovers.
+
+### Template and reading guide
+
+```haskell
+zipR :: [a] -> [b] -> [(a,b)]
+zipR [] _ = []
+zipR _ [] = []
+zipR (x:xs) (y:ys) = (x,y) : zipR xs ys
+
+combineR :: (a -> b -> c) -> [a] -> [b] -> [c]
+combineR _ [] _ = []
+combineR _ _ [] = []
+combineR f (x:xs) (y:ys) = f x y : combineR f xs ys
+```
+
+Both exhaustion directions have bases. Each output consumes one cell from each input, so result length is the shorter input length. f may build a pair or calculate one result from two heads.
+
+### Worked variation: Different types with equal lengths
+
+Different types with equal lengths changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+zipR :: [a] -> [b] -> [(a,b)]
+zipR [] _ = []
+zipR _ [] = []
+zipR (x:xs) (y:ys) = (x,y) : zipR xs ys
+
+combineR :: (a -> b -> c) -> [a] -> [b] -> [c]
+combineR _ [] _ = []
+combineR _ _ [] = []
+combineR f (x:xs) (y:ys) = f x y : combineR f xs ys
+
+main :: IO ()
+main = print (zipR [1,2 :: Int] "ab")
+```
+
+```text
+[(1,'a'),(2,'b')]
+```
+
+</HaskellTryIt>
+
+Pair each integer with the corresponding character.
+
+### Worked variation: Left shorter: addition
+
+Left shorter: addition changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+zipR :: [a] -> [b] -> [(a,b)]
+zipR [] _ = []
+zipR _ [] = []
+zipR (x:xs) (y:ys) = (x,y) : zipR xs ys
+
+combineR :: (a -> b -> c) -> [a] -> [b] -> [c]
+combineR _ [] _ = []
+combineR _ _ [] = []
+combineR f (x:xs) (y:ys) = f x y : combineR f xs ys
+
+main :: IO ()
+main = print ((zipR [1 :: Int] [10,20,30 :: Int], combineR (+) [1 :: Int] [10,20,30]))
+```
+
+```text
+([(1,10)],[11])
+```
+
+</HaskellTryIt>
+
+Only one pair and one paired addition are possible; unpaired right values are excluded.
+
+### Worked variation: Right shorter: subtraction
+
+Right shorter: subtraction changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+zipR :: [a] -> [b] -> [(a,b)]
+zipR [] _ = []
+zipR _ [] = []
+zipR (x:xs) (y:ys) = (x,y) : zipR xs ys
+
+combineR :: (a -> b -> c) -> [a] -> [b] -> [c]
+combineR _ [] _ = []
+combineR _ _ [] = []
+combineR f (x:xs) (y:ys) = f x y : combineR f xs ys
+
+main :: IO ()
+main = print ((zipR [10,20,30 :: Int] [1,2 :: Int], combineR (-) [10,20,30 :: Int] [1,2]))
+```
+
+```text
+([(10,1),(20,2)],[9,18])
+```
+
+</HaskellTryIt>
+
+Two pairs are possible. Subtraction gives 10-1 then 20-2; no partner exists for 30.
+
+### Worked variation: Either side empty
+
+Either side empty changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+zipR :: [a] -> [b] -> [(a,b)]
+zipR [] _ = []
+zipR _ [] = []
+zipR (x:xs) (y:ys) = (x,y) : zipR xs ys
+
+combineR :: (a -> b -> c) -> [a] -> [b] -> [c]
+combineR _ [] _ = []
+combineR _ _ [] = []
+combineR f (x:xs) (y:ys) = f x y : combineR f xs ys
+
+main :: IO ()
+main = print ((zipR ([] :: [Int]) "ab", combineR (+) [1 :: Int] [], combineR (+) ([] :: [Int]) [1]))
+```
+
+```text
+([],[],[])
+```
+
+</HaskellTryIt>
+
+Each empty-side base stops before trying to extract the missing head.
+
+### Exam question: two-list pairing and arithmetic: stop at the shorter (6 marks)
+
+Implement pairwise subtraction recursively and test both unequal-list cases. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Specialise the two-list combine template to (-). Stop on either empty input; otherwise emit x-y and consume both tails. Argument order matters because subtraction is not commutative.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+zipR :: [a] -> [b] -> [(a,b)]
+zipR [] _ = []
+zipR _ [] = []
+zipR (x:xs) (y:ys) = (x,y) : zipR xs ys
+
+combineR :: (a -> b -> c) -> [a] -> [b] -> [c]
+combineR _ [] _ = []
+combineR _ _ [] = []
+combineR f (x:xs) (y:ys) = f x y : combineR f xs ys
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+combineR (-) [10,20,30] [1,2]
+= 9 : combineR (-) [20,30] [2]
+= 9 : (18 : combineR (-) [30] [])
+= 9 : (18 : [])             -- right input exhausted
+= [9,18]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Handling only both-empty input leaves unequal lists uncovered. Computing y-x reverses the differences. Carrying raw leftovers violates the shortest-input policy and may not even have the required output element type.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict zipR [1,2,3] "x" and combineR (+) [1,2] [10,20,30].
+
+<details>
+<summary>Answer</summary>
+
+`[(1,'x')]` and `[11,22]`. One pair or two sums are possible, respectively.
+
+</details>
+
+### Other ways to express the requirement
+
+Library zip and zipWith f express these operations. Their higher-order use is taught in Zip and ZipWith. A single tuple projection such as `second (_,y) = y` requires no recursion; an outer list supplies repeated structure when collecting components from many pairs.
+
+## 15. Missing data and partial operations
+
+The safe algorithms locate boundaries without deliberately crashing a runnable example. Prelude head, tail, last, init and (!!) return unwrapped results and have smaller valid domains. For finite defined input:
+
+| Operation | Data required | Boundary |
+|---|---|---|
+| head xs | a first cell, and its value when the result is demanded | head [] has no head |
+| tail xs | one cell to remove | tail [] fails; tail [x] returns [] |
+| last xs | a final cell found by traversing the spine | last [] fails; an infinite spine has no end |
+| init xs | a final cell to remove, reached as the result is consumed | init [] fails; init [x] returns [] |
+| xs !! n | non-negative n and a cell after n skips | negative, exactly length and larger indices fail |
+
+The spine is the chain of cons cells; inspecting it does not automatically evaluate every element. Length needs the spine; printing a selected head also needs that value. See [Lazy Evaluation](/docs/sem3/csi243/10-reasoning-revision/notes/lazy-evaluation) for partial demands and undefined values. A produced prefix of an init-like algorithm may be available before reaching the end, but its entire finite result still needs the final boundary.
+
+This plain fence deliberately omits the empty case:
+
+```haskell
+-- Deliberately partial: demand firstOnly [] to expose missing data.
+firstOnly :: [a] -> a
+firstOnly (x:_) = x
+```
+
+The key runtime phrase is `Non-exhaustive patterns`. With `-Wincomplete-patterns`, GHC can warn `Pattern match(es) are non-exhaustive`. Adding an explicit error at [] explains failure but does not make a partial function total.
+
+A type error is a separate category:
+
+```haskell
+-- Deliberately wrong: cons makes a list, but the result promises Int.
+badCount :: [Int] -> Int
+badCount [] = 0
+badCount (_:xs) = 1 : badCount xs
+```
+
+GHC's key diagnostic phrase is `Couldn't match`. Repair the step to `1 + badCount xs`. The compiler catches incompatible result types; it does not infer that the prose required a different comparison.
+
+## 16. Independent mixed practice
+
+Attempt these without the templates, then compare the reasoning.
+
+1. Design a one-pass min/max pair, with Nothing for []. What seeds are valid?
+2. Explain how an interleave that drops leftovers differs from the retaining policy here.
+3. Must every list function have a recursive step? Contrast head with last.
+4. A split calls itself twice to obtain fst and snd separately. Rewrite it to name one returned pair.
+5. Give a list-first membership function and collect second components from a list of pairs.
+
+<details>
+<summary>Answers and reasoning</summary>
+
+1. Seed both candidates with the first real head. Update the lower candidate with a smaller value and the upper with a greater one. Their invariant refers to the consumed prefix; zero is not a valid invented candidate.
+2. Either policy can be specified, but this lesson's interleave retains all remaining elements. Its result length is the sum of input lengths; a truncating interleave emits twice the shorter length.
+3. No. Head needs only one cell; last must find a final cell and therefore consumes tails until singleton success.
+4. Bind `(front,back) = splitR (n-1) xs` once and return `(x:front,back)`. This expresses sharing of the recursive pair.
+5. Change argument order consistently; project the tuple inside the outer list recursion:
+
+```haskell
+hasListFirst :: Eq a => [a] -> a -> Bool
+hasListFirst [] _ = False
+hasListFirst (x:xs) target = x == target || hasListFirst xs target
+
+secondsR :: [(a,b)] -> [b]
+secondsR [] = []
+secondsR ((_,y):rest) = y : secondsR rest
+```
+
+A single pair projection or tuple swap needs only a tuple pattern; the outer list supplies the repeated structure here.
+
+</details>
+
+Use [List_Append.hs](/files/sem3/csi243/downloads/completed-examples/List_Append.hs), [Lab2_ConcatLists.hs](/files/sem3/csi243/downloads/completed-examples/Lab2_ConcatLists.hs), [List_Reverse.hs](/files/sem3/csi243/downloads/completed-examples/List_Reverse.hs), [List_Maximum.hs](/files/sem3/csi243/downloads/completed-examples/List_Maximum.hs) and [List_Membership.hs](/files/sem3/csi243/downloads/completed-examples/List_Membership.hs) for independent attempts. Try the [Reverse starter](/files/sem3/csi243/downloads/starter-code/List_Reverse.hs) first. Checking sortedness does not sort; the algorithms for rearranging data belong to Sorting and Merging.
+
+## Summary
+
+<Callout type="key" title="Remember">
+Prefix functions stop at one boundary; filters continue after rejection. Two-list algorithms need both exhaustion cases and a leftovers policy. Reverse carries a reversed prefix; extrema carry real input candidates. Missing input differs from a successful empty result: tail and init succeed on singletons, and a selected head or last can itself be an empty inner list.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="Why does takeWhileR (> 0) [2,0,4] omit 4?">
+    Zero ends the initial passing run. This prefix operation stops rather than searching for later matches.
+  </CheckQuestion>
+
+  <CheckQuestion question="What happens when one interleave input ends?">
+    The stated policy controls the answer. Here the remaining other list is returned; the pairwise algorithm instead stops.
+  </CheckQuestion>
+
+  <CheckQuestion question="Why seed a maximum with an actual input value?">
+    Zero invents an answer for all-negative input. A candidate must belong to the consumed prefix.
+  </CheckQuestion>
+
+  <CheckQuestion question="Why is tailR [7] Just [] but tailR [] Nothing?">
+    Singleton has a removable head and valid empty remainder. Empty input has no cell to remove.
+  </CheckQuestion>
+
+  <CheckQuestion question="What accumulator follows consumption of the prefix [4,5]?">
+    `[5,4]`. The remaining input is separate and each later head is prepended.
+  </CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Tuples](/docs/sem3/csi243/06-lists-tuples/notes/tuples).

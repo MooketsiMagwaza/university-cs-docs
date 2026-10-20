@@ -1,0 +1,2023 @@
+---
+title: "More Higher-Order Functions"
+description: "Trace iteration, flattening, splitting, three-list operations, seedless scans, stopping rules and lists of functions by hand."
+---
+
+The next set of functions combines familiar ideas: update a state repeatedly, turn each input into several outputs, split a list, or keep functions in a list. Use the same pencil-and-paper method as in Applying higher-order functions by hand: one substitution or primitive reduction per line, with its equation named.
+
+<LearningObjectives items={[
+  'Trace finite observations of iterate and distinguish copying from updating',
+  'Explain concatMap and choose between span, break and partition',
+  'Trace zip3, zipWith3 and scans without explicit seeds',
+  'Evaluate until by testing the initial state before updating',
+  'Apply and compose a list of functions, stating the result types',
+  'Choose the appropriate higher-order function from a specification',
+]} />
+
+<Prerequisites items={[
+  'Applying higher-order functions by hand: labelled equations and lambda substitution',
+  'List constructors, function types, tuples, sections, composition and dollar',
+]} />
+
+A template uses descriptive placeholders such as `update` or `predicate`: replace them by the function given in the question. LAM replaces a parameter by its argument; OP changes prefix operator application to infix notation; SEC-R inserts an argument into a right section. IF-T and IF-F select the branch after the test has been calculated. List and string notation only change spelling. A let-substitution replaces a local name by its value; a let pair match binds both tuple fields. Error messages below are diagnostic excerpts rather than complete compiler transcripts, which vary with GHC version.
+
+These are value calculations for finite observations, not a specification of the compiler's internal evaluation order. In particular, infinite values must be observed finitely.
+
+## 1. Repeated updates with `iterate`
+
+`iterate` produces an unbounded list starting with a seed. Each following value is obtained by applying the update function once to the previous value. Observe a finite prefix with `take`.
+
+**Template:** `take count (iterate update seed)`. `count` limits the observation, `update` advances one step, and `seed` is the first value.
+
+Labelled equations for paper traces:
+
+```text
+iterate :: (a -> a) -> a -> [a]
+iterate f x = x : iterate f (f x) -- IT
+take n xs | n <= 0 = [] -- T0
+take n [] = [] -- T1
+take n (x:xs) = x : take (n-1) xs -- T2, for n > 0
+```
+
+### A section advances the state
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 (iterate (+2) 1))
+```
+
+```text
+[1,3,5]
+```
+
+</HaskellTryIt>
+
+```text
+take 3 (iterate (+2) 1) -- given call
+= take 3 (1 : iterate (+2) ((+2) 1)) -- IT: x := 1
+= 1 : take (3-1) (iterate (+2) ((+2) 1)) -- T2
+= 1 : take 2 (iterate (+2) ((+2) 1)) -- subtraction
+= 1 : take 2 (iterate (+2) (1 + 2)) -- SEC-R
+= 1 : take 2 (iterate (+2) 3) -- addition
+= 1 : take 2 (3 : iterate (+2) ((+2) 3)) -- IT: x := 3
+= 1 : (3 : take (2-1) (iterate (+2) ((+2) 3))) -- T2
+= 1 : (3 : take 1 (iterate (+2) ((+2) 3))) -- subtraction
+= 1 : (3 : take 1 (iterate (+2) (3 + 2))) -- SEC-R
+= 1 : (3 : take 1 (iterate (+2) 5)) -- addition
+= 1 : (3 : take 1 (5 : iterate (+2) ((+2) 5))) -- IT: x := 5
+= 1 : (3 : (5 : take (1-1) (iterate (+2) ((+2) 5)))) -- T2
+= 1 : (3 : (5 : take 0 (iterate (+2) ((+2) 5)))) -- subtraction
+= 1 : (3 : (5 : [])) -- T0: no further update demanded
+= [1,3,5] -- list notation
+```
+
+The seed is included; it is not transformed before the first output.
+
+### A lambda changing strings
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 2 (iterate (\s -> 'x' : s) ""))
+```
+
+```text
+["","x"]
+```
+
+</HaskellTryIt>
+
+```text
+take 2 (iterate (\s -> 'x' : s) "") -- given call
+= take 2 ("" : iterate (\s -> 'x' : s) ((\s -> 'x' : s) "")) -- IT
+= "" : take (2-1) (iterate (\s -> 'x' : s) ((\s -> 'x' : s) "")) -- T2
+= "" : take 1 (iterate (\s -> 'x' : s) ((\s -> 'x' : s) "")) -- subtraction
+= "" : take 1 (iterate (\s -> 'x' : s) ('x' : "")) -- LAM: s := ""
+= "" : take 1 (iterate (\s -> 'x' : s) "x") -- string notation
+= "" : take 1 ("x" : iterate (\s -> 'x' : s) ((\s -> 'x' : s) "x")) -- IT
+= "" : ("x" : take (1-1) (iterate (\s -> 'x' : s) ((\s -> 'x' : s) "x"))) -- T2
+= "" : ("x" : take 0 (iterate (\s -> 'x' : s) ((\s -> 'x' : s) "x"))) -- subtraction
+= "" : ("x" : []) -- T0
+= ["","x"] -- list notation
+```
+
+The empty string is an actual first value.
+
+### A zero-length observation
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 0 (iterate (*2) 3))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+take 0 (iterate (*2) 3) -- given call
+= [] -- T0: iterate is not demanded
+```
+
+An empty observation need not even start the iteration.
+
+**Common error.** Trying to print the whole `iterate (+1) 0` does not finish, so there is no finite output transcript. Limit it with `take`; this is a termination issue, not a type error.
+
+**Practice with answer.** `take 1 (iterate (*2) 7)` is `[7]`: IT, T2, subtraction, T0, list notation. The seed is the only observation.
+
+| Observation index | State | Next update, if demanded |
+|---|---|---|
+| `0` | `1` | `1 + 2 = 3` |
+| `1` | `3` | `3 + 2 = 5` |
+| `2` | `5` | not needed by `take 3` |
+
+## 2. Producing and flattening lists with `concatMap`
+
+`concatMap` applies a function that returns a list to each input, then joins those result lists in input order. Unlike `map`, it does not keep a separate outer list around each result.
+
+**Template:** `concatMap makeList inputList`. `makeList` can return zero, one or many elements for each input.
+
+Labelled equations for paper traces:
+
+```text
+concatMap :: (a -> [b]) -> [a] -> [b]
+concatMap f [] = [] -- CM0
+concatMap f (x:xs) = f x ++ concatMap f xs -- CM1
+[] ++ ys = ys -- A0
+(x:xs) ++ ys = x : (xs ++ ys) -- A1
+```
+
+### A lambda duplicates a value
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (concatMap (\x -> [x,x]) [2])
+```
+
+```text
+[2,2]
+```
+
+</HaskellTryIt>
+
+```text
+concatMap (\x -> [x,x]) [2] -- given call
+= (\x -> [x,x]) 2 ++ concatMap (\x -> [x,x]) [] -- CM1
+= [2,2] ++ concatMap (\x -> [x,x]) [] -- LAM: x := 2
+= 2 : ([2] ++ concatMap (\x -> [x,x]) []) -- A1
+= 2 : (2 : ([] ++ concatMap (\x -> [x,x]) [])) -- A1
+= 2 : (2 : concatMap (\x -> [x,x]) []) -- A0
+= 2 : (2 : []) -- CM0
+= [2,2] -- list notation
+```
+
+One input can contribute more than one output.
+
+### A partially applied function
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (concatMap (replicate 2) "ab")
+```
+
+```text
+"aabb"
+```
+
+</HaskellTryIt>
+
+```text
+concatMap (replicate 2) "ab" -- given call
+= replicate 2 'a' ++ concatMap (replicate 2) "b" -- CM1
+= ('a' : replicate (2-1) 'a') ++ concatMap (replicate 2) "b" -- REP1
+= ('a' : replicate 1 'a') ++ concatMap (replicate 2) "b" -- subtraction
+= ('a' : ('a' : replicate (1-1) 'a')) ++ concatMap (replicate 2) "b" -- REP1
+= ('a' : ('a' : replicate 0 'a')) ++ concatMap (replicate 2) "b" -- subtraction
+= ('a' : ('a' : [])) ++ concatMap (replicate 2) "b" -- REP0
+= 'a' : (['a'] ++ concatMap (replicate 2) "b") -- A1
+= 'a' : ('a' : ([] ++ concatMap (replicate 2) "b")) -- A1
+= 'a' : ('a' : concatMap (replicate 2) "b") -- A0
+= 'a' : ('a' : (replicate 2 'b' ++ concatMap (replicate 2) "")) -- CM1
+= 'a' : ('a' : (('b' : replicate (2-1) 'b') ++ concatMap (replicate 2) "")) -- REP1
+= 'a' : ('a' : (('b' : replicate 1 'b') ++ concatMap (replicate 2) "")) -- subtraction
+= 'a' : ('a' : (('b' : ('b' : replicate (1-1) 'b')) ++ concatMap (replicate 2) "")) -- REP1
+= 'a' : ('a' : (('b' : ('b' : replicate 0 'b')) ++ concatMap (replicate 2) "")) -- subtraction
+= 'a' : ('a' : (('b' : ('b' : [])) ++ concatMap (replicate 2) "")) -- REP0
+= 'a' : ('a' : ('b' : (['b'] ++ concatMap (replicate 2) ""))) -- A1
+= 'a' : ('a' : ('b' : ('b' : ([] ++ concatMap (replicate 2) "")))) -- A1
+= 'a' : ('a' : ('b' : ('b' : concatMap (replicate 2) ""))) -- A0
+= 'a' : ('a' : ('b' : ('b' : []))) -- CM0
+= "aabb" -- string notation
+```
+
+The rule repeats each character twice. REP0 and REP1 are given in the replicate section below.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (concatMap (replicate 2) ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+concatMap (replicate 2) ([] :: [Int]) -- given call
+= [] -- CM0
+```
+
+No result lists are produced.
+
+**Common error.** `concatMap (+1) [1,2]` supplies a numeric rule where a list-producing rule is needed. GHC reports a type mismatch or a missing numeric instance for a list. Use `map (+1)` for one output per input, or a lambda returning a list.
+
+**Practice with answer.** `concatMap (replicate 0) [1,2]` is `[]`: both elements contribute empty lists, and A0 joins them without adding elements.
+
+## 3. Splitting an initial run with `span`
+
+`span` returns both the longest passing prefix and the remaining suffix. It stops at the first failure; it does not collect all matching elements from later positions.
+
+**Template:** `span predicate inputList`. The result is a pair `(passingPrefix, remainder)`.
+
+Labelled equations for paper traces:
+
+```text
+span :: (a -> Bool) -> [a] -> ([a],[a])
+span p [] = ([],[]) -- SP0
+span p (x:xs) =
+  if p x then let (ys,zs) = span p xs in (x:ys,zs)
+         else ([],x:xs) -- SP1
+```
+
+### A failure followed by another success
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (span (<3) [1,4,2])
+```
+
+```text
+([1],[4,2])
+```
+
+</HaskellTryIt>
+
+```text
+span (<3) [1,4,2] -- given call
+= if (<3) 1 then let (ys,zs) = span (<3) [4,2] in (1:ys,zs) else ([],[1,4,2]) -- SP1
+= if 1 < 3 then let (ys,zs) = span (<3) [4,2] in (1:ys,zs) else ([],[1,4,2]) -- SEC-R
+= if True then let (ys,zs) = span (<3) [4,2] in (1:ys,zs) else ([],[1,4,2]) -- comparison
+= let (ys,zs) = span (<3) [4,2] in (1:ys,zs) -- IF-T
+= let (ys,zs) = (if (<3) 4 then let (us,vs) = span (<3) [2] in (4:us,vs) else ([],[4,2])) in (1:ys,zs) -- SP1
+= let (ys,zs) = (if 4 < 3 then let (us,vs) = span (<3) [2] in (4:us,vs) else ([],[4,2])) in (1:ys,zs) -- SEC-R
+= let (ys,zs) = (if False then let (us,vs) = span (<3) [2] in (4:us,vs) else ([],[4,2])) in (1:ys,zs) -- comparison
+= let (ys,zs) = ([],[4,2]) in (1:ys,zs) -- IF-F
+= (1:[],[4,2]) -- let pair match: ys := [], zs := [4,2]
+= ([1],[4,2]) -- list notation
+```
+
+The later 2 belongs to the remainder, although it would pass the predicate.
+
+### A singleton passing a named predicate
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (span even [2])
+```
+
+```text
+([2],[])
+```
+
+</HaskellTryIt>
+
+```text
+span even [2] -- given call
+= if even 2 then let (ys,zs) = span even [] in (2:ys,zs) else ([],[2]) -- SP1
+= if True then let (ys,zs) = span even [] in (2:ys,zs) else ([],[2]) -- EVEN
+= let (ys,zs) = span even [] in (2:ys,zs) -- IF-T
+= let (ys,zs) = ([],[]) in (2:ys,zs) -- SP0
+= (2:[],[]) -- let pair match
+= ([2],[]) -- list notation
+```
+
+If every element passes, the remainder is empty.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (span even ([] :: [Int]))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+```text
+span even ([] :: [Int]) -- given call
+= ([],[]) -- SP0
+```
+
+Both parts are empty.
+
+**Common error.** Predicting `([1,2],[4])` for the first example confuses `span` with `partition`; both type-check, so there is no GHC diagnostic. Keep the single cut in the original list.
+
+**Practice with answer.** `span (<3) [4,1]` is `([],[4,1])`: SP1, section, comparison, IF-F; it stops at the first element.
+
+## 4. Splitting before a match with `break`
+
+`break` cuts a list just before its first matching element. The matching element belongs to the remainder. It is `span` with the predicate negated.
+
+**Template:** `break predicate inputList`. Keep a prefix while the predicate is false; stop when it becomes true.
+
+Labelled equations for paper traces:
+
+```text
+break :: (a -> Bool) -> [a] -> ([a],[a])
+break p xs = span (not . p) xs -- BR
+(f . g) x = f (g x) -- COMP
+not True = False -- NOT-T
+not False = True -- NOT-F
+```
+
+### Breaking at the first element
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (break even [2,3])
+```
+
+```text
+([],[2,3])
+```
+
+</HaskellTryIt>
+
+```text
+break even [2,3] -- given call
+= span (not . even) [2,3] -- BR
+= if (not . even) 2 then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- SP1
+= if not (even 2) then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- COMP
+= if not True then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- EVEN
+= if False then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- NOT-T
+= ([],[2,3]) -- IF-F
+```
+
+The matching 2 is included in the second part.
+
+### No matching element
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (break (>3) [1])
+```
+
+```text
+([1],[])
+```
+
+</HaskellTryIt>
+
+```text
+break (>3) [1] -- given call
+= span (not . (>3)) [1] -- BR
+= if (not . (>3)) 1 then let (ys,zs) = span (not . (>3)) [] in (1:ys,zs) else ([],[1]) -- SP1
+= if not ((>3) 1) then let (ys,zs) = span (not . (>3)) [] in (1:ys,zs) else ([],[1]) -- COMP
+= if not (1 > 3) then let (ys,zs) = span (not . (>3)) [] in (1:ys,zs) else ([],[1]) -- SEC-R
+= if not False then let (ys,zs) = span (not . (>3)) [] in (1:ys,zs) else ([],[1]) -- comparison
+= if True then let (ys,zs) = span (not . (>3)) [] in (1:ys,zs) else ([],[1]) -- NOT-F
+= let (ys,zs) = span (not . (>3)) [] in (1:ys,zs) -- IF-T
+= let (ys,zs) = ([],[]) in (1:ys,zs) -- SP0
+= (1:[],[]) -- let pair match
+= ([1],[]) -- list notation
+```
+
+An absent match leaves the whole finite input in the first part.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (break even ([] :: [Int]))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+```text
+break even ([] :: [Int]) -- given call
+= span (not . even) ([] :: [Int]) -- BR
+= ([],[]) -- SP0
+```
+
+No matching point exists.
+
+**Common error.** Discarding the matching element is a value error without a GHC diagnostic. Keep it at the front of the remainder. Use an explicit `drop 1` afterwards if a separator must be removed.
+
+**Practice with answer.** `break odd [1]` is `([],[1])`: BR, SP1, COMP, ODD, NOT-T, IF-F.
+
+## 5. Separating every element with `partition`
+
+`partition` sends every element to one of two lists: passing elements first, failing elements second. It preserves the original order within each part, and unlike `span` it examines the whole finite input.
+
+**Template:** `partition predicate inputList`. Import `partition` from `Data.List`; the result is a pair of lists.
+
+Labelled equations for paper traces:
+
+```text
+partition :: (a -> Bool) -> [a] -> ([a],[a])
+partition p [] = ([],[]) -- P0
+partition p (x:xs) =
+  let (ys,zs) = partition p xs
+  in if p x then (x:ys,zs) else (ys,x:zs) -- P1
+```
+
+### A match after a failure
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (partition)
+
+main :: IO ()
+main = print (partition even [1,2])
+```
+
+```text
+([2],[1])
+```
+
+</HaskellTryIt>
+
+```text
+partition even [1,2] -- given call
+= let (ys,zs) = partition even [2] in if even 1 then (1:ys,zs) else (ys,1:zs) -- P1
+= let (ys,zs) = partition even [2] in if False then (1:ys,zs) else (ys,1:zs) -- EVEN
+= let (ys,zs) = partition even [2] in (ys,1:zs) -- IF-F
+= let (ys,zs) = (let (us,vs) = partition even [] in if even 2 then (2:us,vs) else (us,2:vs)) in (ys,1:zs) -- P1
+= let (ys,zs) = (let (us,vs) = ([],[]) in if even 2 then (2:us,vs) else (us,2:vs)) in (ys,1:zs) -- P0
+= let (ys,zs) = (if even 2 then (2:[],[]) else ([],2:[])) in (ys,1:zs) -- let pair match
+= let (ys,zs) = (if True then (2:[],[]) else ([],2:[])) in (ys,1:zs) -- EVEN
+= let (ys,zs) = (2:[],[]) in (ys,1:zs) -- IF-T
+= (2:[],1:[]) -- let pair match
+= ([2],[1]) -- list notation
+```
+
+The first failed test does not stop the traversal.
+
+### A lambda on a singleton
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (partition)
+
+main :: IO ()
+main = print (partition (\x -> x > 0) [3])
+```
+
+```text
+([3],[])
+```
+
+</HaskellTryIt>
+
+```text
+partition (\x -> x > 0) [3] -- given call
+= let (ys,zs) = partition (\x -> x > 0) [] in if (\x -> x > 0) 3 then (3:ys,zs) else (ys,3:zs) -- P1
+= let (ys,zs) = ([],[]) in if (\x -> x > 0) 3 then (3:ys,zs) else (ys,3:zs) -- P0
+= if (\x -> x > 0) 3 then (3:[],[]) else ([],3:[]) -- let pair match
+= if 3 > 0 then (3:[],[]) else ([],3:[]) -- LAM: x := 3
+= if True then (3:[],[]) else ([],3:[]) -- comparison
+= (3:[],[]) -- IF-T
+= ([3],[]) -- list notation
+```
+
+All input values pass here.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (partition)
+
+main :: IO ()
+main = print (partition even ([] :: [Int]))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+```text
+partition even ([] :: [Int]) -- given call
+= ([],[]) -- P0
+```
+
+Both destinations are empty.
+
+**Common error.** Without `import Data.List (partition)`, GHC reports `Variable not in scope: partition`. Include the import at the top of a complete program.
+
+**Practice with answer.** `partition even [1]` is `([],[1])`: P1, P0, pair substitution, EVEN, IF-F, list notation.
+
+| Input element | Passes `even`? | Destination |
+|---|---|---|
+| `1` | `False` | second list |
+| `2` | `True` | first list |
+
+Every element has exactly one destination. The combined lengths equal the input length, although appending the two parts need not recover the original order.
+
+## 6. Retaining three fields with `zip3`
+
+`zip3` walks three lists at the same time and keeps a triple at each position. It stops at the shortest input.
+
+**Template:** `zip3 firstList secondList thirdList`. The three input element types may differ.
+
+Labelled equations for paper traces:
+
+```text
+zip3 :: [a] -> [b] -> [c] -> [(a,b,c)]
+zip3 [] ys zs = [] -- Z30
+zip3 xs [] zs = [] -- Z31
+zip3 xs ys [] = [] -- Z32
+zip3 (x:xs) (y:ys) (z:zs) = (x,y,z) : zip3 xs ys zs -- Z33
+```
+
+### Mixed types and unequal lengths
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip3 [1,2] "a" [True,False])
+```
+
+```text
+[(1,'a',True)]
+```
+
+</HaskellTryIt>
+
+```text
+zip3 [1,2] "a" [True,False] -- given call
+= (1,'a',True) : zip3 [2] "" [False] -- Z33: x := 1, y := 'a', z := True
+= (1,'a',True) : [] -- Z31
+= [(1,'a',True)] -- list notation
+```
+
+The second input determines the output length.
+
+### An empty third list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip3 [1] [True] ([] :: [Char]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+zip3 [1] [True] ([] :: [Char]) -- given call
+= [] -- Z32
+```
+
+No complete triple exists.
+
+### Three singleton lists
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip3 ["Ada"] [80] [True])
+```
+
+```text
+[("Ada",80,True)]
+```
+
+</HaskellTryIt>
+
+```text
+zip3 ["Ada"] [80] [True] -- given call
+= ("Ada",80,True) : zip3 [] [] [] -- Z33
+= ("Ada",80,True) : [] -- Z30
+= [("Ada",80,True)] -- list notation
+```
+
+A triple retains all three fields.
+
+**Common error.** Expecting a pair of a pair and a value confuses `zip3 xs ys zs` with `zip (zip xs ys) zs`. Both type-check but have different types and shapes; GHC gives no value-error diagnostic.
+
+**Practice with answer.** `zip3 ([] :: [Int]) "x" [True]` is `[]` by Z30.
+
+## 7. Combining three positions with `zipWith3`
+
+`zipWith3` applies a three-argument function to matching positions. It returns the results rather than the triples, and also stops at the shortest input.
+
+**Template:** `zipWith3 combine firstList secondList thirdList`. `combine` must accept one value from each list, in that order.
+
+Labelled equations for paper traces:
+
+```text
+zipWith3 :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWith3 f [] ys zs = [] -- W30
+zipWith3 f xs [] zs = [] -- W31
+zipWith3 f xs ys [] = [] -- W32
+zipWith3 f (x:xs) (y:ys) (z:zs) = f x y z : zipWith3 f xs ys zs -- W33
+```
+
+### A lambda with three substitutions
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zipWith3 (\x y z -> x + y * z) [1,9] [2] [3,8])
+```
+
+```text
+[7]
+```
+
+</HaskellTryIt>
+
+```text
+zipWith3 (\x y z -> x + y * z) [1,9] [2] [3,8] -- given call
+= (\x y z -> x + y * z) 1 2 3 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- W33
+= (\y z -> 1 + y * z) 2 3 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- LAM: x := 1
+= (\z -> 1 + 2 * z) 3 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- LAM: y := 2
+= (1 + 2 * 3) : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- LAM: z := 3
+= (1 + 6) : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- multiplication
+= 7 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- addition
+= 7 : [] -- W31
+= [7] -- list notation
+```
+
+Each list supplies one lambda parameter.
+
+### The tuple constructor
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zipWith3 (,,) [1] [True] "x")
+```
+
+```text
+[(1,True,'x')]
+```
+
+</HaskellTryIt>
+
+```text
+zipWith3 (,,) [1] [True] "x" -- given call
+= (,,) 1 True 'x' : zipWith3 (,,) [] [] "" -- W33
+= (1,True,'x') : zipWith3 (,,) [] [] "" -- tuple constructor application
+= (1,True,'x') : [] -- W30
+= [(1,True,'x')] -- list notation
+```
+
+Using `(,,)` recovers `zip3`.
+
+### An empty list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zipWith3 (\x y z -> x + y + z) [1] [2] [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+zipWith3 (\x y z -> x + y + z) [1] [2] [] -- given call
+= [] -- W32
+```
+
+The rule never receives three arguments.
+
+**Common error.** `zipWith3 (+)` gives a two-argument numeric function where a three-argument one is needed. GHC reports a type or numeric-instance mismatch. Use a three-parameter lambda.
+
+**Practice with answer.** `zipWith3 (,,) [] [True] "x"` is `[]` by W30; with a concrete first-list type such as `[Int]`, the result type is `[(Int,Bool,Char)]`.
+
+## 8. Left scans without an explicit seed: `scanl1`
+
+`scanl1` starts at the first element and records the successive left-fold accumulators. A non-empty input of length `n` gives `n` results. Unlike `foldl1`, the empty input is allowed and returns an empty list.
+
+**Template:** `scanl1 combine inputList`. The first element replaces the separate seed.
+
+Labelled equations for paper traces:
+
+```text
+scanl1 :: (a -> a -> a) -> [a] -> [a]
+scanl1 f [] = [] -- S110
+scanl1 f (x:xs) = scanl f x xs -- S111
+scanl f z [] = [z] -- SL0
+scanl f z (x:xs) = z : scanl f (f z x) xs -- SL1
+```
+
+### Subtraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl1 (-) [8,3,1])
+```
+
+```text
+[8,5,4]
+```
+
+</HaskellTryIt>
+
+```text
+scanl1 (-) [8,3,1] -- given call
+= scanl (-) 8 [3,1] -- S111
+= 8 : scanl (-) ((-) 8 3) [1] -- SL1
+= 8 : scanl (-) (8 - 3) [1] -- OP
+= 8 : scanl (-) 5 [1] -- subtraction
+= 8 : (5 : scanl (-) ((-) 5 1) []) -- SL1
+= 8 : (5 : scanl (-) (5 - 1) []) -- OP
+= 8 : (5 : scanl (-) 4 []) -- subtraction
+= 8 : (5 : [4]) -- SL0
+= [8,5,4] -- list notation
+```
+
+The first accumulator is 8, not zero.
+
+### A singleton
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl1 max [7])
+```
+
+```text
+[7]
+```
+
+</HaskellTryIt>
+
+```text
+scanl1 max [7] -- given call
+= scanl max 7 [] -- S111
+= [7] -- SL0
+```
+
+The combining function is not called.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl1 (+) ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+scanl1 (+) ([] :: [Int]) -- given call
+= [] -- S110
+```
+
+There is no first accumulator, so no entries are returned.
+
+**Common error.** Assuming the `1` suffix always means an empty-list exception confuses folds with scans. GHC prints `[]` for this empty scan; use S110.
+
+**Practice with answer.** `scanl1 (-) [9,2]` is `[9,7]`: S111, SL1, OP, subtraction, SL0, list notation.
+
+| Input consumed | Left accumulator | Output so far |
+|---|---|---|
+| `[8]` | `8` | `[8]` |
+| `[8,3]` | `5` | `[8,5]` |
+| `[8,3,1]` | `4` | `[8,5,4]` |
+
+## 9. Right scans without an explicit seed: `scanr1`
+
+`scanr1` starts at the last element and retains every right-fold result for non-empty suffixes. It returns `[]` on an empty input and preserves input length.
+
+**Template:** `scanr1 combine inputList`. The last element supplies the seed; no extra empty-suffix entry is present.
+
+Labelled equations for paper traces:
+
+```text
+scanr1 :: (a -> a -> a) -> [a] -> [a]
+scanr1 f [] = [] -- S120
+scanr1 f [x] = [x] -- S121
+scanr1 f (x:y:xs) =
+  let qs = scanr1 f (y:xs) in f x (head qs) : qs -- S122
+head (x:xs) = x -- HEAD
+```
+
+### Subtraction on suffixes
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanr1 (-) [8,3,1])
+```
+
+```text
+[6,2,1]
+```
+
+</HaskellTryIt>
+
+```text
+scanr1 (-) [8,3,1] -- given call
+= let qs = scanr1 (-) [3,1] in (-) 8 (head qs) : qs -- S122
+= let qs = (let rs = scanr1 (-) [1] in (-) 3 (head rs) : rs) in (-) 8 (head qs) : qs -- S122
+= let qs = (let rs = [1] in (-) 3 (head rs) : rs) in (-) 8 (head qs) : qs -- S121
+= let qs = (-) 3 (head [1]) : [1] in (-) 8 (head qs) : qs -- let substitution
+= let qs = (-) 3 1 : [1] in (-) 8 (head qs) : qs -- HEAD
+= let qs = (3 - 1) : [1] in (-) 8 (head qs) : qs -- OP
+= let qs = 2 : [1] in (-) 8 (head qs) : qs -- subtraction
+= (-) 8 (head (2 : [1])) : (2 : [1]) -- let substitution
+= (-) 8 2 : (2 : [1]) -- HEAD
+= (8 - 2) : (2 : [1]) -- OP
+= 6 : (2 : [1]) -- subtraction
+= [6,2,1] -- list notation
+```
+
+Check the suffix results independently: 8 - (3 - 1) = 6, 3 - 1 = 2, and the singleton gives 1.
+
+### A singleton string list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanr1 (++) ["x"])
+```
+
+```text
+["x"]
+```
+
+</HaskellTryIt>
+
+```text
+scanr1 (++) ["x"] -- given call
+= ["x"] -- S121
+```
+
+There is no extra empty string at the end.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanr1 max ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+scanr1 max ([] :: [Int]) -- given call
+= [] -- S120
+```
+
+The empty case is total.
+
+**Common error.** Adding an extra seed to a `scanr1` answer silently changes its length. GHC gives no diagnostic for a wrong prediction. There are exactly as many outputs as inputs.
+
+**Practice with answer.** `scanr1 (-) [9,2]` is `[7,2]`: S122, S121, substitute the tail scan, HEAD, OP, subtraction, list notation.
+
+| Non-empty suffix | Right-fold result |
+|---|---|
+| `[8,3,1]` | `6` |
+| `[3,1]` | `2` |
+| `[1]` | `1` |
+
+Unlike an explicit-seed scan, there is no result for the empty suffix.
+
+## 10. Updating until a test succeeds with `until`
+
+`until` returns the first state satisfying a stopping predicate. It checks the current state before updating it. If no state ever passes the test, the calculation does not terminate.
+
+**Template:** `until stop update initialState`. `stop` returns `Bool`, while `update` returns another state of the same type.
+
+Labelled equations for paper traces:
+
+```text
+until :: (a -> Bool) -> (a -> a) -> a -> a
+until p f x = if p x then x else until p f (f x) -- U
+if True then a else b = a -- IF-T
+if False then a else b = b -- IF-F
+```
+
+### A section with an overshoot
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (until (>=5) (+2) 2)
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+```text
+until (>=5) (+2) 2 -- given call
+= if (>=5) 2 then 2 else until (>=5) (+2) ((+2) 2) -- U
+= if 2 >= 5 then 2 else until (>=5) (+2) ((+2) 2) -- SEC-R
+= if False then 2 else until (>=5) (+2) ((+2) 2) -- comparison
+= until (>=5) (+2) ((+2) 2) -- IF-F
+= until (>=5) (+2) (2 + 2) -- SEC-R
+= until (>=5) (+2) 4 -- addition
+= if (>=5) 4 then 4 else until (>=5) (+2) ((+2) 4) -- U
+= if 4 >= 5 then 4 else until (>=5) (+2) ((+2) 4) -- SEC-R
+= if False then 4 else until (>=5) (+2) ((+2) 4) -- comparison
+= until (>=5) (+2) ((+2) 4) -- IF-F
+= until (>=5) (+2) (4 + 2) -- SEC-R
+= until (>=5) (+2) 6 -- addition
+= if (>=5) 6 then 6 else until (>=5) (+2) ((+2) 6) -- U
+= if 6 >= 5 then 6 else until (>=5) (+2) ((+2) 6) -- SEC-R
+= if True then 6 else until (>=5) (+2) ((+2) 6) -- comparison
+= 6 -- IF-T
+```
+
+The answer need not equal the boundary; it is the first reached state passing the test.
+
+### A lambda update
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (until (==4) (\x -> x * 2) 2)
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+```text
+until (==4) (\x -> x * 2) 2 -- given call
+= if (==4) 2 then 2 else until (==4) (\x -> x * 2) ((\x -> x * 2) 2) -- U
+= if 2 == 4 then 2 else until (==4) (\x -> x * 2) ((\x -> x * 2) 2) -- SEC-R
+= if False then 2 else until (==4) (\x -> x * 2) ((\x -> x * 2) 2) -- equality
+= until (==4) (\x -> x * 2) ((\x -> x * 2) 2) -- IF-F
+= until (==4) (\x -> x * 2) (2 * 2) -- LAM: x := 2
+= until (==4) (\x -> x * 2) 4 -- multiplication
+= if (==4) 4 then 4 else until (==4) (\x -> x * 2) ((\x -> x * 2) 4) -- U
+= if 4 == 4 then 4 else until (==4) (\x -> x * 2) ((\x -> x * 2) 4) -- SEC-R
+= if True then 4 else until (==4) (\x -> x * 2) ((\x -> x * 2) 4) -- equality
+= 4 -- IF-T
+```
+
+The lambda is applied once, between the two tests.
+
+### A seed already passing
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (until even (+1) 4)
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+```text
+until even (+1) 4 -- given call
+= if even 4 then 4 else until even (+1) ((+1) 4) -- U
+= if True then 4 else until even (+1) ((+1) 4) -- EVEN
+= 4 -- IF-T
+```
+
+The update is never applied.
+
+**Common error.** Reading `until p` as 'keep going while p is true' reverses its meaning. This is a value or termination error without a GHC type diagnostic. Stop when `p` first becomes true.
+
+**Practice with answer.** `until (>=3) (+1) 3` is `3`: U, section, comparison, IF-T. The initial state already meets the condition.
+
+| State before test | Test `state >= 5` | Action |
+|---|---|---|
+| `2` | `False` | update to `4` |
+| `4` | `False` | update to `6` |
+| `6` | `True` | return `6` |
+
+Independent check: the reached states are 2, 4, 6. The first two are below 5; the third satisfies the bound. With `until (==5) (+2) (2 :: Integer)`, no reached state is 5, so it never finishes. A bound test is often safer than exact equality when updates can overshoot.
+
+## 11. Supplying repeated inputs with `replicate`
+
+`replicate` makes a finite list containing a fixed number of copies of one value. The copies are values, so a replicated function is still a function until it receives an argument. Replication does not repeatedly apply an update.
+
+**Template:** `replicate count value`. `count` has type `Int`; a non-positive count produces an empty list.
+
+Labelled equations for paper traces:
+
+```text
+replicate :: Int -> a -> [a]
+replicate n x | n <= 0 = [] -- REP0
+replicate n x = x : replicate (n-1) x -- REP1, for n > 0
+```
+
+### Copies consumed by a scan
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl (+) 0 (replicate 2 3))
+```
+
+```text
+[0,3,6]
+```
+
+</HaskellTryIt>
+
+```text
+scanl (+) 0 (replicate 2 3) -- given call
+= scanl (+) 0 (3 : replicate (2-1) 3) -- REP1
+= scanl (+) 0 (3 : replicate 1 3) -- subtraction
+= 0 : scanl (+) ((+) 0 3) (replicate 1 3) -- SL1
+= 0 : scanl (+) (0 + 3) (replicate 1 3) -- OP
+= 0 : scanl (+) 3 (replicate 1 3) -- addition
+= 0 : scanl (+) 3 (3 : replicate (1-1) 3) -- REP1
+= 0 : scanl (+) 3 (3 : replicate 0 3) -- subtraction
+= 0 : (3 : scanl (+) ((+) 3 3) (replicate 0 3)) -- SL1
+= 0 : (3 : scanl (+) (3 + 3) (replicate 0 3)) -- OP
+= 0 : (3 : scanl (+) 6 (replicate 0 3)) -- addition
+= 0 : (3 : scanl (+) 6 []) -- REP0
+= 0 : (3 : [6]) -- SL0
+= [0,3,6] -- list notation
+```
+
+Replication supplies two equal inputs, and the scan retains three states.
+
+### Copies consumed by concatMap
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (concatMap (\x -> [x,x]) (replicate 1 'a'))
+```
+
+```text
+"aa"
+```
+
+</HaskellTryIt>
+
+```text
+concatMap (\x -> [x,x]) (replicate 1 'a') -- given call
+= concatMap (\x -> [x,x]) ('a' : replicate (1-1) 'a') -- REP1
+= concatMap (\x -> [x,x]) ('a' : replicate 0 'a') -- subtraction
+= (\x -> [x,x]) 'a' ++ concatMap (\x -> [x,x]) (replicate 0 'a') -- CM1
+= ['a','a'] ++ concatMap (\x -> [x,x]) (replicate 0 'a') -- LAM: x := 'a'
+= 'a' : (['a'] ++ concatMap (\x -> [x,x]) (replicate 0 'a')) -- A1
+= 'a' : ('a' : ([] ++ concatMap (\x -> [x,x]) (replicate 0 'a'))) -- A1
+= 'a' : ('a' : concatMap (\x -> [x,x]) (replicate 0 'a')) -- A0
+= 'a' : ('a' : concatMap (\x -> [x,x]) []) -- REP0
+= 'a' : ('a' : []) -- CM0
+= "aa" -- string notation
+```
+
+A single replicated character can generate two output characters.
+
+### A negative count
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (replicate (-2) True)
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+replicate (-2) True -- given call
+= [] -- REP0: -2 <= 0
+```
+
+Non-positive counts do not cause recursion.
+
+**Common error.** Predicting `[1,2,3]` for `replicate 3 1` confuses copying with iteration. GHC prints `[1,1,1]`; use `take 3 (iterate (+1) 1)` for successive states.
+
+**Practice with answer.** `replicate 0 'x'` is the empty string `""` when printed with its character-list type. REP0 supplies the empty list.
+
+## 12. Keeping a list of functions
+
+A list can contain functions provided they share one type. Apply every function to one input with `map ($ input) functions`, or compose the functions with `foldr (.) id functions`. The rightmost function in a composition acts first.
+
+**Template:** `map ($ input) functions; (foldr (.) id functions) input`. The map produces a list of results. The fold produces one function and therefore needs a final input to produce a printable value.
+
+Labelled equations for paper traces:
+
+```text
+($ k) f = f $ k -- DSEC: right section
+f $ x = f x -- APP
+map f [] = [] -- M0
+map f (x:xs) = f x : map f xs -- M1
+foldr f z [] = z -- R0
+foldr f z (x:xs) = f x (foldr f z xs) -- R1
+(.) f g x = f (g x) -- COMP
+id x = x -- ID
+```
+
+### Apply every function to the same value
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map ($ 3) [(+1),(*2)])
+```
+
+```text
+[4,6]
+```
+
+</HaskellTryIt>
+
+```text
+map ($ 3) [(+1),(*2)] -- given call
+= ($ 3) (+1) : map ($ 3) [(*2)] -- M1
+= ((+1) $ 3) : map ($ 3) [(*2)] -- DSEC: f := (+1)
+= (+1) 3 : map ($ 3) [(*2)] -- APP
+= (3 + 1) : map ($ 3) [(*2)] -- SEC-R
+= 4 : map ($ 3) [(*2)] -- addition
+= 4 : (($ 3) (*2) : map ($ 3) []) -- M1
+= 4 : (((*2) $ 3) : map ($ 3) []) -- DSEC: f := (*2)
+= 4 : ((*2) 3 : map ($ 3) []) -- APP
+= 4 : ((3 * 2) : map ($ 3) []) -- SEC-R
+= 4 : (6 : map ($ 3) []) -- multiplication
+= 4 : (6 : []) -- M0
+= [4,6] -- list notation
+```
+
+Both functions receive 3; neither receives the other's result.
+
+### Compose a list of functions
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((foldr (.) id [(+1),(*2)]) 3)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+```text
+(foldr (.) id [(+1),(*2)]) 3 -- given call
+= ((.) (+1) (foldr (.) id [(*2)])) 3 -- R1
+= (+1) ((foldr (.) id [(*2)]) 3) -- COMP: f := (+1), g := tail composition
+= (+1) (((.) (*2) (foldr (.) id [])) 3) -- R1
+= (+1) ((*2) ((foldr (.) id []) 3)) -- COMP: f := (*2)
+= (+1) ((*2) (id 3)) -- R0
+= (+1) ((*2) 3) -- ID
+= (+1) (3 * 2) -- SEC-R
+= (+1) 6 -- multiplication
+= 6 + 1 -- SEC-R
+= 7 -- addition
+```
+
+The rightmost `(*2)` acts on 3 before `(+1)`.
+
+### An empty composition
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((foldr (.) id ([] :: [Int -> Int])) 3)
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+```text
+(foldr (.) id ([] :: [Int -> Int])) 3 -- given call
+= id 3 -- R0
+= 3 -- ID
+```
+
+The empty list composes to the identity function.
+
+**Common error.** Printing `[(+1),(*2)]` or `foldr (.) id fs` tries to print functions. GHC reports a missing `Show` instance for a function type. Apply the functions first. Mixing `not` and `(+1)` in one function list also fails because their input and output types cannot agree.
+
+**Practice with answer.** `map ($ True) [not,id]` is `[False,True]`. Each function receives the same Boolean. Empty composition applied to `True` returns `True`.
+
+## 13. Which higher-order function?
+
+Read the requested output shape first, then choose the function. "First", "every", "state" and "matching position" signal different jobs.
+
+| Question wording or required shape | Choose | Important check |
+|---|---|---|
+| Successive states from an update | `take n (iterate f seed)` | Seed is first; observation must be finite |
+| Copies of a fixed value | `replicate n x` | Copies do not apply an update |
+| Zero or more outputs for each input, flattened | `concatMap f xs` | `f` must return a list |
+| Passing prefix and its remainder | `span p xs` | Stops at the first failure |
+| Prefix before a match and remainder starting at that match | `break p xs` | Matching element is retained in the remainder |
+| All passing and all failing elements | `partition p xs` | Traverses the whole finite list; import from `Data.List` |
+| Retain matching triples | `zip3 xs ys zs` | Stops at the shortest list |
+| Combine three matching elements | `zipWith3 f xs ys zs` | Rule needs three arguments |
+| Prefix accumulators, first element as seed | `scanl1 f xs` | Empty input gives `[]` |
+| Suffix accumulators, last element as seed | `scanr1 f xs` | Original suffix order; empty gives `[]` |
+| First state satisfying a test | `until p f seed` | Test before updating; may never succeed |
+| Results of several functions on the same input | `map ($ x) fs` | All functions must accept that input |
+| One function made from several functions | `foldr (.) id fs` | Rightmost acts first; apply final function to print a value |
+
+## Exam questions
+
+Each question fixes the result type with an annotation. Give the type of the whole expression as well as the result. The annotations specialise overloaded numbers, avoiding an accidental claim that a specialised type is the most general inferred type.
+
+### Exam question 1: Repeated updates with iterate (5 marks)
+
+Evaluate and trace `(take 3 (iterate (+2) 1)) :: [Int]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `take 3 (iterate (+2) 1)`; its annotation fixes the result type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `take count (iterate update seed)`. `count` limits the observation, `update` advances one step, and `seed` is the first value. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[1,3,5]`.
+
+`(+2)` is specialised to `Int -> Int`, so `iterate` produces `[Int]`; `take` preserves that list type. 
+
+```text
+take 3 (iterate (+2) 1) -- given call
+= take 3 (1 : iterate (+2) ((+2) 1)) -- IT: x := 1
+= 1 : take (3-1) (iterate (+2) ((+2) 1)) -- T2
+= 1 : take 2 (iterate (+2) ((+2) 1)) -- subtraction
+= 1 : take 2 (iterate (+2) (1 + 2)) -- SEC-R
+= 1 : take 2 (iterate (+2) 3) -- addition
+= 1 : take 2 (3 : iterate (+2) ((+2) 3)) -- IT: x := 3
+= 1 : (3 : take (2-1) (iterate (+2) ((+2) 3))) -- T2
+= 1 : (3 : take 1 (iterate (+2) ((+2) 3))) -- subtraction
+= 1 : (3 : take 1 (iterate (+2) (3 + 2))) -- SEC-R
+= 1 : (3 : take 1 (iterate (+2) 5)) -- addition
+= 1 : (3 : take 1 (5 : iterate (+2) ((+2) 5))) -- IT: x := 5
+= 1 : (3 : (5 : take (1-1) (iterate (+2) ((+2) 5)))) -- T2
+= 1 : (3 : (5 : take 0 (iterate (+2) ((+2) 5)))) -- subtraction
+= 1 : (3 : (5 : [])) -- T0: no further update demanded
+= [1,3,5] -- list notation
+```
+
+The seed is included; it is not transformed before the first output.
+
+</Step>
+
+<Step title="4. Check">
+
+`take 1 (iterate (*2) 7)` is `[7]`: IT, T2, subtraction, T0, list notation. The seed is the only observation. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: Producing and flattening lists with concatMap (5 marks)
+
+Evaluate and trace `(concatMap (\x -> [x,x]) [2]) :: [Int]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `concatMap (\x -> [x,x]) [2]`; its annotation fixes the result type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `concatMap makeList inputList`. `makeList` can return zero, one or many elements for each input. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[2,2]`.
+
+The lambda has type `Int -> [Int]`; `concatMap` removes the extra list layer and returns `[Int]`. 
+
+```text
+concatMap (\x -> [x,x]) [2] -- given call
+= (\x -> [x,x]) 2 ++ concatMap (\x -> [x,x]) [] -- CM1
+= [2,2] ++ concatMap (\x -> [x,x]) [] -- LAM: x := 2
+= 2 : ([2] ++ concatMap (\x -> [x,x]) []) -- A1
+= 2 : (2 : ([] ++ concatMap (\x -> [x,x]) [])) -- A1
+= 2 : (2 : concatMap (\x -> [x,x]) []) -- A0
+= 2 : (2 : []) -- CM0
+= [2,2] -- list notation
+```
+
+One input can contribute more than one output.
+
+</Step>
+
+<Step title="4. Check">
+
+`concatMap (replicate 0) [1,2]` is `[]`: both elements contribute empty lists, and A0 joins them without adding elements. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: Splitting an initial run with span (5 marks)
+
+Evaluate and trace `(span (<3) [1,4,2]) :: ([Int],[Int])`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `span (<3) [1,4,2]`; its annotation fixes the result type to `([Int],[Int])`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `span predicate inputList`. The result is a pair `(passingPrefix, remainder)`. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `([Int],[Int])`. Result: `([1],[4,2])`.
+
+The input elements are specialised to `Int`. `span` returns two lists of that same element type. 
+
+```text
+span (<3) [1,4,2] -- given call
+= if (<3) 1 then let (ys,zs) = span (<3) [4,2] in (1:ys,zs) else ([],[1,4,2]) -- SP1
+= if 1 < 3 then let (ys,zs) = span (<3) [4,2] in (1:ys,zs) else ([],[1,4,2]) -- SEC-R
+= if True then let (ys,zs) = span (<3) [4,2] in (1:ys,zs) else ([],[1,4,2]) -- comparison
+= let (ys,zs) = span (<3) [4,2] in (1:ys,zs) -- IF-T
+= let (ys,zs) = (if (<3) 4 then let (us,vs) = span (<3) [2] in (4:us,vs) else ([],[4,2])) in (1:ys,zs) -- SP1
+= let (ys,zs) = (if 4 < 3 then let (us,vs) = span (<3) [2] in (4:us,vs) else ([],[4,2])) in (1:ys,zs) -- SEC-R
+= let (ys,zs) = (if False then let (us,vs) = span (<3) [2] in (4:us,vs) else ([],[4,2])) in (1:ys,zs) -- comparison
+= let (ys,zs) = ([],[4,2]) in (1:ys,zs) -- IF-F
+= (1:[],[4,2]) -- let pair match: ys := [], zs := [4,2]
+= ([1],[4,2]) -- list notation
+```
+
+The later 2 belongs to the remainder, although it would pass the predicate.
+
+</Step>
+
+<Step title="4. Check">
+
+`span (<3) [4,1]` is `([],[4,1])`: SP1, section, comparison, IF-F; it stops at the first element. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: Splitting before a match with break (5 marks)
+
+Evaluate and trace `(break even [2,3]) :: ([Int],[Int])`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `break even [2,3]`; its annotation fixes the result type to `([Int],[Int])`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `break predicate inputList`. Keep a prefix while the predicate is false; stop when it becomes true. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `([Int],[Int])`. Result: `([],[2,3])`.
+
+The input elements are specialised to `Int`. `break` returns a pair of lists of the same type as the input. 
+
+```text
+break even [2,3] -- given call
+= span (not . even) [2,3] -- BR
+= if (not . even) 2 then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- SP1
+= if not (even 2) then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- COMP
+= if not True then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- EVEN
+= if False then let (ys,zs) = span (not . even) [3] in (2:ys,zs) else ([],[2,3]) -- NOT-T
+= ([],[2,3]) -- IF-F
+```
+
+The matching 2 is included in the second part.
+
+</Step>
+
+<Step title="4. Check">
+
+`break odd [1]` is `([],[1])`: BR, SP1, COMP, ODD, NOT-T, IF-F. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: Separating every element with partition (5 marks)
+
+Evaluate and trace `(partition even [1,2]) :: ([Int],[Int])`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `partition even [1,2]`; its annotation fixes the result type to `([Int],[Int])`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `partition predicate inputList`. Import `partition` from `Data.List`; the result is a pair of lists. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `([Int],[Int])`. Result: `([2],[1])`.
+
+The input elements are specialised to `Int`; `partition` returns two `[Int]` destinations. The complete program needs `import Data.List (partition)`.
+
+```text
+partition even [1,2] -- given call
+= let (ys,zs) = partition even [2] in if even 1 then (1:ys,zs) else (ys,1:zs) -- P1
+= let (ys,zs) = partition even [2] in if False then (1:ys,zs) else (ys,1:zs) -- EVEN
+= let (ys,zs) = partition even [2] in (ys,1:zs) -- IF-F
+= let (ys,zs) = (let (us,vs) = partition even [] in if even 2 then (2:us,vs) else (us,2:vs)) in (ys,1:zs) -- P1
+= let (ys,zs) = (let (us,vs) = ([],[]) in if even 2 then (2:us,vs) else (us,2:vs)) in (ys,1:zs) -- P0
+= let (ys,zs) = (if even 2 then (2:[],[]) else ([],2:[])) in (ys,1:zs) -- let pair match
+= let (ys,zs) = (if True then (2:[],[]) else ([],2:[])) in (ys,1:zs) -- EVEN
+= let (ys,zs) = (2:[],[]) in (ys,1:zs) -- IF-T
+= (2:[],1:[]) -- let pair match
+= ([2],[1]) -- list notation
+```
+
+The first failed test does not stop the traversal.
+
+</Step>
+
+<Step title="4. Check">
+
+`partition even [1]` is `([],[1])`: P1, P0, pair substitution, EVEN, IF-F, list notation. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: Retaining three fields with zip3 (5 marks)
+
+Evaluate and trace `(zip3 [1,2] "a" [True,False]) :: [(Int,Char,Bool)]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `zip3 [1,2] "a" [True,False]`; its annotation fixes the result type to `[(Int,Char,Bool)]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `zip3 firstList secondList thirdList`. The three input element types may differ. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[(Int,Char,Bool)]`. Result: `[(1,'a',True)]`.
+
+The three input types are `[Int]`, `[Char]` and `[Bool]`; `zip3` returns `[(Int,Char,Bool)]`. 
+
+```text
+zip3 [1,2] "a" [True,False] -- given call
+= (1,'a',True) : zip3 [2] "" [False] -- Z33: x := 1, y := 'a', z := True
+= (1,'a',True) : [] -- Z31
+= [(1,'a',True)] -- list notation
+```
+
+The second input determines the output length.
+
+</Step>
+
+<Step title="4. Check">
+
+`zip3 ([] :: [Int]) "x" [True]` is `[]` by Z30. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: Combining three positions with zipWith3 (5 marks)
+
+Evaluate and trace `(zipWith3 (\x y z -> x + y * z) [1,9] [2] [3,8]) :: [Int]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `zipWith3 (\x y z -> x + y * z) [1,9] [2] [3,8]`; its annotation fixes the result type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `zipWith3 combine firstList secondList thirdList`. `combine` must accept one value from each list, in that order. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[7]`.
+
+The combining lambda is specialised to `Int -> Int -> Int -> Int`, so the output list is `[Int]`. 
+
+```text
+zipWith3 (\x y z -> x + y * z) [1,9] [2] [3,8] -- given call
+= (\x y z -> x + y * z) 1 2 3 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- W33
+= (\y z -> 1 + y * z) 2 3 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- LAM: x := 1
+= (\z -> 1 + 2 * z) 3 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- LAM: y := 2
+= (1 + 2 * 3) : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- LAM: z := 3
+= (1 + 6) : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- multiplication
+= 7 : zipWith3 (\x y z -> x + y * z) [9] [] [8] -- addition
+= 7 : [] -- W31
+= [7] -- list notation
+```
+
+Each list supplies one lambda parameter.
+
+</Step>
+
+<Step title="4. Check">
+
+`zipWith3 (,,) [] [True] "x"` is `[]` by W30; with a concrete first-list type such as `[Int]`, the result type is `[(Int,Bool,Char)]`. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: Left scans without an explicit seed: scanl1 (5 marks)
+
+Evaluate and trace `(scanl1 (-) [8,3,1]) :: [Int]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `scanl1 (-) [8,3,1]`; its annotation fixes the result type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `scanl1 combine inputList`. The first element replaces the separate seed. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[8,5,4]`.
+
+`(-) :: Int -> Int -> Int` keeps each accumulator an `Int`; the scan returns `[Int]`. 
+
+```text
+scanl1 (-) [8,3,1] -- given call
+= scanl (-) 8 [3,1] -- S111
+= 8 : scanl (-) ((-) 8 3) [1] -- SL1
+= 8 : scanl (-) (8 - 3) [1] -- OP
+= 8 : scanl (-) 5 [1] -- subtraction
+= 8 : (5 : scanl (-) ((-) 5 1) []) -- SL1
+= 8 : (5 : scanl (-) (5 - 1) []) -- OP
+= 8 : (5 : scanl (-) 4 []) -- subtraction
+= 8 : (5 : [4]) -- SL0
+= [8,5,4] -- list notation
+```
+
+The first accumulator is 8, not zero.
+
+</Step>
+
+<Step title="4. Check">
+
+`scanl1 (-) [9,2]` is `[9,7]`: S111, SL1, OP, subtraction, SL0, list notation. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: Right scans without an explicit seed: scanr1 (5 marks)
+
+Evaluate and trace `(scanr1 (-) [8,3,1]) :: [Int]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `scanr1 (-) [8,3,1]`; its annotation fixes the result type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `scanr1 combine inputList`. The last element supplies the seed; no extra empty-suffix entry is present. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[6,2,1]`.
+
+`(-) :: Int -> Int -> Int` keeps each suffix accumulator an `Int`; the scan returns `[Int]`. 
+
+```text
+scanr1 (-) [8,3,1] -- given call
+= let qs = scanr1 (-) [3,1] in (-) 8 (head qs) : qs -- S122
+= let qs = (let rs = scanr1 (-) [1] in (-) 3 (head rs) : rs) in (-) 8 (head qs) : qs -- S122
+= let qs = (let rs = [1] in (-) 3 (head rs) : rs) in (-) 8 (head qs) : qs -- S121
+= let qs = (-) 3 (head [1]) : [1] in (-) 8 (head qs) : qs -- let substitution
+= let qs = (-) 3 1 : [1] in (-) 8 (head qs) : qs -- HEAD
+= let qs = (3 - 1) : [1] in (-) 8 (head qs) : qs -- OP
+= let qs = 2 : [1] in (-) 8 (head qs) : qs -- subtraction
+= (-) 8 (head (2 : [1])) : (2 : [1]) -- let substitution
+= (-) 8 2 : (2 : [1]) -- HEAD
+= (8 - 2) : (2 : [1]) -- OP
+= 6 : (2 : [1]) -- subtraction
+= [6,2,1] -- list notation
+```
+
+Check the suffix results independently: 8 - (3 - 1) = 6, 3 - 1 = 2, and the singleton gives 1.
+
+</Step>
+
+<Step title="4. Check">
+
+`scanr1 (-) [9,2]` is `[7,2]`: S122, S121, substitute the tail scan, HEAD, OP, subtraction, list notation. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: Updating until a test succeeds with until (5 marks)
+
+Evaluate and trace `(until (>=5) (+2) 2) :: Int`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `until (>=5) (+2) 2`; its annotation fixes the result type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `until stop update initialState`. `stop` returns `Bool`, while `update` returns another state of the same type. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `6`.
+
+The predicate is specialised to `Int -> Bool`, and the update to `Int -> Int`. `until` returns the state type `Int`. 
+
+```text
+until (>=5) (+2) 2 -- given call
+= if (>=5) 2 then 2 else until (>=5) (+2) ((+2) 2) -- U
+= if 2 >= 5 then 2 else until (>=5) (+2) ((+2) 2) -- SEC-R
+= if False then 2 else until (>=5) (+2) ((+2) 2) -- comparison
+= until (>=5) (+2) ((+2) 2) -- IF-F
+= until (>=5) (+2) (2 + 2) -- SEC-R
+= until (>=5) (+2) 4 -- addition
+= if (>=5) 4 then 4 else until (>=5) (+2) ((+2) 4) -- U
+= if 4 >= 5 then 4 else until (>=5) (+2) ((+2) 4) -- SEC-R
+= if False then 4 else until (>=5) (+2) ((+2) 4) -- comparison
+= until (>=5) (+2) ((+2) 4) -- IF-F
+= until (>=5) (+2) (4 + 2) -- SEC-R
+= until (>=5) (+2) 6 -- addition
+= if (>=5) 6 then 6 else until (>=5) (+2) ((+2) 6) -- U
+= if 6 >= 5 then 6 else until (>=5) (+2) ((+2) 6) -- SEC-R
+= if True then 6 else until (>=5) (+2) ((+2) 6) -- comparison
+= 6 -- IF-T
+```
+
+The answer need not equal the boundary; it is the first reached state passing the test.
+
+</Step>
+
+<Step title="4. Check">
+
+`until (>=3) (+1) 3` is `3`: U, section, comparison, IF-T. The initial state already meets the condition. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: Supplying repeated inputs with replicate (5 marks)
+
+Evaluate and trace `(scanl (+) 0 (replicate 2 3)) :: [Int]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `scanl (+) 0 (replicate 2 3)`; its annotation fixes the result type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `replicate count value`. `count` has type `Int`; a non-positive count produces an empty list. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[0,3,6]`.
+
+`replicate 2 3` supplies `[Int]`, and `scanl (+) 0` retains `Int` accumulators, giving `[Int]`. 
+
+```text
+scanl (+) 0 (replicate 2 3) -- given call
+= scanl (+) 0 (3 : replicate (2-1) 3) -- REP1
+= scanl (+) 0 (3 : replicate 1 3) -- subtraction
+= 0 : scanl (+) ((+) 0 3) (replicate 1 3) -- SL1
+= 0 : scanl (+) (0 + 3) (replicate 1 3) -- OP
+= 0 : scanl (+) 3 (replicate 1 3) -- addition
+= 0 : scanl (+) 3 (3 : replicate (1-1) 3) -- REP1
+= 0 : scanl (+) 3 (3 : replicate 0 3) -- subtraction
+= 0 : (3 : scanl (+) ((+) 3 3) (replicate 0 3)) -- SL1
+= 0 : (3 : scanl (+) (3 + 3) (replicate 0 3)) -- OP
+= 0 : (3 : scanl (+) 6 (replicate 0 3)) -- addition
+= 0 : (3 : scanl (+) 6 []) -- REP0
+= 0 : (3 : [6]) -- SL0
+= [0,3,6] -- list notation
+```
+
+Replication supplies two equal inputs, and the scan retains three states.
+
+</Step>
+
+<Step title="4. Check">
+
+`replicate 0 'x'` is the empty string `""` when printed with its character-list type. REP0 supplies the empty list. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: Keeping a list of functions (5 marks)
+
+Evaluate and trace `(map ($ 3) [(+1),(*2)]) :: [Int]`. State the expression's type. Show all substitutions and explain the stopping point.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate and trace" requires both a value and its derivation. The given expression is `map ($ 3) [(+1),(*2)]`; its annotation fixes the result type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `map ($ input) functions; (foldr (.) id functions) input`. The map produces a list of results. The fold produces one function and therefore needs a final input to produce a printable value. Identify the initial value or first list constructor, use the matching labelled equation, and calculate tests before selecting branches.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[4,6]`.
+
+The function list is specialised to `[Int -> Int]`. `($ 3) :: (Int -> Int) -> Int`, so mapping it gives `[Int]`. 
+
+```text
+map ($ 3) [(+1),(*2)] -- given call
+= ($ 3) (+1) : map ($ 3) [(*2)] -- M1
+= ((+1) $ 3) : map ($ 3) [(*2)] -- DSEC: f := (+1)
+= (+1) 3 : map ($ 3) [(*2)] -- APP
+= (3 + 1) : map ($ 3) [(*2)] -- SEC-R
+= 4 : map ($ 3) [(*2)] -- addition
+= 4 : (($ 3) (*2) : map ($ 3) []) -- M1
+= 4 : (((*2) $ 3) : map ($ 3) []) -- DSEC: f := (*2)
+= 4 : ((*2) 3 : map ($ 3) []) -- APP
+= 4 : ((3 * 2) : map ($ 3) []) -- SEC-R
+= 4 : (6 : map ($ 3) []) -- multiplication
+= 4 : (6 : []) -- M0
+= [4,6] -- list notation
+```
+
+Both functions receive 3; neither receives the other's result.
+
+</Step>
+
+<Step title="4. Check">
+
+`map ($ True) [not,id]` is `[False,True]`. Each function receives the same Boolean. Empty composition applied to `True` returns `True`. This small case checks the stopping equation or argument roles. Also compare the result shape with the decision table before accepting the longer calculation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+`iterate` updates; `replicate` copies. `concatMap` flattens list-valued outputs. `span` and `break` make one cut, while `partition` classifies every element. Three-list zips stop at the shortest input. `scanl1` and `scanr1` accept empty lists and retain input length. `until` tests before updating. Mapping dollar applies every function to the same input; folding composition builds one function whose rightmost part acts first.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="How do iterate and replicate differ?">
+
+`take 3 (iterate (+1) 1)` is `[1,2,3]`; `replicate 3 1` is `[1,1,1]`. The former updates a state, while the latter copies a value.
+
+</CheckQuestion>
+
+<CheckQuestion question="What distinguishes span from partition on a mixed list?">
+
+`span even [2,1,4]` is `([2],[1,4])`. `partition even [2,1,4]` is `([2,4],[1])`. Only partition collects later matches.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does a seedless scan fail on the empty list?">
+
+No. Both `scanl1 f []` and `scanr1 f []` return `[]`, whereas the seedless folds require non-empty input.
+
+</CheckQuestion>
+
+<CheckQuestion question="What if the initial state already satisfies until's predicate?">
+
+It is returned unchanged, and the update is not applied.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is the difference between map ($ 3) fs and (foldr (.) id fs) 3?">
+
+For `fs = [(+1),(*2)]`, the map gives `[4,6]`. The composed function gives `7`, because doubling acts first and incrementing acts next.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Lab 04: Folds and Zips](/docs/sem3/csi243/07-higher-order/notes/lab-04-folds-and-zips).

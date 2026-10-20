@@ -1,0 +1,2530 @@
+---
+title: "Where and Local Definitions"
+description: "Read, trace and rewrite local values, helper functions and pattern bindings with precise scope and evaluation rules."
+---
+
+A `where` clause names the calculations and helpers belonging to one equation. The earlier lessons introduced function construction and guards; here we examine the local definitions themselves, including their scope, dependencies, layout and evaluation.
+
+<LearningObjectives items={[
+  'Use local values, helper functions and pattern bindings',
+  'Trace demand and sharing without treating declarations as assignments',
+  'Determine scope across guards, equations, nesting and shadowing',
+  'Convert between where, let expressions and top-level helpers',
+  'Explain and repair common scope and layout errors',
+]} />
+
+<Prerequisites items={[
+  'Defining Functions: signatures, application and small-input checks',
+  'Guarded Equations: Boolean tests and the first successful guard',
+]} />
+
+## 1. Read and trace the general template
+
+```text
+function arguments
+  | testUsingName = resultUsingName
+  | otherwise = otherResult
+  where
+    name = calculationUsingArguments
+    helper parameter = expressionUsingParameterAndName
+```
+
+`function arguments` describes the public call. Each guard chooses a result. `name` names a value; `helper` names a function with its own argument. Both can use the equation's parameters and sibling declarations. Without guards, write `function arguments = result` followed by the same group.
+
+Read a name's definition when the result or a guard needs it. The equals sign defines a relationship; it does not update a variable. A declaration is not a command executed when its line is reached.
+
+<KeyTerm title="Scope">The region where a name refers to a particular binding. A binding associates a name or pattern with its definition.</KeyTerm>
+
+| Region | Equation parameters | This equation's where names | Helper parameters |
+|---|---|---|---|
+| Every guard and result of this equation | Yes | Yes | No |
+| Sibling where declarations | Yes | Yes | Only inside that helper |
+| Another equation of the same function | Its own parameters | No | No |
+| main or an unrelated definition | No | No | No |
+
+**Demand-tracing template:** substitute the arguments; identify the selected guard or result; follow its dependencies; reduce only needed bindings; reuse a binding's value at subsequent occurrences; identify anything left unevaluated. A binding is shared within its environment, not cached for all future calls. A local function's calls with different arguments are separate computations, not automatically memoised results.
+
+These are traces of lazy semantics, not promises about optimised machine instructions. A tuple can be demanded to its outer shape without demanding both fields; a list can be consumed without demanding all its elements.
+
+Each alternative rewrite below replaces the original definition: load it separately, rather than pasting two same-named definitions together. To run a rewrite, retain the example's `main`. The template fences use `text` because their placeholders are not complete Haskell programs.
+
+## 2. Name an intermediate value
+
+Give a formula a meaningful name so that the result says what it uses. A value binding has no parameters of its own; it uses the enclosing equation's arguments.
+
+```text
+f inputs = combine intermediate
+  where
+    intermediate = formula inputs
+```
+
+`intermediate` is the calculated value; `combine` stands for the result expression that consumes it.
+
+### BMI with exact arithmetic
+
+The intermediate is a denominator. This is a formula example, not a clinical assessment; assume positive height.
+
+<HaskellTryIt>
+
+```haskell
+bmiValue :: Double -> Double -> Double
+bmiValue weight height = weight / heightSquared
+  where
+    heightSquared = height * height
+
+main :: IO ()
+main = print (bmiValue 100 2)
+```
+
+```text
+25.0
+```
+
+</HaskellTryIt>
+
+**Demand trace:** the quotient needs `heightSquared`, so compute `2 * 2 = 4.0`; divide `100 / 4 = 25.0`. The declaration's position does not trigger computation.
+
+**Without `where`:** substitute the formula directly.
+
+```haskell
+bmiValue :: Double -> Double -> Double
+bmiValue weight height = weight / (height * height)
+```
+
+### A signed discriminant
+
+The intermediate can now be negative, without taking an invalid square root.
+
+<HaskellTryIt>
+
+```haskell
+discReport :: Double -> Double -> Double -> Double
+discReport a b c = discriminant / 4
+  where
+    discriminant = b * b - 4 * a * c
+
+main :: IO ()
+main = print (discReport 1 2 2)
+```
+
+```text
+-1.0
+```
+
+</HaskellTryIt>
+
+**Demand trace:** division demands `discriminant = 4 - 8 = -4.0`; dividing by 4 produces `-1.0`.
+
+**Without `where`:** inline this single-use value.
+
+```haskell
+discReport :: Double -> Double -> Double -> Double
+discReport a b c = (b * b - 4 * a * c) / 4
+```
+
+### Heron's formula
+
+The same intermediate now occurs four times. Assume valid positive triangle sides.
+
+<HaskellTryIt>
+
+```haskell
+heron :: Double -> Double -> Double -> Double
+heron a b c = sqrt (s * (s - a) * (s - b) * (s - c))
+  where
+    s = (a + b + c) / 2
+
+main :: IO ()
+main = print (heron 3 4 5)
+```
+
+```text
+6.0
+```
+
+</HaskellTryIt>
+
+**Demand trace:** `sqrt` demands its argument, which needs `s = 12 / 2 = 6.0`. Reuse that binding for all factors: `6 * 3 * 2 * 1 = 36.0`. Its exact square root is `6.0`.
+
+**Without `where`:** use a `let` to preserve sharing.
+
+```haskell
+heron :: Double -> Double -> Double -> Double
+heron a b c = let s = (a + b + c) / 2
+              in sqrt (s * (s - a) * (s - b) * (s - c))
+```
+
+### A discounted basket
+
+The value now explains a business calculation with two uses of a subtotal.
+
+<HaskellTryIt>
+
+```haskell
+basket :: Double -> Double -> Double
+basket price quantity = subtotal - subtotal / 4
+  where
+    subtotal = price * quantity
+
+main :: IO ()
+main = print (basket 8 3)
+```
+
+```text
+18.0
+```
+
+</HaskellTryIt>
+
+**Demand trace:** subtraction needs `subtotal = 24.0`; its second use reuses 24.0. The discount is 6.0, leaving 18.0. Another call creates its own subtotal binding.
+
+**Without `where`:** retain the shared name in a `let` expression.
+
+```haskell
+basket :: Double -> Double -> Double
+basket price quantity = let subtotal = price * quantity
+                        in subtotal - subtotal / 4
+```
+
+### Exam question: explain the intermediate (3 marks)
+
+Explain when `s` is computed in `heron 3 4 5` and why it is not four independent semiperimeter calculations.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” requires a dependency argument, not just the final area.
+
+</Step>
+
+<Step title="2. Plan">
+
+Start from the demanded square root and follow its product's dependency on s.
+
+</Step>
+
+<Step title="3. Solution">
+
+The product first needs s, forcing `(3 + 4 + 5) / 2 = 6.0`. All occurrences refer to that binding, whose value is reused. The product is 36.0 and the area is 6.0.
+
+</Step>
+
+<Step title="4. Check">
+
+Sides 1, 1, 2 give s = 2.0 and a zero factor, hence area 0.0: the degenerate boundary.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error:** `s a b c` treats the value s as a function. GHC reports a type mismatch involving an expected function type. Use `s`, or deliberately define a helper with parameters.
+
+**Practice, with answer:** BMI at weight 0 and height 2 is `0.0`; the local denominator is still 4.0. Do not use height zero in this model.
+
+## 3. Share a value across several guards
+
+All guards and all results in one equation see its `where` group. The first test needing a binding demands it; later tests reuse it.
+
+```text
+f input
+  | measured < lower = firstResult
+  | measured < upper = secondResult
+  | otherwise = lastResult
+  where
+    measured = formula input
+```
+
+`measured` is the shared calculation; `lower` and `upper` are cut-offs. The guards still run in their written order.
+
+### Two assessments
+
+The shared value is an integer sum.
+
+<HaskellTryIt>
+
+```haskell
+band :: Int -> Int -> String
+band exam lab
+  | total >= 80 = "high"
+  | total >= 50 = "pass"
+  | otherwise = "retry"
+  where
+    total = exam + lab
+
+main :: IO ()
+main = print (band 40 20)
+```
+
+```text
+"pass"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** the first guard forces total = 60, fails its comparison with 80; the second reuses 60 and succeeds at 50. The last result is unused.
+
+**Without `where`:** put the complete choice under `let`, not just one result.
+
+```haskell
+band :: Int -> Int -> String
+band exam lab = let total = exam + lab
+                in if total >= 80 then "high"
+                   else if total >= 50 then "pass" else "retry"
+```
+
+### Parcel bands
+
+The shared quantity is now a list reduction, including a boundary value.
+
+<HaskellTryIt>
+
+```haskell
+parcel :: [Int] -> String
+parcel weights
+  | total <= 2 = "small"
+  | total <= 5 = "medium"
+  | otherwise = "large"
+  where
+    total = sum weights
+
+main :: IO ()
+main = print (parcel [2,3])
+```
+
+```text
+"medium"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** the first guard forces `sum [2,3] = 5`; `5 <= 2` is False. Reuse 5 for the next comparison, which is True. The total is not recalculated for the second guard.
+
+**Without `where`:**
+
+```haskell
+parcel :: [Int] -> String
+parcel weights = let total = sum weights
+                 in if total <= 2 then "small"
+                    else if total <= 5 then "medium" else "large"
+```
+
+### Calibrated temperature
+
+The shared measurement is adjusted before testing.
+
+<HaskellTryIt>
+
+```haskell
+temperature :: Int -> String
+temperature raw
+  | adjusted < 0 = "cold"
+  | adjusted < 20 = "mild"
+  | otherwise = "warm"
+  where
+    adjusted = raw - 2
+
+main :: IO ()
+main = print (temperature 12)
+```
+
+```text
+"mild"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** test one demands adjusted = 10 and fails; test two reuses 10 and succeeds. The warm result is not selected.
+
+**Without `where`:**
+
+```haskell
+temperature :: Int -> String
+temperature raw = let adjusted = raw - 2
+                  in if adjusted < 0 then "cold"
+                     else if adjusted < 20 then "mild" else "warm"
+```
+
+### A text-length policy
+
+The shared Int is obtained from a String.
+
+<HaskellTryIt>
+
+```haskell
+labelSize :: String -> String
+labelSize text
+  | size == 0 = "empty"
+  | size <= 4 = "short"
+  | otherwise = "long"
+  where
+    size = length text
+
+main :: IO ()
+main = print (labelSize "Ada")
+```
+
+```text
+"short"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** the first guard demands size = 3 by traversing the string's list spine. It fails; the second guard reuses 3 and succeeds. Computing a list's length does not require its element values.
+
+**Without `where`:**
+
+```haskell
+labelSize :: String -> String
+labelSize text = let size = length text
+                 in if size == 0 then "empty"
+                    else if size <= 4 then "short" else "long"
+```
+
+### Exam question: trace the cut-offs (4 marks)
+
+Trace `parcel [4,4]`, naming the local value and every guard tried.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Trace” asks for intermediate work and comparisons, not only a label.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the shared-guard template: calculate the total when the first test needs it.
+
+</Step>
+
+<Step title="3. Solution">
+
+total = 8; `8 <= 2` is False; `8 <= 5` is False using the same total; otherwise is True. Return `"large"`.
+
+</Step>
+
+<Step title="4. Check">
+
+The empty list has total 0 and takes the first guard, giving `"small"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error:** a `let` inside a result cannot supply names to earlier guards; using that name there gives `Variable not in scope`. Move the binding to `where` or wrap the whole conditional in `let`.
+
+**Practice, with answer:** `temperature 0` has adjusted -2 and returns `"cold"`; its second test is not needed.
+
+
+## 4. Give a local helper its own parameters
+
+A local function names a rule rather than one fixed result. Each call supplies its own helper arguments. A helper can also use an enclosing argument without receiving it explicitly; that value is captured from its surrounding scope.
+
+**Template:**
+
+```text
+f outer = helper first + helper second
+  where
+    helper local = expressionUsing outer local
+```
+
+outer belongs to f; local belongs only to helper's body. Two helper calls share a definition, not automatically the results of their applications.
+
+### Vector energy
+
+The helper is applied to two different components.
+
+<HaskellTryIt>
+
+```haskell
+energy :: Int -> Int -> Int
+energy x y = square x + square y
+  where
+    square z = z * z
+
+main :: IO ()
+main = print (energy 3 4)
+```
+
+
+
+```text
+25
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Addition demands square 3, substituting z = 3 to obtain 9, then square 4 to obtain 16. Add 9 + 16 = 25. Defining square did not calculate either application.
+
+**Without `where`:**
+
+```haskell
+energy :: Int -> Int -> Int
+energy x y = let square z = z * z in square x + square y
+```
+
+
+### A captured service fee
+
+The helper uses its own amount and an enclosing fee.
+
+<HaskellTryIt>
+
+```haskell
+charged :: Int -> [Int] -> [Int]
+charged fee amounts = map addFee amounts
+  where
+    addFee amount = amount + fee
+
+main :: IO ()
+main = print (charged 2 [3,8])
+```
+
+
+
+```text
+[5,10]
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing demands addFee 3 = 3 + 2 = 5, then addFee 8 = 8 + 2 = 10. Each call has a new amount; fee remains the captured 2.
+
+**Without `where`:**
+
+```haskell
+charged :: Int -> [Int] -> [Int]
+charged fee amounts = map (\amount -> amount + fee) amounts
+```
+
+
+### A recursive local helper
+
+The helper now calls itself; assume non-negative input.
+
+<HaskellTryIt>
+
+```haskell
+countdownSum :: Int -> Int
+countdownSum n = sum (build n)
+  where
+    build 0 = []
+    build k = k : build (k - 1)
+
+main :: IO ()
+main = print (countdownSum 3)
+```
+
+
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+**Demand trace:** sum demands build 3 = 3 : build 2, then 2 : build 1, then 1 : build 0, finally []. Adding the demanded elements gives 6. Each recursive invocation has its own k.
+
+**Without `where`:**
+
+```haskell
+countdownSum :: Int -> Int
+countdownSum n = let build 0 = []
+                     build k = k : build (k - 1)
+                 in sum (build n)
+```
+
+
+### A text formatter
+
+The helper works on strings and captures a greeting.
+
+<HaskellTryIt>
+
+```haskell
+names :: String -> [String] -> [String]
+names prefix people = map greet people
+  where
+    greet person = prefix ++ person ++ "!"
+
+main :: IO ()
+main = print (names "Hi " ["Ada","Bo"])
+```
+
+
+
+```text
+["Hi Ada!","Hi Bo!"]
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing calls greet with person = "Ada", giving "Hi Ada!", then person = "Bo", giving "Hi Bo!". The prefix is available to both calls; greet is not itself one stored String.
+
+**Without `where`:**
+
+```haskell
+names :: String -> [String] -> [String]
+names prefix people = let greet person = prefix ++ person ++ "!"
+                      in map greet people
+```
+
+
+### Exam question: write a parameterised helper (4 marks)
+
+Write an Int function adding twice each of two arguments. Use a local helper.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for a definition taking two Int inputs and returning Int.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the local-function template, with one parameter per helper call.
+
+</Step>
+
+<Step title="3. Solution">
+
+`addTwice a b = twice a + twice b` followed by `where twice x = 2 * x`. The helper's x is independent of a and b.
+
+</Step>
+
+<Step title="4. Check">
+
+Inputs 2 and 3 demand twice 2 = 4 and twice 3 = 6, giving 10.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** A helper parameter used outside the helper gives `Variable not in scope`. Keep the expression inside that helper or pass the value explicitly.
+
+**Practice, with answer:** countdownSum 0 calls build 0 = []; sum [] is 0. The recursion stops immediately.
+
+
+## 5. Bind names with patterns
+
+A local binding can unpack a tuple or list. Its left side describes the structure and names its components. Local pattern bindings are lazy: matching is postponed until a bound component is needed. A partial pattern still fails if an incompatible value is demanded.
+
+**Template:**
+
+```text
+f input = use a b
+  where
+    (a,b) = pairExpression input
+```
+
+The pattern supplies a and b from one expression. `(x:_)` supplies only a list's first element. Establish the domain before relying on a partial pattern.
+
+### Decimal quotient and remainder
+
+The tuple comes from one divMod computation on a non-negative number.
+
+<HaskellTryIt>
+
+```haskell
+digitPair :: Int -> Int
+digitPair n = q + r
+  where
+    (q,r) = n `divMod` 10
+
+main :: IO ()
+main = print (digitPair 47)
+```
+
+
+
+```text
+11
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The addition demands q and r. Their shared pair expression is 47 divMod 10 = (4,7); the components give 4 + 7 = 11. Reusing r would use the same binding.
+
+**Without `where`:**
+
+```haskell
+digitPair :: Int -> Int
+digitPair n = let (q,r) = n `divMod` 10 in q + r
+```
+
+
+### Coordinates
+
+The tuple is now already the input.
+
+<HaskellTryIt>
+
+```haskell
+taxi :: (Int,Int) -> Int
+taxi point = abs x + abs y
+  where
+    (x,y) = point
+
+main :: IO ()
+main = print (taxi (-3,4))
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The sum needs x and y, so the pattern obtains -3 and 4. abs gives 3 and 4, whose sum is 7. The tuple is not unpacked because its declaration was reached; its fields are demanded by the result.
+
+**Without `where`:**
+
+```haskell
+taxi :: (Int,Int) -> Int
+taxi (x,y) = abs x + abs y
+```
+
+
+### First reading with an empty-input repair
+
+A separate equation protects the cons pattern.
+
+<HaskellTryIt>
+
+```haskell
+firstTwice :: [Int] -> Int
+firstTwice [] = 0
+firstTwice xs = 2 * x
+  where
+    (x:_) = xs
+
+main :: IO ()
+main = print (firstTwice [7,99])
+```
+
+
+
+```text
+14
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The empty equation fails to match. Multiplication demands x; matching [7,99] obtains 7 and gives 14. The unused tail's element values are not needed. For [] the first equation returns 0.
+
+**Without `where`:**
+
+```haskell
+firstTwice :: [Int] -> Int
+firstTwice [] = 0
+firstTwice (x:_) = 2 * x
+```
+
+
+### A nested invoice entry
+
+The pattern extracts three values from nested tuples.
+
+<HaskellTryIt>
+
+```haskell
+invoice :: ((Int,Int),Int) -> Int
+invoice entry = subtotal - discount
+  where
+    ((price,quantity),discount) = entry
+    subtotal = price * quantity
+
+main :: IO ()
+main = print (invoice ((5,4),3))
+```
+
+
+
+```text
+17
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The subtraction demands subtotal and discount. subtotal demands price = 5 and quantity = 4, giving 20. discount is 3 from the same entry, so the result is 17.
+
+**Without `where`:**
+
+```haskell
+invoice :: ((Int,Int),Int) -> Int
+invoice ((price,quantity),discount) = price * quantity - discount
+```
+
+
+### Exam question: trace a tuple binding (4 marks)
+
+Trace digitPair 47 and explain how q and r are obtained.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Trace” requires the local pair and the result, not just 11.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the pattern-binding template and the demanded components.
+
+</Step>
+
+<Step title="3. Solution">
+
+The addition needs both components of 47 divMod 10 = (4,7). Bind q = 4 and r = 7; their sum is 11.
+
+</Step>
+
+<Step title="4. Check">
+
+At 0, divMod gives (0,0) and the result is 0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** Using `(x:_) = []` and demanding x fails with the key run-time diagnostic `Non-exhaustive patterns`. Protect the operation with an empty-input equation or a complete case.
+
+**Practice, with answer:** In firstTwice [], the local pattern is not used at all. The first equation gives 0.
+
+
+## 6. Follow dependencies rather than declaration order
+
+A where group is recursively scoped: sibling declarations can refer forward or backward to one another. Follow dependencies from the demanded result. A circular arithmetic definition without a way to produce a value is still a mistake; Haskell does not solve simultaneous algebraic equations.
+
+**Template:**
+
+```text
+f input = final
+  where
+    final = middle + 1
+    middle = start * 2
+    start = input
+```
+
+final is written first, but demanding it needs middle and then start. Reordering the declarations does not alter these dependencies.
+
+### A receipt in reverse dependency order
+
+The result binding precedes its ingredients.
+
+<HaskellTryIt>
+
+```haskell
+receipt :: Double -> Double -> Double
+receipt price count = net
+  where
+    net = gross - rebate
+    rebate = gross / 4
+    gross = price * count
+
+main :: IO ()
+main = print (receipt 8 4)
+```
+
+
+
+```text
+24.0
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Demand net, then gross = 32.0. rebate reuses gross and becomes 8.0. net is 24.0. gross is not recalculated at its second occurrence.
+
+**Without `where`:**
+
+```haskell
+receipt :: Double -> Double -> Double
+receipt price count = let net = gross - rebate; rebate = gross / 4; gross = price * count
+                      in net
+```
+
+
+### Packing with ceiling division
+
+A forward reference now supplies a positive constant.
+
+<HaskellTryIt>
+
+```haskell
+packs :: Int -> Int
+packs items = needed `div` capacity
+  where
+    needed = items + capacity - 1
+    capacity = 4
+
+main :: IO ()
+main = print (packs 9)
+```
+
+
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Division needs needed and capacity. capacity = 4 also supplies needed = 9 + 4 - 1 = 12; reuse that capacity to divide 12 by 4, giving 3.
+
+**Without `where`:**
+
+```haskell
+packs :: Int -> Int
+packs items = let needed = items + capacity - 1; capacity = 4
+              in needed `div` capacity
+```
+
+
+### A capped list score
+
+A list reduction and a limit feed a final binding.
+
+<HaskellTryIt>
+
+```haskell
+score :: [Int] -> Int
+score xs = adjusted
+  where
+    adjusted = min limit raw
+    limit = 10
+    raw = sum xs
+
+main :: IO ()
+main = print (score [4,5,6])
+```
+
+
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Demand adjusted. min compares limit = 10 and raw = 15, then returns 10. raw is visible even though its declaration follows adjusted.
+
+**Without `where`:**
+
+```haskell
+score :: [Int] -> Int
+score xs = let adjusted = min limit raw; limit = 10; raw = sum xs
+           in adjusted
+```
+
+
+### A text label
+
+The chain now produces a String incrementally.
+
+<HaskellTryIt>
+
+```haskell
+badge :: String -> String
+badge person = complete
+  where
+    complete = prefix ++ person ++ suffix
+    suffix = "!"
+    prefix = "Guest: "
+
+main :: IO ()
+main = print (badge "Ada")
+```
+
+
+
+```text
+"Guest: Ada!"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing complete needs prefix characters, then person, then suffix. These produce "Guest: ", "Ada", "!". Each name refers to one value, although a String can be demanded a character at a time.
+
+**Without `where`:**
+
+```haskell
+badge :: String -> String
+badge person = let complete = prefix ++ person ++ suffix; suffix = "!"; prefix = "Guest: "
+               in complete
+```
+
+
+### Exam question: explain a forward reference (4 marks)
+
+Explain why receipt can use gross before its declaration.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” asks for the binding-group rule, not a source-order execution story.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply recursive scope, then trace the dependency.
+
+</Step>
+
+<Step title="3. Solution">
+
+All sibling names are visible throughout the group. net needs gross; rebate also needs gross and reuses its demanded value. Source order is not evaluation order.
+
+</Step>
+
+<Step title="4. Check">
+
+price 10 and count 2 give gross 20.0, rebate 5.0, net 15.0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** `x = y + 1` and `y = x + 1` make a demand cycle. This is not a parse or type error; demanding either cannot produce a number. Repair the dependency to reach an input or a productive base case.
+
+**Practice, with answer:** Reverse the two declarations in packs: the output at 9 remains 3, since the dependencies are unchanged.
+
+
+## 7. Nest a where inside a helper
+
+An inner where belongs to the helper equation. It sees that helper's parameters and unshadowed outer bindings. Its own names do not escape into the enclosing result or sibling helpers. Each helper call has its own inner binding environment.
+
+**Template:**
+
+```text
+f outer = helper argument
+  where
+    helper local = use inner
+      where
+        inner = formula outer local
+```
+
+The inner where is indented beneath helper. inner is local to that helper equation, even though outer is visible at both depths.
+
+### Travel quotes
+
+The nested binding captures the enclosing fee.
+
+<HaskellTryIt>
+
+```haskell
+travel :: Int -> [Int] -> [Int]
+travel fee distances = map quote distances
+  where
+    quote km = km * unit
+      where
+        unit = 2 + fee
+
+main :: IO ()
+main = print (travel 1 [3,4])
+```
+
+
+
+```text
+[9,12]
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing calls quote 3: its unit is demanded as 3, giving 9. quote 4 has its own inner unit binding, also 3, giving 12. Equal numerical values do not imply one source-level binding shared between calls.
+
+**Without `where`:**
+
+```haskell
+travel :: Int -> [Int] -> [Int]
+travel fee distances = let quote km = let unit = 2 + fee in km * unit
+                       in map quote distances
+```
+
+
+### Game bonuses
+
+The inner value now depends on the helper parameter itself.
+
+<HaskellTryIt>
+
+```haskell
+game :: Int -> Int
+game level = bonus level + bonus (level + 1)
+  where
+    bonus n = doubled + 1
+      where
+        doubled = 2 * n
+
+main :: IO ()
+main = print (game 3)
+```
+
+
+
+```text
+16
+```
+
+</HaskellTryIt>
+
+**Demand trace:** bonus 3 needs doubled = 6 and returns 7. bonus 4 needs a new doubled = 8 and returns 9. Add 7 + 9 = 16. The two doubled bindings have different environments.
+
+**Without `where`:**
+
+```haskell
+game :: Int -> Int
+game level = let bonus n = let doubled = 2 * n in doubled + 1
+             in bonus level + bonus (level + 1)
+```
+
+
+### A text wrapper
+
+The nested value is a suffix built from the helper input.
+
+<HaskellTryIt>
+
+```haskell
+wrapped :: String -> String
+wrapped name = decorate name
+  where
+    decorate word = "[" ++ ending
+      where
+        ending = word ++ "]"
+
+main :: IO ()
+main = print (wrapped "CS")
+```
+
+
+
+```text
+"[CS]"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** decorate receives "CS". Printing provides "[", then demands ending = "CS]". The inner name ending is not visible in wrapped's outer result.
+
+**Without `where`:**
+
+```haskell
+wrapped :: String -> String
+wrapped name = let decorate word = let ending = word ++ "]" in "[" ++ ending
+               in decorate name
+```
+
+
+### Sum of squares through a nested helper
+
+The inner calculation is demanded once per mapped input.
+
+<HaskellTryIt>
+
+```haskell
+squareTotal :: [Int] -> Int
+squareTotal xs = sum (map measure xs)
+  where
+    measure n = productValue
+      where
+        productValue = n * n
+
+main :: IO ()
+main = print (squareTotal [2,5])
+```
+
+
+
+```text
+29
+```
+
+</HaskellTryIt>
+
+**Demand trace:** sum demands measure 2, forcing its productValue = 4; measure 5 forces a different productValue = 25. Sum 4 + 25 = 29. A helper definition is not a cache of all applications.
+
+**Without `where`:**
+
+```haskell
+squareTotal :: [Int] -> Int
+squareTotal xs = let measure n = let productValue = n * n in productValue
+                 in sum (map measure xs)
+```
+
+
+### Exam question: identify an inner scope (4 marks)
+
+Can game use doubled in its outer result? Explain and suggest a repair.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+This asks whether a name is visible, before asking for a calculation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Find the equation owning the inner where.
+
+</Step>
+
+<Step title="3. Solution">
+
+No: doubled belongs to bonus's equation and needs its n. Keep its use inside bonus, return it through a helper, or define a helper doubled n = 2 * n in the outer group.
+
+</Step>
+
+<Step title="4. Check">
+
+bonus 3 can see its doubled = 6; game itself cannot refer to that inner name.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** Using the inner name outside its helper gives `Variable not in scope`. Moving it outward only works if you also provide the helper arguments it formerly used.
+
+**Practice, with answer:** travel 0 [3,4] gives [6,8]. Each quote call demands its own unit expression with fee 0.
+
+
+## 8. Keep equation scope separate from function scope
+
+One where group covers all guards and results of the equation it follows, not every equation of the function. To share across cases, use one outer equation delegating to local helpers, or pass the common value explicitly. The following variations show four ways to respect or repair that boundary.
+
+**Template:**
+
+```text
+f [] = base
+f xs
+  | test total = result total
+  | otherwise = other total
+  where
+    total = calculation xs
+```
+
+Only the second equation sees total. In particular, the first equation cannot use it just because both equations are named f.
+
+### Stock tally: give the empty case its own answer
+
+The stock tally's first repair returns a literal in the independent equation; the second caps the reported stock at ten.
+
+<HaskellTryIt>
+
+```haskell
+tally :: [Int] -> Int
+tally [] = 0
+tally xs
+  | total > 10 = 10
+  | otherwise = total
+  where
+    total = sum xs
+
+main :: IO ()
+main = print (tally [2,3])
+```
+
+
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The empty equation does not match. The first guard of the second demands total = 5 and fails; otherwise returns that same 5. On [] the first equation returns 0 without using this local total.
+
+**Without `where`:**
+
+```haskell
+tally :: [Int] -> Int
+tally [] = 0
+tally xs = let total = sum xs in if total > 10 then 10 else total
+```
+
+
+### Tariffs: repeat a tiny binding independently
+
+Model a tariff with a fixed zero-use charge and a different adjustment for other inputs. Each equation can own a different binding with the same spelling.
+
+<HaskellTryIt>
+
+```haskell
+adjust :: Int -> Int
+adjust 0 = adjustment
+  where
+    adjustment = 2
+adjust n = n + adjustment
+  where
+    adjustment = 3
+
+main :: IO ()
+main = print (adjust 4)
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The zero equation is skipped. The selected result demands its adjustment = 3, giving 7. The first equation's adjustment = 2 is a distinct binding and is never demanded here.
+
+**Without `where`:**
+
+```haskell
+adjust :: Int -> Int
+adjust 0 = 2
+adjust n = n + 3
+```
+
+
+### Enrolment totals: delegate from one outer equation
+
+Treat the input as enrolment counts for groups. Both helper cases can see the enclosing total.
+
+<HaskellTryIt>
+
+```haskell
+describeCount :: [Int] -> Int
+describeCount xs = choose xs
+  where
+    total = sum xs
+    choose [] = 0
+    choose _ = total
+
+main :: IO ()
+main = print (describeCount [3,4])
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The outer equation calls choose [3,4]. Its [] case fails; the wildcard result demands outer total = 7. choose [] would return 0 without demanding total.
+
+**Without `where`:**
+
+```haskell
+describeCount :: [Int] -> Int
+describeCount xs = let total = sum xs; choose [] = 0; choose _ = total
+                   in choose xs
+```
+
+
+### Sensor readings: protect a partial operation
+
+For a list of sensor readings, the empty equation prevents head [] from being demanded.
+
+<HaskellTryIt>
+
+```haskell
+safeFirst :: [Int] -> Int
+safeFirst [] = 0
+safeFirst xs = first + first
+  where
+    first = head xs
+
+main :: IO ()
+main = print (safeFirst [6,8])
+```
+
+
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The second equation's addition demands first = 6 and reuses it, giving 12. On [] the first equation gives 0 before this equation and its head binding are involved.
+
+**Without `where`:**
+
+```haskell
+safeFirst :: [Int] -> Int
+safeFirst [] = 0
+safeFirst xs = let first = head xs in first + first
+```
+
+
+### Exam question: find the owner of a binding (4 marks)
+
+Find the error if tally's first equation is changed to `tally [] = total`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Find” requests the cause, not a guessed total value.
+
+</Step>
+
+<Step title="2. Plan">
+
+Locate the equation that owns total.
+
+</Step>
+
+<Step title="3. Solution">
+
+total belongs only to the second equation's where group. The first equation cannot see it. Restore tally [] = 0, give that equation its own binding, or delegate from one outer equation.
+
+</Step>
+
+<Step title="4. Check">
+
+tally [] then returns 0; tally [2,3] returns 5.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** The rejected program below reports `Variable not in scope: total`. Adding more indentation to a use in another equation does not extend the binding's scope.
+
+**Practice, with answer:** safeFirst [] returns 0 and never demands head []. This is equation selection, not error recovery after calling head.
+
+
+### A binding in the wrong equation
+
+This program is intentionally rejected and is not a runnable exercise.
+
+```haskell
+-- Rejected: total is local to the second equation only.
+broken :: [Int] -> Int
+broken [] = total
+broken xs = total
+  where
+    total = sum xs
+```
+
+The key message is `Variable not in scope: total`. The tally variation above repairs it by supplying the empty equation's own answer.
+
+## 9. Recognise shadowing without inventing mutation
+
+An inner binding may hide an outer parameter with the same spelling. This is shadowing: the inner uses resolve to the nearer binding. It does not update the argument. Avoid shadowing in ordinary code by choosing distinct names. The examples deliberately expose it.
+
+**Template:**
+
+```text
+f name = use name
+  where
+    name = replacement
+```
+
+The result refers to the local name. The local definition also has recursive scope: name = name + 1 would refer to itself, not to the hidden parameter.
+
+### An integer parameter hidden by a constant
+
+The incoming number is unused.
+
+<HaskellTryIt>
+
+```haskell
+hidden :: Int -> Int
+hidden n = n + n
+  where
+    n = 3
+
+main :: IO ()
+main = print (hidden 10)
+```
+
+
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Both result occurrences resolve to local n. Demand it as 3 and reuse that value to obtain 6. The argument 10 contributes nothing; no assignment changed 10.
+
+**Without `where`:**
+
+```haskell
+hidden :: Int -> Int
+hidden ignored = let n = 3 in n + n
+```
+
+
+### A String parameter hidden by a label
+
+The same name-resolution rule applies to text.
+
+<HaskellTryIt>
+
+```haskell
+rename :: String -> String
+rename name = name ++ "!"
+  where
+    name = "Guest"
+
+main :: IO ()
+main = print (rename "Ada")
+```
+
+
+
+```text
+"Guest!"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing demands local name = "Guest", then appends "!". The incoming "Ada" is hidden and unused.
+
+**Without `where`:**
+
+```haskell
+rename :: String -> String
+rename ignored = "Guest!"
+```
+
+
+### A Boolean parameter hidden by a decision
+
+The local binding controls a conditional.
+
+<HaskellTryIt>
+
+```haskell
+permission :: Bool -> String
+permission allowed = if allowed then "yes" else "no"
+  where
+    allowed = False
+
+main :: IO ()
+main = print (permission True)
+```
+
+
+
+```text
+"no"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The if test demands local allowed = False. Select "no"; the parameter True is hidden. Only the selected result is demanded.
+
+**Without `where`:**
+
+```haskell
+permission :: Bool -> String
+permission ignored = let allowed = False in if allowed then "yes" else "no"
+```
+
+
+### A helper parameter hidden in a nested group
+
+The hiding happens inside a local function.
+
+<HaskellTryIt>
+
+```haskell
+ticket :: Int -> Int
+ticket fee = quote 100
+  where
+    quote amount = amount + fee
+      where
+        amount = 4
+
+main :: IO ()
+main = print (ticket 2)
+```
+
+
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+**Demand trace:** quote receives 100, but its result resolves amount to local 4. The captured fee is 2, so 4 + 2 = 6. The helper argument 100 is unused.
+
+**Without `where`:**
+
+```haskell
+ticket :: Int -> Int
+ticket fee = let quote ignored = let amount = 4 in amount + fee
+             in quote 100
+```
+
+
+### Exam question: predict a shadowed result (4 marks)
+
+Predict hidden 100 and explain whether the argument changes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Predict” needs the result; “explain” needs name resolution.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the nearest binding rule before doing arithmetic.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result sees local n = 3, so n + n = 6. The argument 100 is unused, not mutated.
+
+</Step>
+
+<Step title="4. Check">
+
+hidden 0 also returns 6, confirming independence of its argument.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** With `-Wname-shadowing`, GHC warns using the key wording `shadows the existing binding`. These programs are legal. Rename the local value to keep the outer parameter accessible.
+
+**Practice, with answer:** If the local n in hidden is renamed next and defined as n + 1, then returning next + next at input 10 gives 22.
+
+
+## 10. Leave unused bindings unevaluated
+
+A binding offers a computation; it does not command its execution. If the selected result does not need it, it can remain unevaluated even when its expression would fail. Referencing a binding only in an unselected branch does not force it either.
+
+**Template:**
+
+```text
+f input = safeResult
+  where
+    unused = expressionThatWouldFail
+```
+
+Start at safeResult and follow only demanded dependencies. A tuple can be partially demanded too: using the first field need not force the second.
+
+### A placeholder in a scoring function
+
+The scoring function increments its input while leaving an unfinished calculation dormant. The placeholder has an explicit type.
+
+<HaskellTryIt>
+
+```haskell
+safeConstant :: Int -> Int
+safeConstant n = n + 1
+  where
+    unused :: Int
+    unused = undefined
+
+main :: IO ()
+main = print (safeConstant 4)
+```
+
+
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Demand n + 1 = 4 + 1 = 5. The result has no dependency on unused, so undefined is never evaluated.
+
+**Without `where`:**
+
+```haskell
+safeConstant :: Int -> Int
+safeConstant n = n + 1
+```
+
+
+### An unused payment calculation
+
+The public result increments an account counter; a dormant payment calculation would fail if demanded.
+
+<HaskellTryIt>
+
+```haskell
+safeZero :: Int -> Int
+safeZero n = n + 1
+  where
+    bad :: Int
+    bad = 10 `div` 0
+
+main :: IO ()
+main = print (safeZero 8)
+```
+
+
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Only n + 1 is demanded, giving 9. bad is not needed, so no division takes place in this demand trace.
+
+**Without `where`:**
+
+```haskell
+safeZero :: Int -> Int
+safeZero n = n + 1
+```
+
+
+### Validation avoids an unfinished error label
+
+For a non-negative quantity, validation returns the safe label. The unfinished error label is referenced only in an unselected result.
+
+<HaskellTryIt>
+
+```haskell
+positiveLabel :: Int -> String
+positiveLabel n
+  | n >= 0 = "safe"
+  | otherwise = bad
+  where
+    bad :: String
+    bad = undefined
+
+main :: IO ()
+main = print (positiveLabel 0)
+```
+
+
+
+```text
+"safe"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The first test demands n = 0 and succeeds. Printing "safe" does not need bad. The other result is not selected, so its reference to bad causes no evaluation.
+
+**Without `where`:**
+
+```haskell
+positiveLabel :: Int -> String
+positiveLabel n = if n >= 0 then "safe" else undefined
+```
+
+
+### Demand one field of a sensor pair
+
+The sensor pair has one available reading and one unavailable field. The binding itself is used, but its second field remains dormant.
+
+<HaskellTryIt>
+
+```haskell
+firstOnly :: Int
+firstOnly = fst pair
+  where
+    pair :: (Int,Int)
+    pair = (7, undefined)
+
+main :: IO ()
+main = print (firstOnly)
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+**Demand trace:** fst demands pair's tuple shape, then its first field 7. Its second field is never demanded. Evaluating the outer tuple is not the same as evaluating both components.
+
+**Without `where`:**
+
+```haskell
+firstOnly :: Int
+firstOnly = fst (7, undefined)
+```
+
+
+### Exam question: explain why a program terminates (4 marks)
+
+Explain why safeZero 8 produces an answer despite its local division by zero.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+This asks about demand, not whether division by zero is valid.
+
+</Step>
+
+<Step title="2. Plan">
+
+Follow the result's references using the lazy tracing template.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is n + 1, so it needs n = 8 and returns 9. It never refers to bad; the zero-divisor expression is never evaluated.
+
+</Step>
+
+<Step title="4. Check">
+
+Changing the result to bad would demand the invalid division and fail.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** Predicting a crash merely because undefined appears in the source confuses declaration with demand. Conversely, a selected result that needs undefined does fail; laziness is not a general error suppressor.
+
+**Practice, with answer:** If the first field of pair becomes undefined, firstOnly fails when printed: fst does demand that field.
+
+
+## 11. Convert between where and let expressions
+
+A where clause belongs to a declaration. A let ... in form is an expression: it can appear inside a result, a Boolean guard expression, or a lambda body. Both introduce lazy, recursively scoped groups. A let inside a result cannot provide names to earlier guards; moving guard-used bindings requires moving the whole decision under let.
+
+**Template:**
+
+```text
+f args = result
+  where
+    local = calculation
+
+-- Alternative:
+f args = let local = calculation in result
+```
+
+These are alternative definitions to load separately. Moving a group changes its scope boundary; check every use, including uses in guards.
+
+### Where to let for one value
+
+Move one numeric binding before the result expression.
+
+<HaskellTryIt>
+
+```haskell
+halfAfter :: Double -> Double
+halfAfter n = half + 1
+  where
+    half = n / 2
+
+main :: IO ()
+main = print (halfAfter 3)
+```
+
+
+
+```text
+2.5
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Addition demands half = 1.5, then adds 1 to get 2.5. Moving the group to let preserves the dependency and sharing.
+
+**Without `where`:**
+
+```haskell
+halfAfter :: Double -> Double
+halfAfter n = let half = n / 2 in half + 1
+```
+
+
+### Let back to where
+
+Start with `f n = let square = n * n in square - 1`; the runnable answer uses where.
+
+<HaskellTryIt>
+
+```haskell
+lessSquare :: Int -> Int
+lessSquare n = square - 1
+  where
+    square = n * n
+
+main :: IO ()
+main = print (lessSquare 4)
+```
+
+
+
+```text
+15
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The result demands square = 16, then subtracts 1. Both placements calculate square when needed, rather than when its declaration is read.
+
+**Without `where`:**
+
+```haskell
+lessSquare :: Int -> Int
+lessSquare n = let square = n * n in square - 1
+```
+
+
+### A per-element let inside a lambda
+
+The outer local helper is expressed as a lambda in the rewrite; its inner temporary needs let there.
+
+<HaskellTryIt>
+
+```haskell
+offsetSquares :: Int -> [Int] -> [Int]
+offsetSquares offset xs = map squareShift xs
+  where
+    squareShift x = shifted * shifted
+      where
+        shifted = x + offset
+
+main :: IO ()
+main = print (offsetSquares 1 [1,2])
+```
+
+
+
+```text
+[4,9]
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing the first element calls squareShift 1, demanding shifted = 2 once and reusing it to give 4. The second call has shifted = 3 and gives 9. A where cannot attach directly to a lambda body; the rewrite uses a let expression.
+
+**Without `where`:**
+
+```haskell
+offsetSquares :: Int -> [Int] -> [Int]
+offsetSquares offset xs = map (\x -> let shifted = x + offset in shifted * shifted) xs
+```
+
+
+### A let inside a Boolean guard
+
+The inner r exists only in the parenthesised guard expression; the outer step belongs to the equation.
+
+<HaskellTryIt>
+
+```haskell
+divisible :: Int -> Bool
+divisible n
+  | (let r = n `mod` step in r == 0) = True
+  | otherwise = False
+  where
+    step = 3
+
+main :: IO ()
+main = print (divisible 6)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The guard demands r, which demands step = 3. r = 6 mod 3 = 0, so the guard succeeds. r cannot be used in the True result because its let scope ends at the guard expression.
+
+**Without `where`:**
+
+```haskell
+divisible :: Int -> Bool
+divisible n = let step = 3 in (let r = n `mod` step in r == 0)
+```
+
+
+### Exam question: move a guard binding outward (4 marks)
+
+Rewrite divisible so r is bound by the equation's where rather than a let inside its guard.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Rewrite” requires identical decisions while changing the binding's location.
+
+</Step>
+
+<Step title="2. Plan">
+
+Give r equation-wide scope and remove the guard's let wrapper.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `divisible n | r == 0 = True | otherwise = False` with `where { step = 3; r = mod n step }`. Both names are then visible in the guards and results.
+
+</Step>
+
+<Step title="4. Check">
+
+At n = 7, r = 1 and the result is False in either definition.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** `map (\x -> x + y where y = 1) xs` cannot attach where to a lambda expression. GHC's key diagnostic is `parse error on input`. Use `\x -> let y = 1 in x + y`.
+
+**Practice, with answer:** Convert `let a = 4 in a * a` to the value equation `result = a * a` followed by `where a = 4`. Both give 16.
+
+
+## 12. Decide when to promote a top-level helper
+
+Keep a helper local when it only explains one operation. Promote it when several definitions need it or when it deserves independent tests. A promoted helper loses access to the original enclosing parameters: make those captured values explicit arguments. Top-level names are available across a module, subject to its export list when used from another module.
+
+**Template:**
+
+```text
+f captured input = helper input
+  where
+    helper x = formula captured x
+
+-- Promoted alternative:
+f captured input = helperTop captured input
+helperTop captured x = formula captured x
+```
+
+helperTop receives the formerly captured value explicitly. Moving its body alone would leave that value out of scope.
+
+### An independent arithmetic helper
+
+This helper uses no captured argument, so its interface stays the same.
+
+<HaskellTryIt>
+
+```haskell
+squarePair :: Int -> Int -> Int
+squarePair a b = square a + square b
+  where
+    square x = x * x
+
+main :: IO ()
+main = print (squarePair 2 5)
+```
+
+
+
+```text
+29
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The sum calls square 2 = 4 and square 5 = 25, giving 29. Promotion changes visibility, not which arithmetic is demanded.
+
+**Without `where`:**
+
+```haskell
+squareTop :: Int -> Int
+squareTop x = x * x
+squarePair :: Int -> Int -> Int
+squarePair a b = squareTop a + squareTop b
+```
+
+
+### A captured fee becomes explicit
+
+Promotion now needs one additional helper parameter.
+
+<HaskellTryIt>
+
+```haskell
+bill :: Int -> Int -> Int
+bill fee amount = charge amount
+  where
+    charge x = x + fee
+
+main :: IO ()
+main = print (bill 3 9)
+```
+
+
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Demand charge 9; its x = 9 and captured fee = 3 give 12. The top-level version must receive both values explicitly.
+
+**Without `where`:**
+
+```haskell
+chargeTop :: Int -> Int -> Int
+chargeTop fee x = x + fee
+bill :: Int -> Int -> Int
+bill fee amount = chargeTop fee amount
+```
+
+
+### Promote a filtering predicate
+
+Partial application fixes the formerly captured threshold.
+
+<HaskellTryIt>
+
+```haskell
+above :: Int -> [Int] -> [Int]
+above limit xs = filter keep xs
+  where
+    keep x = x > limit
+
+main :: IO ()
+main = print (above 4 [2,4,6])
+```
+
+
+
+```text
+[6]
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Filtering demands keep 2 = False, keep 4 = False, keep 6 = True, each using limit = 4. Only 6 is printed. Each predicate application still receives its own x.
+
+**Without `where`:**
+
+```haskell
+keepTop :: Int -> Int -> Bool
+keepTop limit x = x > limit
+above :: Int -> [Int] -> [Int]
+above limit xs = filter (keepTop limit) xs
+```
+
+
+### Promote a text prefix helper
+
+A String captured from the enclosing call becomes a parameter too.
+
+<HaskellTryIt>
+
+```haskell
+prefixAll :: String -> [String] -> [String]
+prefixAll prefix xs = map attach xs
+  where
+    attach word = prefix ++ word
+
+main :: IO ()
+main = print (prefixAll "#" ["one","two"])
+```
+
+
+
+```text
+["#one","#two"]
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing requests attach "one", demanding prefix "#", and then attach "two". The same captured prefix is used at both calls, but the result strings differ.
+
+**Without `where`:**
+
+```haskell
+attachTop :: String -> String -> String
+attachTop prefix word = prefix ++ word
+prefixAll :: String -> [String] -> [String]
+prefixAll prefix xs = map (attachTop prefix) xs
+```
+
+
+### Exam question: promote a captured helper (4 marks)
+
+Promote addFee from charged to a top-level definition.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+This asks for a top-level helper, not merely a let rewrite.
+
+</Step>
+
+<Step title="2. Plan">
+
+Expose fee as an extra parameter and partially apply the helper for map.
+
+</Step>
+
+<Step title="3. Solution">
+
+Define `addFeeTop fee amount = amount + fee`; define `charged fee amounts = map (addFeeTop fee) amounts`. The helper no longer relies on an enclosing fee.
+
+</Step>
+
+<Step title="4. Check">
+
+fee 2 and amounts [3,8] still give [5,10].
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** Moving charge to the top level while leaving fee unbound gives `Variable not in scope: fee`. Add fee to its arguments and supply it at the call.
+
+**Practice, with answer:** squareTop needs no captured parameter. chargeTop, keepTop and attachTop each need one formerly captured value.
+
+
+## 13. Make layout and separators explicit
+
+In the conventional style here, indent where beneath its equation and align sibling bindings beneath where. The first declaration sets the group's layout column. A deeper line continues a declaration; a sibling at the same column starts another declaration. Braces enclose an explicit group and semicolons separate declarations. Use spaces, not tabs.
+
+**Template:**
+
+```text
+f x = a + b
+  where
+    a = x + 1
+    b = x + 2
+
+-- Explicit group:
+g x = a + b where { a = x + 1; b = x + 2 }
+```
+
+The layout describes group membership, not evaluation order. Each nested group needs its own indentation or explicit boundaries.
+
+### Inventory bins with aligned siblings
+
+The two bin counts are x + 1 and x + 2. Start with two-space and four-space indentation.
+
+<HaskellTryIt>
+
+```haskell
+layoutSum :: Int -> Int
+layoutSum x = a + b
+  where
+    a = x + 1
+    b = x + 2
+
+main :: IO ()
+main = print (layoutSum 2)
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Addition demands a = 3 and b = 4, giving 7. Their alignment puts them in the same group; it does not require declaration-order evaluation.
+
+**Without `where`:**
+
+```haskell
+layoutSum :: Int -> Int
+layoutSum x = let a = x + 1; b = x + 2 in a + b
+```
+
+
+### Garden area in a one-line group
+
+The garden sides are x + 1 and x - 1. Braces and a semicolon replace implicit layout.
+
+<HaskellTryIt>
+
+```haskell
+layoutProduct :: Int -> Int
+layoutProduct x = a * b where { a = x + 1; b = x - 1 }
+
+main :: IO ()
+main = print (layoutProduct 4)
+```
+
+
+
+```text
+15
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Multiplication demands a = 5 and b = 3, yielding 15. The semicolon separates declarations rather than sequencing computations.
+
+**Without `where`:**
+
+```haskell
+layoutProduct :: Int -> Int
+layoutProduct x = let { a = x + 1; b = x - 1 } in a * b
+```
+
+
+### A greeting with a continued helper body
+
+The helper body continues deeper; its sibling returns to the binding column.
+
+<HaskellTryIt>
+
+```haskell
+layoutText :: String -> String
+layoutText name = greet name ++ suffix
+  where
+    greet person =
+      "Hello " ++ person
+    suffix = "!"
+
+main :: IO ()
+main = print (layoutText "Ada")
+```
+
+
+
+```text
+"Hello Ada!"
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing demands greet "Ada", producing "Hello Ada", then suffix = "!". suffix is a sibling declaration, not part of greet's continued expression.
+
+**Without `where`:**
+
+```haskell
+layoutText :: String -> String
+layoutText name = let greet person = "Hello " ++ person; suffix = "!"
+                  in greet name ++ suffix
+```
+
+
+### Paired ticket prices with explicit nested groups
+
+Each ticket costs the base n plus one; the helper totals two tickets. Both the outer helper group and its inner value group use braces.
+
+<HaskellTryIt>
+
+```haskell
+layoutNested :: Int -> Int
+layoutNested n = helper n where { helper x = y + y where { y = x + 1 } }
+
+main :: IO ()
+main = print (layoutNested 3)
+```
+
+
+
+```text
+8
+```
+
+</HaskellTryIt>
+
+**Demand trace:** helper receives 3 and its sum demands y = 4. Reuse y to obtain 8. The first closing brace ends the inner group and the next ends the enclosing helper group.
+
+**Without `where`:**
+
+```haskell
+layoutNested :: Int -> Int
+layoutNested n = let helper x = let y = x + 1 in y + y
+                 in helper n
+```
+
+
+### Exam question: insert a missing separator (4 marks)
+
+Fix `f x = a + b where { a = x + 1 b = x + 2 }`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Fix” requests a syntax repair, not a different formula.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the explicit-group template: one separator between declarations.
+
+</Step>
+
+<Step title="3. Solution">
+
+Insert a semicolon: `f x = a + b where { a = x + 1; b = x + 2 }`. Alternatively put a and b on aligned lines beneath where.
+
+</Step>
+
+<Step title="4. Check">
+
+At x = 2, a = 3 and b = 4, giving 7.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common error and repair:** A missing separator produces the key diagnostic `parse error on input`. A tab can produce a `-Wtabs` warning with key wording `Tab character found here`; mixed visual columns may also change layout. Replace tabs with spaces and align siblings.
+
+**Practice, with answer:** If b is indented as a continuation of a, its equals sign may be parsed in the wrong place. Align the two binding names to repair the intended group.
+
+## 14. Compare the tools and diagnose failures
+
+| Tool | Role | Scope and demand |
+|---|---|---|
+| where | Name values and helpers for a declaration | All guards and results of one equation; demand controls evaluation |
+| let ... in | Bind names inside an expression | Its group and expression after in; usable inside guards and lambdas |
+| Guards | Choose a result by tests | Tried in order; do not by themselves share repeated calculations |
+| Top-level definitions | Provide module-level operations | Reusable across equations; captured inputs must become explicit parameters |
+
+A let expression *inside a Boolean guard* can calculate that guard's test. A let placed only in a result cannot supply names to earlier tests. Haskell also supports let guard qualifiers, such as `| let x = expression, test x = result`; these are distinct from the ordinary Boolean guards and let expressions compared here.
+
+### A misplaced where
+
+This program is deliberately rejected, so it is a plain fence.
+
+```haskell
+-- Rejected: where is not an independent top-level declaration.
+wrongLayout n = local + 1
+where
+  local = n * 2
+```
+
+GHC's key diagnostic is `parse error on input`. Indent where beneath the equation and local beneath where. The layoutSum variation shows that structure, and its let rewrite provides an alternative without where.
+
+### A misleading self-reference
+
+```haskell
+-- Incorrect: this uses the inner n recursively, not the parameter.
+selfReference :: Int -> Int
+selfReference n = n
+  where
+    n = n + 1
+```
+
+This is legal recursive scope, not a compiler rejection. Demand for inner n demands itself again and cannot produce an Int. Do not run it as a success example. Rename the inner binding: `f n = next` followed by `where next = n + 1`. Without where, write `f n = n + 1`.
+
+### A local name that escaped its owner
+
+```haskell
+-- Rejected: local is not a top-level name.
+owner :: Int -> Int
+owner n = local
+  where
+    local = n + 1
+outsider :: Int
+outsider = local
+```
+
+The key message is `Variable not in scope: local`. Repair outsider by calling `owner 2`, or promote a parameterised helper. Changing a use's indentation does not make a local name public.
+
+## Summary
+
+<Callout type="key" title="Remember">
+A where group belongs to one equation, including all its guards. Sibling declarations can refer to one another regardless of order. Follow demand, reuse each demanded binding, and leave unused work untouched. Helper applications have their own parameters and environments. Patterns may be partial; nesting restricts scope; shadowing hides rather than updates. Use let inside expressions and explicit parameters when promoting helpers. Align siblings and use spaces.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Does the last declaration in a where group run last?">
+No. Demand follows dependencies, not declaration order. An unused declaration may never be evaluated.
+</CheckQuestion>
+
+<CheckQuestion question="Does a where after the last equation serve all equations of that function?">
+No. It serves the equation it follows. Delegate cases from one outer equation or use a suitable shared helper.
+</CheckQuestion>
+
+<CheckQuestion question="Can a local function use its own arguments and the enclosing parameters?">
+Yes. Each helper application supplies its own arguments and can use unshadowed captured parameters.
+</CheckQuestion>
+
+<CheckQuestion question="How does promotion affect a captured value?">
+Make it an explicit helper parameter, and supply it at every call.
+</CheckQuestion>
+
+<CheckQuestion question="Why does fst work when a pair's second field is undefined?">
+It demands the tuple's outer shape and first field, not the unused second field.
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Where Exam Practice](/docs/sem3/csi243/03-defining-functions/notes/where-exam-practice).

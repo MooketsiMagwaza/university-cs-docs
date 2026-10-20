@@ -1,0 +1,1495 @@
+---
+title: "Operators and Lexical Rules"
+description: "Choose legal Haskell names, define value and constructor operators, and resolve precedence and associativity with explicit parentheses."
+---
+
+[Defining Functions](/docs/sem3/csi243/03-defining-functions/notes/defining-functions) teaches the construction process. Here we extend it with the spelling and grouping rules that determine what a definition means. These rules matter before any arithmetic is evaluated.
+
+<LearningObjectives items={[
+  'Distinguish value names, type names, data constructors and symbolic operators',
+  'Use apostrophes, digits and underscores without confusing a binding with a wildcard',
+  'Declare operators with signatures and choose left, right or non-associative fixity',
+  'Insert every implied parenthesis and explain conflicting fixities',
+  'Use constructor operators in expressions and patterns',
+]} />
+
+For sections, lambdas, prefix operator application and the negative-section trap, read [Currying and Sections](/docs/sem3/csi243/07-higher-order/notes/currying-and-sections). The focus here is declaring and parsing operators. For how a constructor pattern matches, use [Pattern Matching](/docs/sem3/csi243/04-making-choices/notes/pattern-matching) and [Case Expressions](/docs/sem3/csi243/04-making-choices/notes/case-expressions).
+
+## 1. Value identifiers: letters, digits and apostrophes
+
+An identifier is a name written with letters rather than as an operator. An ordinary value or function identifier starts with a lower-case letter or an underscore. After the first character it may contain letters, digits, underscores and apostrophes. These are spelling rules, not type declarations: a plural name such as `marks` suggests a list to a human but does not make it a list. Names are case-sensitive. An apostrophe in `score'` is part of the name; it does not compute a derivative or automatically refer to `score`.
+
+For portable beginner examples use ASCII letters. Haskell also admits appropriate Unicode letters; there is no need to invent punctuation-based identifiers such as `score-total`. That text is parsed using subtraction. An identifier cannot begin with a digit.
+
+### Template
+
+```haskell
+valueName2 :: Int -> Int
+valueName2 input_value = input_value + 1
+
+valueName' :: Int -> Int
+valueName' input_value = input_value - 1
+```
+
+`valueName2` and `valueName'` are distinct names; `input_value` is a parameter. A prime can occur after the first character, including inside a name, and several primes are legal.
+
+### Worked variation: a digit after the first letter
+
+<HaskellTryIt>
+
+```haskell
+mark2 :: Int
+mark2 = 48
+main :: IO ()
+main = print (mark2 + 2)
+```
+
+```text
+50
+```
+
+</HaskellTryIt>
+
+`mark2` is one identifier. Replace it by its value `48`, then add `2`.
+
+### Worked variation: a prime names a separate function
+
+<HaskellTryIt>
+
+```haskell
+adjust :: Int -> Int
+adjust n = n + 1
+adjust' :: Int -> Int
+adjust' n = n - 1
+main :: IO ()
+main = print (adjust 4, adjust' 4)
+```
+
+```text
+(5,3)
+```
+
+</HaskellTryIt>
+
+The two definitions are independent: substitute `4` for `n` in each, giving `4 + 1` and `4 - 1`.
+
+### Worked variation: internal underscores and several primes
+
+<HaskellTryIt>
+
+```haskell
+score_total :: Int
+score_total = 10
+score'' :: Int
+score'' = 3
+main :: IO ()
+main = print (score_total - score'')
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+Both are legal identifiers. The primes do not alter `3`; the result is `10 - 3`.
+
+### Exam question: repair a digit-led identifier (4 marks)
+
+Repair `2marks = 20` and write a complete call that subtracts 3 from the repaired value.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is “repair”: preserve the intended value and change the illegal spelling.
+
+</Step>
+
+<Step title="2. Plan">
+
+A leading digit cannot start a value identifier. Move the digit after a lower-case letter and update the use.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+marks2 :: Int
+marks2 = 20
+
+main :: IO ()
+main = print (marks2 - 3)
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`marks2` is legal, its value is `20`, and the call prints `17`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`2marks = 20` is invalid source; GHC's key diagnostic is `Parse error`. Repair it to `marks2 = 20`. `total-score` is not one name: it uses the operator `-` between two names. An unbound `score` then gives `Variable not in scope`. Use `total_score` if one identifier was intended. A prime does not define the unprimed name for you.
+
+### Practice with answers
+
+Which are legal value identifiers: `item3`, `3item`, `item'`, `item_count`? Does `items = 7` declare a list?
+
+<details>
+<summary>Answer</summary>
+
+`item3`, `item'` and `item_count` are legal; `3item` is not. `items = 7` binds a numeric value: the plural spelling does not enforce a list type.
+
+</details>
+
+## 2. Type names and constructor names
+
+Type constructors name types, such as `Int` or `Ticket`. Data constructors build values, such as `True` or `Ticket 7`. Ordinary names for both start with an upper-case letter; lower-case type names in signatures are type variables, such as `a`. A type variable stands for a type, while a value parameter stands for a value. The same upper-case spelling can be used for a type and its data constructor because they occupy different namespaces. Upper-case names cannot be used as ordinary function parameters.
+
+Capitalisation changes the syntactic role; it is not a way to decorate a function name. `Square x = x*x` does not define an ordinary function named `Square`.
+
+### Template
+
+```haskell
+data TypeName a = ConstructorName a
+valueName :: TypeName Int -> Int
+valueName (ConstructorName field) = field
+```
+
+`TypeName` is the type constructor, `a` is its type parameter, `ConstructorName` is a data constructor, and `field` is a value bound by a pattern.
+
+### Worked variation: the same spelling in two namespaces
+
+<HaskellTryIt>
+
+```haskell
+data Ticket = Ticket Int
+number :: Ticket -> Int
+number (Ticket n) = n
+main :: IO ()
+main = print (number (Ticket 7))
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+In the signature, `Ticket` is a type. In the input, `Ticket` builds a value; the pattern extracts its field `7`.
+
+### Worked variation: different type and constructor spellings
+
+<HaskellTryIt>
+
+```haskell
+data Signal = Stop | Go
+mayMove :: Signal -> Bool
+mayMove Stop = False
+mayMove Go = True
+main :: IO ()
+main = print (mayMove Stop, mayMove Go)
+```
+
+```text
+(False,True)
+```
+
+</HaskellTryIt>
+
+The type is `Signal`; the values are `Stop` and `Go`. Each matches the equation with that constructor.
+
+### Worked variation: a type variable and a primed constructor
+
+<HaskellTryIt>
+
+```haskell
+data Box2 a = Box' a
+unbox :: Box2 a -> a
+unbox (Box' x) = x
+main :: IO ()
+main = print (unbox (Box' "ok"))
+```
+
+```text
+"ok"
+```
+
+</HaskellTryIt>
+
+`Box2` and `Box'` are legal upper-case identifiers with legal suffixes. Instantiate `a` to `String`; the field is the string `"ok"`, which `print` shows with quotes.
+
+### Exam question: repair source capitalisation (5 marks)
+
+Repair the intended function `Square X = X * X` with type `Int -> Int`. Explain both changes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Repair” asks for an ordinary function. The upper-case spellings currently suggest constructors.
+
+</Step>
+
+<Step title="2. Plan">
+
+Lower-case the function name and its parameter everywhere; retain `Int` because it names a type.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+square :: Int -> Int
+square x = x * x
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`square 3` reduces to `3 * 3 = 9`; `square 0` is `0`. The signature and equation use the same name.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+With no `X` constructor declared, `f X = 1` gives the key phrase `Not in scope: data constructor`. Write `f x = 1` to bind a parameter. `data ticket = Ticket Int` is invalid (`Malformed head of type or class declaration`); repair the type to `Ticket`. A type name in an expression does not automatically build a value: after `data Signal = Stop | Go`, the expression `Signal` refers to no declared data constructor.
+
+### Practice with answers
+
+In `data Parcel a = Packed a`, classify `Parcel`, `Packed`, `a` and the `x` in `open (Packed x) = x`.
+
+<details>
+<summary>Answer</summary>
+
+`Parcel` is a type constructor; `Packed` is a data constructor; `a` is a type variable; `x` is a value variable. `Packed 5` is a value, while `Parcel Int` is a type.
+
+</details>
+
+## 3. The wildcard and underscore-prefixed bindings
+
+The pattern `_` accepts a value and binds no name. Each occurrence is independent, so `( _, _ )` does not test equality. An identifier such as `_value` really does bind a name and can be used in its scope. The leading underscore often signals an intentionally unused binding and suppresses the usual unused-binding warning; it does not change matching into a wildcard. `_` in an expression is a typed hole, not a reference to a discarded argument.
+
+### Template
+
+```haskell
+keepSecond :: a -> b -> b
+keepSecond _ value = value
+
+keepFirst :: a -> b -> a
+keepFirst _value _ = _value
+```
+
+`_` discards a position; `_value` names a position. Use an ordinary name when its value matters to the calculation.
+
+### Worked variation: discard a field of a pair
+
+<HaskellTryIt>
+
+```haskell
+second :: (Int, Int) -> Int
+second (_, y) = y
+main :: IO ()
+main = print (second (12, 4))
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+The first field matches `_` without creating a binding. The second field binds `y = 4`.
+
+### Worked variation: use a binding that begins with underscore
+
+<HaskellTryIt>
+
+```haskell
+difference :: Int -> Int -> Int
+difference _left right = _left - right
+main :: IO ()
+main = print (difference 10 3)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+`_left` is bound to `10` and can be used on the right, so this calculates `10 - 3`.
+
+### Worked variation: two wildcards impose no relationship
+
+<HaskellTryIt>
+
+```haskell
+accept :: (Int, Int) -> Bool
+accept (_, _) = True
+main :: IO ()
+main = print (accept (2, 9), accept (2, 2))
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+Both patterns match any pair. The unequal fields `2` and `9` are accepted just as the equal fields are.
+
+### Exam question: discard or retain (4 marks)
+
+Write a function on `(String, Int)` that returns the integer. Then write a version whose first field is named `_label`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for definitions; only the second field affects the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a wildcard when the field is discarded. A named underscore binding is legal but unnecessary unless retained for another use.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+count :: (String, Int) -> Int
+count (_, n) = n
+
+countNamed :: (String, Int) -> Int
+countNamed (_label, n) = n
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+Both return `6` on `("red", 6)` and `0` on `("", 0)`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`bad _ = _` cannot retrieve the discarded argument: the expression hole gives the GHC key phrase `Found hole`. Repair to `good x = x`. Repeating `_name` in one pattern is still a repeated binding and is illegal; use two distinct names and an equality guard if that was intended.
+
+### Practice with answers
+
+What do `f _ _ = True` and `g _x _y = _x - _y` do on arguments `8` and `3`?
+
+<details>
+<summary>Answer</summary>
+
+`f 8 3` returns `True` without comparing the arguments. `g 8 3` returns `5`; both underscore-prefixed parameters are bound and used.
+
+</details>
+
+## 4. Defining symbolic value operators
+
+A value operator is an ordinary function with a symbolic name that does not start with a colon. Give its signature with parentheses around the name. Define it either between its two argument patterns or in prefix form with parentheses. A fixity declaration describes grouping; it does not supply a function body or a type.
+
+ASCII operator characters include `! # $ % & * + . / < = > ? @ \ ^ | - ~ :`. Some complete tokens are reserved syntax: for example `=`, `::`, `->`, `<-`, `=>`, `..`, `|`, `@`, `~` and `\` cannot be repurposed as your ordinary operator. Alphabetic names use backticks in infix position; symbolic names use parentheses in prefix position. Backticks are not single quotation marks. Avoid names that obscure familiar Prelude operators.
+
+### Template
+
+```haskell
+infixl 6 <->
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+-- Equivalent definition form, used instead of the previous equation:
+-- (<->) x y = x - y
+```
+
+`<->` is the operator name; `6` is its precedence; `x` and `y` are its operands. The declared `Int` inputs determine which calls type-check.
+
+### Worked variation: a difference operator
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+main :: IO ()
+main = print (10 <-> 3, (<->) 3 10)
+```
+
+```text
+(7,-7)
+```
+
+</HaskellTryIt>
+
+The prefix call preserves argument order. Substitution gives `10 - 3` and `3 - 10`; changing the order changes the sign.
+
+### Worked variation: prefix definition of a text operator
+
+<HaskellTryIt>
+
+```haskell
+infixr 5 <+>
+(<+>) :: String -> String -> String
+(<+>) left right = left ++ ":" ++ right
+main :: IO ()
+main = print ("red" <+> "blue")
+```
+
+```text
+"red:blue"
+```
+
+</HaskellTryIt>
+
+The definition inserts a colon between its arguments. This is a value operator despite containing angle brackets; only an initial colon would put it in the constructor category.
+
+### Worked variation: a named function with a fixity declaration
+
+<HaskellTryIt>
+
+```haskell
+infixl 7 `remove`
+remove :: Int -> Int -> Int
+remove left right = left - right
+main :: IO ()
+main = print (20 `remove` 6, remove 6 20)
+```
+
+```text
+(14,-14)
+```
+
+</HaskellTryIt>
+
+The backticked call and prefix call use the same function. The declaration is legal for an alphabetic name; it is not restricted to symbolic names.
+
+### Exam question: define and call an operator (5 marks)
+
+Define `<#>` on integers so that `x <#> y` means `2*x - y`. Supply a signature and show a prefix call.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Define” requires a body and type, not just a fixity declaration. The order of operands matters.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a non-colon symbolic name, put it in parentheses in the signature, and retain both operand positions.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+infixl 6 <#>
+(<#>) :: Int -> Int -> Int
+x <#> y = 2 * x - y
+
+main :: IO ()
+main = print ((<#>) 7 3)
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+The prefix call is `7 <#> 3`, so `2 * 7 - 3 = 11`. Swapping the inputs would give `-1`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The signature `<-> :: Int -> Int -> Int` lacks the required parentheses and gives `parse error`. Repair it to `(<->) :: Int -> Int -> Int`. A declaration `infixl 6 <->` alone does not bind `<->`; a use without any definition gives `Variable not in scope`. `7 'div' 2` uses a character-literal delimiter, not backticks: write ``7 `div` 2``.
+
+### Practice with answers
+
+Write the signature and a prefix definition for an operator `%%` that returns the left operand minus twice the right operand. Evaluate `9 %% 2`.
+
+<details>
+<summary>Answer</summary>
+
+```haskell
+(%%) :: Int -> Int -> Int
+(%%) x y = x - 2 * y
+```
+
+`9 %% 2` is `9 - 4 = 5`. A fixity may be supplied separately; it does not alter this single application.
+
+</details>
+
+## 5. Constructor operators start with a colon
+
+A symbolic data constructor begins with `:`. Declare it in a `data` declaration: it builds a structured value and can appear in a pattern that takes that structure apart. An ordinary value operator computes a result and cannot be used as an ordinary constructor pattern. The built-in `(:)` is the list constructor: it joins one element to a list. A custom colon operator has the fields specified by its declaration; it need not construct a list.
+
+These are data constructor operators. Symbolic operators in types are a separate language feature and are not needed for these declarations.
+
+### Template
+
+```haskell
+data Pair a b = a :*: b
+infixr 5 :*:
+firstField :: Pair a b -> a
+firstField (x :*: _) = x
+```
+
+`Pair a b` is the type; `(:*:) :: a -> b -> Pair a b` is the data constructor. The infix pattern exposes its two fields.
+
+### Worked variation: a custom pair constructor
+
+The symbolic declaration and consumer are valid Haskell, but the site interpreter does not implement symbolic data-constructor declarations:
+
+```haskell
+data Pair a b = a :*: b
+infixr 5 :*:
+firstField :: Pair a b -> a
+firstField (x :*: _) = x
+```
+
+For this symbolic version, evaluate `firstField (7 :*: "tag")`. The runnable equivalent below changes only the constructor spelling and makes the same structure explicit.
+
+<HaskellTryIt>
+
+```haskell
+data Pair a b = Pair a b
+firstField :: Pair a b -> a
+firstField (Pair x _) = x
+main :: IO ()
+main = print (firstField (Pair 7 "tag"))
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+Construction stores `7` and `"tag"`; the constructor pattern binds the first field to `x` and discards the second.
+
+### Worked variation: a recursive constructor with a terminal case
+
+The symbolic declaration and consumer are valid Haskell, but the site interpreter does not implement symbolic data-constructor declarations:
+
+```haskell
+data Chain = End | Int :> Chain
+infixr 5 :>
+count :: Chain -> Int
+count End = 0
+count (_ :> rest) = 1 + count rest
+```
+
+For this symbolic version, evaluate `count (4 :> 9 :> End)`. The runnable equivalent below changes only the constructor spelling and makes the same structure explicit.
+
+<HaskellTryIt>
+
+```haskell
+data Chain = End | Link Int Chain
+count :: Chain -> Int
+count End = 0
+count (Link _ rest) = 1 + count rest
+main :: IO ()
+main = print (count (Link 4 (Link 9 End)))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+Right association builds `4 :> (9 :> End)`. The two constructor matches contribute `1 + 1 + 0`.
+
+### Worked variation: constructor prefix form and empty structure
+
+The symbolic declaration and consumer are valid Haskell, but the site interpreter does not implement symbolic data-constructor declarations:
+
+```haskell
+data Chain = End | Int :> Chain
+infixr 5 :>
+firstOr :: Int -> Chain -> Int
+firstOr fallback End = fallback
+firstOr _ (x :> _) = x
+```
+
+For this symbolic version, evaluate `firstOr 0 ((:>) 8 End), firstOr 0 End`. The runnable equivalent below changes only the constructor spelling and makes the same structure explicit.
+
+<HaskellTryIt>
+
+```haskell
+data Chain = End | Link Int Chain
+firstOr :: Int -> Chain -> Int
+firstOr fallback End = fallback
+firstOr _ (Link x _) = x
+main :: IO ()
+main = print (firstOr 0 (Link 8 End), firstOr 0 End)
+```
+
+```text
+(8,0)
+```
+
+</HaskellTryIt>
+
+`(:>) 8 End` builds the same node as `8 :> End`. Its field is `8`. `End` matches the other equation and uses the fallback `0`.
+
+### Exam question: choose a constructor operator (5 marks)
+
+Declare `Join a` with a constructor operator `:+:` storing two values of type `a`. Write a function that returns its second field.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Declare” requires a type and constructor; “write” then requires a consumer using that constructor pattern.
+
+</Step>
+
+<Step title="2. Plan">
+
+The initial colon selects a constructor operator. Give both fields the same type parameter and name only the needed field.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Join a = a :+: a
+infixr 5 :+:
+
+rightField :: Join a -> a
+rightField (_ :+: y) = y
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`rightField (2 :+: 9)` is `9`; `rightField ("a" :+: "b")` is `"b"`. The consumer works at either element type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+With no `:+` declaration, `first (x :+ y) = x` gives `Not in scope: data constructor`. A colon-led name must be a declared constructor. Declare it in `data` if you want structure, or use a non-colon name such as `<+>` for a value function. Conversely, `data Pair = Int +* Int` cannot declare `+*` as an ordinary data constructor because it lacks the initial colon (`parse error`).
+
+### Practice with answers
+
+Is `<:>` a constructor operator? Is `:<>`? Can a value operator `<->` be used to decompose a value in a pattern?
+
+<details>
+<summary>Answer</summary>
+
+`<:>` is a value operator because its first character is `<`; `:<>` is a constructor operator because its first character is `:`. An ordinary value operator cannot be used as a constructor pattern. A `:<>` constructor must first be declared in a data type.
+
+</details>
+
+## 6. Left association with infixl
+
+Precedence is a number from `0` to `9`; the larger number binds more tightly. Associativity decides how an unparenthesised chain at the same precedence groups. `infixl` means group to the left. This is a rule for inserting parentheses, not a promise about run-time evaluation order. Subtraction exposes the difference because it is not associative: `(a-b)-c` and `a-(b-c)` need not agree.
+
+### Template
+
+```haskell
+infixl 6 <->
+-- a <-> b <-> c means (a <-> b) <-> c
+```
+
+Read `infixl` as left grouping. A fixity declaration can be written before or after its binding within the same declaration group.
+
+### Worked variation: a three-operand chain
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+main :: IO ()
+main = print (20 <-> 6 <-> 2)
+```
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+Insert parentheses: `(20 <-> 6) <-> 2 = (20 - 6) - 2 = 14 - 2 = 12`.
+
+### Worked variation: a fourth operand
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+main :: IO ()
+main = print (20 <-> 6 <-> 2 <-> 1)
+```
+
+```text
+11
+```
+
+</HaskellTryIt>
+
+Group `((20 <-> 6) <-> 2) <-> 1`. The successive results are `14`, `12`, `11`.
+
+### Worked variation: zero and a negative intermediate result
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+main :: IO ()
+main = print (0 <-> 3 <-> 4)
+```
+
+```text
+-7
+```
+
+</HaskellTryIt>
+
+The first result is `0 - 3 = -3`; the next is `-3 - 4 = -7`. Right grouping would instead give `1`.
+
+### Worked variation: explicit parentheses override the declaration
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+main :: IO ()
+main = print (20 <-> (6 <-> 2))
+```
+
+```text
+16
+```
+
+</HaskellTryIt>
+
+The written parentheses require the inner `6 - 2 = 4`, then `20 - 4 = 16`. Fixity only fills in missing parentheses.
+
+### Exam question: fully parenthesise and reduce (5 marks)
+
+Given the subtraction operator above, fully parenthesise and reduce `30 <-> 8 <-> 5 <-> 2`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Fully parenthesise” asks for the parse before the result. The operator is left-associative at precedence 6.
+
+</Step>
+
+<Step title="2. Plan">
+
+Grow the left group one operand at a time, then substitute the subtraction definition.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+(((30 <-> 8) <-> 5) <-> 2)
+```
+
+The reductions are `30 - 8 = 22`, `22 - 5 = 17`, and `17 - 2 = 15`.
+
+</Step>
+
+<Step title="4. Check">
+
+Explicit prefix nesting is `(<->) ((<->) ((<->) 30 8) 5) 2`, also yielding `15`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The wrong answer `29` for that exam call comes from the right grouping `30 - (8 - (5 - 2))`. GHC reports no error for the original valid expression: this is a reasoning error. `infixl 10 <->` is rejected with the key phrase `Precedence out of range`; choose `0` through `9`.
+
+### Practice with answers
+
+With this definition, compare `8 <-> 3 <-> 1` and `8 <-> (3 <-> 1)`.
+
+<details>
+<summary>Answer</summary>
+
+The first is `(8 - 3) - 1 = 4`. The second is `8 - (3 - 1) = 6`.
+
+</details>
+
+## 7. Right association with infixr
+
+`infixr` groups an equal-precedence chain to the right. The operator body can still be subtraction: the declaration, rather than the spelling or mathematical operation, determines grouping. Right grouping is useful for constructors whose right field contains another structure, but does not by itself make a function lazy or change its type.
+
+### Template
+
+```haskell
+infixr 6 <~>
+-- a <~> b <~> c means a <~> (b <~> c)
+```
+
+Work from the rightmost pair towards the left once grouping is fixed. That is a reduction strategy for these finite arithmetic examples, not a general evaluation-order rule.
+
+### Worked variation: the same subtraction body with right grouping
+
+<HaskellTryIt>
+
+```haskell
+infixr 6 <~>
+(<~>) :: Int -> Int -> Int
+x <~> y = x - y
+main :: IO ()
+main = print (20 <~> 6 <~> 2)
+```
+
+```text
+16
+```
+
+</HaskellTryIt>
+
+`20 <~> (6 <~> 2) = 20 - (6 - 2) = 20 - 4 = 16`.
+
+### Worked variation: four operands with alternating subtraction
+
+<HaskellTryIt>
+
+```haskell
+infixr 6 <~>
+(<~>) :: Int -> Int -> Int
+x <~> y = x - y
+main :: IO ()
+main = print (20 <~> 6 <~> 2 <~> 1)
+```
+
+```text
+15
+```
+
+</HaskellTryIt>
+
+Group `20 <~> (6 <~> (2 <~> 1))`. The right pair is `1`, then `6 - 1 = 5`, then `20 - 5 = 15`.
+
+### Worked variation: zero makes the grouping visible
+
+<HaskellTryIt>
+
+```haskell
+infixr 6 <~>
+(<~>) :: Int -> Int -> Int
+x <~> y = x - y
+main :: IO ()
+main = print (0 <~> 3 <~> 4)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+`3 - 4 = -1`; the outer call is `0 - (-1) = 1`. The parentheses distinguish a negative operand from another subtraction.
+
+### Worked variation: force the left grouping explicitly
+
+<HaskellTryIt>
+
+```haskell
+infixr 6 <~>
+(<~>) :: Int -> Int -> Int
+x <~> y = x - y
+main :: IO ()
+main = print ((20 <~> 6) <~> 2)
+```
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+The explicit left group produces `14`, then `14 - 2 = 12`. A declaration never overrides parentheses.
+
+### Exam question: compare association without changing the body (5 marks)
+
+An operator `<??>` has body `x - 2*y` and declaration `infixr 6 <??>`. Fully parenthesise `20 <??> 4 <??> 1` and calculate it.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Calculate” requires substituting a non-standard operator body after parsing. Do not assume subtraction alone is the whole operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Group the right pair first. At each call double that call's right argument.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+20 <??> (4 <??> 1)
+```
+
+`4 <??> 1 = 4 - 2*1 = 2`; `20 <??> 2 = 20 - 2*2 = 16`.
+
+</Step>
+
+<Step title="4. Check">
+
+Left grouping would give `(20 - 8) - 2 = 10`, a different result, so the fixity choice matters.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Reading `infixr` as “reverse the argument order” is wrong: `20 <~> 6` still means `20 - 6`. No GHC error occurs for that misconception. Two contradictory fixity declarations for the same binding are rejected with `Multiple fixity declarations`; keep one declaration and use parentheses for exceptional grouping.
+
+### Practice with answers
+
+Calculate `10 <~> 4 <~> 2 <~> 1`. Does `infixr` imply the operands must have the same type?
+
+<details>
+<summary>Answer</summary>
+
+It is `10 - (4 - (2 - 1)) = 10 - 3 = 7`. Associativity does not impose types: the operator signature does. A constructor can have different field types.
+
+</details>
+
+## 8. Non-associative infix
+
+`infix` without `l` or `r` permits a single application but refuses an unparenthesised chain at that precedence. It is useful for comparisons where chained syntax might misleadingly suggest a mathematical range test. Non-associative does not mean the function has no result; it means the parser will not invent a left or right grouping for such a chain.
+
+### Template
+
+```haskell
+infix 4 <#>
+-- a <#> b is legal
+-- a <#> b <#> c needs an explicit redesign or grouping
+```
+
+The declaration sets precedence 4 and neither association. Whether an explicitly grouped alternative type-checks is a separate question.
+
+### Worked variation: a single comparison
+
+<HaskellTryIt>
+
+```haskell
+infix 4 <#>
+(<#>) :: Int -> Int -> Bool
+x <#> y = x < y
+main :: IO ()
+main = print (3 <#> 8)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+A single pair has no associativity conflict. The body asks whether `3 < 8`.
+
+### Worked variation: equal operands
+
+<HaskellTryIt>
+
+```haskell
+infix 4 <#>
+(<#>) :: Int -> Int -> Bool
+x <#> y = x < y
+main :: IO ()
+main = print (5 <#> 5)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Strict comparison rejects equality. Fixity does not change the predicate.
+
+### Worked variation: two independent comparisons
+
+<HaskellTryIt>
+
+```haskell
+infix 4 <#>
+(<#>) :: Int -> Int -> Bool
+x <#> y = x < y
+main :: IO ()
+main = print ((2 <#> 5) && (5 <#> 9))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Each parenthesised comparison returns `True`. Conjunction combines the two Booleans, implementing the intended range test.
+
+### Worked variation: non-associative arithmetic can be explicitly nested
+
+<HaskellTryIt>
+
+```haskell
+infix 6 <!>
+(<!>) :: Int -> Int -> Int
+x <!> y = x - y
+main :: IO ()
+main = print ((20 <!> 6) <!> 2, 20 <!> (6 <!> 2))
+```
+
+```text
+(12,16)
+```
+
+</HaskellTryIt>
+
+Both written groupings are legal and well-typed because every input and result is `Int`. They evaluate to `(20 - 6) - 2 = 12` and `20 - (6 - 2) = 16`.
+
+### Exam question: repair a chained comparison (5 marks)
+
+With `<#>` as above, explain why `2 <#> 5 <#> 9` is rejected and write the intended increasing-order test.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” asks for the parsing problem; “write” asks for a Boolean expression expressing two comparisons.
+
+</Step>
+
+<Step title="2. Plan">
+
+Non-associative operators cannot form this chain. Compare adjacent values separately and use conjunction.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+infix 4 <#>
+(<#>) :: Int -> Int -> Bool
+x <#> y = x < y
+increasing = (2 <#> 5) && (5 <#> 9)
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+Both comparisons are `True`. Merely writing `(2 <#> 5) <#> 9` would pass parsing but fail type checking: its first operand is `Bool`, while `<#>` expects `Int`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The unparenthesised chain gives `Precedence parsing error`. Parenthesising a comparison chain as a nested comparison is generally a type error (`Couldn't match expected type`), not a meaningful repair. Write two comparisons joined by `&&`. For an `Int -> Int -> Int` non-associative operator, explicit nesting can be meaningful, as in the fourth variation.
+
+### Practice with answers
+
+For the arithmetic `<!>` above, is `9 <!> 4 <!> 1` legal? Give the results of both explicit groupings.
+
+<details>
+<summary>Answer</summary>
+
+The chain is rejected. `(9 <!> 4) <!> 1 = 4`, while `9 <!> (4 <!> 1) = 6`.
+
+</details>
+
+## 9. Mixed precedence, defaults and conflicting fixities
+
+First recognise ordinary function application: `f x` binds tighter than any infix operator. Then group higher-precedence operators before lower-precedence ones. At an equal precedence, a chain can group without parentheses when both adjacent operators are left-associative or both are right-associative. Mixing left and right association at the same precedence is a parse conflict; a non-associative operator at that shared precedence also prevents implicit grouping. Different precedence levels do not conflict merely because their association differs.
+
+An operator with no fixity declaration defaults to `infixl 9`. Existing Prelude fixities still apply: for example `*` has precedence 7 and `-` precedence 6. Fixity declarations belong with the binding; do not try to redeclare an imported operator's fixity as a local preference. Parenthesise the expression instead.
+
+### Template
+
+```haskell
+infixl 6 <->
+infixr 7 <~>
+-- a <-> b <~> c means a <-> (b <~> c)
+-- If both instead had precedence 6, this mixed association would conflict.
+```
+
+Read precedence before associativity. Expand an operator to its definition only after deciding the grouping.
+
+### Worked variation: higher precedence beats left-to-right reading
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+infixr 7 <~>
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+(<~>) :: Int -> Int -> Int
+x <~> y = x - y
+main :: IO ()
+main = print (20 <-> 6 <~> 2)
+```
+
+```text
+16
+```
+
+</HaskellTryIt>
+
+Precedence 7 groups `6 <~> 2` before precedence 6: `20 - (6 - 2) = 16`. Opposite associativities do not conflict at these different precedence levels.
+
+### Worked variation: same precedence and same association
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->, <+>
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+(<+>) :: Int -> Int -> Int
+x <+> y = 2 * x - y
+main :: IO ()
+main = print (20 <-> 6 <+> 2)
+```
+
+```text
+26
+```
+
+</HaskellTryIt>
+
+Both declarations select left grouping: `(20 <-> 6) <+> 2 = 14 <+> 2 = 28 - 2 = 26`. Different spellings can share one fixity declaration.
+
+### Worked variation: default precedence and function application
+
+<HaskellTryIt>
+
+```haskell
+(<%>) :: Int -> Int -> Int
+x <%> y = x - y
+twice :: Int -> Int
+twice x = 2 * x
+main :: IO ()
+main = print (twice 5 <%> 3 * 2)
+```
+
+```text
+14
+```
+
+</HaskellTryIt>
+
+Application groups `twice 5`. The undeclared operator has precedence 9, above `*` at 7, so the full grouping is `((twice 5) <%> 3) * 2 = (10 - 3) * 2 = 14`.
+
+### Exam question: diagnose a fixity conflict (6 marks)
+
+Suppose `<->` is `infixl 6`, `<~>` is `infixr 6`, and both subtract. Diagnose `20 <-> 6 <~> 2`, then give both legal parenthesised results.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Diagnose” asks why grouping fails before evaluation; the bodies are irrelevant until the parse is fixed.
+
+</Step>
+
+<Step title="2. Plan">
+
+The adjacent operators have the same precedence and conflicting associativity. Choose one of the two groupings explicitly.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+(20 <-> 6) <~> 2
+20 <-> (6 <~> 2)
+```
+
+The first is `(20 - 6) - 2 = 12`. The second is `20 - (6 - 2) = 16`.
+
+</Step>
+
+<Step title="4. Check">
+
+Both repaired expressions have `Int` operands throughout. GHC cannot choose between them for the original chain.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The conflict above gives `Precedence parsing error`; this is not `Variable not in scope` and not a type mismatch. Parentheses resolve grouping without changing a declaration. Assuming all undeclared operators group like `+` is a silent reasoning mistake: the default is precedence 9, left association. Application `f x` remains tighter even than precedence 9.
+
+### Practice with answers
+
+Fully group `twice 8 <%> 5 <%> 2 + 1`, using the third variation's definitions. Also explain whether `infix 4` conflicts with `infixr 7` merely because their association differs.
+
+<details>
+<summary>Answer</summary>
+
+`(((twice 8) <%> 5) <%> 2) + 1 = ((16 - 5) - 2) + 1 = 10`. Different precedences settle grouping, so those declarations do not conflict on that basis. Equal-precedence neighbours require the associativity check.
+
+</details>
+
+## 10. Token boundaries, whitespace and comments
+
+Before fixity can group an expression, the lexer divides source into tokens: names, literals, punctuation and operators. It generally takes the longest legal token, so `<-->` is one symbolic name, not several applications of `<`, `-`, `-` and `>`. Spaces may separate tokens, but extra spaces do not create parentheses. A line comment begins with `--` when that sequence is not part of a longer operator token; everything after the comment marker on that line is ignored. Avoid writing subtraction immediately beside a negative sign: explicit parentheses make the intended operands clear.
+
+### Template
+
+```haskell
+infixl 6 <-->
+(<-->) :: Int -> Int -> Int
+left <--> right = left - right
+-- A comment explains the declaration; it is not executed.
+```
+
+`<-->` is one name everywhere it occurs. Use the same complete spelling in its signature, definition, fixity declaration and calls.
+
+### Worked variation: extra spaces do not change precedence
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (20    -    3 * 2)
+```
+
+```text
+14
+```
+
+</HaskellTryIt>
+
+Multiplication still binds more tightly than subtraction. The grouping is `20 - (3 * 2) = 14`; spacing does not make it `(20 - 3) * 2`.
+
+### Worked variation: a comment cannot contribute an operand
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (10 - 3) -- subtract the fee
+  print (10 - (-3))
+```
+
+```text
+7
+13
+```
+
+</HaskellTryIt>
+
+The comment ends at the newline and contributes nothing to the first expression. The second line explicitly subtracts negative three, so `10 - (-3) = 13`. The closing parentheses belong to the source before any comment.
+
+### Worked variation: consecutive symbols can form one operator
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <-->
+(<-->) :: Int -> Int -> Int
+left <--> right = left - right
+main :: IO ()
+main = print (12 <--> 5)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+The lexer recognises the complete `<-->` name, including its internal hyphens. It is the declared subtraction function, so the result is `12 - 5 = 7`. Its embedded hyphens do not start a line comment.
+
+### Exam question: distinguish spacing from grouping (4 marks)
+
+A student claims `20 - 3    * 2` means `(20 - 3) * 2` because of the wide gap before `*`. Correct the claim and show how to request each result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is “correct”: explain the grouping rule and give expressions for both intended calculations. The numerical inputs are fixed.
+
+</Step>
+
+<Step title="2. Plan">
+
+Whitespace separates tokens. Prelude multiplication has higher precedence than subtraction. Use parentheses when the subtraction must happen within the multiplication operand.
+
+</Step>
+
+<Step title="3. Solution">
+
+`20 - 3 * 2` is `20 - (3 * 2)`, giving `14`. Write `(20 - 3) * 2` to request the other calculation, giving `34`.
+
+</Step>
+
+<Step title="4. Check">
+
+The first reduces through `3 * 2 = 6`; the second through `20 - 3 = 17`. Adding spaces changes neither expression's grouping.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`main = print (10--3)` does not mean subtract negative three: `--3)` begins a comment, hiding the closing parenthesis. GHC's key phrase is `parse error`. Write `main = print (10 - (-3))`. Similarly, `a+++b` uses one `+++` token, not three `+` operators; if no such binding is declared, GHC gives `Variable not in scope`. Use explicit parentheses for arithmetic grouping and spaces to make token boundaries easy to see.
+
+### Practice with answers
+
+What are the complete operator tokens in `12 <--> 5` and `12 <-> 5`? If only `<-->` was declared, can adding spaces inside its name fix a use of `<->`? Evaluate `8 - (-2)`.
+
+<details>
+<summary>Answer</summary>
+
+The tokens are `<-->` and `<->`, which are distinct names. Adding spaces inside an operator splits it into different tokens; it does not supply the missing binding. Use the declared spelling consistently. `8 - (-2)` is `10`.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Value identifiers start with a lower-case letter or underscore; ordinary type and constructor names start with an upper-case letter. Digits and primes may follow the first character. `_` binds nothing; `_name` binds a usable value. Give symbolic functions parenthesised signatures; colon-led operators are data constructors. Precedence chooses the tighter group, then associativity resolves equal levels. Parentheses override fixity, but do not repair incorrect types. Whitespace does not change precedence; whole operator tokens and line comments must be recognised before grouping.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Does a prime mean a derivative?">
+
+No. It is part of a distinct identifier, with no automatic relationship to another binding.
+
+</CheckQuestion>
+
+<CheckQuestion question="How does a constructor operator differ from a value operator?">
+
+Its name begins with a colon, it is declared in a data declaration, and its structure can be matched in a pattern.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is an undeclared operator's default fixity?">
+
+For an operator binding with no fixity declaration, it is infixl 9.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does right association reverse operands?">
+
+No. It changes the nesting of calls while preserving the written operand order.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can parentheses make every comparison chain correct?">
+
+No. A nested comparison may parse yet use a Bool where a numeric input is required. Compare adjacent values separately and combine the Booleans.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Operator and Pattern Repairs](/docs/sem3/csi243/03-defining-functions/notes/operator-and-pattern-repairs).

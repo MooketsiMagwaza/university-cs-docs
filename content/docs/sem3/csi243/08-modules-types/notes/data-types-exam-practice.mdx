@@ -1,0 +1,1118 @@
+---
+title: "Data Types Exam Practice"
+description: "Solve seventeen exam questions on custom type declarations, total functions, recursion, records, wrappers and lawful instances."
+---
+
+Attempt each question before opening its answer. State the type, list the constructor cases, and check the smallest input as well as the supplied value. These questions extend [Data Types by Example](/docs/sem3/csi243/08-modules-types/notes/data-types-by-example) with new models and complete programs.
+
+<LearningObjectives items={[
+  'Translate requirements into declarations with the right fields and alternatives',
+  'Explain derivation and distinguish constructor order from field order',
+  'Convert records and repair partial functions or invalid wrappers',
+  'Trace recursive and mutually recursive functions by substitution',
+  'Define consistent Show, Eq and Ord instances',
+]} />
+
+<Prerequisites items={['Custom Data Types', 'Data Types by Example']} />
+
+## 1. A repeatable exam method
+
+The declaration template is `data Type parameters = Alternative fields | Other fields`. Choose `newtype` only for one constructor with one field. For a function, copy every constructor into a pattern and fill in the result; recurse on recursive fields. For an instance, match the method's result type and cover all combinations of inputs. For a trace, substitute fields into the selected equation and show each recursive result before combining them.
+
+Read the command word carefully: "declare" requires a type, "write" requires code, "trace" requires intermediate steps, "explain" requires a reason, and "repair" requires a corrected definition. The mark allocations are practice allocations, not a prediction of a particular paper.
+
+## 2. Questions and fully worked answers
+
+### Exam question 1: enumeration services (5 marks)
+
+Declare `Service = Economy | Express | Courier` and derive `Show`, `Eq`, `Ord`, `Enum` and `Bounded`. Explain what each gives. List all services, find the successor of `Economy`, and give the enumeration number of `Courier`.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "declare" asks for an enumeration, and "explain" asks for the meaning of each derived class. No constructor carries a field.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the enumeration template. Declaration order is Economy, Express, Courier: numbers are zero, one and two. Annotate the bounds so their type is known.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: derive and inspect the service enumeration.
+data Service = Economy | Express | Courier
+  deriving (Show, Eq, Ord, Enum, Bounded)
+fee :: Service -> Int
+fee Economy = 2
+fee Express = 5
+fee Courier = 9
+main :: IO ()
+main = do
+  print ([minBound .. maxBound] :: [Service])
+  print (succ Economy)
+  print (fromEnum Courier)
+  print (Economy < Courier, Express == Express, fee Express)
+```
+
+```text
+[Economy,Express,Courier]
+Express
+2
+(True,True,5)
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+`Show` formats constructors; `Eq` compares equality; `Ord` orders constructors as declared; `Enum` supplies numbering, ranges and neighbouring values; `Bounded` supplies Economy and Courier as the limits. The range includes both limits. The final fee is five by the Express equation, not by enumeration numbering. `succ Courier` would exceed the range; it does not return Economy.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: a single constructor with fields (5 marks)
+
+Declare a cinema booking containing a film title, a number of seats and a price per seat, using integers for the last two fields. Write `totalCost` and state the constructor type.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The booking always needs all three pieces, so this is a product, not three alternatives. "Write" asks for a numerical function.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one positional constructor. Ignore the film title in `totalCost`, multiply the two integer fields and test a zero-seat booking.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: represent cinema bookings and calculate their cost.
+data Booking = Booking String Int Int deriving (Show, Eq)
+totalCost :: Booking -> Int
+totalCost (Booking _ seats price) = seats * price
+main :: IO ()
+main = do
+  print (Booking "Orbit" 3 12)
+  print (totalCost (Booking "Orbit" 3 12))
+  print (totalCost (Booking "Orbit" 0 12))
+```
+
+```text
+Booking "Orbit" 3 12
+36
+0
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+`Booking :: String -> Int -> Int -> Booking`. Substitute seats three and price twelve: `3 * 12 = 36`. The zero test gives zero. Because the single pattern accepts every combination of fields, there is no omitted constructor or field case.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: different alternatives and a missing pattern (6 marks)
+
+A delivery is cancelled, collected by a named person, or posted to an address with a parcel count. Declare the type and write a total `parcelCount`. Explain what is wrong with defining only its posted case.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The alternatives carry different data. "Total" requires a result for all three constructors, including cancellation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the sum template. A cancellation counts zero, a collection counts one, and a posted delivery uses its stored count. No field should act as a marker for cancellation.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: count parcels for all delivery alternatives.
+data Delivery = Cancelled | Collected String | Posted String Int
+  deriving (Show, Eq)
+parcelCount :: Delivery -> Int
+parcelCount Cancelled = 0
+parcelCount (Collected _) = 1
+parcelCount (Posted _ n) = n
+main :: IO ()
+main = print (map parcelCount
+  [Cancelled, Collected "Ari", Posted "North" 4])
+```
+
+```text
+[0,1,4]
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The outer names choose zero, one and four. A definition containing only `parcelCount (Posted _ n) = n` omits Cancelled and Collected. With `-Wincomplete-patterns`, GHC warns `Pattern match(es) are non-exhaustive`; demanding either missing case raises an exception whose key text is `Non-exhaustive patterns in function`. Adding the two equations above repairs it.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: record conversion and immutable update (6 marks)
+
+Given a record with fields `memberName :: String` and `booksHeld :: Int`, convert it to positional form, write an incrementing record update, and show both the updated and original values.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+There are two requests: positional conversion removes field labels from the declaration; the update must use the record declaration to retain named-field syntax.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep separate type names for the record and positional versions. Constructor position follows declaration order. Bind the original record, update its count and print both values.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: convert a record and demonstrate a non-mutating update.
+data Member = Member { memberName :: String, booksHeld :: Int }
+  deriving (Show, Eq)
+data MemberP = MemberP String Int deriving (Show, Eq)
+toPositional :: Member -> MemberP
+toPositional (Member name n) = MemberP name n
+borrowOne :: Member -> Member
+borrowOne m = m { booksHeld = booksHeld m + 1 }
+main :: IO ()
+main = do
+  let m = Member { booksHeld = 2, memberName = "Zoe" }
+  print (toPositional m)
+  print (borrowOne m)
+  print m
+  putStrLn (memberName m)
+```
+
+```text
+MemberP "Zoe" 2
+Member {memberName = "Zoe", booksHeld = 3}
+Member {memberName = "Zoe", booksHeld = 2}
+Zoe
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The labelled construction listed the count first, but positional conversion still puts the name first. The update reads two and builds three; the original still contains two. The accessor has type `Member -> String`. The positional declaration does not generate the record accessors or update syntax.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: repairing an invalid newtype (5 marks)
+
+Explain why `newtype Window = Window Int Int` is invalid. Repair it while preserving one pair of bounds in a distinct wrapper, and write a function computing upper minus lower.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" needs the violated rule; "repair" must keep a newtype rather than merely changing the keyword to data. There are two numerical components but they can be stored in one tuple field.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `newtype Window = Window (Int, Int)`. Match the tuple inside the constructor, subtract lower from upper, and test equal bounds.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: wrap a pair as one newtype field and compute its width.
+newtype Window = Window (Int, Int) deriving (Show, Eq, Ord)
+width :: Window -> Int
+width (Window (lower, upper)) = upper - lower
+main :: IO ()
+main = do
+  print (width (Window (3, 9)))
+  print (width (Window (4, 4)))
+  print (Window (3, 9))
+```
+
+```text
+6
+0
+Window (3,9)
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The invalid declaration gives a GHC diagnostic containing `must have exactly one field`. The repair has one field whose type is a pair. Width gives `9 - 3 = 6` and `4 - 4 = 0`. If two independent constructor arguments are required instead, choose data. Deriving Ord does not validate that the lower bound is smaller.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: mapping two parameter types (6 marks)
+
+Declare `Pair a b` and write `mapPair` that independently transforms both fields. Give its most general type and test it on an integer paired with a string.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The two stored types may differ. Two supplied functions may also produce different new types, so four type variables are needed.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the Pair template. A single constructor equation applies the first function to the first field and the second to the second. Do not compare either field, so no class constraint is needed.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: transform both fields of a polymorphic pair.
+data Pair a b = Pair a b deriving (Show, Eq)
+mapPair :: (a -> c) -> (b -> d) -> Pair a b -> Pair c d
+mapPair f g (Pair x y) = Pair (f x) (g y)
+main :: IO ()
+main = do
+  print (mapPair (+1) length (Pair (4 :: Int) "map"))
+  print (mapPair not reverse (Pair True "ab"))
+```
+
+```text
+Pair 5 3
+Pair False "ba"
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The first call substitutes `x = 4` and `y = "map"`: five and length three rebuild the pair. The second call instantiates entirely different types: not True gives False and reverse gives "ba". This checks that the implementation is not accidentally fixed to numbers.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: safe optional division (6 marks)
+
+Declare `Maybe' a` with absent and present constructors. Write integer division that returns absence for a zero divisor. Write a total function extracting an integer with a supplied fallback.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The result type must represent failure. The command "total" prohibits extracting only the present constructor.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the optional template. Check the divisor before using div. The fallback extractor has one equation for absence and one for presence; a successful zero must remain distinguishable from failure.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: divide safely and extract optional integers.
+data Maybe' a = Nothing' | Just' a deriving (Show, Eq)
+safeDiv :: Int -> Int -> Maybe' Int
+safeDiv _ 0 = Nothing'
+safeDiv x y = Just' (x `div` y)
+valueOr :: Int -> Maybe' Int -> Int
+valueOr fallback Nothing' = fallback
+valueOr _ (Just' x) = x
+main :: IO ()
+main = do
+  print (safeDiv 8 2)
+  print (safeDiv 8 0)
+  print (safeDiv (-6) 2)
+  print (valueOr 99 (safeDiv 0 2))
+  print (valueOr 99 (safeDiv 8 0))
+```
+
+```text
+Just' 4
+Nothing'
+Just' (-3)
+0
+99
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The zero-divisor equation returns before division is attempted. Negative six divided by two is negative three, and derived Show parenthesises that constructor argument. A successful zero selects the present equation, so its result is zero rather than the fallback 99. The failing call selects absence and returns 99.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: either-like validation with information (6 marks)
+
+Design a result type for a seat request: failure carries a message, success carries a seat count. Reject negative counts, accept zero, and write a function describing either result.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requirement retains a reason, so an either-like type is more informative than an optional value. Zero is explicitly valid.
+
+</Step>
+
+<Step title="2. Plan">
+
+Parameterise both alternatives, then instantiate to `Result String Int`. Use guards for validation and one equation per result constructor when describing it.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: validate a count while retaining an error message.
+data Result e a = Failure e | Success a deriving (Show, Eq)
+validate :: Int -> Result String Int
+validate n
+  | n < 0 = Failure "negative count"
+  | otherwise = Success n
+describe :: Result String Int -> String
+describe (Failure message) = "Error: " ++ message
+describe (Success n) = "Seats: " ++ show n
+main :: IO ()
+main = do
+  putStrLn (describe (validate (-1)))
+  putStrLn (describe (validate 0))
+  putStrLn (describe (validate 3))
+```
+
+```text
+Error: negative count
+Seats: 0
+Seats: 3
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+Negative one satisfies the first guard and retains the message. Zero and three reach otherwise and produce success. The describing function covers both alternatives; extracting Success alone would omit Failure and produce the incomplete-pattern warning.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: tracing a custom list sum (6 marks)
+
+Declare an integer chain with a stopping constructor. Define its sum and trace the sum of a chain containing 4 followed by negative 2.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" needs equations and intermediate calls, not just the final answer. The chain has two constructors: a stop and one stored integer with a tail.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use zero for the stop. Add the first field to the recursively summed tail. Follow exactly one smaller chain per recursive equation.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sum a chain and trace a two-link example.
+data Chain = End | Link Int Chain deriving (Show, Eq)
+sumChain :: Chain -> Int
+sumChain End = 0
+sumChain (Link x rest) = x + sumChain rest
+main :: IO ()
+main = do
+  print (sumChain (Link 4 (Link (-2) End)))
+  print (sumChain End)
+```
+
+```text
+2
+0
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+`sumChain (Link 4 (Link (-2) End))` becomes `4 + sumChain (Link (-2) End)` by the Link equation, then `4 + ((-2) + sumChain End)` by Link again, then `4 + ((-2) + 0)` by End, then `2` by arithmetic. The separate empty test checks the base case directly.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: tracing a node-labelled tree (7 marks)
+
+For `data Tree a = Leaf | Node (Tree a) a (Tree a)`, write `treeTotal :: Tree Int -> Int`. Trace a root of 5 with left child 2 and right child negative 1, both children having empty subtrees.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Values occur at nodes. Leaf is empty, so it contributes zero, not one. The function returns the sum of values, not the number of nodes.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one equation per constructor and two recursive calls in the node equation. Sum the left result, root value and right result.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: total the values in a node-labelled tree.
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+treeTotal :: Tree Int -> Int
+treeTotal Leaf = 0
+treeTotal (Node l x r) = treeTotal l + x + treeTotal r
+main :: IO ()
+main = do
+  print (treeTotal
+    (Node (Node Leaf 2 Leaf) 5 (Node Leaf (-1) Leaf)))
+  print (treeTotal Leaf)
+```
+
+```text
+6
+0
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The left child reduces to `0 + 2 + 0 = 2`; the right child reduces to `0 + (-1) + 0 = -1`. The root equation is then `2 + 5 + (-1) = 6`. Each zero comes from the Leaf equation. Replacing a recursive sum by one would count structure rather than stored amounts.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: leaf-labelled tree depth (6 marks)
+
+For a leaf-labelled tree, define depth with a single leaf having depth 1. Trace a branch whose left child is one leaf and whose right child joins two leaves.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The base case is not an empty tree: a leaf contains a value and has depth one by the question. The longest branch determines depth.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the leaf-labelled template. At a branch, add one to the maximum child depth. The element type is irrelevant, so keep the function polymorphic.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: compute the longest path depth of a leaf-labelled tree.
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a) deriving (Show, Eq)
+depth :: LTree a -> Int
+depth (LLeaf _) = 1
+depth (LBranch l r) = 1 + max (depth l) (depth r)
+main :: IO ()
+main = do
+  print (depth (LBranch (LLeaf "A")
+    (LBranch (LLeaf "B") (LLeaf "C"))))
+  print (depth (LLeaf True))
+```
+
+```text
+3
+1
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The right branch has `1 + max 1 1 = 2`. The root has `1 + max 1 2 = 3`. A leaf alone gives one even when its value is Boolean rather than String. Adding child depths instead of taking max would count leaves with extra branch contributions, not depth.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: expression evaluation and printing (8 marks)
+
+Declare an expression language for integer literals, addition and multiplication. Define evaluation and fully parenthesised printing. Trace `(2 + 3) * 4` and distinguish derived Show from the printer.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requirement represents syntax, so the operator fields are expressions rather than integers. Evaluation returns Int; the printer returns String.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use three constructor equations in each function. Recursively evaluate or print both child expressions. Parenthesise every binary operation so grouping is visible.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: evaluate and display a small expression language.
+data Expr = Lit Int | Plus Expr Expr | Times Expr Expr deriving (Show, Eq)
+eval :: Expr -> Int
+eval (Lit n) = n
+eval (Plus l r) = eval l + eval r
+eval (Times l r) = eval l * eval r
+render :: Expr -> String
+render (Lit n) = show n
+render (Plus l r) = "(" ++ render l ++ "+" ++ render r ++ ")"
+render (Times l r) = "(" ++ render l ++ "*" ++ render r ++ ")"
+main :: IO ()
+main = do
+  let e = Times (Plus (Lit 2) (Lit 3)) (Lit 4)
+  print e
+  print (eval e)
+  putStrLn (render e)
+```
+
+```text
+Times (Plus (Lit 2) (Lit 3)) (Lit 4)
+20
+((2+3)*4)
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+Evaluation unfolds to `(eval (Lit 2) + eval (Lit 3)) * eval (Lit 4)`, then `(2 + 3) * 4 = 20`. Printing the left expression yields `(2+3)`; surrounding it with multiplication gives `((2+3)*4)`. Derived Show instead exposes Times, Plus and Lit with parentheses around their nested applications. Omitting Times from either function creates a missing constructor case.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: mutually recursive folders (7 marks)
+
+Design two types: a folder is empty or named with contents; contents contain two folders. Write mutually recursive functions counting named folders, and trace a nested example.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requirement alternates between Folder and Contents. The count includes a named parent and its descendants, but does not count a contents wrapper.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use an empty folder base case. Add one at a named folder, then call the contents function. Contents adds the two folder counts, making two calls back to the first function.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: count folders across mutually recursive types.
+data Folder = Empty | Named String Contents deriving (Show, Eq)
+data Contents = Contents Folder Folder deriving (Show, Eq)
+countFolders :: Folder -> Int
+countFolders Empty = 0
+countFolders (Named _ contents) = 1 + countContents contents
+countContents :: Contents -> Int
+countContents (Contents l r) = countFolders l + countFolders r
+main :: IO ()
+main = do
+  print (countFolders (Named "root" (Contents Empty
+    (Named "child" (Contents Empty Empty)))))
+  print (countContents (Contents Empty Empty))
+```
+
+```text
+2
+0
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The root becomes `1 + countContents (Contents Empty child)`, then `1 + (countFolders Empty + countFolders child)`. The child is `1 + (0 + 0) = 1`, so the whole count is `1 + (0 + 1) = 2`. Both functions eventually reach Empty. `Named "root" Empty` would have the wrong field type: Contents is required.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 14: a handwritten Show instance (5 marks)
+
+Declare a bus stop as closed or open with an integer queue length. Write Show by hand so values print as `closed` or `queue=NUMBER`. Do not derive Show.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The output strings are specified exactly. The instance method show must return String and cover both constructors.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a sum with zero and one field. For the open case, convert the integer with Prelude show and concatenate the prefix. Test both constructors, then compare printing a value with printing its shown string.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: customise display for both bus-stop alternatives.
+data Stop = Closed | Open Int
+instance Show Stop where
+  show Closed = "closed"
+  show (Open n) = "queue=" ++ show n
+main :: IO ()
+main = do
+  print Closed
+  print (Open 3)
+  print (show (Open 3))
+```
+
+```text
+closed
+queue=3
+"queue=3"
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+`print Closed` uses the instance and writes closed. The open equation builds queue=3. In the last call the argument to print is already a String, so the String Show instance adds quotation marks. Returning n directly would be a type error; deriving Show as well would cause `Duplicate instance declarations`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 15: equality by an identifying field (6 marks)
+
+Declare a user with an integer identifier and a display name. Write Eq by hand so only the identifier matters. Explain whether different names can compare equal and whether this policy is transitive.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested equality differs from deriving Eq, which would compare both fields. Only the identifier is a key.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one constructor pattern for each operand and discard their names. Delegate to Int equality, which supplies reflexivity, symmetry and transitivity for these values.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: compare users by identifier only.
+data User = User Int String deriving (Show)
+instance Eq User where
+  User i _ == User j _ = i == j
+main :: IO ()
+main = do
+  print (User 7 "Ada" == User 7 "A")
+  print (User 7 "Ada" == User 8 "Ada")
+  print (User 7 "Ada" /= User 7 "A")
+```
+
+```text
+True
+False
+False
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The first test reduces to `7 == 7`, the second to `7 == 8`. The default inequality negates equality, so the last test is false. Different names can be equal because they are ignored deliberately. If identifiers i and j are equal and j and k are equal, i and k are equal; the policy is transitive. Comparing names as a tie-breaker in a later Ord instance would break agreement with this equality.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 16: a handwritten Ord instance (7 marks)
+
+Declare urgency as `Routine` or `Urgent Int`. Write Eq and Ord by hand so every urgent value precedes Routine, while urgent values compare by their integer field. Cover every constructor pair.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested order reverses declaration priority. Deriving Ord would put Routine first, so a handwritten comparison is needed. Ord also requires Eq.
+
+</Step>
+
+<Step title="2. Plan">
+
+List four combinations for each two-argument method. Mixed equality is false. Mixed comparison puts Urgent first. For matching Urgent constructors, compare their integer fields.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: order urgency by a custom constructor priority.
+data Urgency = Routine | Urgent Int deriving (Show)
+instance Eq Urgency where
+  Routine == Routine = True
+  Routine == Urgent _ = False
+  Urgent _ == Routine = False
+  Urgent x == Urgent y = x == y
+instance Ord Urgency where
+  compare Routine Routine = EQ
+  compare Routine (Urgent _) = GT
+  compare (Urgent _) Routine = LT
+  compare (Urgent x) (Urgent y) = compare x y
+main :: IO ()
+main = do
+  print (Urgent 99 < Routine)
+  print (compare (Urgent 2) (Urgent 5))
+  print (compare Routine Routine)
+  print (Urgent 2 == Urgent 2)
+```
+
+```text
+True
+LT
+EQ
+True
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+The first test uses the Urgent/Routine equation regardless of the field 99. The second compares 2 with 5. The last two check that equal values compare EQ. Omitting the mixed-constructor cases is partial and produces `Pattern match(es) are non-exhaustive` with the warning enabled. Returning Bool from compare is wrong: the required result type is Ordering.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 17: derived ordering and a design choice (6 marks)
+
+For `data Item = Basic Int Int | Special Int deriving (Show, Eq, Ord)`, predict four comparisons: `Basic 9 9 < Special 0`, `Basic 2 99 < Basic 3 0`, `Basic 2 99 < Basic 2 100`, and `Special 8 < Special 1`. Would this order sort by a numerical price across constructors?
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Predict" requires Boolean results with reasons. The final question asks whether structural ordering implements a domain rule.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use derived ordering: constructor position first, then fields left to right only when constructors match. Do not invent a shared price comparison.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Question: predict derived ordering before considering domain meaning.
+data Item = Basic Int Int | Special Int deriving (Show, Eq, Ord)
+main :: IO ()
+main = do
+  print (Basic 9 9 < Special 0)
+  print (Basic 2 99 < Basic 3 0)
+  print (Basic 2 99 < Basic 2 100)
+  print (Special 8 < Special 1)
+```
+
+```text
+True
+True
+True
+False
+```
+
+</HaskellTryIt>
+
+</Step>
+
+<Step title="4. Check">
+
+Basic precedes Special, so the first answer ignores the amounts. The second compares first fields 2 and 3 and stops. The third ties on first fields and compares 99 with 100. The fourth compares 8 with 1 and is false. This is not a cross-constructor numerical price order. If a price order is required, define a price function with one equation per constructor and compare prices; decide how equal-price items should compare and keep Eq consistent with that policy.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Final practice with answers
+
+Try these short changes without opening the programmes above.
+
+1. Change the chain-sum question to a link count. What changes?
+2. Change the optional division fallback from 99 to zero. Does absence become the same constructor as a successful zero?
+3. Add `Delayed Int` to Delivery in the parcel question. What must be reviewed?
+4. Can a record with one constructor still have a partial function over it?
+
+<details>
+
+<summary>Answers</summary>
+
+1. Keep `count End = 0`, but use `count (Link _ rest) = 1 + count rest`; the field is ignored rather than added. The two-link example counts two regardless of its amounts.
+2. No. Both extractions may produce zero, but `Nothing'` and `Just' 0` remain different constructors and compare unequal when Eq is derived.
+3. Review every function that matches Delivery, including parcelCount. Add an equation giving the intended meaning of Delayed. Recompile with `-Wincomplete-patterns`; a derived Show instance will adapt to the new constructor, but a handwritten function will not invent an equation.
+4. Yes. A pattern restricting an integer to zero or a Boolean to True can omit valid field cases. Guards can also omit inputs. A single unrestricted constructor pattern is complete; the constructor count alone does not prove totality.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Start with the requirement: together means fields, alternatives mean constructors, absence means an optional type, and failure information means an either-like type. Copy constructors into function patterns before calculating. Trace recursive calls on the exact fields they receive. Record updates preserve the original. For instances, cover every input combination and make equality agree with comparison. Derived ordering is structural, so a business order may need a handwritten instance.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Which test catches an incomplete chain function immediately?">
+
+The stopping constructor End. Also test one link to check the recursive equation connects to the base case.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is an empty-leaf tree different from a leaf-labelled tree in an exam?">
+
+Their base constructors have different fields and meanings. Leaf stores nothing, whereas LLeaf stores a value. Their base cases cannot be copied blindly.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does Ord require besides compare?">
+
+An Eq instance for the same type. The comparison must agree with equality and obey the ordering laws.
+
+</CheckQuestion>
+
+<CheckQuestion question="When does derived ordering inspect the second field?">
+
+Only after the constructor and all preceding fields compare equal.
+
+</CheckQuestion>
+
+<CheckQuestion question="What should a repair answer include?">
+
+The violated rule, corrected code and a small test that exercises the formerly broken or missing case.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with the [practice questions](/docs/sem3/csi243/08-modules-types/questions).

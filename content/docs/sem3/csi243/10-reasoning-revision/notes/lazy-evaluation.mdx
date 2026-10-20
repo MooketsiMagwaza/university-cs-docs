@@ -1,0 +1,1036 @@
+---
+title: "Lazy Evaluation"
+description: "Trace non-strict evaluation, thunks and sharing, predict termination, and choose when to force a value."
+---
+
+Haskell can return an answer without calculating every expression in a program. To predict its behaviour, ask what the answer demands: an integer, a constructor, a list spine, or particular elements. This lesson makes that question into a tracing method.
+
+<LearningObjectives items={[
+  'Distinguish non-strict semantics from strict evaluation and explain outermost-first reduction',
+  'Draw thunks and sharing, and trace exactly which parts of a value are demanded',
+  'Predict whether undefined or a non-terminating expression is reached',
+  'Explain short-circuiting, unused bindings and finite observations of infinite producers',
+  "Use seq, strict application and foldl' with their limits understood",
+]} />
+
+<Prerequisites items={['Function application, pattern matching, lists, map, filter and folds']} />
+
+## 1. Non-strict versus strict evaluation
+
+A function is **strict in an argument** if it needs that argument to be defined before it can give a defined result. **Non-strict** means a function may give a result even when an argument has no value. An eager evaluator calculates arguments before calling the function; Haskell normally delays them until needed. Non-strictness describes observable behaviour; lazy evaluation is the implementation strategy of delaying work and sharing its result.
+
+| Question | Strict, eager strategy | Haskell lazy strategy |
+|---|---|---|
+| When are arguments evaluated? | Before entering the function | When the function or its consumer demands them |
+| What happens to an unused failing argument? | Its evaluation fails | It can remain unevaluated |
+| Can a constructor contain delayed work? | In a fully eager model, its fields are evaluated | Ordinary constructor fields can be thunks |
+| How is repeated use handled? | A computed argument can be reused | Uses of one binding share the same thunk |
+
+The template is `f argument = result`. First inspect the definition of `f`; do not automatically evaluate `argument`. A pattern such as `(x,y)` demands the pair constructor, but naming `x` and `y` does not itself demand their values. Arithmetic such as `x + 1` demands the number `x`.
+
+Haskell uses **outermost-first reduction guided by demand**: reduce an enclosing call far enough to discover what it needs. This does not mean that all arguments are evaluated from left to right. A demanded arithmetic result needs its operands, but the language does not generally promise which operand is evaluated first.
+
+### Variation: select a pair field
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fst (1, undefined))
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+`print` needs an integer. `fst (x,y) = x` needs the pair constructor and selects `1`. It never selects the second field. An eager evaluation of both fields would encounter `undefined` before returning the pair.
+
+### Variation: ignore an entire argument
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (const 5 undefined)
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+`const x _ = x` returns its first argument. The second argument is not even inspected for a constructor. The enclosing `print` then demands `5`. Eagerly evaluating the second argument would fail.
+
+### Variation: a constructor is enough
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (null [undefined])
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+`null [] = True` and `null (_:_) = False`. The outer constructor is `(:)`, so the list is non-empty. Its head is irrelevant. This varies the demand from selecting a field to testing a constructor.
+
+**Common error.** Saying "Haskell evaluates nothing" cannot explain why `print (1 + 2)` prints `3`. The repair is to start with the consumer: printing a number demands its value. Predict a fourth case: `const True (head [])` returns `True`, because the failing argument is unused.
+
+## 2. Thunks, the list spine and a tracing template
+
+A **thunk** is a suspended computation together with the environment of bindings it needs. When demanded, it is evaluated and its result can replace the suspension. The **spine** of a list is the chain of `(:)` constructors ending in `[]`; the elements are separate fields. Knowing a constructor without evaluating its fields is called **weak head normal form**, or WHNF. A pair of thunks is already in WHNF; an unevaluated addition is not.
+
+Use this template for every lazy trace:
+
+1. Write the whole expression and say what its consumer demands.
+2. Reduce the outermost call using its defining equation.
+3. Give delayed subexpressions names such as `t1`; record them as thunks.
+4. Force only the thunk needed to choose the next equation or produce the required result.
+5. Update that thunk with its result and keep all references to it shared.
+6. Stop when the consumer has its answer; explicitly name the unused thunks.
+
+A memory sketch is a model of demand, not a guarantee of GHC's exact allocation after optimisation:
+
+```text
+length [undefined, undefined]
+A -> Cons(head -> t1 = undefined, tail -> B)
+B -> Cons(head -> t2 = undefined, tail -> C)
+C -> []
+length A -> 1 + length B -> 1 + (1 + length C) -> 2
+Head thunks t1 and t2 are never entered.
+```
+
+Here `Cons` means the built-in `(:)` cell; it is not a new declaration.
+
+### Variation: count cells without their elements
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length [undefined, undefined])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+Use `length [] = 0` and `length (_:xs) = 1 + length xs`. Two cons cells contribute two ones; the final `[]` contributes zero. No equation needs either head. The printed integer is `2`, not an exception.
+
+### Variation: demand one head but no tail
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (head (7 : undefined))
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+Sketch `A -> Cons(7, t1)` with `t1 = undefined`. `head (x:_) = x` forces `A` to a cons and selects `7`. It leaves `t1` untouched. In contrast, asking for the length would demand `t1` and fail.
+
+### Variation: inspect an empty prefix
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length (take 0 undefined))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The equation `take 0 _ = []` does not examine its list argument. Then `length [] = 0`. Even the input spine is unused, which is a weaker demand than counting two cells.
+
+**Common error.** Confusing `length [undefined]` with `length undefined`. The first has a known cons and an empty tail; the second has no available spine. Practice: `head [3,undefined]` gives `3`; `length (3:undefined)` fails because its tail is demanded.
+
+## 3. Demand through producers
+
+A **producer** builds a structure, and a **consumer** asks for part of it. The template is `consumer (producer source)`: trace backwards from the consumer's required part, then forwards through just enough production. For lists the useful equations are:
+
+```haskell
+map f [] = []
+map f (x:xs) = f x : map f xs
+filter p [] = []
+filter p (x:xs)
+  | p x = x : filter p xs
+  | otherwise = filter p xs
+take n _ | n <= 0 = []
+take _ [] = []
+take n (x:xs) = x : take (n - 1) xs
+```
+
+These are explanatory equations for Prelude functions. `map` can expose a cons before computing its head. `filter` must compute enough of the predicate to decide whether to expose a cons.
+
+### Variation: take two mapped values
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 2 (map (*2) [1..]))
+```
+
+```text
+[2,4]
+```
+
+</HaskellTryIt>
+
+`take 2` demands a source cons; `map` exposes `(1*2) : map (*2) [2..]`. The next `take 1` demands a second cons, exposing `(2*2) : map (*2) [3..]`. `take 0` returns `[]` without touching that remaining map. Printing demands the two heads, giving `2` and `4`.
+
+```text
+take 2 (map (*2) [1..])
+= (1*2) : take 1 (map (*2) [2..])    -- map, take
+= (1*2) : (2*2) : take 0 (map (*2) [3..])
+= (1*2) : (2*2) : []                -- take 0
+= [2,4]                             -- printing demands the heads
+```
+
+### Variation: search before producing a head
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (head (filter even [1..]))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+`head` needs one cons from `filter`. `even 1` is `False`, so filter discards `1`. `even 2` is `True`, so it exposes `2 : filter even [3..]`. `head` selects `2`; nothing asks whether `3` is even. Unlike `map`, a filter might search forever before producing even one result.
+
+### Variation: ask for no production
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 0 (map (*2) [1..]) :: [Int])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The consumer returns `[]` immediately. Neither the map, a source cons, nor multiplication is demanded. This edge case is why tracing the source first gives the wrong account of the work.
+
+**Common error.** `head (filter (const False) [1..])` is not an empty-list error: it searches forever and never establishes that the filtered list is empty. Keep this deliberately divergent expression in a plain fence:
+
+```haskell
+-- Does not terminate: no output cell can pass the filter.
+main :: IO ()
+main = print (head (filter (const False) [1..]) :: Int)
+```
+
+Practice: `take 2 (filter odd [1..])` gives `[1,3]`; the predicate is tested on `1`, `2` and `3`.
+
+## 4. Conditionals and short-circuiting
+
+A conditional demands its condition and only the selected branch. Boolean operators are functions with selective demand, not commands to evaluate both operands. Read these templates as equations:
+
+```haskell
+choose b yes no = if b then yes else no
+-- False && rhs = False; True && rhs = rhs
+-- True  || rhs = True;  False || rhs = rhs
+```
+
+Here `yes`, `no` and `rhs` stand for arbitrary expressions. For `(&&)` and `(||)`, the left Boolean is demanded first to choose an equation.
+
+### Variation: an unselected branch
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (if 2 < 3 then 8 else undefined)
+```
+
+```text
+8
+```
+
+</HaskellTryIt>
+
+The comparison reduces to `True`, selecting the `then` branch. `print` demands `8`. The `else` branch remains a thunk. With a false condition the same program would demand `undefined`.
+
+### Variation: false stops conjunction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (False && undefined)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+The first equation for `(&&)` returns `False`. The right-hand Boolean is not needed. Reversing the operands demands `undefined` immediately and fails.
+
+### Variation: true stops disjunction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (True || undefined)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The first operand is `True`, which already makes the disjunction true. No demand reaches the second argument. With `False || undefined`, the second argument is required and evaluation fails.
+
+**Common error.** Assuming `(&&)` is operationally symmetric because Boolean truth tables are symmetric. With bottom, `False && undefined` succeeds but `undefined && False` fails. Practice: `False || (3 > 2)` demands the comparison and gives `True`.
+
+## 5. Unused bindings and sharing
+
+A `let` or `where` binding names a suspended computation; writing a binding does not execute it. **Sharing** means that all uses of one binding refer to the same computation and reuse its result. The template is `let x = expensive in use x x`, or a function with `where x = expensive`. `expensive` is a placeholder for a computation, not a built-in function.
+
+In the standard call-by-need model, each shared thunk is evaluated at most once. This is not a promise that two separately written copies of `expensive` are automatically one thunk, nor a promise about an optimiser's exact instruction count.
+
+```text
+let x = sum [1..4] in x + x
+initial:  x -> T = thunk(sum [1..4]); (+) has two references to T
+demand:   (+) needs a number, so enter T
+compute:  sum [1..4] -> 10
+update:   T -> 10
+reuse:    both references now yield 10
+result:   10 + 10 -> 20
+```
+
+No copy of `sum [1..4]` needs evaluating for the second use of `x`.
+
+### Variation: an unused where binding
+
+<HaskellTryIt>
+
+```haskell
+answer :: Int
+answer = 12
+  where
+    unused = undefined
+
+main :: IO ()
+main = print answer
+```
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+Entering `answer` returns `12`. The local name `unused` is never referenced, so its bottom is never demanded. Under an eager policy that evaluated all local definitions this binding would cause failure.
+
+### Variation: share a numerical computation
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (let x = sum [1..4] in x + x)
+```
+
+```text
+20
+```
+
+</HaskellTryIt>
+
+The trace above applies: both occurrences of `x` share one thunk. The first demand updates it to `10`; the other reuses `10`. Output alone verifies the value, not the number of machine operations.
+
+### Variation: share a list between two consumers
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (let xs = map (+1) [1,2,3] in (head xs, length xs))
+```
+
+```text
+(2,3)
+```
+
+</HaskellTryIt>
+
+`xs` names one list producer. Selecting its head demands the first mapped value `1+1 = 2`. Counting its length needs the three cons cells and final empty tail, but need not compute mapped values `2+1` and `3+1`. Both consumers refer to the same spine.
+
+**Common error.** "A binding is run once at its declaration." A binding may never run; if its thunk is demanded it is shared. Practice: `let x = undefined in const 4 x` gives `4`, because neither occurrence of a name nor passing it to a function necessarily forces it.
+
+## 6. Bottom: failure, looping and partial values
+
+**Bottom**, written mathematically as `⊥`, means no defined result. `undefined`, `error "message"`, and a computation that never returns are all bottom when demanded. An exception and endless evaluation are different observable ways of failing to produce a value. A structure can be **partially defined**: its outer constructor is available while a field is bottom.
+
+The analysis template is `observer partialValue`. Identify the first demanded bottom, or explain why every demanded part is defined. A bottom hidden in a field does not make every observation fail.
+
+### Variation: do not enter an error thunk
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (const 9 (error "unused"))
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+`const` ignores its second argument, so no exception is raised. The message is not printed: merely writing `error` in an unused expression has no effect.
+
+### Variation: measure a partially defined pair list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length [(undefined, 1), (undefined, 2)])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The list has two cons cells. Counting them does not require even inspecting the pair constructors, let alone either undefined first field. This separates three levels: list spine, pair constructor and pair fields.
+
+### Variation: a function ignores a looping argument
+
+<HaskellTryIt>
+
+```haskell
+loop :: Int
+loop = loop
+
+main :: IO ()
+main = print (const 6 loop)
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+`loop` refers to itself without exposing a number or constructor. It would not produce a result if entered, but `const 6` never enters it. The complete program terminates.
+
+The following are intentionally **not** runnable widgets. They demonstrate demanded bottom:
+
+```haskell
+-- Fails when the selected integer is printed; GHC reports Prelude.undefined.
+main :: IO ()
+main = print (snd (1, undefined) :: Int)
+```
+
+```haskell
+-- No defined result: this recursion never exposes a value.
+loop :: Int
+loop = loop
+main :: IO ()
+main = print loop
+```
+
+GHC can detect some self-dependent thunks and report `<<loop>>`; other non-terminating computations run until interrupted or resources are exhausted. Do not predict an identical diagnostic for every kind of bottom. `error "bad"` raises an exception whose message includes `bad`; call-stack and source-location details depend on the build.
+
+**Common error.** Treating bottom as an ordinary value that `print` can display. Repair a partial function by handling the missing case, or arrange that a consumer does not demand the bad part. With `head []`, the failure is an empty-list exception; with `head (filter (const False) [1..])`, the search never finishes. Practice: `null [undefined]` is `False`, but `null undefined` fails.
+
+## 7. Choosing strictness with seq, strict application and foldl'
+
+Sometimes delaying a calculation retains a long chain of suspended work. Strictness tools let the programmer demand an outer value earlier. They do not turn all of Haskell into eager evaluation.
+
+### The seq template
+
+``a `seq` b`` demands `a` to WHNF before returning `b`. It does not recursively force fields. In ``a `seq` b``, the `seq` operator is written between its arguments using backticks. The meaning is: if the first expression is bottom, the whole expression is bottom; otherwise return the second expression. This specifies demand, not a general-purpose timing primitive.
+
+### Variation: force an arithmetic thunk
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((2 + 3) `seq` 9)
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+`2+3` reaches the number `5`, satisfying `seq`. The result is its second argument, `9`, not `5`.
+
+### Variation: force only a pair constructor
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((undefined, undefined) `seq` 9)
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+The pair is already in WHNF. Neither component is demanded, so the result is `9` despite both fields being bottom.
+
+### Variation: force only a cons constructor
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((undefined : undefined) `seq` 9)
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+The cons constructor is available. Neither the head nor the tail needs evaluating. This is a defined outer constructor even though no complete element or finite spine can be observed.
+
+``undefined `seq` 9`` would fail. **Common error:** expecting `seq` to prove an entire structure contains no bottom. Practice: ``[] `seq` True`` gives `True`, since the empty-list constructor is WHNF.
+
+### The strict-application template
+
+``f $! x = x `seq` f x``. Ordinary `$` only changes grouping: `f $ x = f x`. Strict application forces the argument to WHNF before passing it on. Parenthesise the whole application when it is an argument to `print`.
+
+### Variation: strict numeric application
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((+1) $! (2 + 3))
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+The argument becomes `5` before application; `(+1) 5` becomes `6`. Ordinary application has the same numerical answer, but its demand starts inside addition.
+
+### Variation: a strict call with lazy fields
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (const 7 $! (undefined, undefined))
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+Strict application demands the pair constructor. It is present, so `const 7` returns `7` without inspecting the fields. `$!` is shallow.
+
+### Variation: force a list without its head
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (null $! [undefined])
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+The argument is forced to a cons, then `null` returns `False`. No demand reaches the element. Strict application is not the same as fully evaluating a list.
+
+**Common error.** `const 7 $! undefined` fails even though `const 7 undefined` succeeds. The strict-application operator introduces demand that the function itself would not need. Practice: `(const 4 $! [])` gives `4`.
+
+### The foldl' template and the accumulator chain
+
+The ordinary left fold updates an accumulator without requiring the update to be evaluated. The strict left fold from `Data.List` forces each new accumulator to WHNF. With a numeric accumulator, WHNF is the computed number.
+
+```haskell
+-- Explanatory versions; Prelude supplies foldl and Data.List supplies foldl'.
+lazyLeft f z [] = z
+lazyLeft f z (x:xs) = lazyLeft f (f z x) xs
+strictLeft f z [] = z
+strictLeft f z (x:xs) =
+  let zNext = f z x
+  in zNext `seq` strictLeft f zNext xs
+```
+
+```text
+foldl (+) 0 [1,2,3]
+-> foldl (+) (0+1) [2,3]
+-> foldl (+) ((0+1)+2) [3]
+-> foldl (+) (((0+1)+2)+3) []
+-> (((0+1)+2)+3) -> 6
+
+foldl' (+) 0 [1,2,3]
+-> force (0+1), continue with 1 and [2,3]
+-> force (1+2), continue with 3 and [3]
+-> force (3+3), continue with 6 and []
+-> 6
+```
+
+The unoptimised `foldl` reduction builds a chain of additions. `foldl'` avoids that numeric chain, although neither version can return a completed left fold over an infinite spine. Optimisation may remove some thunks; the explanation is the source-level evaluation model. A pair accumulator needs additional care: forcing the pair constructor does not force its components.
+
+### Variation: lazy and strict sums agree
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (foldl')
+
+main :: IO ()
+main = do
+  print (foldl (+) 0 [1,2,3])
+  print (foldl' (+) 0 [1,2,3])
+```
+
+```text
+6
+6
+```
+
+</HaskellTryIt>
+
+Both traverse the same finite spine and add the same numbers. Their accumulator evaluation differs as in the trace, but their printed answers agree.
+
+### Variation: the empty fold
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (foldl')
+
+main :: IO ()
+main = print (foldl' (+) 10 ([] :: [Int]))
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+The empty-list equation returns the initial accumulator `10`. There are no updates to force. Do not invent a first addition when the input is empty.
+
+### Variation: multiplication with a strict accumulator
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (foldl')
+
+main :: IO ()
+main = print (foldl' (*) 1 [2,3,4])
+```
+
+```text
+24
+```
+
+</HaskellTryIt>
+
+The updates are `1*2 = 2`, `2*3 = 6`, then `6*4 = 24`; each is forced before continuing. A wrong initial accumulator of zero would produce zero throughout.
+
+A case where evaluation strategy changes termination is deliberately plain code:
+
+```haskell
+-- The ordinary fold returns 2; the strict fold demands the first bottom update.
+import Data.List (foldl')
+main :: IO ()
+main = do
+  print (foldl (\_ x -> x) 0 [undefined, 2] :: Int)
+  print (foldl' (\_ x -> x) 0 [undefined, 2] :: Int)
+```
+
+For `foldl`, the first update is `undefined`, but the next update ignores it and returns `2`. For `foldl'`, the first update must reach WHNF, so it fails before the second update. Thus replacing a lazy fold is not always semantics-preserving on partial values.
+
+**Common error.** Expecting `foldl'` to make an infinite input finite, or to deeply evaluate a record accumulator. Use a terminating consumer for infinite input and force individual accumulator fields when the algorithm requires it. Practice: `foldl' (-) 10 [1,2]` gives `7`, with updates `9` and `7`.
+
+## Exam questions
+
+### Exam question 1: a field that is not selected (3 marks)
+
+State what `print (fst (4, undefined))` prints and justify termination.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" asks for output, and "justify" asks for demand, not just a number.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the pair-selection template; distinguish the pair constructor from its fields.
+
+</Step>
+
+<Step title="3. Solution">
+
+`fst (4,undefined)` exposes the pair and selects `4`. The second field remains a thunk. Output: `4`.
+
+</Step>
+
+<Step title="4. Check">
+
+Replacing the second field by `99` leaves the answer `4`; selecting it with `snd` would demand bottom.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: counting versus printing (4 marks)
+
+Does `print (length [undefined,undefined])` fail? Would `print ([undefined,undefined] :: [Int])` behave the same?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for two termination decisions. The same list has two different consumers.
+
+</Step>
+
+<Step title="2. Plan">
+
+Trace the spine for length; trace elements as well for list printing.
+
+</Step>
+
+<Step title="3. Solution">
+
+The first prints `2`: two cons cells and `[]` suffice. The second demands an undefined element while showing the list and raises an exception; it has no completed list output.
+
+</Step>
+
+<Step title="4. Check">
+
+On `[1,2]`, both terminate, printing `2` and `[1,2]` respectively. The difference comes from element demand.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: a lazy pipeline (5 marks)
+
+Trace `take 2 (map (+3) [1..])` and give its type and printed result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" requires intermediate reductions, not merely the prefix.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use take, map and the zero-count stopping equation.
+
+</Step>
+
+<Step title="3. Solution">
+
+`take 2 (map (+3) [1..]) = (1+3) : take 1 (map (+3) [2..]) = (1+3) : (2+3) : take 0 (map (+3) [3..]) = [4,5]`. Printing forces the two additions. Its general type is `(Num a, Enum a) => [a]`; choosing `[Integer]` is valid.
+
+</Step>
+
+<Step title="4. Check">
+
+For `take 0` the answer is `[]`, with no source demand. No third addition is needed.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: which Boolean is demanded (4 marks)
+
+Explain which argument is evaluated first in `undefined && False`, and compare `False && undefined`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks how equation selection controls evaluation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the first argument to choose the equation of conjunction.
+
+</Step>
+
+<Step title="3. Solution">
+
+`undefined && False` demands the left operand and fails. `False && undefined` reads the left `False` and returns `False` without the right operand. Both expressions have type `Bool`.
+
+</Step>
+
+<Step title="4. Check">
+
+With total inputs, both `True && False` and `False && True` give `False`; that truth table does not permit swapping demands on bottom.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: unused local work (3 marks)
+
+Predict `let x = undefined; y = 3 + 4 in y`, and explain whether `x` is evaluated.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Predict" asks for a value and the status of the binding.
+
+</Step>
+
+<Step title="2. Plan">
+
+Start from the returned expression `y`, following only its dependencies.
+
+</Step>
+
+<Step title="3. Solution">
+
+Demanding `y` computes `3+4 = 7`. No path refers to `x`, so its thunk is never entered. Printing the expression produces `7`.
+
+</Step>
+
+<Step title="4. Check">
+
+Changing the body to `x` demands bottom and fails. Changing the unused definition does not change the original result.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: shared work (4 marks)
+
+Draw the shared thunk in `let x = sum [1..3] in x * x` and find the output.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Draw" requires references to one binding, not two independent sums.
+
+</Step>
+
+<Step title="2. Plan">
+
+Name one thunk `T` and point both operands at it.
+
+</Step>
+
+<Step title="3. Solution">
+
+Initially `x -> T = thunk(sum [1..3])`; both multiplication operands reference `T`. Demand updates `T` to `6`. Both uses now read `6`, yielding output `36`.
+
+</Step>
+
+<Step title="4. Check">
+
+The sum is `1+2+3 = 6`; multiplication gives `6*6`. The output proves the value; the thunk model explains reuse.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: shallow strictness (5 marks)
+
+Compare ``(undefined,1) `seq` 8``, ``undefined `seq` 8``, and `const 8 $! [undefined]`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" requires a conclusion for all three demands.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use WHNF for seq and expand strict application using its template.
+
+</Step>
+
+<Step title="3. Solution">
+
+The pair constructor is WHNF, so the first prints `8`. The second demands bottom and fails. The third forces a cons constructor, then `const 8` returns `8`; its undefined element is unused.
+
+</Step>
+
+<Step title="4. Check">
+
+Replacing the pair or cons by `undefined` removes the available outer constructor and makes forcing fail.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: two left folds (6 marks)
+
+Trace `foldl (+) 0 [2,3]` and `foldl' (+) 0 [2,3]`. Explain whether either can finish on `[1..]`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" asks for accumulator states; "explain" asks for the stopping condition.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate traversal from forcing and look for the empty-list equation.
+
+</Step>
+
+<Step title="3. Solution">
+
+`foldl` carries `(0+2)`, then `((0+2)+3)`, then evaluates to `5`. The strict fold forces `2` before the second step and `5` before the end. Both require reaching `[]` to return their final accumulator. `[1..]` never provides it, so neither finishes.
+
+</Step>
+
+<Step title="4. Check">
+
+On `[]`, both return the initial `0`. For `[2,3]`, arithmetic independently confirms `5`. The strict fold changes retained work, not the infinite spine.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+Non-strict functions can ignore arguments. Lazy evaluation delays work in thunks and shares the result of each demanded binding. Follow demand from the outer consumer, distinguishing constructors, list spines and elements. Bottom matters only when demanded. Conditionals and Boolean operators can stop early. `seq` and `$!` force only WHNF; `foldl'` forces each accumulator update but still needs a finite input to return a final accumulator.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Does non-strict mean no expressions are evaluated?">
+
+No. Expressions are evaluated when the consumer needs their values. Arithmetic and printing create demands.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can length ignore undefined list elements?">
+
+Its equations inspect only the list spine. A bottom tail is different: length needs that tail's constructor.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does sharing add to delaying work?">
+
+All uses of one binding reuse its evaluated result instead of independently entering copies of the same suspension.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does seq force every field of a constructor?">
+
+No. It forces WHNF, so an ordinary pair or cons can pass the test while containing bottom fields.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can a filter over an infinite source fail to produce even one cell?">
+
+It may reject every input forever. Infinite input alone does not guarantee productive output.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Infinite Data Structures](/docs/sem3/csi243/10-reasoning-revision/notes/infinite-data-structures).

@@ -1,0 +1,2234 @@
+---
+title: "Specification Exam Practice"
+description: "Resolve ambiguous laboratory requirements, prove product specifications, and compare programming descriptions through narrated exam questions."
+---
+
+Words such as invalid, square, range and only if are not complete contracts. This lesson applies [Contracts and Predicate Logic](/docs/sem3/csi243/10-reasoning-revision/notes/contracts-and-predicate-logic) to the laboratory's awkward cases and to specification proofs. Read [Specification and Correctness](/docs/sem3/csi243/10-reasoning-revision/notes/specification) and [Defining Functions](/docs/sem3/csi243/03-defining-functions/notes/defining-functions) first; their specification and design processes are prerequisites rather than tasks repeated here.
+
+<LearningObjectives items={[
+  'Record an assumption before implementing an ambiguous requirement',
+  'Test every disjoint input partition, including shared boundaries and overlapping errors',
+  'Prove factorial equals its specified mathematical product, separately from positivity and termination',
+  'Adapt a product-correctness argument to ranges, shifts and double factorial',
+  'Compare functional, procedural, object-oriented, declarative and markup descriptions concretely',
+  'Explain optimisation and concurrency benefits without promising automatic speed'
+]} />
+
+<Prerequisites items={[
+  'Contracts and Predicate Logic: relations, implication, quantifiers and total correctness',
+  'Lab 02: Making Choices, and Lab 03: Recursion Continued',
+  'Proofs of Programs I and Lab: Proofs of Programs I for the established proof template',
+  'Maybe and Either lessons for explicit absence and validation results'
+]} />
+
+For each ambiguity, use this procedure: quote the ambiguous phrase, state the chosen interpretation, list disjoint input partitions, then implement and test. An assumption is not an invented fact about the question. In an exam, write it beside your solution; if clarification is available, request it before relying on the assumption. Deliberate failing programs belong in plain code fences and are never run automatically.
+
+## 1. Invalid parity for an Int
+
+Lab 02's isEven task mentions an invalid-input response, but every defined Int or Integer is even or odd, including zero and negative values. Text that has not been parsed, a missing input and a negative value rejected by an application are three different concerns. They must not be silently called a third parity.
+
+### Template
+
+```text
+Core policy: every defined Int accepted
+  even n -> even label; otherwise -> odd label
+Extra application policy, only if stated: n >= 0
+Missing-data policy: Nothing means no number supplied
+```
+
+Start with the core policy. The three worked variations keep the same total Int domain and change the representation of the answer. Later validation may wrap this core; that does not change parity itself.
+
+### Worked variation: signed inputs with labels
+
+Use the exact even/odd labels from Lab 02 and test all sign partitions.
+
+<HaskellTryIt>
+
+```haskell
+isEven :: Int -> String
+isEven n = if n `mod` 2 == 0 then "The number is even" else "The number is odd"
+main :: IO ()
+main = print (map isEven [-3,-2,0,1,2])
+```
+
+```text
+["The number is odd","The number is even","The number is even","The number is odd","The number is even"]
+```
+
+</HaskellTryIt>
+
+The disjoint partitions are negative odd, negative even, zero, positive odd and positive even. -3 has a non-zero remainder, -2 and zero have zero remainder. There is no remaining defined Int for an invalid-parity branch.
+
+### Worked variation: guards with the same contract
+
+Change the syntax, keeping the input domain and labels identical.
+
+<HaskellTryIt>
+
+```haskell
+isEven :: Int -> String
+isEven n
+  | even n = "The number is even"
+  | otherwise = "The number is odd"
+main :: IO ()
+main = print (isEven (-1), isEven 0, isEven 7)
+```
+
+```text
+("The number is odd","The number is even","The number is odd")
+```
+
+</HaskellTryIt>
+
+The negative and positive odd cases choose otherwise; zero chooses the first guard. The guard rewrite preserves the total parity contract. It cannot create a meaningful third case.
+
+### Worked variation: count even inputs without labels
+
+Change the result representation to the bothEven task's count.
+
+<HaskellTryIt>
+
+```haskell
+bothEven :: Int -> Int -> Int
+bothEven x y = (if even x then 1 else 0) + (if even y then 1 else 0)
+main :: IO ()
+main = print (bothEven 3 5, bothEven 2 5, bothEven 3 4, bothEven 0 (-2))
+```
+
+```text
+(0,1,1,2)
+```
+
+</HaskellTryIt>
+
+All four Boolean parity combinations are covered. Zero and -2 are both even, so the count is 2. Exactly-one corresponds to XOR of the even tests.
+
+### Optional application policies, stated before implementation
+
+The core policy above accepts every defined Int. Suppose a separate application explicitly requires non-negative values: its reporting wrapper returns Nothing for a negative and Just a parity label otherwise. Alternatively an application may permit a missing number: it accepts Maybe Int, with Nothing reporting absence and Just n retaining signed parity. These two wrappers have different domains and meanings. Both are total on their respective defined input types; they must not turn rejection or absence into a false arithmetic result.
+
+```text
+nonNegativeParity:
+  n < 0 -> Nothing; n >= 0 -> Just (core parity label)
+suppliedParity:
+  Nothing -> Nothing; Just n -> Just (core parity label)
+```
+
+### Worked variation: application policies on negative input
+
+Now compare the extra non-negative restriction with a present signed value.
+
+<HaskellTryIt>
+
+```haskell
+parity :: Int -> String
+parity n = if even n then "even" else "odd"
+nonNegativeParity :: Int -> Maybe String
+nonNegativeParity n = if n < 0 then Nothing else Just (parity n)
+suppliedParity :: Maybe Int -> Maybe String
+suppliedParity input = case input of
+  Nothing -> Nothing
+  Just n -> Just (parity n)
+main :: IO ()
+main = print (nonNegativeParity (-2), suppliedParity (Just (-2)), suppliedParity Nothing)
+```
+
+```text
+(Nothing,Just "even",Nothing)
+```
+
+</HaskellTryIt>
+
+The restriction rejects -2. The missing-data wrapper accepts the supplied -2 and classifies it as even. Nothing means absence, not an odd number. This is the first worked case for each wrapper policy.
+
+### Worked variation: application policies at zero
+
+Now both wrapper policies have an ordinary defined zero.
+
+<HaskellTryIt>
+
+```haskell
+parity :: Int -> String
+parity n = if even n then "even" else "odd"
+nonNegativeParity :: Int -> Maybe String
+nonNegativeParity n = if n < 0 then Nothing else Just (parity n)
+suppliedParity :: Maybe Int -> Maybe String
+suppliedParity input = case input of
+  Nothing -> Nothing
+  Just n -> Just (parity n)
+main :: IO ()
+main = print (nonNegativeParity 0, suppliedParity (Just 0), suppliedParity Nothing)
+```
+
+```text
+(Just "even",Just "even",Nothing)
+```
+
+</HaskellTryIt>
+
+Zero is allowed under non-negative validity and has even parity. A missing value still reports Nothing. Returning Nothing for zero would be a different, positive-only policy.
+
+### Worked variation: application policies on an ordinary odd number
+
+Now both wrappers succeed with an odd input.
+
+<HaskellTryIt>
+
+```haskell
+parity :: Int -> String
+parity n = if even n then "even" else "odd"
+nonNegativeParity :: Int -> Maybe String
+nonNegativeParity n = if n < 0 then Nothing else Just (parity n)
+suppliedParity :: Maybe Int -> Maybe String
+suppliedParity input = case input of
+  Nothing -> Nothing
+  Just n -> Just (parity n)
+main :: IO ()
+main = print (nonNegativeParity 3, suppliedParity (Just 3), nonNegativeParity (-3))
+```
+
+```text
+(Just "odd",Just "odd",Nothing)
+```
+
+</HaskellTryIt>
+
+Both successful paths preserve the odd label at 3, while the non-negative policy rejects -3. Together these three comparisons cover rejection, the zero boundary, success and absence.
+
+### Exam question: repair contradictory invalid parity (5 marks)
+
+The requirement says isEven :: Int -> String must report even, odd, or invalid input. Explain the contradiction and give a defensible interpretation.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Explain means identify the domain issue before writing extra guards.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+All defined Ints have parity. Keep the core domain total and put malformed external input in a separate validation layer.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+For the Int function, use the two labels in the first variation and state that the invalid branch is unreachable for defined inputs. If the application forbids negatives, explicitly add that policy; it is not a parity rule. If input may be missing, accept Maybe Int and handle Nothing separately.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Test -3,-2,0,1,2. They exhaust the sign/parity partitions; none is neither even nor odd.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Treating negative values as invalid without saying so changes the task. GHC gives no error for such a guard. `undefined :: Int` is not a third integer parity: it is a non-value whose evaluation fails. Do not use it as a normal invalid-input test. A parser's error is also separate from the mathematical classifier.
+
+### Practice with answers
+
+Specify a non-negative-only application wrapper. **Answer:** P is every defined Int for the wrapper; Q reports a validation failure for `n < 0` and otherwise returns the core parity label. If the wrapper instead has P: `n >= 0`, its contract makes no promise for negatives. Do not confuse the two designs.
+
+## 2. Divisor zero, equality and order
+
+Lab 02 says test divisibility only when m is greater than n, with separate equality and less-than labels. That does not settle zero: (5,0) satisfies m > n but mod by zero is undefined. Choose precedence for overlaps. Here the reporting policy is zero first, then equality, then less-than, then divisibility.
+
+### Template
+
+```text
+Disjoint partitions under zero-first policy:
+1. n == 0 -> zero-divisor message
+2. n /= 0 and m == n -> equality message
+3. n /= 0 and m < n -> order message
+4. n /= 0 and m > n and m mod n == 0 -> divisible
+5. n /= 0 and m > n and m mod n /= 0 -> not divisible
+```
+
+Each branch excludes earlier branches, so these partitions cover all pairs. The executable versions use Integer to avoid bounded quotient overflow; the same reporting policy applies to Int with its arithmetic limits stated. The zero-divisor text is our explicit addition because the old task does not specify it. Equality-first is another defensible reporting policy if zero is still checked before mod; it differs at (0,0).
+
+### Worked variation: ordinary quotient branches
+
+Start with the two specified greater-than cases.
+
+<HaskellTryIt>
+
+```haskell
+isDiv :: Integer -> Integer -> String
+isDiv m n
+  | n == 0 = "Zero divisor"
+  | m == n = "m and n are equal"
+  | m < n = "m should be greater than n"
+  | m `mod` n == 0 = "Yes, m is divisible by n"
+  | otherwise = "No, m is not divisible by n"
+main :: IO ()
+main = print (isDiv 8 4, isDiv 8 3)
+```
+
+```text
+("Yes, m is divisible by n","No, m is not divisible by n")
+```
+
+</HaskellTryIt>
+
+Eight exceeds both divisors. Its remainder is 0 with 4 and 2 with 3. Only these final two partitions execute mod.
+
+### Worked variation: overlapping error conditions
+
+Now zero overlaps equality and the less-than report.
+
+<HaskellTryIt>
+
+```haskell
+isDiv :: Integer -> Integer -> String
+isDiv m n
+  | n == 0 = "Zero divisor"
+  | m == n = "m and n are equal"
+  | m < n = "m should be greater than n"
+  | m `mod` n == 0 = "Yes, m is divisible by n"
+  | otherwise = "No, m is not divisible by n"
+main :: IO ()
+main = print (isDiv 0 0, isDiv 5 0, isDiv (-2) 0)
+```
+
+```text
+("Zero divisor","Zero divisor","Zero divisor")
+```
+
+</HaskellTryIt>
+
+All three calls select zero first. (0,0) would otherwise select equality; (-2,0) would otherwise select order. Precedence affects the reported reason, so include these overlap tests.
+
+### Worked variation: non-zero equality, order and negative values
+
+Now test the remaining partitions without confusing mathematical divisibility and the lab's extra ordering policy.
+
+<HaskellTryIt>
+
+```haskell
+isDiv :: Integer -> Integer -> String
+isDiv m n
+  | n == 0 = "Zero divisor"
+  | m == n = "m and n are equal"
+  | m < n = "m should be greater than n"
+  | m `mod` n == 0 = "Yes, m is divisible by n"
+  | otherwise = "No, m is not divisible by n"
+main :: IO ()
+main = print (isDiv 4 4, isDiv 3 8, isDiv (-4) (-2), isDiv 4 (-2))
+```
+
+```text
+("m and n are equal","m should be greater than n","m should be greater than n","Yes, m is divisible by n")
+```
+
+</HaskellTryIt>
+
+Equality and less-than never execute mod. -4 is mathematically divisible by -2, but `-4 < -2`, so the lab's ordered policy reports order. Four exceeds -2 and is divisible. This is a policy for reporting, not a new definition of divisibility.
+
+### Alternative reporting precedence
+
+A relation-first reporter is also safe if its zero check precedes every mod call. It preserves the lab's equality/order responses even when the divisor is zero. Its effective partitions are equality, strict less-than, then zero with m greater than n, then the two remainder cases. Both reporters use short labels below to make the differing reasons easy to compare.
+
+```text
+Zero-first: n==0 before all relationships
+Relation-first: m==n, then m<n, then n==0, then mod
+Restricted arithmetic core: P(m,n) = m>n and n/=0
+```
+
+### Worked variation: two policies at equality with zero
+
+Now the guards overlap at the same input.
+
+<HaskellTryIt>
+
+```haskell
+zeroFirst :: Integer -> Integer -> String
+zeroFirst m n
+  | n == 0 = "zero"
+  | m == n = "equal"
+  | m < n = "order"
+  | m `mod` n == 0 = "divisible"
+  | otherwise = "not divisible"
+relationFirst :: Integer -> Integer -> String
+relationFirst m n
+  | m == n = "equal"
+  | m < n = "order"
+  | n == 0 = "zero"
+  | m `mod` n == 0 = "divisible"
+  | otherwise = "not divisible"
+main :: IO ()
+main = print (zeroFirst 0 0, relationFirst 0 0, 0 > (0 :: Integer) && 0 /= (0 :: Integer))
+```
+
+```text
+("zero","equal",False)
+```
+
+</HaskellTryIt>
+
+Both reporters avoid mod. Their reason differs by the documented precedence. The restricted arithmetic core has no promised numeric result for this pair, as its precondition is False.
+
+### Worked variation: two policies below a zero divisor
+
+Now zero overlaps the less-than relationship.
+
+<HaskellTryIt>
+
+```haskell
+zeroFirst :: Integer -> Integer -> String
+zeroFirst m n
+  | n == 0 = "zero"
+  | m == n = "equal"
+  | m < n = "order"
+  | m `mod` n == 0 = "divisible"
+  | otherwise = "not divisible"
+relationFirst :: Integer -> Integer -> String
+relationFirst m n
+  | m == n = "equal"
+  | m < n = "order"
+  | n == 0 = "zero"
+  | m `mod` n == 0 = "divisible"
+  | otherwise = "not divisible"
+main :: IO ()
+main = print (zeroFirst (-2) 0, relationFirst (-2) 0, (-2 :: Integer) > 0 && (0 :: Integer) /= 0)
+```
+
+```text
+("zero","order",False)
+```
+
+</HaskellTryIt>
+
+Zero-first reports the divisor; relation-first reports order. Neither reaches arithmetic. Testing only (5,0) would not reveal this difference.
+
+### Worked variation: two policies above a zero divisor and on valid arithmetic
+
+Now zero is reached after both relationships fail, and ordinary branches are also exercised.
+
+<HaskellTryIt>
+
+```haskell
+zeroFirst :: Integer -> Integer -> String
+zeroFirst m n
+  | n == 0 = "zero"
+  | m == n = "equal"
+  | m < n = "order"
+  | m `mod` n == 0 = "divisible"
+  | otherwise = "not divisible"
+relationFirst :: Integer -> Integer -> String
+relationFirst m n
+  | m == n = "equal"
+  | m < n = "order"
+  | n == 0 = "zero"
+  | m `mod` n == 0 = "divisible"
+  | otherwise = "not divisible"
+main :: IO ()
+main = print (zeroFirst 5 0, relationFirst 5 0, relationFirst 8 4, relationFirst 8 3, 8 > (4 :: Integer) && 4 /= (0 :: Integer))
+```
+
+```text
+("zero","zero","divisible","not divisible",True)
+```
+
+</HaskellTryIt>
+
+Both reject the zero divisor at (5,0). The non-zero valid pairs execute mod and separate divisible from not divisible. Each reporter now has three worked comparisons including its overlap and arithmetic branches.
+
+### Exam question: zero before arithmetic (6 marks)
+
+Extend the lab isDiv contract to reject a zero divisor. State the result at (0,0), (5,0), (4,4), (3,8), (8,4), (8,3).
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Extend authorises an additional policy; the command state requires every overlapping case.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Choose zero-first explicitly, then follow the disjoint partition table.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The six results are zero-divisor, zero-divisor, equality, order, divisible, not-divisible. The implementation above follows that order.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Each of the five partitions is covered, and (0,0) specifically checks the overlap. No zero divisor reaches mod.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The old precondition m > n is insufficient for safe mod: (5,0) is a valid pair under it. GHC accepts a mod expression with zero and fails when it is evaluated; the key run-time phrase is `divide by zero`. Do not run that case. Repair the restricted arithmetic precondition to `m > n && n /= 0`, or use the total reporter above. Use Integer for this unbounded arithmetic contract; an Int version also needs an arithmetic-overflow policy.
+
+### Practice with answers
+
+Choose equality/order-first reporting while keeping mod safe. **Answer:** equality, then less-than, then zero, then mod. (0,0) reports equality, (-2,0) reports order, (5,0) reports zero. Say this precedence explicitly; never move the zero guard below mod.
+
+## 3. Index equal to length and the original index
+
+Lab 03 says indices start at zero, gives the example (3,10), and says reject y greater than the length. The boundary y equal to length is also invalid: a length-n list has positions 0 through n-1. The example establishes result order as (index,element), despite prose that can sound reversed. We choose an explicit safe result.
+
+### Template
+
+```text
+Purpose: return (original index, element at that index)
+P for a numeric result: 0 <= i and i < length xs
+Reporting contract: Nothing outside that subset
+                   Just (i, xs !! i) inside it
+```
+
+The finite-list assumption makes length terminate. This lesson checks the boundary policy; [Recursive List Design](/docs/sem3/csi243/06-lists-tuples/notes/recursive-list-design) derives the recursive algorithm without repeating it here.
+
+### Worked variation: last valid and first invalid
+
+Now compare adjacent positions around length.
+
+<HaskellTryIt>
+
+```haskell
+atPosition :: [a] -> Int -> Maybe (Int,a)
+atPosition xs i
+  | i < 0 || i >= length xs = Nothing
+  | otherwise = Just (i, xs !! i)
+main :: IO ()
+main = print (atPosition [3,5,2,10 :: Int] 3, atPosition [3,5,2,10 :: Int] 4)
+```
+
+```text
+(Just (3,10),Nothing)
+```
+
+</HaskellTryIt>
+
+Length is 4. Index 3 selects 10 and preserves 3; index 4 is equal to length and has no element. Rejecting only greater-than would miss it.
+
+### Worked variation: empty and singleton boundaries
+
+Now length can be zero or one.
+
+<HaskellTryIt>
+
+```haskell
+atPosition :: [a] -> Int -> Maybe (Int,a)
+atPosition xs i
+  | i < 0 || i >= length xs = Nothing
+  | otherwise = Just (i, xs !! i)
+main :: IO ()
+main = print (atPosition ([] :: [Int]) 0, atPosition [7 :: Int] 0, atPosition [7 :: Int] 1)
+```
+
+```text
+(Nothing,Just (0,7),Nothing)
+```
+
+</HaskellTryIt>
+
+No index is valid for []. A singleton has exactly index 0; 1 equals its length and is rejected. The same strict upper bound handles both.
+
+### Worked variation: negative and far oversize
+
+Now invalid positions occur on either side of the valid subset.
+
+<HaskellTryIt>
+
+```haskell
+atPosition :: [a] -> Int -> Maybe (Int,a)
+atPosition xs i
+  | i < 0 || i >= length xs = Nothing
+  | otherwise = Just (i, xs !! i)
+main :: IO ()
+main = print (atPosition "ab" (-1), atPosition "ab" 1, atPosition "ab" 8)
+```
+
+```text
+(Nothing,Just (1,'b'),Nothing)
+```
+
+</HaskellTryIt>
+
+The disjoint categories are negative, valid, equal-to-length and greater-than-length. The string variation shows the element type need not be numeric. Validation prevents !! from seeing a missing position.
+
+### Exam question: repair the boundary sentence (5 marks)
+
+A zero-based index requirement rejects `y < 0` or `y > length xs`. Find the missing case and repair the precondition.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Find means identify a concrete boundary counterexample, then give the general correction.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+List all positions of a singleton.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+For [7], y=1 is not greater than length but has no element. Validity is `y >= 0 && y < length xs`; reject `y < 0 || y >= length xs`. Preserve the original y in the pair.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The valid singleton call is Just (0,7); its equal-length call and [] at 0 are both Nothing.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`i > length xs` misses equality, and pairing a recursive remaining counter with the answer loses the original index. These can type check with no warning. Repair the boundary and retain the original argument. Evaluating !! at an oversized index raises an error with key phrase `index too large`; do not place that deliberate crash in HaskellTryIt.
+
+### Practice with answers
+
+If a helper reaches its zero counter for original index 2 and element 'c', which pair is required? **Answer:** (2,'c'), not (0,'c'). State one-based indexing separately if a different question explicitly requests it.
+
+## 4. A square specially defined at zero
+
+The Making Choices example explicitly defines square 0 = 1 and square y = y*y elsewhere. Ordinary mathematical squaring gives zero at zero. The implementation is correct only relative to the chosen specification: do not 'fix' the special case by silently substituting ordinary mathematics.
+
+### Template
+
+```text
+specialSquare n = if n == 0 then 1 else n*n
+ordinarySquare n = n*n
+Partitions: zero; negative non-zero; positive non-zero
+```
+
+Use Integer here to give the mathematical product without overflow. An Int version promises bounded machine arithmetic unless the contract restricts values enough to avoid overflow.
+
+### Worked variation: zero reveals the specification
+
+Now compare the same input under two contracts.
+
+<HaskellTryIt>
+
+```haskell
+specialSquare :: Integer -> Integer
+specialSquare 0 = 1
+specialSquare n = n * n
+main :: IO ()
+main = print (specialSquare 0, (0 :: Integer) * 0)
+```
+
+```text
+(1,0)
+```
+
+</HaskellTryIt>
+
+The outputs differ because the specifications differ. The name square cannot override an explicit zero case.
+
+### Worked variation: positive non-zero input
+
+Now guards implement the same special specification.
+
+<HaskellTryIt>
+
+```haskell
+specialSquare :: Integer -> Integer
+specialSquare n
+  | n == 0 = 1
+  | otherwise = n * n
+main :: IO ()
+main = print (map specialSquare [1,2,5])
+```
+
+```text
+[1,4,25]
+```
+
+</HaskellTryIt>
+
+All inputs use the ordinary-product branch. Testing only these values would fail to detect a missing special zero case.
+
+### Worked variation: negative non-zero input
+
+Now both the sign partition and an independent postcondition are checked.
+
+<HaskellTryIt>
+
+```haskell
+specialSquare :: Integer -> Integer
+specialSquare n = if n == 0 then 1 else n * n
+post :: Integer -> Integer -> Bool
+post n r = if n == 0 then r == 1 else r == n * n
+main :: IO ()
+main = print (specialSquare (-3), post (-3) 9, post 0 0)
+```
+
+```text
+(9,True,False)
+```
+
+</HaskellTryIt>
+
+-3 uses the non-zero branch and returns 9. A result of 0 for input 0 fails the special contract even though it is the ordinary square.
+
+### Exam question: which square is correct? (4 marks)
+
+A supplied specification says square 0 = 1. A student replaces it by square n = n*n. Is the change correct?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Correct asks for agreement with the supplied requirement, not with the function's everyday name.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Compare the two definitions on the special partition.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The replacement violates the supplied postcondition at zero: it returns 0 rather than 1. It is correct for the ordinary-square contract, which is a different requirement.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Negative and positive non-zero examples agree, so those tests alone cannot justify the replacement.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Putting the general equation before the zero equation makes the latter redundant. The warning's key phrase is `overlapping-patterns`. Keep the specific case first. Removing it entirely can compile without a warning, but still violates this specification.
+
+### Practice with answers
+
+Give a test set covering all three partitions. **Answer:** [-2,0,3], expecting [4,1,9]. If the question instead asks ordinary square, the expected middle answer is 0.
+
+## 5. Negative bounds, inclusivity and reversed ranges
+
+A requirement saying 'sum a range' leaves the endpoints, signs and reversed order unsettled. Negative bounds do not inherently make a finite sum invalid. Here the primary policy is an inclusive ascending range, accepting signed bounds and treating lo > hi as empty. Two explicit alternatives are shown for comparison: reject negative bounds, or traverse downwards when reversed.
+
+### Template
+
+```text
+Primary: signedRange lo hi = sum of integers lo through hi inclusive
+         lo > hi means empty sum 0
+Alternative A: nonNegativeRange rejects either negative bound with Nothing
+Alternative B: directedRange includes both endpoints and travels towards hi
+```
+
+These are different contracts, not interchangeable implementations. A one-argument sum from 1 to n likewise needs a policy for `n < 1`. For a product, the empty identity is 1 rather than 0; the proof section uses that distinction.
+
+### Worked variation: negative to positive
+
+Now the same negative bounds are accepted or rejected under different policies.
+
+<HaskellTryIt>
+
+```haskell
+signedRange :: Integer -> Integer -> Integer
+signedRange lo hi = sum [lo..hi]
+nonNegativeRange :: Integer -> Integer -> Maybe Integer
+nonNegativeRange lo hi
+  | lo < 0 || hi < 0 = Nothing
+  | otherwise = Just (sum [lo..hi])
+directedRange :: Integer -> Integer -> Integer
+directedRange lo hi = if lo <= hi then sum [lo..hi] else sum [lo,lo-1..hi]
+main :: IO ()
+main = print (signedRange (-2) 2, nonNegativeRange (-2) 2, directedRange (-2) 2)
+```
+
+```text
+(0,Nothing,0)
+```
+
+</HaskellTryIt>
+
+The primary and directed sums are -2-1+0+1+2 = 0. The non-negative-only policy rejects the bounds instead of inventing a numeric answer. Include negative-negative ranges such as [-3..-1] when extending the tests.
+
+### Worked variation: equal endpoints including zero
+
+Now a range has exactly one member, under all three policies.
+
+<HaskellTryIt>
+
+```haskell
+signedRange :: Integer -> Integer -> Integer
+signedRange lo hi = sum [lo..hi]
+nonNegativeRange :: Integer -> Integer -> Maybe Integer
+nonNegativeRange lo hi
+  | lo < 0 || hi < 0 = Nothing
+  | otherwise = Just (sum [lo..hi])
+directedRange :: Integer -> Integer -> Integer
+directedRange lo hi = if lo <= hi then sum [lo..hi] else sum [lo,lo-1..hi]
+main :: IO ()
+main = print (signedRange 0 0, nonNegativeRange 0 0, directedRange 0 0, signedRange (-3) (-3), nonNegativeRange (-3) (-3), directedRange (-3) (-3))
+```
+
+```text
+(0,Just 0,0,-3,Nothing,-3)
+```
+
+</HaskellTryIt>
+
+[0..0] contains zero, while [-3..-3] contains -3. A singleton is not an empty range. The rejection policy still rejects the negative singleton. Both endpoint inclusivity and sign policy are visible.
+
+### Worked variation: reversed positive bounds
+
+Now direction changes the mathematical task.
+
+<HaskellTryIt>
+
+```haskell
+signedRange :: Integer -> Integer -> Integer
+signedRange lo hi = sum [lo..hi]
+nonNegativeRange :: Integer -> Integer -> Maybe Integer
+nonNegativeRange lo hi
+  | lo < 0 || hi < 0 = Nothing
+  | otherwise = Just (sum [lo..hi])
+directedRange :: Integer -> Integer -> Integer
+directedRange lo hi = if lo <= hi then sum [lo..hi] else sum [lo,lo-1..hi]
+main :: IO ()
+main = print (signedRange 3 1, nonNegativeRange 3 1, directedRange 3 1)
+```
+
+```text
+(0,Just 0,6)
+```
+
+</HaskellTryIt>
+
+The ascending range [3..1] is empty, so the first two contracts return the empty sum. The directed range contains 3,2,1 and returns 6. This third variation completes a three-case comparison for each policy.
+
+### Exam question: state a range assumption (6 marks)
+
+Implement the sum of a range with negative endpoints permitted. State inclusivity and reversed-bounds behaviour before giving code.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The requirement settles signs but still leaves two choices to record.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Choose ascending inclusive bounds and the empty-sum rule for reversal.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi = sum [lo..hi]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+P: all defined Integer bounds; Q: the inclusive ascending sum, with 0 when lo > hi. (-2,2) gives 0, (3,3) gives 3, (3,1) gives 0.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Replacing a negative bound by abs changes the requested range. GHC accepts it, so there is no diagnostic to quote. `sum [1..n]` returning 0 for negative n is an empty-range convention, not a signed sum down to n. Repair by stating the intended direction, or reporting unsupported bounds.
+
+### Practice with answers
+
+For inclusive productRange with lo > hi treated as empty, what result is required? **Answer:** 1, the multiplicative identity. For productRange (-2) 1, zero occurs in the range, so the result is 0. Neither is automatically an error.
+
+## 6. Grade cut-offs, invalid precedence and disjoint partitions
+
+A grade rule needs the accepted mark domain, precise cut-offs and boundary ownership. Here the stated policy is integral marks 0 through 100 inclusive, distinction from 75, pass from 50, and fail below 50. These cut-offs are explicit assumptions for this exercise; a question giving different bands overrides them. Invalid values must not slip into an otherwise valid band.
+
+### Template
+
+```text
+m < 0 or m > 100 -> Invalid
+75 <= m <= 100 -> Distinction
+50 <= m < 75 -> Pass
+0 <= m < 50 -> Fail
+```
+
+The guards below are tried in order. Later rows inherit the negation of earlier tests, which makes the implied bands disjoint. Validity is checked before classifying high marks, so 101 cannot become a distinction.
+
+### Worked variation: pass threshold neighbours
+
+Begin immediately below, at and above the first cut-off.
+
+<HaskellTryIt>
+
+```haskell
+grade :: Integer -> String
+grade m
+  | m < 0 || m > 100 = "Invalid"
+  | m >= 75 = "Distinction"
+  | m >= 50 = "Pass"
+  | otherwise = "Fail"
+main :: IO ()
+main = print (map grade [49,50,51])
+```
+
+```text
+["Fail","Pass","Pass"]
+```
+
+</HaskellTryIt>
+
+49 falls below 50. The >= test gives ownership of 50 to Pass; 51 stays there. Testing only 60 would not reveal a mistaken strict >.
+
+### Worked variation: distinction threshold neighbours
+
+Now examine overlap between high bands.
+
+<HaskellTryIt>
+
+```haskell
+grade :: Integer -> String
+grade m
+  | m < 0 || m > 100 = "Invalid"
+  | m >= 75 = "Distinction"
+  | m >= 50 = "Pass"
+  | otherwise = "Fail"
+main :: IO ()
+main = print (map grade [74,75,76])
+```
+
+```text
+["Pass","Distinction","Distinction"]
+```
+
+</HaskellTryIt>
+
+75 and 76 satisfy both >=75 and >=50. The first successful high-band guard wins. Testing pass first would incorrectly classify distinction marks.
+
+### Worked variation: accepted endpoints and invalid neighbours
+
+Now cover the outer domain as well as internal bands.
+
+<HaskellTryIt>
+
+```haskell
+grade :: Integer -> String
+grade m
+  | m < 0 || m > 100 = "Invalid"
+  | m >= 75 = "Distinction"
+  | m >= 50 = "Pass"
+  | otherwise = "Fail"
+main :: IO ()
+main = print (map grade [-1,0,100,101])
+```
+
+```text
+["Invalid","Fail","Distinction","Invalid"]
+```
+
+</HaskellTryIt>
+
+Zero is a valid fail; 100 is a valid distinction. The adjacent -1 and 101 lie outside the accepted domain. These tests cover both invalid partitions.
+
+### Worked variation: one representative of each disjoint band
+
+Now classify a complete partition set without relying on overlapping descriptions.
+
+<HaskellTryIt>
+
+```haskell
+grade :: Integer -> String
+grade m
+  | m < 0 || m > 100 = "Invalid"
+  | m >= 75 = "Distinction"
+  | m >= 50 = "Pass"
+  | otherwise = "Fail"
+main :: IO ()
+main = print (map grade [-5,20,60,90,105])
+```
+
+```text
+["Invalid","Fail","Pass","Distinction","Invalid"]
+```
+
+</HaskellTryIt>
+
+The sequence covers below-domain, valid fail, valid pass, valid distinction and above-domain. This complements the boundary-neighbour tests rather than replacing them.
+
+### Exam question: find an overlap error (5 marks)
+
+A classifier tests m >= 50 before m >= 75 and tests m > 100 last. Explain two failures and repair the order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Find two failures means give inputs exposing different defects.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+One valid high mark exposes band overlap; one invalid high mark exposes validation precedence.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+75 becomes Pass rather than Distinction; 101 also becomes Pass rather than Invalid. Validate 0..100 first, then test >=75, then >=50, then otherwise.
+
+  </Step>
+
+  <Step title="4. Check">
+
+0,49,50,74,75,100 are accepted with the named bands; -1 and 101 are rejected.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using > instead of >= moves the exact cut-off. Checking pass before distinction hides the higher band. Neither is a GHC error. Repair guard order and use a partition table. If accepting Double marks, specify fractional boundaries, rounding and non-finite inputs; do not silently round 49.5 to a pass.
+
+### Practice with answers
+
+Could a pass predicate use only `m >= 50`? **Answer:** under P restricting m to 0..100, yes. For an all-integer reporter, include validation so that 101 is not treated as a valid pass. A False validation result must not be confused with a valid failing grade.
+
+## 7. Correctness against a mathematical product
+
+A positivity proof shows only that the result exceeds zero. A function returning 1 everywhere would satisfy that property and still fail the factorial specification. The ho7 homework obligation is stronger: **prove the factorial implementation computes the specified product**. Use the existing [Proofs of Programs I](/docs/sem3/csi243/10-reasoning-revision/notes/proofs-of-programs-i) layout and the narrated method in [Lab: Proofs of Programs I](/docs/sem3/csi243/10-reasoning-revision/notes/lab-proofs-of-programs-i). Other proof techniques and counterexample construction remain in [Proof Patterns](/docs/sem3/csi243/10-reasoning-revision/notes/proof-patterns).
+
+### Template
+
+```text
+Purpose and P: identify the intended product and accepted arguments
+Claim: implementation input = independently specified mathematical product
+Induct on: the argument or range width controlling recursion
+Base: use the empty product identity, with a reason on each line
+Hypothesis: equality for the smaller valid input
+Step: unfold implementation, apply IH, use the product extension identity
+Conclusion: equality for every valid input
+Termination separately: a non-negative measure decreases on each call
+```
+
+The mathematical product of no factors is 1. This convention makes the extension identity work at the first step too. All proofs use Integer and fully defined finite inputs, so they are not relying on overflowed Int arithmetic.
+
+### Factorial: the exact homework claim
+
+Purpose: return the factorial of a non-negative integer. P: `n >= 0`. Define `F(n)` independently as the product of the integers 1 through n, with `F(0)=1`. The postcondition is `result = F(n)`, not just `result > 0`. The implementation uses the usual guarded factorial equations, with negative rejection outside the proof's domain.
+
+```haskell
+fact :: Integer -> Integer
+fact n
+  | n < 0 = error "negative factorial argument"
+  | n == 0 = 1                    -- (F0)
+  | otherwise = n * fact (n - 1)  -- (FS), here n > 0
+```
+
+The rejection branch is not a returned mathematical factorial. A negative call is deliberately excluded from runnable tests. A version using `n <= 1` as its base branch has equivalent non-negative equations: at 1 the recursive form gives `1 * fact 0 = 1`.
+
+**Claim:** `fact n = F(n)` for every non-negative Integer n. **Induct on:** n. The product identity is `F(k+1) = (k+1) * F(k)`: separate the last factor from `1*2*...*k*(k+1)`, using associativity and commutativity of integer multiplication. It also holds for k=0 by the empty-product convention.
+
+```text
+Base n = 0:
+  fact 0
+  = 1                         -- (F0)
+  = F(0)                      -- empty product definition
+
+Hypothesis:
+  fact k = F(k) for an arbitrary k >= 0
+
+Step, goal fact (k+1) = F(k+1):
+  fact (k+1)
+  = (k+1) * fact ((k+1)-1)    -- (FS), k+1 > 0
+  = (k+1) * fact k            -- integer arithmetic
+  = (k+1) * F(k)              -- IH
+  = F(k+1)                    -- product extension identity
+
+Conclusion:
+  base and step establish equality for all n >= 0 by induction.
+```
+
+**Termination, separately:** choose measure n. At n=0 return directly. At n>0 the next input n-1 remains non-negative and is strictly smaller. Therefore every valid call reaches zero in finitely many recursive steps; multiplication of the resulting finite Integers terminates. Together with the equality proof, this establishes total correctness against the product specification. The negative rejection branch terminates with an exception, not a normal numeric result.
+
+### Worked variation: factorial at the empty product
+
+Begin at zero, which a positivity-only argument does not connect to the product specification.
+
+<HaskellTryIt>
+
+```haskell
+fact :: Integer -> Integer
+fact n
+  | n < 0 = error "negative factorial argument"
+  | n == 0 = 1
+  | otherwise = n * fact (n - 1)
+main :: IO ()
+main = print (fact 0, product ([1..0] :: [Integer]), fact 0 == product [1..0])
+```
+
+```text
+(1,1,True)
+```
+
+</HaskellTryIt>
+
+Both sides use the empty-product value 1. Returning 0 here would type check and destroy the specification proof.
+
+### Worked variation: factorial at the first extension
+
+Now the product contains one factor, so the k=0 step is exercised.
+
+<HaskellTryIt>
+
+```haskell
+fact :: Integer -> Integer
+fact n
+  | n < 0 = error "negative factorial argument"
+  | n == 0 = 1
+  | otherwise = n * fact (n - 1)
+main :: IO ()
+main = print (fact 1, 1 * fact 0, product ([1..1] :: [Integer]))
+```
+
+```text
+(1,1,1)
+```
+
+</HaskellTryIt>
+
+The implementation unfolds to 1 times the zero case, and the specification product has the sole factor 1. This checks that the extension identity includes the first step.
+
+### Worked variation: factorial at several positive values
+
+Now compare a family of results against the independent product definition.
+
+<HaskellTryIt>
+
+```haskell
+fact :: Integer -> Integer
+fact n
+  | n < 0 = error "negative factorial argument"
+  | n == 0 = 1
+  | otherwise = n * fact (n - 1)
+main :: IO ()
+main = print (map fact [2,3,5], all (\n -> fact n == product [1..n]) [0..7])
+```
+
+```text
+([2,6,120],True)
+```
+
+</HaskellTryIt>
+
+2!=2, 3!=6 and 5!=120. The finite check supports the equations but is not the universal proof; that is the induction above.
+
+### Exam question: ho7 factorial product proof (10 marks)
+
+Prove that fact returns the product of the integers from 1 to n for every n >= 0. State the zero case, the inductive product identity and termination.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command prove requires a universal argument, not a list of outputs or positivity. The valid inputs are non-negative integers.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Name the mathematical product F, induct on n, and keep the result equality and the decreasing measure separate.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Use the claim, base, hypothesis, step and conclusion above. In particular, the decisive IH replacement is `fact k = F(k)`; the final step is `F(k+1) = (k+1)*F(k)`. The measure n proves termination independently.
+
+  </Step>
+
+  <Step title="4. Check">
+
+At 0 the product is empty and equals 1. At 3, unfolding gives 3*2*1*1=6, agreeing with the product 1*2*3. A constant-1 implementation is positive but fails this check.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Proving only positivity does not imply the product equality. Assuming `fact (k+1)=F(k+1)` in the step is circular. Omitting F(0) leaves the base undefined. GHC produces no diagnostic for any of these proof errors. Repair by stating the precise IH and using the named product identity.
+
+### Practice with answers
+
+Why does an implementation with `fact 0 = 2` fail despite positive outputs? **Answer:** the base would claim `2 = F(0) = 1`. Its positive results do not repair the failed equality. Why does the induction not prove anything for -1? **Answer:** -1 is outside P and the natural-number induction domain.
+
+## 8. Range products: induct on remaining width
+
+An inclusive range product may have a negative lower bound; its termination depends on width, not the sign of lo. Adopt the ascending policy: reversed bounds give the empty product 1. Let R(lo,hi) be the independent mathematical product of the ascending integers lo through hi.
+
+### Template
+
+```text
+rp lo hi = 1                         if lo > hi
+rp lo hi = lo * rp (lo+1) hi         otherwise
+Claim: rp lo hi = R(lo,hi)
+Measure: max 0 (hi-lo+1)
+R(lo,hi) = 1                         if lo > hi
+R(lo,hi) = lo * R(lo+1,hi)           if lo <= hi
+```
+
+The specification describes the product's factors; the implementation chooses left-to-right recursion. The product identity is obtained by separating the first factor. For the proof, fix hi and induct on the natural width; lo then determines which factors remain.
+
+**Claim:** rp equals R for all defined Integer bounds. **Induct on:** width `w=max 0 (hi-lo+1)`.
+
+```text
+Base w = 0, so lo > hi:
+  rp lo hi
+  = 1                            -- empty-range equation
+  = R(lo,hi)                     -- empty product
+
+Hypothesis:
+  rp a hi = R(a,hi) for bounds with width k
+
+Step w = k+1, so lo <= hi:
+  rp lo hi
+  = lo * rp (lo+1) hi            -- non-empty-range equation
+  = lo * R(lo+1,hi)              -- IH: next width is k
+  = R(lo,hi)                     -- first-factor product identity
+
+Conclusion:
+  equality holds at width 0 and is preserved by each width step,
+  hence it holds for all finite ranges.
+```
+
+**Termination, separately:** in the non-empty branch, lo+1 reduces width by exactly one and leaves another legitimate pair of Integer bounds. Width cannot decrease indefinitely in the naturals. At width zero the base returns 1. This works even when the range crosses zero; a zero factor changes the result, not the termination argument.
+
+### Worked variation: reversed range product
+
+Change the factorial empty-prefix shape to a range with no factors.
+
+<HaskellTryIt>
+
+```haskell
+rp :: Integer -> Integer -> Integer
+rp lo hi = if lo > hi then 1 else lo * rp (lo + 1) hi
+main :: IO ()
+main = print (rp 4 3, product ([4..3] :: [Integer]))
+```
+
+```text
+(1,1)
+```
+
+</HaskellTryIt>
+
+Both are empty products. Returning 0 would be the sum identity, not the product identity.
+
+### Worked variation: singleton negative range
+
+Now a single negative factor is valid.
+
+<HaskellTryIt>
+
+```haskell
+rp :: Integer -> Integer -> Integer
+rp lo hi = if lo > hi then 1 else lo * rp (lo + 1) hi
+main :: IO ()
+main = print (rp (-3) (-3), product ([-3..(-3)] :: [Integer]))
+```
+
+```text
+(-3,-3)
+```
+
+</HaskellTryIt>
+
+The implementation uses -3 times the empty product. The result need not be positive; correctness concerns the specified factors.
+
+### Worked variation: several factors and a zero crossing
+
+Now compare products on both sides of zero.
+
+<HaskellTryIt>
+
+```haskell
+rp :: Integer -> Integer -> Integer
+rp lo hi = if lo > hi then 1 else lo * rp (lo + 1) hi
+main :: IO ()
+main = print (rp 2 4, rp (-3) (-1), rp (-2) 2)
+```
+
+```text
+(24,-6,0)
+```
+
+</HaskellTryIt>
+
+2*3*4=24. (-3)*(-2)*(-1)=-6. The crossing range includes zero, so its product is 0. All ranges still decrease in width.
+
+### Exam question: prove a range product (8 marks)
+
+Prove rp lo hi computes the inclusive ascending product, accepting negative endpoints and returning 1 for reversed bounds.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Prove requires all bounds, so induction only on non-negative lo would miss valid cases.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Induct on max 0 (hi-lo+1). Separate the first factor in the non-empty specification.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Use the width proof above. The IH applies to (lo+1,hi), whose width is exactly one smaller. Termination follows from the same width measure but is stated as a separate obligation.
+
+  </Step>
+
+  <Step title="4. Check">
+
+At (-3,-3), rp = -3*1. At (4,3), rp=1. Both agree with the product's factors.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Inducting on lo >= 0 excludes the negative ranges the contract permits. Claiming the result must always be positive is false for a single negative factor or a range containing zero. GHC cannot diagnose either mathematical error. Use width and the product relation.
+
+### Practice with answers
+
+Why is `abs lo` not a measure for every range? **Answer:** with lo=0 and hi=3, the next lo is 1 and abs increases. Remaining width still falls from 4 to 3.
+
+## 9. Shifted products and double factorial
+
+A change to the factors changes the specification identity. A shifted factorial product multiplies 2 through n+1; a double factorial multiplies n,n-2,n-4 and so on, ending at 2 or 1. These are siblings of factorial, not synonyms for it. Double factorial needs both zero and one base cases.
+
+### Template
+
+```text
+shifted 0 = 1
+shifted n = (n+1) * shifted (n-1)       for n > 0
+S(n) = product of integers 2 through n+1
+
+doubleFact 0 = 1
+doubleFact 1 = 1
+doubleFact n = n * doubleFact (n-2)     for n >= 2
+D(n) = product n*(n-2)*... of positive factors with n's parity
+```
+
+P is n >= 0 for both functions. S(0) and D(0) are empty products. For double factorial, D(1) is the singleton product 1. Two different parity chains require two starting cases.
+
+**Shifted-product claim:** shifted n = S(n). **Induct on:** n.
+
+```text
+Base:
+  shifted 0 = 1                    -- shifted base
+            = S(0)                 -- empty product 2 through 1
+
+Hypothesis: shifted k = S(k), k >= 0
+
+Step:
+  shifted (k+1)
+  = (k+2) * shifted k              -- shifted recursive equation
+  = (k+2) * S(k)                   -- IH
+  = S(k+1)                        -- append last factor k+2
+
+Conclusion: equality for all n >= 0 by induction.
+```
+
+**Double-factorial claim:** doubleFact n = D(n). **Induct on:** n using the existing strong-induction template from Proof Patterns (the needed smaller argument is n-2).
+
+```text
+Base n=0:
+  doubleFact 0 = 1                 -- base equation
+               = D(0)             -- empty product
+Base n=1:
+  doubleFact 1 = 1                 -- base equation
+               = D(1)             -- singleton product 1
+
+Hypothesis:
+  doubleFact j = D(j) for every 0 <= j < n
+
+Step n >= 2:
+  doubleFact n
+  = n * doubleFact (n-2)           -- recursive equation
+  = n * D(n-2)                     -- IH, 0 <= n-2 < n
+  = D(n)                           -- separate largest factor n
+
+Conclusion:
+  both bases and the step cover every non-negative n.
+```
+
+**Termination, separately:** shifted decreases n to n-1 for n>0. doubleFact decreases n to n-2 for n>=2; both 0 and 1 stop. Both preserve non-negativity, so n is a natural-number measure for each. Negative input policy is deliberately not used to fabricate a product.
+
+### Worked variation: empty and first factors
+
+Now compare both product variants at their bases.
+
+<HaskellTryIt>
+
+```haskell
+shifted :: Integer -> Integer
+shifted n
+  | n < 0 = error "negative shifted argument"
+  | n == 0 = 1
+  | otherwise = (n + 1) * shifted (n - 1)
+doubleFact :: Integer -> Integer
+doubleFact n
+  | n < 0 = error "negative double factorial argument"
+  | n <= 1 = 1
+  | otherwise = n * doubleFact (n - 2)
+main :: IO ()
+main = print (shifted 0, shifted 1, doubleFact 0, doubleFact 1)
+```
+
+```text
+(1,2,1,1)
+```
+
+</HaskellTryIt>
+
+Shifted at 1 contains the factor 2, so it differs from ordinary factorial. Both double-factorial bases are 1, but zero uses an empty product and one uses a singleton.
+
+### Worked variation: shifted non-empty product
+
+Now a three-factor shifted product is compared to its own specification.
+
+<HaskellTryIt>
+
+```haskell
+shifted :: Integer -> Integer
+shifted n
+  | n < 0 = error "negative shifted argument"
+  | n == 0 = 1
+  | otherwise = (n + 1) * shifted (n - 1)
+doubleFact :: Integer -> Integer
+doubleFact n
+  | n < 0 = error "negative double factorial argument"
+  | n <= 1 = 1
+  | otherwise = n * doubleFact (n - 2)
+main :: IO ()
+main = print (shifted 3, product ([2..4] :: [Integer]), all (\n -> shifted n == product [2..n+1]) [0..5])
+```
+
+```text
+(24,24,True)
+```
+
+</HaskellTryIt>
+
+The factors are 2,3,4, giving 24. The finite checks use the shifted bounds, not [1..n]. The equality proof above explains the general case.
+
+### Worked variation: both parity chains of double factorial
+
+Now even and odd inputs need different final factors.
+
+<HaskellTryIt>
+
+```haskell
+shifted :: Integer -> Integer
+shifted n
+  | n < 0 = error "negative shifted argument"
+  | n == 0 = 1
+  | otherwise = (n + 1) * shifted (n - 1)
+doubleFact :: Integer -> Integer
+doubleFact n
+  | n < 0 = error "negative double factorial argument"
+  | n <= 1 = 1
+  | otherwise = n * doubleFact (n - 2)
+main :: IO ()
+main = print (doubleFact 6, doubleFact 5, product ([6,4..2] :: [Integer]), product ([5,3..1] :: [Integer]))
+```
+
+```text
+(48,15,48,15)
+```
+
+</HaskellTryIt>
+
+6!!=6*4*2=48 and 5!!=5*3*1=15. Subtracting two preserves parity, so an implementation stopping only at zero would miss the odd chain.
+
+### Worked variation: shifted at the second extension
+
+Now check another shifted product independently of factorial.
+
+<HaskellTryIt>
+
+```haskell
+shifted :: Integer -> Integer
+shifted n = if n == 0 then 1 else (n + 1) * shifted (n - 1)
+main :: IO ()
+main = print (shifted 2, product ([2..3] :: [Integer]))
+```
+
+```text
+(6,6)
+```
+
+</HaskellTryIt>
+
+Under P: n>=0, factors 2 and 3 give 6. Recursion uses 3*shifted 1, matching the next product extension.
+
+### Worked variation: double factorial's first even step
+
+Now the n-2 call reaches the empty-product base directly.
+
+<HaskellTryIt>
+
+```haskell
+doubleFact :: Integer -> Integer
+doubleFact n = if n <= 1 then 1 else n * doubleFact (n - 2)
+main :: IO ()
+main = print (doubleFact 2, product ([2] :: [Integer]))
+```
+
+```text
+(2,2)
+```
+
+</HaskellTryIt>
+
+Under P: n>=0, the first even step is 2*doubleFact 0=2. This separately checks the zero chain.
+
+### Worked variation: double factorial's first odd step
+
+Now the n-2 call reaches the other base.
+
+<HaskellTryIt>
+
+```haskell
+doubleFact :: Integer -> Integer
+doubleFact n = if n <= 1 then 1 else n * doubleFact (n - 2)
+main :: IO ()
+main = print (doubleFact 3, product ([3,1] :: [Integer]))
+```
+
+```text
+(3,3)
+```
+
+</HaskellTryIt>
+
+Three becomes 3*doubleFact 1=3. Together with 2 and 5/6, these tests cover both base transitions and longer chains. No claim is made about negatives.
+
+### Exam question: a changed factor needs a changed claim (8 marks)
+
+Prove shifted n = product [2..n+1] for n >= 0. State why a proof of fact n = product [1..n] cannot be quoted unchanged.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The factors in the postcondition differ, so the exact claim and extension identity must change.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the same induction method with S(0)=1 and S(k+1)=(k+2)*S(k).
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Apply the shifted proof above: unfold at k+1, replace shifted k using IH, then append factor k+2 to the specified product. Termination uses n decreasing by one.
+
+  </Step>
+
+  <Step title="4. Check">
+
+shifted 1 is 2 whereas fact 1 is 1. The distinct small result confirms why copying the old postcondition would be wrong.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using n rather than n+1 as the shifted factor proves a different function. Omitting the double-factorial base at 1 leaves the odd chain outside the termination argument. These definitions can type check, so GHC cannot validate the claims. Repair the factor identity and cover both stopping values. Positivity still does not establish either product equality.
+
+### Practice with answers
+
+What is the right IH for the n-2 recursive call? **Answer:** doubleFact (n-2) = D(n-2), justified by the smaller-input hypothesis and n>=2. Does ordinary induction's hypothesis only at n-1 supply it directly? **Answer:** no; use the existing strong-induction pattern or separate parity chains.
+
+## 10. Functional, procedural, object-oriented and declarative descriptions
+
+A paradigm is a style of organising computation. A procedural description gives ordered steps and updates; object-oriented design groups state and operations around objects; a functional description uses functions and values; a declarative description states wanted relationships. Functional programming is commonly declarative, but a recursive function still specifies an algorithm. A language can support several styles.
+
+### Template
+
+```text
+1. State the common input/output contract
+2. Identify the organising unit: procedure, object, function or relation
+3. Explain state changes or value construction
+4. Check the same example under each description
+5. Do not infer speed from the category
+```
+
+OO code may use pure methods and a functional application may perform IO. Encapsulation is not unique to objects. Haskell's parametric and type-class polymorphism do not require inheritance. These programs are functional reference results; the alternative descriptions are designs, not claims that Haskell has changed paradigms.
+
+### Worked variation: counting passes
+
+Compare one contract under four descriptions.
+
+<HaskellTryIt>
+
+```haskell
+passes :: [Integer] -> Int
+passes marks = length (filter (>= 50) marks)
+main :: IO ()
+main = print (passes [49,50,75], passes [])
+```
+
+```text
+(2,0)
+```
+
+</HaskellTryIt>
+
+Functional: compose a selector and length. Procedural: initialise a counter, visit marks and increment for each qualifying one. OO: a GradeBook exposes a passes method over its marks. Declarative: count exactly the marks satisfying the threshold. All four must return 2 and 0 under this contract.
+
+### Worked variation: a deposit
+
+Now the domain resembles an object with state.
+
+<HaskellTryIt>
+
+```haskell
+deposit :: Integer -> Integer -> Integer
+deposit balance amount = balance + amount
+main :: IO ()
+main = print (deposit 100 25, deposit 100 0)
+```
+
+```text
+(125,100)
+```
+
+</HaskellTryIt>
+
+Assume non-negative balance and amount. Functional: return a new balance. Procedural: assign balance := balance + amount. OO: Account.deposit may update private state or return a new Account. Declarative: new balance equals old balance plus deposit. The same outputs do not reveal the internal state model.
+
+### Worked variation: selection preserving order
+
+Now collection order is part of the contract.
+
+<HaskellTryIt>
+
+```haskell
+eligible :: [Integer] -> [Integer]
+eligible xs = [x | x <- xs, x >= 18]
+main :: IO ()
+main = print (eligible [20,17,18,20], eligible [])
+```
+
+```text
+([20,18,20],[])
+```
+
+</HaskellTryIt>
+
+Functional: construct a list by comprehension. Procedural: visit inputs and append qualifying values. OO: a Roster offers an eligibleMembers query. Declarative: select exactly qualifying members in original order with duplicates retained. Replacing the result with a set changes this contract.
+
+### Worked variation: polymorphism without inheritance
+
+Now reuse occurs across different types.
+
+<HaskellTryIt>
+
+```haskell
+swap :: (a,b) -> (b,a)
+swap (x,y) = (y,x)
+main :: IO ()
+main = print (swap (3 :: Integer,True), swap ('x',"ok"))
+```
+
+```text
+((True,3),("ok",'x'))
+```
+
+</HaskellTryIt>
+
+The function works at multiple types through type variables. A procedural routine can also be generic; an OO generic method need not use subclass overriding. Declaratively the first result field is the old second and vice versa. Parametric polymorphism and OO subtype polymorphism are different mechanisms.
+
+### Exam question: classify a description (6 marks)
+
+Compare 'set total to zero, visit each mark, add it to total' with 'return sum marks' and 'GradeBook.total()'. Is inheritance required for polymorphism?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Compare asks how computation is organised, not which label sounds preferable.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Hold the sum contract fixed, then identify state and organising unit.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The first is procedural with an updated accumulator. The second is functional, expressing a result by function application. The third is an OO interface; its internal algorithm is unspecified by the call. All may compute the same sum. Type variables and type classes provide polymorphism without OO inheritance.
+
+  </Step>
+
+  <Step title="4. Check">
+
+For [2,3] the contract requires 5. That shared result does not prove identical control flow or cost.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Calling every recursion declarative or every class OO confuses syntax and design. GHC has no diagnostic for those claims. Functional code can perform IO; polymorphism is not inheritance only. Identify the actual mechanism and contract.
+
+### Practice with answers
+
+Can an immutable object's method be pure? **Answer:** yes: return a new value without mutation. Is encapsulation exclusive to OO? **Answer:** no; module export boundaries can hide representations too.
+
+## 11. Markup, programming and a declared mini-language
+
+Markup describes document structure or presentation, such as headings and paragraphs. A general programming language expresses computation through variables, selection and repetition or recursion. A notation may combine markup with embedded executable expressions. Classify capabilities and semantics, rather than treating angle brackets as proof either way.
+
+### Template
+
+```text
+What do the constructs mean?
+Do tags describe structure or execute operations?
+Where does evaluation occur: browser, template engine, or nowhere?
+Which inputs determine the output?
+```
+
+The following Haskell programs manipulate markup as strings and interpret a tiny command language. Printing a string with a tag does not execute a browser. The generating program, its string result and a renderer's later action are separate layers.
+
+### Worked variation: a heading string
+
+Now the output describes document structure.
+
+<HaskellTryIt>
+
+```haskell
+heading :: String -> String
+heading title = "<h1>" ++ title ++ "</h1>"
+main :: IO ()
+main = print (heading "Exam")
+```
+
+```text
+"<h1>Exam</h1>"
+```
+
+</HaskellTryIt>
+
+The Haskell function computes a string; h1 denotes a heading when interpreted as HTML. The tag alone does not calculate a grade or visit a list. This toy builder assumes trusted literal titles; arbitrary HTML escaping is outside its stated contract.
+
+### Worked variation: selection in the generator
+
+Now code chooses which markup string to produce.
+
+<HaskellTryIt>
+
+```haskell
+badge :: Integer -> String
+badge mark = if mark >= 50 then "<p>Pass</p>" else "<p>Fail</p>"
+main :: IO ()
+main = print (badge 49, badge 50)
+```
+
+```text
+("<p>Fail</p>","<p>Pass</p>")
+```
+
+</HaskellTryIt>
+
+Under P: marks 0..100, Haskell performs selection. The p tags describe paragraphs in the generated output. Markup inside a program does not remove the computation.
+
+### Worked variation: an interpreted command
+
+Now strings are explicitly given operational meanings.
+
+<HaskellTryIt>
+
+```haskell
+applyCommand :: String -> Integer -> Integer
+applyCommand command n
+  | command == "double" = 2 * n
+  | command == "increment" = n + 1
+  | otherwise = n
+main :: IO ()
+main = print (applyCommand "double" 4, applyCommand "increment" 4, applyCommand "<h1>" 4)
+```
+
+```text
+(8,5,4)
+```
+
+</HaskellTryIt>
+
+Double and increment compute because this interpreter defines their meanings. The h1 string is unknown here and leaves n unchanged under the stated default. Text has meaning relative to a language's rules.
+
+### Worked variation: a template combines structure and values
+
+Now a calculation is inserted into document structure.
+
+<HaskellTryIt>
+
+```haskell
+report :: [Integer] -> String
+report xs = "<p>Total: " ++ show (sum xs) ++ "</p>"
+main :: IO ()
+main = print (report [2,3], report [])
+```
+
+```text
+("<p>Total: 5</p>","<p>Total: 0</p>")
+```
+
+</HaskellTryIt>
+
+The sum is demanded while the string is produced; markup surrounds its representation. A template system with executable expressions combines computation and markup. A static paragraph skeleton alone does not compute the total.
+
+### Exam question: markup versus computation (5 marks)
+
+Compare a static HTML paragraph, JavaScript calculating a total, and a template inserting a calculated total into HTML.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Compare asks for each notation's role, not a blanket rule based on filenames.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate structure, calculation and data insertion.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+A static paragraph describes structure. JavaScript calculates as a program. A template may combine markup and executable evaluation; inspect its rules to determine what is computed. HTML text alone does not implement the total algorithm.
+
+  </Step>
+
+  <Step title="4. Check">
+
+For inputs 2 and 3, computation yields 5 and a paragraph can display 5. The displayed number does not establish which component computed it.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Calling every notation with tags non-programming ignores embedded computation. Calling static HTML a general algorithm language ignores its semantics. There is no GHC diagnostic for these classifications. State the evaluator. print adds string quotes; putStrLn prints contents without them.
+
+### Practice with answers
+
+Does a Haskell string containing `2+3` evaluate to 5? **Answer:** no. It remains text unless an interpreter explicitly evaluates it. The same distinction applies to code displayed inside a document.
+
+## 12. Referential transparency, optimisation and concurrency
+
+Referential transparency permits replacing a pure expression by its equal value without changing meaning. This supports local reasoning and can permit sharing or compiler transformations. Independent pure computations are easier to run concurrently because they do not race to update shared mutable state. None of this guarantees parallel execution, smaller cost or automatic speed-up.
+
+### Template
+
+```text
+1. State the pure function's contract
+2. Identify equal expressions or independent computations
+3. State the legal substitution or possible scheduling
+4. State demand, cost and execution assumptions
+5. Conclude an opportunity, not a timing promise
+```
+
+Concurrency is overlapping progress; parallelism is simultaneous execution. Scheduling, runtime support, workload size, communication, laziness and retained data affect performance. See [Lazy Evaluation](/docs/sem3/csi243/10-reasoning-revision/notes/lazy-evaluation) and [Complexity by Recurrence](/docs/sem3/csi243/10-reasoning-revision/notes/complexity-by-recurrence) for the mechanisms.
+
+### Worked variation: substitution of equals
+
+Now compare a pure expression before and after substitution.
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube n = n * n * n
+main :: IO ()
+main = print (cube 3 + cube 3, 27 + 27 :: Integer)
+```
+
+```text
+(54,54)
+```
+
+</HaskellTryIt>
+
+cube 3 equals 27, so replacement preserves the answer. A compiler may exploit this, but the output does not show whether the call ran once or twice.
+
+### Worked variation: independent subtotals
+
+Now two results read separate immutable lists.
+
+<HaskellTryIt>
+
+```haskell
+totals :: [Integer] -> [Integer] -> (Integer,Integer)
+totals xs ys = (sum xs,sum ys)
+main :: IO ()
+main = print (totals [1,2] [10,20], totals [] [4])
+```
+
+```text
+((3,30),(0,4))
+```
+
+</HaskellTryIt>
+
+Neither sum needs the other's result or updates shared state. This exposes possible parallel work; pair construction and printing do not by themselves schedule the sums in parallel.
+
+### Worked variation: a dependent next computation
+
+Now an earlier result determines the branch.
+
+<HaskellTryIt>
+
+```haskell
+pipeline :: [Integer] -> Integer
+pipeline xs = let total = sum xs in if total > 5 then total * total else total + 1
+main :: IO ()
+main = print (pipeline [1,2], pipeline [3,4])
+```
+
+```text
+(4,49)
+```
+
+</HaskellTryIt>
+
+The totals 3 and 7 choose different branches. This dependency remains in pure code: purity does not remove the need to compute total to choose the branch.
+
+### Worked variation: sharing a named result
+
+Now one pure binding is used twice.
+
+<HaskellTryIt>
+
+```haskell
+shared :: [Integer] -> Integer
+shared xs = let total = sum xs in total + total
+main :: IO ()
+main = print (shared [1,2,3], 2 * sum [1,2,3 :: Integer])
+```
+
+```text
+(12,12)
+```
+
+</HaskellTryIt>
+
+Both return 12. A shared binding supports reuse under lazy evaluation; an optimiser may transform it further. Printed values establish neither exact allocation nor relative execution time.
+
+### Exam question: evaluate a speed claim (6 marks)
+
+A student says functional code is always faster because the compiler automatically runs every function in parallel. Which benefits are defensible?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Evaluate requires the conditions and limits of the claim.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate freedom to reason or schedule from an actual implementation.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Pure functions avoid hidden shared-state updates, support substitution and expose independent work. Optimisation and parallel execution still depend on implementation, demand, dependencies, overhead and workload. Purity alone does not schedule work; functional algorithms can be expensive.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Independent sums are a candidate; the dependent pipeline needs its first result. Identical outputs cannot establish which is faster.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+GHC accepts pure but expensive algorithms. No diagnostic rejects an unmeasured speed promise. Repair to state an opportunity and its assumptions. Reading or printing IO actions cannot generally be replaced with their past results because interaction with the world matters.
+
+### Practice with answers
+
+Can independent pure computations always be parallelised profitably? **Answer:** no: overhead or memory retention can dominate. Do pure functions help repeatable tests? **Answer:** yes: fixed defined inputs produce the same result, while tests still cover only selected cases.
+
+## 13. Independent mixed exam questions
+
+Attempt these before opening the answers. Their solutions combine earlier concepts and do not add to the worked-variation count.
+
+### Exam question: compose before classifying (6 marks)
+
+A function keeps passing marks; a second takes the first member. Is a non-empty original list sufficient? Give a precondition and a safe alternative.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Decide and justify by inspecting the intermediate filtered list.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+head needs a non-empty result after filtering, not merely before.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+No. [10] produces []. Require `any (>= 50) marks` under the valid-mark domain. A safe alternative returns Nothing for an empty filtered result and Just the first retained mark otherwise.
+
+  </Step>
+
+  <Step title="4. Check">
+
+[] and [10] fail the numeric-result precondition; [10,50] satisfies it and yields 50. No first value is fabricated.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question: a contradictory selection (6 marks)
+
+Every selected mark must be positive, but selection requires both a negative and a positive mark value. Why can an all test pass?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Explain the quantifier domain before claiming useful correctness.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+The two selection conditions cannot both hold for the same integer.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The selected list is empty and all (>0) is True vacuously. This does not show any selected member exists. If data must exist, add an existence clause and resolve the contradictory restriction.
+
+  </Step>
+
+  <Step title="4. Check">
+
+any (>0) over that selected list is False. Universal truth and existence are separate.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question: complete a total-correctness proof (6 marks)
+
+A proof shows whenever rangeProduct returns it equals the specified product. What remains for total correctness?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The returned-value claim is partial correctness.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Find a natural measure for every valid recursive call, including negative bounds.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+For ascending recursion (lo+1,hi), use max 0 (hi-lo+1), show strict decrease in the non-empty branch, and show the empty branch returns. State finite defined bounds and Integer arithmetic. An exception under P would not be a numeric result.
+
+  </Step>
+
+  <Step title="4. Check">
+
+From (-2,1), widths are 4,3,2,1,0. Zero as a factor affects the answer, not termination.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+State assumptions before code. Int has no third parity; zero divisors need explicit handling; a zero-based index equal to length is invalid. A special square may return 1 at zero. Range signs, direction, empty identities and grade boundaries belong in the contract. Prove the specified product equality, then termination separately. Paradigm labels describe organisation and capabilities. Purity supports reasoning and opportunities for optimisation and concurrency without guaranteeing speed.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is m > n insufficient before m mod n?">
+
+(5,0) satisfies the ordering condition but has a zero divisor. Require n /= 0 too, or report it before arithmetic.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is the last valid index of a non-empty length-n list?">
+
+n-1. Index n is invalid. An empty list has no valid index.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does positivity prove factorial is correct?">
+
+No. Require equality to the product, including the zero case's empty product, and termination on valid inputs.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does double factorial need two stopping values?">
+
+Subtracting two preserves parity. Even inputs reach zero; odd inputs reach one.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does an OO interface say whether a method mutates state?">
+
+No. Its contract and implementation must specify whether it updates state or returns a new value.
+
+</CheckQuestion>
+
+<CheckQuestion question="Do independent pure sums automatically run in parallel?">
+
+No. They expose independent work; execution and speed depend on implementation and workload.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Equational Reasoning](/docs/sem3/csi243/10-reasoning-revision/notes/equational-reasoning).

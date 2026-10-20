@@ -4,21 +4,28 @@
  */
 import { load } from './compiler.wasm-runtime.js';
 
-const MAX_OUTPUT_LINES = 500;
-const MAX_OUTPUT_CHARACTERS = 64 * 1024;
+const MAX_OUTPUT_LINES = 2000;
+const MAX_OUTPUT_CHARACTERS = 256 * 1024;
 let outputLines = 0;
 let outputCharacters = 0;
 let outputLimited = false;
+// System.exit(n) in a program is rewritten to print this marker on stderr and raise an error; the marker says the stop was asked for.
+const EXIT_MARKER = String.fromCharCode(1) + 'EXIT';
+let exitRequested = false;
 
 const stopForOutputLimit = () => {
   if (outputLimited) return;
   outputLimited = true;
-  self.postMessage({ type: 'done', error: 'Output limit exceeded (500 lines or 64 KiB).' });
+  self.postMessage({ type: 'done', error: 'Output limit exceeded (2000 lines or 256 KiB).' });
   self.close();
 };
 
 const postLine = (stream, text) => {
   if (outputLimited) return;
+  if (stream === 'err' && text === EXIT_MARKER) {
+    exitRequested = true;
+    return;
+  }
   outputLines += 1;
   if (outputLines > MAX_OUTPUT_LINES || outputCharacters > MAX_OUTPUT_CHARACTERS) {
     stopForOutputLimit();
@@ -66,6 +73,10 @@ self.onmessage = async (event) => {
   } catch (error) {
     if (stdout) postLine('out', stdout);
     if (stderr) postLine('err', stderr);
+    if (exitRequested) {
+      self.postMessage({ type: 'done' });
+      return;
+    }
     self.postMessage({
       type: 'done',
       error: error instanceof Error ? (error.stack || `${error.name}: ${error.message}`) : String(error),

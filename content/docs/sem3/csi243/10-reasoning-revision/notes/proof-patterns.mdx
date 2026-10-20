@@ -1,0 +1,3015 @@
+---
+title: "Proof Patterns"
+description: "Choose and apply induction, cases, generalisation, fusion and counterexamples across numbers, lists and trees."
+---
+
+An exam changes the function, the data type or the precondition. The method stays recognisable: state exactly what is claimed, unfold a defining equation, and justify every change. This lesson extends Proofs of Programs I without redoing its proofs.
+
+<LearningObjectives items={[
+  'Choose ordinary, strong, structural or mutual induction from the recursive calls',
+  'State domains that exclude partial calls, overflow and undefined inputs',
+  'Prove list and fold laws using arbitrary extra arguments and named lemmas',
+  'Use both subtree hypotheses and preserve a search-tree invariant',
+  'Refute false laws and identify the exact invalid line in a proof',
+]} />
+
+<Prerequisites items={[
+  'Proofs of Programs I and its lab: the six-part proof layout and seven questions',
+  'Lists, folds, Maybe, recursive data types and pattern matching',
+]} />
+
+## 1. The contract and the proof template
+
+A proof is a promise with a domain. Unless a claim says otherwise, all data here is **finite and total**: no infinite structures, no undefined spine, element, function result or comparison. Functions and predicates used in a law terminate on the arguments involved. `Eq` and `Ord` mean lawful equality and ordering; numeric order examples use `Integer`, never floating-point NaN. Number recurrences have non-negative `Integer` inputs; negative inputs are excluded because the displayed recursive calls would not reach zero. `Expr` deliberately uses the requested `Int`; its equalities only use identities and congruence valid even for bounded arithmetic.
+
+Prelude `length`, `take`, `drop` and `replicate` use `Int`. Claims about their lengths assume all lengths and counts involved fit `Int`. In an `Int` count induction, take only successor steps whose counts remain representable. For arbitrary mathematical tree sizes use `count :: [a] -> Integer` below. No induction here establishes equality on `undefined`; for instance `foldr (\_ r -> r) 0 [undefined]` returns zero, but numeric sum demands that element.
+
+```text
+Claim:       state the result, the quantifiers and the preconditions
+Induct on:   the argument the defining equations take apart
+Base case:   reduce the smallest allowed value, with reasons
+Hypothesis:  assume the claim for the smaller value(s), extra arguments arbitrary
+Step:        state the new goal; unfold, use IH, refold; reason on every line
+Conclusion:  every case covered, so the claim holds throughout the stated domain
+```
+
+Read each claim in words and test a small input first. Collect equations before choosing induction. Then do the base case, write the hypothesis in full, prove the step and check all cases. These are exactly the seven narrated steps in the lab. A `Property` comment gives a Boolean test under the stated domain; `||` encodes an implication when its left side negates the precondition. Tests support the proof but do not replace it.
+
+### Definitions and labelled equations
+
+This is a reference block of definitions, not a program with output. Prelude equations are comments so the file does not accidentally redefine or clash with Prelude names. Load it to use the custom names in subsequent claims.
+
+```haskell
+-- Domain: finite, total inputs; natural-number arguments are non-negative.
+fact :: Integer -> Integer
+fact 0 = 1                              -- (FA0)
+fact n = n * fact (n-1)                  -- (FA1), n > 0
+oddSum :: Integer -> Integer
+oddSum 0 = 0                            -- (OS0)
+oddSum n = oddSum (n-1) + (2*n-1)        -- (OS1), n > 0
+fib :: Integer -> Integer
+fib 0 = 0                               -- (FI0)
+fib 1 = 1                               -- (FI1)
+fib n = fib (n-1) + fib (n-2)            -- (FI2), n >= 2
+
+-- Prelude equations used in proofs; these comments specify the rules.
+-- (A0) [] ++ ys = ys; (A1) (x:xs) ++ ys = x : (xs ++ ys)
+-- (L0) length [] = 0; (L1) length (x:xs) = 1 + length xs
+-- (M0) map f [] = []; (M1) map f (x:xs) = f x : map f xs
+-- (T0) take n xs = [] when n <= 0
+-- (T1) take n [] = []; (T2) take n (x:xs) = x : take (n-1) xs when n > 0
+-- (D0) drop n xs = xs when n <= 0
+-- (D1) drop n [] = []; (D2) drop n (x:xs) = drop (n-1) xs when n > 0
+-- (RP0) replicate n x = [] when n <= 0
+-- (RP1) replicate n x = x : replicate (n-1) x when n > 0
+-- (C0) concat [] = []; (C1) concat (xs:xss) = xs ++ concat xss
+-- (E0) elem a [] = False; (E1) elem a (x:xs) = (a == x) || elem a xs
+-- (LA0) last [x] = x; (LA1) last (x:y:ys) = last (y:ys)
+-- (IN0) init [x] = []; (IN1) init (x:y:ys) = x : init (y:ys)
+-- (AN0) and [] = True; (AN1) and (b:bs) = b && and bs
+-- (OR0) or [] = False; (OR1) or (b:bs) = b || or bs
+-- (MX0) maximum [x] = x; (MX1) maximum (x:y:ys) = max x (maximum (y:ys))
+-- (Z0) zip [] ys = []; (Z1) zip (x:xs) [] = []
+-- (Z2) zip (x:xs) (y:ys) = (x,y) : zip xs ys
+-- (UZ0) unzip [] = ([],[])
+-- (UZ1) unzip ((x,y):ps) = (x:xs,y:ys), where (xs,ys) = unzip ps
+-- (FR0) foldr f z [] = z; (FR1) foldr f z (x:xs) = f x (foldr f z xs)
+-- (FL0) foldl f a [] = a; (FL1) foldl f a (x:xs) = foldl f (f a x) xs
+
+lenR :: [a] -> Int
+lenR [] = 0                             -- (LR0)
+lenR (_:xs) = 1 + lenR xs               -- (LR1)
+lenF :: [a] -> Int
+lenF xs = foldr (\_ n -> 1+n) 0 xs      -- (LF)
+revR :: [a] -> [a]
+revR [] = []                            -- (RR0)
+revR (x:xs) = revR xs ++ [x]            -- (RR1)
+revF :: [a] -> [a]
+revF xs = foldr (\x r -> r ++ [x]) [] xs -- (RF)
+sumR :: [Integer] -> Integer
+sumR [] = 0                             -- (SR0)
+sumR (x:xs) = x + sumR xs               -- (SR1)
+memberR :: Eq a => a -> [a] -> Bool
+memberR _ [] = False                    -- (MR0)
+memberR a (x:xs) = if a == x then True else memberR a xs -- (MR1)
+memberF :: Eq a => a -> [a] -> Bool
+memberF a xs = foldr (\x r -> a == x || r) False xs -- (MF)
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing                   -- (SH0)
+safeHead (x:_) = Just x                 -- (SH1)
+mapMaybe :: (a -> b) -> Maybe a -> Maybe b
+mapMaybe _ Nothing = Nothing            -- (MM0)
+mapMaybe f (Just x) = Just (f x)         -- (MM1)
+
+-- Binary trees: sizes and heights use unbounded arithmetic.
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Eq, Show)
+size :: Tree a -> Integer
+size Leaf = 0                           -- (SZ0)
+size (Node l _ r) = size l + 1 + size r  -- (SZ1)
+height :: Tree a -> Integer
+height Leaf = 0                         -- (H0)
+height (Node l _ r) = 1 + max (height l) (height r) -- (H1)
+mapTree :: (a -> b) -> Tree a -> Tree b
+mapTree _ Leaf = Leaf                   -- (MT0)
+mapTree f (Node l x r) = Node (mapTree f l) (f x) (mapTree f r) -- (MT1)
+preorder :: Tree a -> [a]
+preorder Leaf = []                      -- (PR0)
+preorder (Node l x r) = x : (preorder l ++ preorder r) -- (PR1)
+inorder :: Tree a -> [a]
+inorder Leaf = []                       -- (IO0)
+inorder (Node l x r) = inorder l ++ (x : inorder r) -- (IO1)
+-- A length with Integer result avoids the bounded Int result of Prelude.length.
+count :: [a] -> Integer
+count [] = 0                            -- (CO0)
+count (_:xs) = 1 + count xs             -- (CO1)
+allTree :: (a -> Bool) -> Tree a -> Bool
+allTree _ Leaf = True                   -- (AT0)
+allTree p (Node l x r) = p x && allTree p l && allTree p r -- (AT1)
+ordered :: Tree Integer -> Bool
+ordered Leaf = True                     -- (B0)
+ordered (Node l x r) = ordered l && ordered r
+  && allTree (< x) l && allTree (> x) r   -- (B1), strict ordering: no duplicates
+insert :: Integer -> Tree Integer -> Tree Integer
+insert a Leaf = Node Leaf a Leaf         -- (I0)
+insert a (Node l x r)
+  | a < x = Node (insert a l) x r        -- (I1)
+  | a > x = Node l x (insert a r)        -- (I2)
+  | otherwise = Node l x r              -- (I3)
+member :: Integer -> Tree Integer -> Bool
+member _ Leaf = False                   -- (B2)
+member a (Node l x r)
+  | a < x = member a l                  -- (B3)
+  | a > x = member a r                  -- (B4)
+  | otherwise = True                    -- (B5)
+
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a) deriving (Eq, Show)
+leaves :: LTree a -> Integer
+leaves (LLeaf _) = 1                     -- (LE0)
+leaves (LBranch l r) = leaves l + leaves r -- (LE1)
+nodes :: LTree a -> Integer
+nodes (LLeaf _) = 0                      -- (NO0), internal branches only
+nodes (LBranch l r) = 1 + nodes l + nodes r -- (NO1)
+flatten :: LTree a -> [a]
+flatten (LLeaf x) = [x]                 -- (FT0)
+flatten (LBranch l r) = flatten l ++ flatten r -- (FT1)
+
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr deriving (Eq, Show)
+eval :: Expr -> Int
+eval (Num n) = n                         -- (EV0)
+eval (Add l r) = eval l + eval r         -- (EV1)
+eval (Mul l r) = eval l * eval r         -- (EV2)
+simp :: Expr -> Expr
+simp (Num n) = Num n                     -- (SI0)
+simp (Add (Num 0) r) = simp r           -- (SI1), first matching Add rule
+simp (Add l r) = Add (simp l) (simp r)   -- (SI2), remaining Add cases
+simp (Mul (Num 1) r) = simp r           -- (SI3), first matching Mul rule
+simp (Mul l r) = Mul (simp l) (simp r)   -- (SI4), remaining Mul cases
+
+data Rose a = Rose a (Forest a) deriving (Eq, Show)
+data Forest a = FNil | FCons (Rose a) (Forest a) deriving (Eq, Show)
+roseCount :: Rose a -> Integer
+roseCount (Rose _ fs) = 1 + forestCount fs -- (RC)
+forestCount :: Forest a -> Integer
+forestCount FNil = 0                      -- (FC0)
+forestCount (FCons t ts) = roseCount t + forestCount ts -- (FC1)
+roseList :: Rose a -> [a]
+roseList (Rose x fs) = x : forestList fs  -- (RL)
+forestList :: Forest a -> [a]
+forestList FNil = []                      -- (FF0)
+forestList (FCons t ts) = roseList t ++ forestList ts -- (FF1)
+isEven :: Integer -> Bool
+isEven 0 = True                          -- (IE0)
+isEven n = isOdd (n-1)                   -- (IE1), n > 0
+isOdd :: Integer -> Bool
+isOdd 0 = False                          -- (ID0)
+isOdd n = isEven (n-1)                   -- (ID1), n > 0
+```
+
+The quotable list lemmas from earlier lessons are append associativity, right identity, length of an append, and reverse of an append. We use them by name rather than proving them again. The analogous unbounded result `count (xs ++ ys) = count xs + count ys` follows from the same two constructor equations: the empty case gives `count ys`; the cons step gives `1 + (count xs + count ys)` by IH, then associativity of addition.
+
+## 2. Ordinary induction on numbers
+
+Use ordinary induction when a recursive call refers to the previous number. Inequalities use the same layout, but the step must explain why adding or multiplying preserves order. Divisibility means `d` divides `v` exactly when `v = d*k` for an integer witness `k`.
+
+```text
+Template for n >= b:
+  prove P(b)
+  assume P(n) for an arbitrary n >= b
+  prove P(n+1), using that hypothesis only at n
+```
+
+The starting point `b` is part of the claim. A claim beginning at one needs a base at one, not an irrelevant proof about zero.
+
+### Factorial is positive
+
+**Claim.** For every natural `n`, `fact n > 0`.
+
+`-- Property: n < 0 || fact n > 0`
+
+**Induct on:** n, starting at 0.
+
+**Base case.**
+
+```text
+fact 0 = 1 > 0 -- (FA0), arithmetic
+```
+
+**Hypothesis.** `fact n > 0`.
+
+**Step.**
+
+```text
+fact (n+1)
+= (n+1) * fact n -- (FA1)
+> 0              -- n+1 > 0 and IH: product of positives
+```
+
+**Conclusion.** Zero and the successor case cover all naturals. For `n = 3`, the value is `6`, which is positive.
+
+### Factorial grows from a base of one
+
+**Claim.** For `n >= 1`, `fact n >= n`.
+
+`-- Property: n < 1 || fact n >= n`
+
+**Induct on:** n, starting at 1.
+
+**Base case.**
+
+```text
+fact 1 = 1 * fact 0 = 1 -- (FA1), (FA0), arithmetic
+```
+
+**Hypothesis.** `fact n >= n`, with `n >= 1`.
+
+**Step.**
+
+```text
+fact (n+1)
+= (n+1) * fact n -- (FA1)
+>= (n+1) * n     -- IH, multiplying by positive n+1
+>= n+1           -- n >= 1
+```
+
+**Conclusion.** The base really is one. At `n = 2`, `fact 2 = 2`; a zero-based IH would not justify the last inequality.
+
+### A power beats its exponent
+
+**Claim.** For natural `n`, `2^n > n`, with base `2 :: Integer`.
+
+`-- Property: n < 0 || (2 :: Integer)^n > n`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+2^0 = 1 > 0 -- exponent zero, arithmetic
+```
+
+**Hypothesis.** `2^n > n`; because values are integers, `2^n >= n+1`.
+
+**Step.**
+
+```text
+2^(n+1)
+= 2 * 2^n       -- exponent law
+>= 2 * (n+1)    -- IH and multiplication by positive 2
+>= n+2          -- n >= 0
+> n+1           -- arithmetic
+```
+
+**Conclusion.** In particular `n = 0,1,2` gives `1 > 0`, `2 > 1`, `4 > 2`. No negative exponent is evaluated.
+
+### A second inequality
+
+**Claim.** For natural `n`, `2^n >= n+1`.
+
+`-- Property: n < 0 || (2 :: Integer)^n >= n+1`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+2^0 = 1 = 0+1 -- exponent zero, arithmetic
+```
+
+**Hypothesis.** `2^n >= n+1`.
+
+**Step.**
+
+```text
+2^(n+1)
+= 2 * 2^n       -- exponent law
+>= 2 * (n+1)    -- IH
+>= (n+1)+1      -- n >= 0
+```
+
+**Conclusion.** This is a useful strengthened formulation of the preceding integer inequality; equality holds at zero and one.
+
+### Odd numbers make squares
+
+**Claim.** For natural `n`, `oddSum n = n*n`.
+
+`-- Property: n < 0 || oddSum n == n*n`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+oddSum 0 = 0 = 0*0 -- (OS0), arithmetic
+```
+
+**Hypothesis.** `oddSum n = n*n`.
+
+**Step.**
+
+```text
+oddSum (n+1)
+= oddSum n + (2*(n+1)-1) -- (OS1)
+= n*n + (2*n+1)           -- IH, arithmetic
+= (n+1)*(n+1)             -- expansion
+```
+
+**Conclusion.** At `n = 3`, `1+3+5 = 9`. Both zero and successor cases hold.
+
+### The next odd number is a square difference
+
+**Claim.** For natural `n`, `oddSum (n+1) - oddSum n = 2*n+1`.
+
+`-- Property: n < 0 || oddSum (n+1) - oddSum n == 2*n+1`
+
+**Induct on:** n (the same local calculation works in every case).
+
+**Base case.**
+
+```text
+oddSum 1 - oddSum 0 = 1 -- (OS1), arithmetic
+```
+
+**Hypothesis.** No IH is needed: the recurrence gives the result directly.
+
+**Step.**
+
+```text
+oddSum (n+1) - oddSum n
+= (oddSum n + (2*(n+1)-1)) - oddSum n -- (OS1)
+= 2*n+1                                             -- cancellation
+```
+
+**Conclusion.** This is a direct proof, recorded in the same layout. At `n = 2`, `9-4 = 5`. Do not force induction when an equation already settles it.
+
+### Divisibility by three
+
+**Claim.** For natural `n`, `3` divides `4^n - 1`.
+
+`-- Property: n < 0 || ((4 :: Integer)^n - 1) `mod` 3 == 0`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+4^0 - 1 = 0 = 3*0 -- exponent zero, arithmetic
+```
+
+**Hypothesis.** `4^n - 1 = 3*k` for some integer `k`.
+
+**Step.**
+
+```text
+4^(n+1) - 1
+= 4*(4^n-1) + 3 -- exponent law, distributivity
+= 4*(3*k) + 3   -- IH
+= 3*(4*k+1)     -- arithmetic: integer witness 4*k+1
+```
+
+**Conclusion.** A new integer witness proves the step. At `n = 2`, `15 = 3*5`.
+
+### Divisibility by two
+
+**Claim.** For natural `n`, `n*(n+1)` is even.
+
+`-- Property: n < 0 || (n*(n+1)) `mod` 2 == 0`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+0*(0+1) = 0 = 2*0 -- arithmetic
+```
+
+**Hypothesis.** `n*(n+1) = 2*k` for some integer `k`.
+
+**Step.**
+
+```text
+(n+1)*(n+2)
+= n*(n+1) + 2*(n+1) -- distributivity
+= 2*k + 2*(n+1)      -- IH
+= 2*(k+n+1)          -- factorisation
+```
+
+**Conclusion.** The step supplies witness `k+n+1`. At `n = 3`, `12` is divisible by two.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ((2 :: Integer)^0 > 0)
+  print ((2 :: Integer)^1 > 1)
+  print ((2 :: Integer)^4 > 4)
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+Three boundary variations: exponent zero gives `1`, exponent one gives `2`, and exponent four gives `16`. Each is greater than its exponent.
+
+**Common error.** Multiplying an inequality by an unknown signed number can reverse it; state positivity first. Using `Int` for factorial positivity is also wrong after overflow; use `Integer`. GHC accepts a false mathematical claim, so there is no compiler error to rescue the proof.
+
+**Practice.** Does factorial positivity cover `fact (-1)`? **Answer:** no; the recurrence decreases forever and the precondition excludes it.
+
+## 3. Strong induction and Fibonacci
+
+A Fibonacci step needs two earlier answers. Strong induction allows a hypothesis for **every smaller natural number**, rather than just the immediately preceding one. Two base values are necessary because the recurrence only applies from two onwards.
+
+```text
+Template:
+  prove P(0) and P(1)
+  fix m >= 2; assume P(k) for every 0 <= k < m
+  unfold at m, use the assumptions at m-1 and m-2
+  conclude P(m)
+```
+
+### Fibonacci is bounded by powers of two
+
+**Claim.** For natural `n`, `0 <= fib n` and `fib n <= 2^n`.
+
+`-- Property: n < 0 || (0 <= fib n && fib n <= (2 :: Integer)^n)`
+
+**Induct on:** n by strong induction.
+
+**Base case.**
+
+```text
+fib 0 = 0 <= 1 = 2^0 -- (FI0), exponent zero
+fib 1 = 1 <= 2 = 2^1 -- (FI1), arithmetic
+Both values are non-negative -- arithmetic
+```
+
+**Hypothesis.** For every `k` with `0 <= k < m`, both `fib k >= 0` and `fib k <= 2^k`.
+
+**Step.**
+
+```text
+fib m
+= fib (m-1) + fib (m-2)     -- (FI2), m >= 2
+>= 0                        -- IH at m-1 and m-2
+fib m
+<= 2^(m-1) + 2^(m-2)       -- (FI2), both upper-bound IHs
+<= 2^(m-1) + 2^(m-1)       -- exponent monotonicity, m >= 2
+= 2^m                       -- exponent law
+```
+
+**Conclusion.** The proof genuinely uses two smaller indices. At `n = 4`, `fib 4 = 3 <= 16`.
+
+### Fibonacci is positive after zero
+
+**Claim.** For `n >= 1`, `fib n > 0`.
+
+`-- Property: n < 1 || fib n > 0`
+
+**Induct on:** n by strong induction starting at 1.
+
+**Base case.**
+
+```text
+fib 1 = 1 > 0 -- (FI1)
+fib 2 = 1+0 = 1 > 0 -- (FI2), (FI1), (FI0)
+```
+
+**Hypothesis.** For every `k` with `1 <= k < m`, `fib k > 0`.
+
+**Step.**
+
+```text
+fib m
+= fib (m-1) + fib (m-2) -- (FI2), m >= 3
+> 0                     -- IH at both positive smaller indices
+```
+
+**Conclusion.** One and two are separate bases; using the positive hypothesis at zero would be invalid. At `n = 3`, the value is `2`.
+
+### Fibonacci increases weakly
+
+**Claim.** For natural `n`, `fib n <= fib (n+1)`.
+
+`-- Property: n < 0 || fib n <= fib (n+1)`
+
+**Induct on:** n (direct use of the established non-negativity lemma).
+
+**Base case.**
+
+```text
+fib 0 = 0 <= 1 = fib 1 -- (FI0), (FI1)
+```
+
+**Hypothesis.** No new IH is needed; Fibonacci non-negativity has already been proved.
+
+**Step.**
+
+```text
+fib (n+1)
+= fib n + fib (n-1) -- (FI2), n >= 1
+>= fib n            -- non-negativity lemma at n-1
+```
+
+**Conclusion.** Zero has its own case; at one the values tie (`1 <= 1`). Strict increase at every index would be false.
+
+<HaskellTryIt>
+
+```haskell
+fib :: Integer -> Integer
+fib 0 = 0
+fib 1 = 1
+fib n = fib (n-1) + fib (n-2)
+
+main :: IO ()
+main = do
+  print (fib 0 <= (2 :: Integer)^0)
+  print (fib 1 <= (2 :: Integer)^1)
+  print (fib 4 <= (2 :: Integer)^4)
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+These are the upper-bound checks at Fibonacci indices zero, one and four: `fib` gives `0`, `1`, `3`, and powers give `1`, `2`, `16`. These concrete checks do not replace the strong induction.
+
+**Common error.** An ordinary hypothesis only at `m-1` cannot justify a replacement of `fib (m-2)`. GHC reports no proof error. Repair the hypothesis to cover all smaller indices, or prove a pair of consecutive claims together.
+
+**Practice.** Is `fib n > n` true? **Answer:** no, `fib 1 = 1`, so the strict inequality fails.
+
+## 4. Splitting and constructing lists
+
+Some list functions recurse on both a count and a list. Choose a count induction with the list kept arbitrary, then split the step by list constructor. For a partial function, start with the smallest **allowed** list, often a singleton.
+
+```text
+Template: keep the other arguments arbitrary.
+Count proof: n <= 0 separately; at n+1 split xs = [] or x:xs.
+Non-empty proof: [x] is the base; x:y:ys is the step.
+```
+
+### Take and drop reconstruct a list
+
+**Claim.** For every `Int n` and list `xs`, `take n xs ++ drop n xs = xs`.
+
+`-- Property: take n xs ++ drop n xs == xs`
+
+**Induct on:** non-negative `n`, after handling `n <= 0` directly.
+
+**Base case.**
+
+```text
+take n xs ++ drop n xs
+= [] ++ xs -- (T0), (D0), n <= 0
+= xs       -- (A0)
+```
+
+**Hypothesis.** For every `xs`, `take n xs ++ drop n xs = xs`, with `n >= 0`.
+
+**Step.**
+
+```text
+Case xs = []:
+take (n+1) [] ++ drop (n+1) [] = [] ++ [] = [] -- (T1), (D1), (A0)
+Case xs = x:ys:
+take (n+1) (x:ys) ++ drop (n+1) (x:ys)
+= (x : take n ys) ++ drop n ys -- (T2), (D2)
+= x : (take n ys ++ drop n ys) -- (A1)
+= x : ys                       -- IH at ys
+```
+
+**Conclusion.** Both list cases hold; counts beyond the length simply give the whole list and an empty suffix. Negative counts were handled without recursion.
+
+### Taking a replicated list
+
+**Claim.** For `n >= 0`, `take n (replicate n x) = replicate n x`.
+
+`-- Property: n < 0 || take n (replicate n x) == replicate n x`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+take 0 (replicate 0 x) = [] = replicate 0 x -- (T0), (RP0)
+```
+
+**Hypothesis.** `take n (replicate n x) = replicate n x`.
+
+**Step.**
+
+```text
+take (n+1) (replicate (n+1) x)
+= take (n+1) (x : replicate n x) -- (RP1)
+= x : take n (replicate n x)     -- (T2)
+= x : replicate n x             -- IH
+= replicate (n+1) x             -- (RP1), backwards
+```
+
+**Conclusion.** The singleton case gives `[x]`; the count and length coincide.
+
+### Replicate has the requested length
+
+**Claim.** For `n >= 0`, `length (replicate n x) = n`.
+
+`-- Property: n < 0 || length (replicate n x) == n`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+length (replicate 0 x) = length [] = 0 -- (RP0), (L0)
+```
+
+**Hypothesis.** `length (replicate n x) = n`.
+
+**Step.**
+
+```text
+length (replicate (n+1) x)
+= length (x : replicate n x) -- (RP1)
+= 1 + length (replicate n x) -- (L1)
+= 1+n                       -- IH
+= n+1                       -- arithmetic
+```
+
+**Conclusion.** At zero no elements are made; at three the result contains three copies. Without the non-negative precondition the formula is false.
+
+### Reconstructing a non-empty list from init and last
+
+**Claim.** For non-empty `xs`, `init xs ++ [last xs] = xs`.
+
+`-- Property: null xs || init xs ++ [last xs] == xs`
+
+**Induct on:** the non-empty list xs.
+
+**Base case.**
+
+```text
+init [x] ++ [last [x]]
+= [] ++ [x] -- (IN0), (LA0)
+= [x]       -- (A0)
+```
+
+**Hypothesis.** For non-empty `ys`, `init ys ++ [last ys] = ys`.
+
+**Step.**
+
+```text
+init (x:y:ys) ++ [last (x:y:ys)]
+= (x : init (y:ys)) ++ [last (y:ys)] -- (IN1), (LA1)
+= x : (init (y:ys) ++ [last (y:ys)]) -- (A1)
+= x : y : ys                         -- IH at non-empty y:ys
+```
+
+**Conclusion.** Singleton and longer cases cover the domain. `[]` is deliberately excluded, as both partial calls fail there.
+
+### Last ignores a preceding prefix
+
+**Claim.** For non-empty `ys`, `last (xs ++ ys) = last ys`.
+
+`-- Property: null ys || last (xs ++ ys) == last ys`
+
+**Induct on:** xs, keeping non-empty ys arbitrary.
+
+**Base case.**
+
+```text
+last ([] ++ ys) = last ys -- (A0)
+```
+
+**Hypothesis.** `last (xs ++ ys) = last ys`.
+
+**Step.**
+
+```text
+last ((x:xs) ++ ys)
+= last (x : (xs ++ ys)) -- (A1)
+= last (xs ++ ys)       -- (LA1), xs ++ ys is non-empty
+= last ys               -- IH
+```
+
+**Conclusion.** The non-emptiness follows because `ys` is a suffix. An empty suffix would require a different claim.
+
+### Init of a list with a final element
+
+**Claim.** For every `xs` and `x`, `init (xs ++ [x]) = xs`.
+
+`-- Property: init (xs ++ [x]) == xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+init ([] ++ [x]) = init [x] = [] -- (A0), (IN0)
+```
+
+**Hypothesis.** `init (xs ++ [x]) = xs`.
+
+**Step.**
+
+```text
+init ((y:ys) ++ [x])
+= init (y : (ys ++ [x])) -- (A1)
+= y : init (ys ++ [x])   -- (IN1), ys ++ [x] non-empty
+= y : ys                 -- IH
+```
+
+**Conclusion.** The call is always safe, including `xs = []`, because appending `[x]` makes a non-empty list.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (take (-2) [1,2] ++ drop (-2) [1,2])
+  print (take 1 [1,2] ++ drop 1 [1,2])
+  print (take 9 [1,2] ++ drop 9 [1,2])
+```
+
+```text
+[1,2]
+[1,2]
+[1,2]
+```
+
+</HaskellTryIt>
+
+A negative count gives `[] ++ [1,2]`; one gives `[1] ++ [2]`; an excessive count gives `[1,2] ++ []`. This checks three different branches.
+
+**Common error.** `length (replicate (-1) x) = -1` is false: the left side is zero. `last []` and `init []` raise a GHC runtime exception for an empty list; the precise diagnostic depends on the Prelude version. Repair the domain, rather than inventing a base equation for these partial functions.
+
+**Practice.** Find `init ([] ++ [7])`. **Answer:** `[]`; the input to `init` is `[7]`, not an empty list.
+
+### Dropping all replicated elements
+
+**Claim.** For `n >= 0`, `drop n (replicate n x) = []`.
+
+`-- Property: n < 0 || null (drop n (replicate n x))`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+drop 0 (replicate 0 x) = replicate 0 x = [] -- (D0), (RP0)
+```
+
+**Hypothesis.** `drop n (replicate n x) = []`.
+
+**Step.**
+
+```text
+drop (n+1) (replicate (n+1) x)
+= drop (n+1) (x : replicate n x) -- (RP1)
+= drop n (replicate n x)         -- (D2)
+= []                             -- IH
+```
+
+**Conclusion.** The drop count exactly exhausts the copies. Zero copies and three copies both leave an empty suffix.
+
+## 5. Combining list operations
+
+A distribution law moves an operation through a constructor or an append. First collect its empty and cons equations, then look for the smaller list. Boolean laws use associativity or distributivity of `&&` and `||`. Extrema need an explicit non-empty domain.
+
+```text
+Template:
+  base [] (or [x] for a non-empty domain)
+  unfold the outer operation and ++ once
+  apply IH to the tail
+  regroup using the named algebraic law; refold
+```
+
+### Map over an append: a new lemma
+
+**Claim.** `map f (xs ++ ys) = map f xs ++ map f ys`.
+
+`-- Property: map f (xs ++ ys) == map f xs ++ map f ys`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+map f ([] ++ ys) = map f ys -- (A0)
+map f [] ++ map f ys = [] ++ map f ys = map f ys -- (M0), (A0)
+```
+
+**Hypothesis.** `map f (xs ++ ys) = map f xs ++ map f ys`, for every `ys`.
+
+**Step.**
+
+```text
+map f ((x:xs) ++ ys)
+= map f (x : (xs ++ ys))          -- (A1)
+= f x : map f (xs ++ ys)          -- (M1)
+= f x : (map f xs ++ map f ys)    -- IH
+= (f x : map f xs) ++ map f ys    -- (A1), backwards
+= map f (x:xs) ++ map f ys        -- (M1), backwards
+```
+
+**Conclusion.** Both constructors hold. With `f = (+1)`, `[1]` and `[2]`, both sides are `[2,3]`.
+
+### Map through concat
+
+**Claim.** `map f (concat xss) = concat (map (map f) xss)`.
+
+`-- Property: map f (concat xss) == concat (map (map f) xss)`
+
+**Induct on:** the outer list xss.
+
+**Base case.**
+
+```text
+map f (concat []) = map f [] = [] -- (C0), (M0)
+concat (map (map f) []) = concat [] = [] -- (M0), (C0)
+```
+
+**Hypothesis.** `map f (concat xss) = concat (map (map f) xss)`.
+
+**Step.**
+
+```text
+map f (concat (xs:xss))
+= map f (xs ++ concat xss)                    -- (C1)
+= map f xs ++ map f (concat xss)              -- map-over-append lemma
+= map f xs ++ concat (map (map f) xss)        -- IH
+= concat (map f xs : map (map f) xss)         -- (C1), backwards
+= concat (map (map f) (xs:xss))               -- (M1), backwards
+```
+
+**Conclusion.** An empty inner list causes no problem: with `xss = [[],[2]]` and `f = (*3)`, both sides are `[6]`.
+
+### Membership over an append
+
+**Claim.** `elem a (xs ++ ys) = (elem a xs || elem a ys)`.
+
+`-- Property: elem a (xs ++ ys) == (elem a xs || elem a ys)`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+elem a ([] ++ ys) = elem a ys -- (A0)
+elem a [] || elem a ys = False || elem a ys = elem a ys -- (E0), Boolean identity
+```
+
+**Hypothesis.** The claim for `xs`, all `ys` and `a`.
+
+**Step.**
+
+```text
+elem a ((x:xs) ++ ys)
+= (a == x) || elem a (xs ++ ys)              -- (A1), (E1)
+= (a == x) || (elem a xs || elem a ys)       -- IH
+= ((a == x) || elem a xs) || elem a ys       -- associativity of ||
+= elem a (x:xs) || elem a ys                -- (E1), backwards
+```
+
+**Conclusion.** If the value is in either part it is in the append. With `a = 2`, `[1]`, `[2]`, both results are `True`.
+
+### Membership in a replicated list
+
+**Claim.** For `n >= 0`, `elem a (replicate n x) = (n > 0 && a == x)`.
+
+`-- Property: n < 0 || elem a (replicate n x) == (n > 0 && a == x)`
+
+**Induct on:** n.
+
+**Base case.**
+
+```text
+elem a (replicate 0 x) = False -- (RP0), (E0)
+0 > 0 && a == x = False -- Boolean annihilator
+```
+
+**Hypothesis.** The claim at `n`.
+
+**Step.**
+
+```text
+elem a (replicate (n+1) x)
+= (a == x) || elem a (replicate n x)        -- (RP1), (E1)
+= (a == x) || (n > 0 && a == x)           -- IH
+= (a == x)                                -- Boolean absorption
+= (n+1 > 0 && a == x)                      -- n+1 > 0
+```
+
+**Conclusion.** Zero copies contain nothing, even if `a == x`. At one or more copies membership is exactly equality with `x`.
+
+### and over an append
+
+**Claim.** `and (xs ++ ys) = (and xs && and ys)`.
+
+`-- Property: and (xs ++ ys) == (and xs && and ys)`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+and ([] ++ ys) = and ys -- (A0)
+and [] && and ys = True && and ys = and ys -- (AN0), identity
+```
+
+**Hypothesis.** The claim for `xs`, all `ys`.
+
+**Step.**
+
+```text
+and ((b:bs) ++ ys)
+= b && and (bs ++ ys) -- (A1), (AN1)
+= b && (and bs && and ys) -- IH
+= (b && and bs) && and ys -- associativity of &&
+= and (b:bs) && and ys -- (AN1), backwards
+```
+
+**Conclusion.** The empty identity is `True`. With `[True]` and `[False]`, both sides give `False`. 
+
+### or over an append
+
+**Claim.** `or (xs ++ ys) = (or xs || or ys)`.
+
+`-- Property: or (xs ++ ys) == (or xs || or ys)`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+or ([] ++ ys) = or ys -- (A0)
+or [] || or ys = False || or ys = or ys -- (OR0), identity
+```
+
+**Hypothesis.** The claim for `xs`, all `ys`.
+
+**Step.**
+
+```text
+or ((b:bs) ++ ys)
+= b || or (bs ++ ys) -- (A1), (OR1)
+= b || (or bs || or ys) -- IH
+= (b || or bs) || or ys -- associativity of ||
+= or (b:bs) || or ys -- (OR1), backwards
+```
+
+**Conclusion.** The empty identity is `False`. With `[True]` and `[False]`, both sides give `True`. 
+
+### De Morgan gives a second and/or pattern
+
+**Claim.** `and (map not bs) = not (or bs)`.
+
+`-- Property: and (map not bs) == not (or bs)`
+
+**Induct on:** bs.
+
+**Base case.**
+
+```text
+and (map not []) = and [] = True -- (M0), (AN0)
+not (or []) = not False = True -- (OR0), not
+```
+
+**Hypothesis.** `and (map not bs) = not (or bs)`.
+
+**Step.**
+
+```text
+and (map not (b:bs))
+= not b && and (map not bs) -- (M1), (AN1)
+= not b && not (or bs)     -- IH
+= not (b || or bs)        -- De Morgan law, checked for both Booleans
+= not (or (b:bs))         -- (OR1), backwards
+```
+
+**Conclusion.** At `[False,False]`, both sides are `True`; at `[False,True]`, both are `False`.
+
+### Maximum of an append
+
+**Claim.** For non-empty `xs` and `ys` of `Integer`, `maximum (xs ++ ys) = max (maximum xs) (maximum ys)`.
+
+`-- Property: null xs || null ys || maximum (xs ++ ys) == max (maximum xs) (maximum ys)`
+
+**Induct on:** non-empty xs.
+
+**Base case.**
+
+```text
+maximum ([x] ++ ys) = max x (maximum ys) -- (A1), (A0), (MX1), ys non-empty
+max (maximum [x]) (maximum ys) = max x (maximum ys) -- (MX0)
+```
+
+**Hypothesis.** The claim for non-empty tail `zs` and non-empty `ys`.
+
+**Step.**
+
+```text
+maximum ((x:z:zs) ++ ys)
+= max x (maximum ((z:zs) ++ ys))                 -- (A1), (MX1)
+= max x (max (maximum (z:zs)) (maximum ys))     -- IH
+= max (max x (maximum (z:zs))) (maximum ys)     -- associativity of max
+= max (maximum (x:z:zs)) (maximum ys)           -- (MX1), backwards
+```
+
+**Conclusion.** Both lists must be non-empty on the right. With `[-5]` and `[-2,-9]`, both sides are `-2`; zero is not an empty-list maximum.
+
+### Translation commutes with maximum
+
+**Claim.** For non-empty `Integer` list `xs`, `maximum (map (+k) xs) = maximum xs + k`.
+
+`-- Property: null xs || maximum (map (+k) xs) == maximum xs + k`
+
+**Induct on:** non-empty xs.
+
+**Base case.**
+
+```text
+maximum (map (+k) [x]) = x+k = maximum [x]+k -- (M1), (M0), (MX0)
+```
+
+**Hypothesis.** The claim for non-empty `ys`, every `Integer k`.
+
+**Step.**
+
+```text
+maximum (map (+k) (x:y:ys))
+= max (x+k) (maximum (map (+k) (y:ys))) -- (M1), (MX1)
+= max (x+k) (maximum (y:ys)+k)          -- IH
+= max x (maximum (y:ys)) + k            -- translation preserves integer order
+= maximum (x:y:ys) + k                  -- (MX1), backwards
+```
+
+**Conclusion.** Use `Integer`: bounded overflow would break order preservation. With `[-5,-2]` and `k = 3`, both sides are `1`.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (concat ([] :: [[Int]]))
+  print (concat [[],[2],[]])
+  print (map (+1) (concat [[1],[2,3]]))
+```
+
+```text
+[]
+[2]
+[2,3,4]
+```
+
+</HaskellTryIt>
+
+First there are no inner lists. Next empty inner lists contribute nothing. Finally flattening gives `[1,2,3]`, and mapping adds one at each position.
+
+**Common errors.** `maximum []` has no result: GHC raises an empty-list exception. An `Eq` constraint is needed when a polymorphic test compares values: without it GHC reports a missing `Eq` instance (often ?No instance for (Eq a)? or ?Could not deduce (Eq a)?). Add `Eq a =>` to the signature. A false Boolean law still type-checks; check both truth values.
+
+**Practice.** Is `and (xs ++ ys) = and xs || and ys` valid? **Answer:** no: `xs = [True]`, `ys = [False]` gives `False` on the left and `True` on the right.
+
+### Concat over an outer append
+
+**Claim.** `concat (xss ++ yss) = concat xss ++ concat yss`.
+
+`-- Property: concat (xss ++ yss) == concat xss ++ concat yss`
+
+**Induct on:** the outer list xss.
+
+**Base case.**
+
+```text
+concat ([] ++ yss) = concat yss -- (A0)
+concat [] ++ concat yss = [] ++ concat yss = concat yss -- (C0), (A0)
+```
+
+**Hypothesis.** The claim for `xss`, all outer suffixes `yss`.
+
+**Step.**
+
+```text
+concat ((xs:xss) ++ yss)
+= concat (xs : (xss ++ yss))       -- (A1)
+= xs ++ concat (xss ++ yss)        -- (C1)
+= xs ++ (concat xss ++ concat yss) -- IH
+= (xs ++ concat xss) ++ concat yss -- append associativity, backwards
+= concat (xs:xss) ++ concat yss    -- (C1), backwards
+```
+
+**Conclusion.** The induction is on a list of lists, not on an inner list. For `xss = [[],[1]]`, `yss = [[2]]`, both sides are `[1,2]`.
+
+### The dual De Morgan law
+
+**Claim.** `or (map not bs) = not (and bs)`.
+
+`-- Property: or (map not bs) == not (and bs)`
+
+**Induct on:** bs.
+
+**Base case.**
+
+```text
+or (map not []) = False -- (M0), (OR0)
+not (and []) = not True = False -- (AN0), not
+```
+
+**Hypothesis.** `or (map not bs) = not (and bs)`.
+
+**Step.**
+
+```text
+or (map not (b:bs))
+= not b || or (map not bs) -- (M1), (OR1)
+= not b || not (and bs)   -- IH
+= not (b && and bs)      -- De Morgan law
+= not (and (b:bs))       -- (AN1), backwards
+```
+
+**Conclusion.** This dual swaps or and and. At `[True,False]`, both sides are `True`; at `[True,True]`, both are `False`.
+
+## 6. Zip, unzip and truncated results
+
+`zip` recurses only while **both** lists have a head. A theorem that recovers both original lists must account for discarded suffixes. Induct on the first list, keep the second arbitrary, and split the cons step on the second list.
+
+```text
+Template:
+  xs = []: zip stops, even if ys has more elements
+  xs = x:xt, ys = []: zip stops again
+  xs = x:xt, ys = y:yt: unfold one pair, apply IH at xt and yt
+```
+
+### Zip after unzip loses no pairs
+
+**Claim.** For a list of pairs `ps`, `uncurry zip (unzip ps) = ps`.
+
+`-- Property: uncurry zip (unzip ps) == ps`
+
+**Induct on:** ps.
+
+**Base case.**
+
+```text
+uncurry zip (unzip []) = zip [] [] = [] -- (UZ0), uncurry, (Z0)
+```
+
+**Hypothesis.** If `unzip ps = (xs,ys)`, then `zip xs ys = ps`.
+
+**Step.**
+
+```text
+uncurry zip (unzip ((x,y):ps))
+= zip (x:xs) (y:ys) -- (UZ1), let (xs,ys) = unzip ps
+= (x,y) : zip xs ys -- (Z2)
+= (x,y) : ps        -- IH
+```
+
+**Conclusion.** The pair list determines equal output lengths. At `[(1,True)]`, unzipping and zipping returns that same single pair.
+
+### Unzip after zip keeps only prefixes
+
+**Claim.** Let `k = min (length xs) (length ys)`. Then `unzip (zip xs ys) = (take k xs, take k ys)`.
+
+`-- Property: let k = min (length xs) (length ys) in unzip (zip xs ys) == (take k xs, take k ys)`
+
+**Induct on:** xs, with ys arbitrary.
+
+**Base case.**
+
+```text
+unzip (zip [] ys) = ([],[]) -- (Z0), (UZ0)
+(take 0 [], take 0 ys) = ([],[]) -- (T0), k = 0
+```
+
+**Hypothesis.** The claim for tail `xs` and every second list.
+
+**Step.**
+
+```text
+Case ys = []: both sides are ([],[]) -- (Z1), (UZ0), (T0)
+Case ys = y:yt, let j = min (length xs) (length yt):
+unzip (zip (x:xs) (y:yt))
+= unzip ((x,y) : zip xs yt)             -- (Z2)
+= (x : take j xs, y : take j yt)        -- (UZ1), IH
+= (take (j+1) (x:xs), take (j+1) (y:yt)) -- (T2), backwards
+Here k = j+1 -- (L1), min (a+1) (b+1) = 1 + min a b
+```
+
+**Conclusion.** This handles unequal lengths correctly: `[1,2]` and `[True]` yield `([1],[True])`.
+
+### Length of zip is the smaller length
+
+**Claim.** `length (zip xs ys) = min (length xs) (length ys)`.
+
+`-- Property: length (zip xs ys) == min (length xs) (length ys)`
+
+**Induct on:** xs, with ys arbitrary.
+
+**Base case.**
+
+```text
+length (zip [] ys) = 0 -- (Z0), (L0)
+min (length []) (length ys) = 0 -- (L0), length ys >= 0
+```
+
+**Hypothesis.** The claim for `xs` and every `ys`.
+
+**Step.**
+
+```text
+Case ys = []: both sides are 0 -- (Z1), (L0), min with zero
+Case ys = y:yt:
+length (zip (x:xs) (y:yt))
+= 1 + length (zip xs yt)            -- (Z2), (L1)
+= 1 + min (length xs) (length yt)   -- IH
+= min (1+length xs) (1+length yt)   -- min successor law
+= min (length (x:xs)) (length (y:yt)) -- (L1), backwards
+```
+
+**Conclusion.** Two empty-list stopping cases and one paired step exhaust the possibilities.
+
+### A zip length inequality
+
+**Claim.** `length (zip xs ys) <= length xs` and also `length (zip xs ys) <= length ys`.
+
+`-- Property: length (zip xs ys) <= length xs && length (zip xs ys) <= length ys`
+
+**Induct on:** xs (using the preceding proved length theorem).
+
+**Base case.**
+
+```text
+length (zip [] ys) = 0 -- (Z0), (L0)
+0 <= 0 and 0 <= length ys -- non-negative lengths
+```
+
+**Hypothesis.** No additional IH is needed once the exact length theorem is available.
+
+**Step.**
+
+```text
+length (zip xs ys)
+= min (length xs) (length ys) -- zip-length theorem
+<= length xs                 -- min is at most its first argument
+length (zip xs ys) <= length ys -- same theorem, min at most second argument
+```
+
+**Conclusion.** A second useful form is a bound rather than an equality. With lengths three and one the zip length is one, not three.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (zip ([] :: [Int]) [True])
+  print (zip [1] [True])
+  print (unzip (zip [1,2] [True]))
+```
+
+```text
+[]
+[(1,True)]
+([1],[True])
+```
+
+</HaskellTryIt>
+
+The first stops at an empty list; the second makes one pair; the third discards the unmatched `2`. Unzip cannot recreate a discarded value.
+
+**Common error.** Claiming `unzip (zip xs ys) = (xs,ys)` without equal lengths. This compiles but is false. Use equal lengths as a precondition, or use the prefix theorem above.
+
+**Practice.** Refute `length (zip xs ys) = length xs`. **Answer:** `xs = [1]`, `ys = []` gives zero versus one.
+
+## 7. Folds, generalisation and fusion
+
+A fold replaces list constructors by operations. A right fold replaces `[]` by `z` and `(:)` by `f`. A left fold passes a changing accumulator to the recursive call. Fold fusion removes an intermediate result: a function applied after a fold can become part of the fold when it respects the fold's operation.
+
+```text
+Right-fold template: unfold FR0 or FR1; use IH on foldr ... xs.
+Left-fold template: quantify over EVERY accumulator before inducting on xs.
+Fusion template: prove h z = w and h (f x a) = g x (h a);
+                then h (foldr f z xs) = foldr g w xs.
+```
+
+### Foldr rebuilds the list
+
+**Claim.** `foldr (:) [] xs = xs`.
+
+`-- Property: foldr (:) [] xs == xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+foldr (:) [] [] = [] -- (FR0)
+```
+
+**Hypothesis.** `foldr (:) [] xs = xs`.
+
+**Step.**
+
+```text
+foldr (:) [] (x:xs)
+= x : foldr (:) [] xs -- (FR1)
+= x : xs              -- IH
+```
+
+**Conclusion.** The operation is the original cons and the base is the original empty list, so the structure is unchanged. At `[4]` the result is `[4]`.
+
+### A more general constructor fold
+
+**Claim.** `foldr (:) ys xs = xs ++ ys`.
+
+`-- Property: foldr (:) ys xs == xs ++ ys`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+foldr (:) ys [] = ys = [] ++ ys -- (FR0), (A0), backwards
+```
+
+**Hypothesis.** The claim for `xs`, every `ys`.
+
+**Step.**
+
+```text
+foldr (:) ys (x:xs)
+= x : foldr (:) ys xs -- (FR1)
+= x : (xs ++ ys)     -- IH
+= (x:xs) ++ ys       -- (A1), backwards
+```
+
+**Conclusion.** Changing the base from `[]` to `ys` appends a suffix. At `[1]` and `[2]`, the result is `[1,2]`.
+
+### Map is a right fold
+
+**Claim.** `map f xs = foldr (\x r -> f x : r) [] xs`.
+
+`-- Property: map f xs == foldr (\x r -> f x : r) [] xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+map f [] = [] -- (M0)
+foldr (\x r -> f x : r) [] [] = [] -- (FR0)
+```
+
+**Hypothesis.** The claim for `xs`.
+
+**Step.**
+
+```text
+foldr (\x r -> f x : r) [] (x:xs)
+= f x : foldr (\y r -> f y : r) [] xs -- (FR1), lambda substitution
+= f x : map f xs                       -- IH, backwards
+= map f (x:xs)                         -- (M1), backwards
+```
+
+**Conclusion.** A fresh binder `y` avoids confusing the head `x` with the lambda parameter. Mapping `(+1)` over `[2]` gives `[3]`.
+
+### Mapping with a suffix in the fold
+
+**Claim.** `foldr (\x r -> f x : r) ys xs = map f xs ++ ys`.
+
+`-- Property: foldr (\x r -> f x : r) ys xs == map f xs ++ ys`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+foldr (\x r -> f x : r) ys [] = ys -- (FR0)
+map f [] ++ ys = [] ++ ys = ys -- (M0), (A0)
+```
+
+**Hypothesis.** The claim for `xs` and all suffixes `ys`.
+
+**Step.**
+
+```text
+foldr (\x r -> f x : r) ys (x:xs)
+= f x : foldr (\a r -> f a : r) ys xs -- (FR1), substitution
+= f x : (map f xs ++ ys)               -- IH
+= map f (x:xs) ++ ys                  -- (A1), (M1), backwards
+```
+
+**Conclusion.** This varies the base result. At `f = (*2)`, `[1]`, suffix `[9]`, both sides are `[2,9]`.
+
+### Foldr over an append
+
+**Claim.** `foldr f z (xs ++ ys) = foldr f (foldr f z ys) xs`.
+
+`-- Property: foldr f z (xs ++ ys) == foldr f (foldr f z ys) xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+foldr f z ([] ++ ys) = foldr f z ys -- (A0)
+foldr f (foldr f z ys) [] = foldr f z ys -- (FR0)
+```
+
+**Hypothesis.** The claim for `xs`, arbitrary `f`, `z`, `ys`.
+
+**Step.**
+
+```text
+foldr f z ((x:xs) ++ ys)
+= f x (foldr f z (xs ++ ys))          -- (A1), (FR1)
+= f x (foldr f (foldr f z ys) xs)     -- IH
+= foldr f (foldr f z ys) (x:xs)       -- (FR1), backwards
+```
+
+**Conclusion.** No associativity of `f` is needed: the parentheses remain nested to the right.
+
+### Sum by foldl equals sum by foldr
+
+**Claim.** For `[Integer] xs` and every `Integer a`, `foldl (+) a xs = a + foldr (+) 0 xs`. Hence the two sums agree at `a = 0`.
+
+`-- Property: foldl (+) a xs == a + foldr (+) 0 xs`
+
+**Induct on:** xs, with a universally quantified.
+
+**Base case.**
+
+```text
+foldl (+) a [] = a -- (FL0)
+a + foldr (+) 0 [] = a+0 = a -- (FR0), additive identity
+```
+
+**Hypothesis.** For every `a`, `foldl (+) a xs = a + foldr (+) 0 xs`.
+
+**Step.**
+
+```text
+foldl (+) a (x:xs)
+= foldl (+) (a+x) xs       -- (FL1)
+= (a+x) + foldr (+) 0 xs   -- IH at the CHANGED accumulator a+x
+= a + (x + foldr (+) 0 xs) -- associativity of integer addition
+= a + foldr (+) 0 (x:xs)   -- (FR1), backwards
+```
+
+**Conclusion.** At accumulator `10` and list `[1,-2]`, both sides are `9`. At zero this proves equality of the two fold sums. Floating-point addition is not associative, so it is outside this claim.
+
+### Fold fusion with explicit conditions
+
+**Claim.** If `h z = w` and `h (f x a) = g x (h a)` for all relevant total `x,a`, then `h (foldr f z xs) = foldr g w xs`.
+
+`-- Property: h (foldr f z xs) == foldr g w xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+h (foldr f z []) = h z = w -- (FR0), base condition
+foldr g w [] = w -- (FR0)
+```
+
+**Hypothesis.** The fusion claim for `xs`.
+
+**Step.**
+
+```text
+h (foldr f z (x:xs))
+= h (f x (foldr f z xs)) -- (FR1)
+= g x (h (foldr f z xs)) -- operation condition at a = foldr f z xs
+= g x (foldr g w xs)     -- IH
+= foldr g w (x:xs)       -- (FR1), backwards
+```
+
+**Conclusion.** Both compatibility conditions are needed. The Boolean test below is the conclusion under those universally quantified side conditions.
+
+### A concrete fusion: double a sum
+
+**Claim.** For `[Integer] xs`, `2 * foldr (+) 0 xs = foldr (\x r -> 2*x+r) 0 xs`.
+
+`-- Property: 2 * foldr (+) 0 xs == foldr (\x r -> 2*x+r) 0 xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+2 * foldr (+) 0 [] = 2*0 = 0 -- (FR0), arithmetic
+foldr (\x r -> 2*x+r) 0 [] = 0 -- (FR0)
+```
+
+**Hypothesis.** The claim for `xs`.
+
+**Step.**
+
+```text
+2 * foldr (+) 0 (x:xs)
+= 2 * (x + foldr (+) 0 xs)                  -- (FR1)
+= 2*x + 2 * foldr (+) 0 xs                  -- distributivity
+= 2*x + foldr (\y r -> 2*y+r) 0 xs         -- IH
+= foldr (\y r -> 2*y+r) 0 (x:xs)           -- (FR1), backwards
+```
+
+**Conclusion.** Here `h a = 2*a`, `z = w = 0`, `f = (+)`, `g x a = 2*x+a`; distributivity checks the operation condition. With `[1,-2]`, both sides are `-2`.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (foldr (:) [] ([] :: [Int]))
+  print (foldr (:) [9] [1])
+  print (foldl (+) 10 ([1,-2] :: [Integer]))
+```
+
+```text
+[]
+[1,9]
+9
+```
+
+</HaskellTryIt>
+
+An empty fold returns its base. A cons fold adds `1` in front of `[9]`. The left sum changes its accumulator `10` to `11`, then `9`, and returns `9`.
+
+**Common error.** An IH fixed at accumulator zero cannot rewrite `foldl (+) x xs`. Quantify over all accumulators. Replacing addition by subtraction also destroys the arithmetic argument: `foldr (-) 0 [1,2] = -1` but `foldl (-) 0 [1,2] = -3`. GHC accepts both; it does not check algebraic laws.
+
+**Practice.** What is the base for the fusion example `h a = 2*a`? **Answer:** `h 0 = 0`, so the new base must be zero.
+
+### Foldr across three segments
+
+**Claim.** `foldr f z (xs ++ (ys ++ zs)) = foldr f (foldr f (foldr f z zs) ys) xs`.
+
+`-- Property: foldr f z (xs ++ (ys ++ zs)) == foldr f (foldr f (foldr f z zs) ys) xs`
+
+**Induct on:** xs (as a corollary of the already-proved arbitrary-suffix theorem).
+
+**Base case.**
+
+```text
+foldr f z ([] ++ (ys ++ zs)) = foldr f z (ys ++ zs) -- (A0)
+= foldr f (foldr f z zs) ys -- foldr-append theorem
+= foldr f (foldr f (foldr f z zs) ys) [] -- (FR0), backwards
+```
+
+**Hypothesis.** The arbitrary-suffix foldr-append theorem is available; no new IH is needed.
+
+**Step.**
+
+```text
+foldr f z (xs ++ (ys ++ zs))
+= foldr f (foldr f z (ys ++ zs)) xs -- foldr-append theorem at suffix ys ++ zs
+= foldr f (foldr f (foldr f z zs) ys) xs -- foldr-append theorem at ys and zs
+```
+
+**Conclusion.** The innermost fold handles the rightmost segment first, without reassociating `f`. For subtraction and singleton segments `[1]`, `[2]`, `[3]` at base zero, both expressions give two.
+
+## 8. Binary trees: shape, traversals and bounds
+
+A `Node` contains two smaller trees, so write two hypotheses. Traversals turn a tree into a list; their proofs also need the append-length lemma. Tree bounds use the maximum of two heights, so name that maximum before comparing powers.
+
+```text
+Template:
+  Leaf: unfold the empty-tree equations
+  Node l x r: assume P(l) and P(r)
+  unfold the node equation; use each relevant hypothesis
+  apply list or arithmetic lemmas with their conditions stated
+```
+
+We use `count` for mathematical traversal length. On lists whose lengths fit `Int`, `count xs = toInteger (length xs)` by their identical zero/successor equations. The earlier lab already proves the inorder-size law; we quote its unbounded counterpart, with the same induction, instead of repeating that proof.
+
+### MapTree fusion
+
+**Claim.** `mapTree f (mapTree g t) = mapTree (f . g) t`.
+
+`-- Property: mapTree f (mapTree g t) == mapTree (f . g) t`
+
+**Induct on:** t.
+
+**Base case.**
+
+```text
+mapTree f (mapTree g Leaf) = Leaf -- (MT0) twice
+mapTree (f . g) Leaf = Leaf -- (MT0)
+```
+
+**Hypothesis.** Fusion for both `l` and `r`.
+
+**Step.**
+
+```text
+mapTree f (mapTree g (Node l x r))
+= Node (mapTree f (mapTree g l)) (f (g x)) (mapTree f (mapTree g r)) -- (MT1) twice
+= Node (mapTree (f . g) l) ((f . g) x) (mapTree (f . g) r) -- both IHs, composition
+= mapTree (f . g) (Node l x r) -- (MT1), backwards
+```
+
+**Conclusion.** Shape is preserved and each value gets `g` then `f`. For a singleton value `2`, `g = (*3)`, `f = (+1)`, both give value `7`.
+
+### MapTree identity
+
+**Claim.** `mapTree id t = t`.
+
+`-- Property: mapTree id t == t`
+
+**Induct on:** t.
+
+**Base case.**
+
+```text
+mapTree id Leaf = Leaf -- (MT0)
+```
+
+**Hypothesis.** `mapTree id l = l` and `mapTree id r = r`.
+
+**Step.**
+
+```text
+mapTree id (Node l x r)
+= Node (mapTree id l) (id x) (mapTree id r) -- (MT1)
+= Node l x r                              -- both IHs, id
+```
+
+**Conclusion.** A second mapping proof uses identity rather than composition. Empty and singleton trees both keep their exact shape.
+
+### Preorder has one value per node
+
+**Claim.** `count (preorder t) = size t`; equivalently `toInteger (length (preorder t)) = size t` when the length fits `Int`.
+
+`-- Property: count (preorder t) == size t`
+
+**Induct on:** t.
+
+**Base case.**
+
+```text
+count (preorder Leaf) = count [] = 0 = size Leaf -- (PR0), (CO0), (SZ0)
+```
+
+**Hypothesis.** `count (preorder l) = size l` and the same for `r`.
+
+**Step.**
+
+```text
+count (preorder (Node l x r))
+= count (x : (preorder l ++ preorder r)) -- (PR1)
+= 1 + count (preorder l ++ preorder r)   -- (CO1)
+= 1 + count (preorder l) + count (preorder r) -- count-append lemma
+= 1 + size l + size r                     -- both IHs
+= size (Node l x r)                       -- arithmetic, (SZ1), backwards
+```
+
+**Conclusion.** The root contributes one; both traversals contribute their subtree sizes. A root with one child gives count two.
+
+### Preorder and inorder have equal lengths
+
+**Claim.** `count (preorder t) = count (inorder t)`.
+
+`-- Property: count (preorder t) == count (inorder t)`
+
+**Induct on:** t (directly using two established traversal lemmas).
+
+**Base case.**
+
+```text
+count (preorder Leaf) = 0 = count (inorder Leaf) -- (PR0), (IO0), (CO0)
+```
+
+**Hypothesis.** No new IH: preorder-size above and the quoted inorder-size result cover every subtree.
+
+**Step.**
+
+```text
+count (preorder t)
+= size t                -- preorder-size theorem
+= count (inorder t)      -- quoted inorder-size theorem, backwards
+```
+
+**Conclusion.** This claim needs **two lemmas**: one for each traversal. It compares their lengths, not their order. A root `2` with left child `1` has preorder `[2,1]`, inorder `[1,2]`, each of length two.
+
+### Height is bounded by size
+
+**Claim.** For every tree `t`, `height t <= size t`.
+
+`-- Property: height t <= size t`
+
+**Induct on:** t.
+
+**Base case.**
+
+```text
+height Leaf = 0 = size Leaf -- (H0), (SZ0)
+```
+
+**Hypothesis.** `height l <= size l` and `height r <= size r`. Sizes are non-negative by (SZ0)/(SZ1).
+
+**Step.**
+
+```text
+height (Node l x r)
+= 1 + max (height l) (height r) -- (H1)
+<= 1 + max (size l) (size r)    -- both IHs, monotonicity of max
+<= 1 + size l + size r          -- both sizes non-negative
+= size (Node l x r)             -- arithmetic, (SZ1), backwards
+```
+
+**Conclusion.** A chain attains equality; a branching tree can be shorter than its size. At a three-node balanced tree, `2 <= 3`.
+
+### Size has an exponential bound
+
+**Claim.** For every tree `t`, `size t < 2 ^ height t`, with base `2 :: Integer`.
+
+`-- Property: size t < (2 :: Integer) ^ height t`
+
+**Induct on:** `t`, proving the equivalent integer form `size t <= 2^height t - 1`.
+
+**Base case.**
+
+```text
+size Leaf = 0 = 2^0 - 1 -- (SZ0), (H0), arithmetic
+```
+
+**Hypothesis.** `size l <= 2^height l - 1` and similarly for `r`.
+
+**Step.**
+
+```text
+Let h = max (height l) (height r). -- definition of h
+size (Node l x r)
+= size l + 1 + size r        -- (SZ1)
+<= (2^height l-1) + 1 + (2^height r-1) -- both IHs
+<= (2^h-1) + 1 + (2^h-1)    -- h bounds each height; powers monotone
+= 2^(h+1)-1                  -- arithmetic, exponent law
+= 2^height (Node l x r)-1    -- (H1), backwards
+```
+
+**Conclusion.** For integers, being at most `v-1` means being strictly below `v`. At `Leaf`, `0 < 1`; a singleton has `1 < 2`.
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+size :: Tree a -> Integer
+size Leaf = 0
+size (Node l _ r) = size l + 1 + size r
+height :: Tree a -> Integer
+height Leaf = 0
+height (Node l _ r) = 1 + max (height l) (height r)
+
+main :: IO ()
+main = do
+  let one = Node Leaf 7 Leaf
+  let three = Node one 8 one
+  print (size Leaf < (2 :: Integer)^height Leaf)
+  print (size one < (2 :: Integer)^height one)
+  print (size three < (2 :: Integer)^height three)
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+These are the empty, singleton and full height-two bounds: zero, one and three nodes lie strictly below one, two and four.
+
+**Common error.** Using only one subtree hypothesis leaves an unexplained term from the other subtree. Replacing `max a b` by `a+b` as an equality is false; it is only an upper bound for non-negative values. GHC gives no diagnostic for a wrong inequality.
+
+**Practice.** Is `size t <= height t` true? **Answer:** no. A root and two singleton children have size three and height two.
+
+## 9. Search-tree invariants and other tree constructors
+
+An invariant is a condition a function promises to preserve. Here `ordered` requires every left key to be strictly smaller than its root and every right key strictly larger; merely comparing immediate children would be insufficient. Duplicate insertion leaves the tree unchanged. The proofs use the exact guard order in the definitions.
+
+```text
+Invariant template:
+  assume ordered t before insertion
+  induct on t, with the inserted key arbitrary
+  split the Node step into a < x, a > x, a == x
+  use a bound-preservation lemma for whichever subtree changes
+
+Other-tree template:
+  one case per constructor, one hypothesis per recursive field
+  for Expr, split again where the simplifier has a special pattern
+```
+
+### Insertion preserves a predicate: the bound lemma
+
+**Claim.** If `allTree p t` and `p a`, then `allTree p (insert a t)`, for integer keys and total `p`.
+
+`-- Property: not (allTree p t && p a) || allTree p (insert a t)`
+
+**Induct on:** t, with a and p arbitrary.
+
+**Base case.**
+
+```text
+allTree p (insert a Leaf)
+= allTree p (Node Leaf a Leaf) -- (I0)
+= p a && True && True          -- (AT1), (AT0)
+= True                        -- premise p a
+```
+
+**Hypothesis.** The implication for each subtree, every key and predicate.
+
+**Step.**
+
+```text
+Case a < x:
+allTree p (insert a (Node l x r))
+= p x && allTree p (insert a l) && allTree p r -- (I1), (AT1)
+= True -- premise supplies p x and allTree p r; IH for l uses allTree p l and p a
+Case a > x: the result is True -- (I2), (AT1), premise, IH for r
+Case a == x: the result is True -- (I3), original allTree premise
+```
+
+**Conclusion.** The three guards cover integer order. Instantiate `p = (< x)` or `p = (> x)` to preserve the ancestor bound.
+
+### Insertion keeps a search tree ordered
+
+**Claim.** If `ordered t`, then `ordered (insert a t)`.
+
+`-- Property: not (ordered t) || ordered (insert a t)`
+
+**Induct on:** t, with a arbitrary.
+
+**Base case.**
+
+```text
+ordered (insert a Leaf) = ordered (Node Leaf a Leaf) = True -- (I0), (B1), (B0), (AT0)
+```
+
+**Hypothesis.** Ordered insertion for both subtrees and every key.
+
+**Step.**
+
+```text
+Case a < x:
+ordered (insert a (Node l x r))
+= ordered (insert a l) && ordered r
+  && allTree (< x) (insert a l) && allTree (> x) r -- (I1), (B1)
+= True -- IH for l; bound lemma with p = (< x); original invariant; a < x
+Case a > x: ordered result = True -- (I2), IH for r, bound lemma p = (> x), original invariant
+Case a == x: ordered result = True -- (I3), original invariant
+```
+
+**Conclusion.** The step uses the recursive ordered-insertion hypothesis and the separately proved bound lemma. The latter checks all descendants, not just the new child. At duplicate key `2`, a tree rooted at `2` is unchanged.
+
+### Member finds the inserted key
+
+**Claim.** For every integer tree `t`, `member a (insert a t) = True`. This particular result does not require `ordered t`.
+
+`-- Property: member a (insert a t)`
+
+**Induct on:** t, with a arbitrary.
+
+**Base case.**
+
+```text
+member a (insert a Leaf)
+= member a (Node Leaf a Leaf) -- (I0)
+= True                       -- (B5), a == a
+```
+
+**Hypothesis.** The claim for each subtree, every inserted key.
+
+**Step.**
+
+```text
+Case a < x:
+member a (insert a (Node l x r))
+= member a (Node (insert a l) x r) -- (I1)
+= member a (insert a l)            -- (B3), same a < x
+= True                            -- IH for l
+Case a > x: member a (insert a (Node l x r)) = member a (insert a r) = True -- (I2), (B4), IH for r
+Case a == x: member a (insert a (Node l x r)) = True -- (I3), (B5)
+```
+
+**Conclusion.** Insertion and search follow the same comparisons. Orderedness is needed for general search correctness, but not for retracing this insertion path.
+
+### Leaf-labelled trees have one more leaf than branch
+
+**Claim.** For every `LTree t`, `leaves t = nodes t + 1`; `nodes` counts branches only.
+
+`-- Property: leaves t == nodes t + 1`
+
+**Induct on:** t.
+
+**Base case.**
+
+```text
+leaves (LLeaf x) = 1 = 0+1 = nodes (LLeaf x)+1 -- (LE0), (NO0)
+```
+
+**Hypothesis.** The claim for `l` and `r`.
+
+**Step.**
+
+```text
+leaves (LBranch l r)
+= leaves l + leaves r          -- (LE1)
+= (nodes l+1) + (nodes r+1)     -- both IHs
+= (1+nodes l+nodes r)+1         -- arithmetic
+= nodes (LBranch l r)+1         -- (NO1), backwards
+```
+
+**Conclusion.** A single leaf has zero branches; a branch joining two leaves has two leaves and one branch. Counting all constructors as nodes would give a different formula.
+
+### Flatten counts leaf values
+
+**Claim.** `count (flatten t) = leaves t`.
+
+`-- Property: count (flatten t) == leaves t`
+
+**Induct on:** t.
+
+**Base case.**
+
+```text
+count (flatten (LLeaf x)) = count [x] = 1 = leaves (LLeaf x) -- (FT0), (CO1), (CO0), (LE0)
+```
+
+**Hypothesis.** The claim for `l` and `r`.
+
+**Step.**
+
+```text
+count (flatten (LBranch l r))
+= count (flatten l ++ flatten r) -- (FT1)
+= count (flatten l) + count (flatten r) -- count-append lemma
+= leaves l + leaves r            -- both IHs
+= leaves (LBranch l r)           -- (LE1), backwards
+```
+
+**Conclusion.** The constructor has no stored root value, unlike `Node`, so no extra one belongs in its flatten step. A two-leaf tree flattens to two values.
+
+### A simplifier preserves evaluation
+
+**Claim.** For every total `Expr e`, `eval (simp e) = eval e`.
+
+`-- Property: eval (simp e) == eval e`
+
+**Induct on:** e, splitting Add and Mul cases by the first matching pattern.
+
+**Base case.**
+
+```text
+eval (simp (Num n)) = eval (Num n) -- (SI0)
+```
+
+**Hypothesis.** The evaluation equality for both expression subtrees.
+
+**Step.**
+
+```text
+Case Add (Num 0) r:
+eval (simp (Add (Num 0) r))
+= eval (simp r)       -- (SI1)
+= eval r              -- IH for r
+= 0 + eval r          -- additive identity, backwards
+= eval (Add (Num 0) r) -- (EV0), (EV1), backwards
+Other Add l r:
+eval (simp (Add l r))
+= eval (simp l) + eval (simp r) -- (SI2), (EV1)
+= eval l + eval r               -- both IHs
+= eval (Add l r)                -- (EV1), backwards
+Case Mul (Num 1) r:
+eval (simp (Mul (Num 1) r)) = eval (simp r) = eval r -- (SI3), IH for r
+= 1 * eval r = eval (Mul (Num 1) r) -- multiplicative identity, (EV0), (EV2)
+Other Mul l r:
+eval (simp (Mul l r)) = eval (simp l) * eval (simp r) -- (SI4), (EV2)
+= eval l * eval r = eval (Mul l r) -- both IHs, (EV2), backwards
+```
+
+**Conclusion.** Every constructor and special pattern is covered. At `Add (Num 0) (Mul (Num 1) (Num 7))`, both evaluations are seven. No claim about evaluation on bottom is made.
+
+### The simplifier also preserves evaluation in an Add context
+
+**Claim.** For total expressions `e,r`, `eval (Add (simp e) r) = eval (Add e r)`.
+
+`-- Property: eval (Add (simp e) r) == eval (Add e r)`
+
+**Induct on:** e (by the just-proved structural theorem).
+
+**Base case.**
+
+```text
+eval (Add (simp (Num n)) r) = eval (Add (Num n) r) -- (SI0)
+```
+
+**Hypothesis.** The structural evaluation-preservation theorem is available for every expression; no new IH needed.
+
+**Step.**
+
+```text
+eval (Add (simp e) r)
+= eval (simp e) + eval r -- (EV1)
+= eval e + eval r        -- simplifier theorem
+= eval (Add e r)         -- (EV1), backwards
+```
+
+**Conclusion.** This second variation replaces only one subtree, rather than simplifying a whole tree. Equality is preserved inside an evaluation context, even if Int arithmetic wraps.
+
+<HaskellTryIt>
+
+```haskell
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr
+eval :: Expr -> Int
+eval (Num n) = n
+eval (Add l r) = eval l + eval r
+eval (Mul l r) = eval l * eval r
+simp :: Expr -> Expr
+simp (Num n) = Num n
+simp (Add (Num 0) r) = simp r
+simp (Add l r) = Add (simp l) (simp r)
+simp (Mul (Num 1) r) = simp r
+simp (Mul l r) = Mul (simp l) (simp r)
+
+main :: IO ()
+main = do
+  print (eval (simp (Add (Num 0) (Num 7))))
+  print (eval (simp (Mul (Num 1) (Num 7))))
+  print (eval (simp (Mul (Add (Num 0) (Num 3)) (Mul (Num 1) (Num 4)))))
+```
+
+```text
+7
+7
+12
+```
+
+</HaskellTryIt>
+
+The simplifier uses the zero-addition and one-multiplication identities. A compound example still needs both child results: three times four is twelve.
+
+**Common errors.** A BST hypothesis must include ancestor bounds. ?Both subtrees are ordered? alone allows a root `2` whose left subtree contains `9`. A leaf-labelled tree stores values in leaves, so copying the `Node` size equation adds a spurious one. In the simplifier proof, treating every `Add` by (SI2) ignores the earlier matching (SI1) rule. GHC uses the first matching equation; a proof must do the same.
+
+**Practice.** Does inserting `2` twice into `Leaf` make two nodes? **Answer:** no, the second insertion takes (I3), so size stays one.
+
+## 10. Equivalent definitions and cases inside a proof
+
+Two definitions are equivalent on a domain when they return the same result for every input in that domain. Match their equations: unfold both at the same constructor and use the hypothesis on the same tail. Cases can also be the entire proof: a `Maybe` value has only `Nothing` and `Just x`.
+
+```text
+Equivalence template: base results agree; recursive results agree by IH.
+Cases template: list every constructor or guard outcome; prove each separately.
+Two-lemma template: name both lemmas before the proof, and cite each use.
+```
+
+### Two definitions of length
+
+**Claim.** `lenR xs = lenF xs`.
+
+`-- Property: lenR xs == lenF xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+lenR [] = 0 -- (LR0)
+lenF [] = foldr (\_ n -> 1+n) 0 [] = 0 -- (LF), (FR0)
+```
+
+**Hypothesis.** `lenR xs = lenF xs`.
+
+**Step.**
+
+```text
+lenF (x:xs)
+= 1 + foldr (\_ n -> 1+n) 0 xs -- (LF), (FR1), substitution
+= 1 + lenF xs                   -- (LF), backwards
+= 1 + lenR xs                   -- IH, backwards
+= lenR (x:xs)                   -- (LR1), backwards
+```
+
+**Conclusion.** At `[]`, `[7]`, `[7,8]` both definitions give zero, one, two. Neither examines element values.
+
+### Two definitions of reverse
+
+**Claim.** `revR xs = revF xs`. This compares a recursive definition with a fold, rather than re-proving reverse twice or fastReverse.
+
+`-- Property: revR xs == revF xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+revR [] = [] -- (RR0)
+revF [] = foldr (\x r -> r ++ [x]) [] [] = [] -- (RF), (FR0)
+```
+
+**Hypothesis.** `revR xs = revF xs`.
+
+**Step.**
+
+```text
+revF (x:xs)
+= foldr (\y r -> r ++ [y]) [] xs ++ [x] -- (RF), (FR1), substitution
+= revF xs ++ [x]                        -- (RF), backwards
+= revR xs ++ [x]                        -- IH, backwards
+= revR (x:xs)                           -- (RR1), backwards
+```
+
+**Conclusion.** At `[1,2]`, the fold gives `([ ] ++ [2]) ++ [1] = [2,1]`, just like `revR`.
+
+### Two definitions of sum
+
+**Claim.** For `[Integer] xs`, `sumR xs = foldr (+) 0 xs`.
+
+`-- Property: sumR xs == foldr (+) 0 xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+sumR [] = 0 = foldr (+) 0 [] -- (SR0), (FR0), backwards
+```
+
+**Hypothesis.** The equality for `xs`.
+
+**Step.**
+
+```text
+sumR (x:xs)
+= x + sumR xs          -- (SR1)
+= x + foldr (+) 0 xs   -- IH
+= foldr (+) 0 (x:xs)   -- (FR1), backwards
+```
+
+**Conclusion.** At `[1,-2]`, both give `-1`. This fold equivalence needs no reassociation; the foldl theorem did.
+
+### Two definitions of elem: if inside the step
+
+**Claim.** `memberR a xs = memberF a xs`.
+
+`-- Property: memberR a xs == memberF a xs`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+memberR a [] = False -- (MR0)
+memberF a [] = False -- (MF), (FR0)
+```
+
+**Hypothesis.** The claim for tail `xs` and every key `a`.
+
+**Step.**
+
+```text
+Case a == x is True:
+memberR a (x:xs) = True -- (MR1), if True
+memberF a (x:xs) = True || memberF a xs = True -- (MF), (FR1), ||
+Case a == x is False:
+memberR a (x:xs) = memberR a xs -- (MR1), if False
+= memberF a xs                 -- IH
+memberF a (x:xs) = False || memberF a xs = memberF a xs -- (MF), (FR1), ||
+```
+
+**Conclusion.** Both branches meet, including the short-circuit True case. With key `2` and `[1,2]`, both return `True`.
+
+### Safe head commutes with map
+
+**Claim.** `safeHead (map f xs) = mapMaybe f (safeHead xs)`.
+
+`-- Property: safeHead (map f xs) == mapMaybe f (safeHead xs)`
+
+**Induct on:** xs by cases; no induction is necessary.
+
+**Base case.**
+
+```text
+safeHead (map f []) = Nothing -- (M0), (SH0)
+mapMaybe f (safeHead []) = Nothing -- (SH0), (MM0)
+```
+
+**Hypothesis.** None: the cons equation ignores the tail.
+
+**Step.**
+
+```text
+safeHead (map f (x:xs))
+= safeHead (f x : map f xs) -- (M1)
+= Just (f x)               -- (SH1)
+mapMaybe f (safeHead (x:xs))
+= mapMaybe f (Just x)      -- (SH1)
+= Just (f x)               -- (MM1)
+```
+
+**Conclusion.** Both list constructors are covered. At `f = (+1)` and `[3]`, both sides give `Just 4`.
+
+### MapMaybe composition by constructor cases
+
+**Claim.** `mapMaybe f (mapMaybe g m) = mapMaybe (f . g) m`.
+
+`-- Property: mapMaybe f (mapMaybe g m) == mapMaybe (f . g) m`
+
+**Induct on:** m by cases.
+
+**Base case.**
+
+```text
+mapMaybe f (mapMaybe g Nothing) = Nothing -- (MM0) twice
+mapMaybe (f . g) Nothing = Nothing -- (MM0)
+```
+
+**Hypothesis.** None: `Maybe` has no recursive field.
+
+**Step.**
+
+```text
+mapMaybe f (mapMaybe g (Just x))
+= mapMaybe f (Just (g x)) -- (MM1)
+= Just (f (g x))         -- (MM1)
+= Just ((f . g) x)       -- composition
+= mapMaybe (f . g) (Just x) -- (MM1), backwards
+```
+
+**Conclusion.** The other constructor is `Just x`; at `x = 2`, doubling then adding one gives `Just 5`.
+
+### Map and recursive reverse: two lemmas
+
+**Claim.** `map f (revR xs) = revR (map f xs)`. Use Lemma A: map over append, and Lemma B: `map f [x] = [f x]`, from (M1) then (M0).
+
+`-- Property: map f (revR xs) == revR (map f xs)`
+
+**Induct on:** xs.
+
+**Base case.**
+
+```text
+map f (revR []) = [] -- (RR0), (M0)
+revR (map f []) = [] -- (M0), (RR0)
+```
+
+**Hypothesis.** The claim for `xs`.
+
+**Step.**
+
+```text
+map f (revR (x:xs))
+= map f (revR xs ++ [x])             -- (RR1)
+= map f (revR xs) ++ map f [x]       -- Lemma A
+= revR (map f xs) ++ map f [x]       -- IH
+= revR (map f xs) ++ [f x]           -- Lemma B
+= revR (f x : map f xs)              -- (RR1), backwards
+= revR (map f (x:xs))                -- (M1), backwards
+```
+
+**Conclusion.** Both named lemmas were needed at different lines. With `f = (+1)` and `[1,2]`, each side is `[3,2]`.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (foldr (\_ n -> 1+n) 0 ([] :: [Int]))
+  print (foldr (\_ n -> 1+n) 0 [7])
+  print (foldr (\_ n -> 1+n) 0 [7,8])
+```
+
+```text
+0
+1
+2
+```
+
+</HaskellTryIt>
+
+The empty base is zero. Each element adds one to the tail result, regardless of its value: singleton length one, two-element length two.
+
+**Common error.** Cases are required when the equations branch, even if the result looks obvious. A missing `Nothing` equation makes a function partial; GHC can warn ?Pattern match(es) are non-exhaustive? with incomplete-pattern warnings enabled. Add the missing constructor. A proof that silently uses a new lemma is incomplete even though the code compiles.
+
+**Practice.** Which IH is needed for the safe-head theorem? **Answer:** none; the two constructor cases close without inspecting the tail.
+
+## 11. Mutual recursion beyond alternating lists
+
+A rose tree stores a value and a forest of children. A forest stores zero or more rose trees. The constructor cases are `Rose`, `FNil`, and `FCons`; a simultaneous proof must cover all three. Mutually recursive number functions use the same paired-hypothesis idea, but the decreasing measure is the natural number.
+
+```text
+Mutual template:
+  state A(t) and B(fs) together
+  FNil: prove B directly
+  Rose x fs: assume B(fs), prove A(Rose x fs)
+  FCons t ts: assume A(t) and B(ts), prove B(FCons t ts)
+```
+
+### Rose and forest traversals count every stored value
+
+**Claim.** Together: `count (roseList t) = roseCount t` and `count (forestList fs) = forestCount fs`.
+
+`-- Property: count (roseList t) == roseCount t && count (forestList fs) == forestCount fs`
+
+**Induct on:** Rose and Forest simultaneously.
+
+**Base case.**
+
+```text
+count (forestList FNil) = 0 = forestCount FNil -- (FF0), (CO0), (FC0)
+```
+
+**Hypothesis.** For each recursive field, assume the claim for its own type.
+
+**Step.**
+
+```text
+Rose x fs:
+count (roseList (Rose x fs))
+= 1 + count (forestList fs) -- (RL), (CO1)
+= 1 + forestCount fs       -- forest IH
+= roseCount (Rose x fs)    -- (RC), backwards
+FCons t ts:
+count (forestList (FCons t ts))
+= count (roseList t ++ forestList ts) -- (FF1)
+= count (roseList t) + count (forestList ts) -- count-append lemma
+= roseCount t + forestCount ts       -- rose IH and forest IH
+= forestCount (FCons t ts)           -- (FC1), backwards
+```
+
+**Conclusion.** The Rose step uses a forest fact; the FCons step uses both kinds. A rose root with two leaf children counts three.
+
+### Rose counts are positive and forest counts non-negative
+
+**Claim.** Together: `roseCount t >= 1` and `forestCount fs >= 0`.
+
+`-- Property: roseCount t >= 1 && forestCount fs >= 0`
+
+**Induct on:** Rose and Forest simultaneously.
+
+**Base case.**
+
+```text
+forestCount FNil = 0 >= 0 -- (FC0)
+```
+
+**Hypothesis.** The corresponding lower bound for every recursive field.
+
+**Step.**
+
+```text
+roseCount (Rose x fs)
+= 1 + forestCount fs -- (RC)
+>= 1                -- forest IH
+forestCount (FCons t ts)
+= roseCount t + forestCount ts -- (FC1)
+>= 1+0                         -- rose IH, forest IH
+>= 0                           -- arithmetic
+```
+
+**Conclusion.** The bounds explain why a rose cannot be empty while a forest can. `Rose 7 FNil` counts one; `FNil` counts zero.
+
+### Even and odd tests are complements
+
+**Claim.** For natural `n`, together `isEven n = not (isOdd n)` and `isOdd n = not (isEven n)`. This differs from the earlier equivalence with Prelude parity tests.
+
+`-- Property: n < 0 || (isEven n == not (isOdd n) && isOdd n == not (isEven n))`
+
+**Induct on:** n, proving both equations at once.
+
+**Base case.**
+
+```text
+isEven 0 = True = not False = not (isOdd 0) -- (IE0), (ID0), not
+isOdd 0 = False = not True = not (isEven 0) -- (ID0), (IE0), not
+```
+
+**Hypothesis.** Both complement equations at `n`.
+
+**Step.**
+
+```text
+isEven (n+1)
+= isOdd n                 -- (IE1)
+= not (isEven n)          -- second IH
+= not (isOdd (n+1))       -- (ID1), backwards
+isOdd (n+1)
+= isEven n                -- (ID1)
+= not (isOdd n)           -- first IH
+= not (isEven (n+1))      -- (IE1), backwards
+```
+
+**Conclusion.** One complement equation needs the other at the previous number. At `n = 1`, the two values are `False` and `True`.
+
+### Parity repeats after two steps
+
+**Claim.** For natural `n`, `isEven (n+2) = isEven n` and `isOdd (n+2) = isOdd n`.
+
+`-- Property: n < 0 || (isEven (n+2) == isEven n && isOdd (n+2) == isOdd n)`
+
+**Induct on:** n (direct unfolding already proves both cases).
+
+**Base case.**
+
+```text
+isEven 2 = isOdd 1 = isEven 0 -- (IE1), (ID1)
+isOdd 2 = isEven 1 = isOdd 0 -- (ID1), (IE1)
+```
+
+**Hypothesis.** No IH is needed: two successive calls return to the same function.
+
+**Step.**
+
+```text
+isEven (n+2)
+= isOdd (n+1) -- (IE1)
+= isEven n    -- (ID1)
+isOdd (n+2)
+= isEven (n+1) -- (ID1)
+= isOdd n      -- (IE1)
+```
+
+**Conclusion.** Both calls unfold at positive arguments. `n = 0` and `n = 1` check both parity branches. This result follows directly even though the functions are mutual.
+
+<HaskellTryIt>
+
+```haskell
+isEven :: Integer -> Bool
+isEven 0 = True
+isEven n = isOdd (n-1)
+isOdd :: Integer -> Bool
+isOdd 0 = False
+isOdd n = isEven (n-1)
+
+main :: IO ()
+main = do
+  print (isEven 0 == not (isOdd 0))
+  print (isEven 1 == not (isOdd 1))
+  print (isEven 2 == isEven 0)
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+These check the complement equations at zero and one, followed by the two-step periodicity equation at zero. Mutual recursion changes which function is called at each step.
+
+**Common error.** A rose-only hypothesis cannot replace `count (forestList fs)`. State both claims and cover `FNil` and `FCons` too. Negative parity arguments never reach zero under these equations; do not copy Prelude parity's negative-input behaviour onto this implementation.
+
+**Practice.** How many hypotheses in the `FCons` step? **Answer:** two, one for its rose tree and one for its remaining forest.
+
+## 12. Counterexamples and finding the error
+
+To disprove a universal statement, give one allowed input and compute unequal results. To find the error, name the **first unjustified equality** and the rule it misuses. Neither command word asks for an induction proving a false claim.
+
+```text
+Disproof template: input; left result; right result; they differ; claim false.
+Error template: quote first invalid line; explain why its cited rule does not apply;
+                demonstrate the failure on concrete values; state a repair.
+```
+
+### A negative count refutes a length claim
+
+False claim: `length (replicate n x) = n` for every `Int n`.
+
+```text
+n = -1, x = 7              -- an input allowed by the false claim
+length (replicate (-1) 7)
+= length []               -- (RP0)
+= 0                       -- (L0)
+0 /= -1                   -- arithmetic: unequal sides
+```
+
+Repair: require `n >= 0`, or change the right side to `max 0 n`. The compiler accepts the original expression; this is a specification error.
+
+### Zip truncation refutes a reconstruction claim
+
+False claim: `unzip (zip xs ys) = (xs,ys)` for all lists.
+
+```text
+xs = [1,2], ys = [True]       -- one unmatched element
+unzip (zip [1,2] [True])
+= unzip [(1,True)]            -- (Z2), (Z1)
+= ([1],[True])                -- (UZ1), (UZ0)
+([1],[True]) /= ([1,2],[True]) -- unequal first components
+```
+
+Repair: require equal lengths or retain just the matched prefixes.
+
+### Find the error: a fold treated as associative
+
+A student claims `foldr (-) 0 xs = foldl (-) 0 xs` and writes:
+
+```text
+foldr (-) 0 [1,2,3]
+= 1 - (2 - (3 - 0)) -- (FR1) three times, (FR0)
+= (1 - 2) - (3 - 0) -- WRONG: claimed associativity of subtraction
+= -4                 -- arithmetic
+```
+
+The **first wrong equality** is the reassociation: `1 - (2 - (3 - 0)) = 2`, whereas `(1 - 2) - (3 - 0) = -4`. Subtraction is not associative. The actual left fold is `((0-1)-2)-3 = -6`, so the two folds do differ, but neither the claimed proof nor its intermediate `-4` computes the left fold correctly. It has also failed to derive the left-fold expression: the left-fold base begins on the left.
+
+Repair by retaining the actual parentheses, or use an operation with the required laws, as in the integer-addition theorem. GHC accepts all three expressions; the error is in the claimed equality.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (length (replicate (-1) (7 :: Int)))
+  print (unzip (zip [1,2] [True]))
+  print (foldr (-) 0 [1,2,3], foldl (-) 0 [1,2,3])
+```
+
+```text
+0
+([1],[True])
+(2,-6)
+```
+
+</HaskellTryIt>
+
+Three different failure mechanisms: the negative-count precondition is missing; zip discards a suffix; subtraction folds put parentheses and the base in different places.
+
+**Practice.** Refute `maximum (xs ++ ys) = maximum xs + maximum ys`. **Answer:** with `xs = [1]`, `ys = [2]`, the left side is two and the right side is three. Both lists are non-empty, so the counterexample respects the domain.
+
+## Exam questions
+
+The command word determines the answer: ?prove? needs a complete argument; ?disprove? needs a counterexample; ?find the error? needs the invalid line and its reason. All domains and definitions above apply.
+
+### Exam question 1: Strong induction (8 marks)
+
+Prove that `0 <= fib n && fib n <= 2^n` for natural `n`, using strong induction.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The command is ?prove?. The input is a natural number and the recurrence refers to two earlier indices. At zero the claim reads `0 <= 0 <= 1`; at four it reads `0 <= 3 <= 16`.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Collect (FI0), (FI1), (FI2), the exponent successor law and monotonicity of powers of two.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Choose strong induction on the index, because the step needs both `m-1` and `m-2`. A hypothesis only at `m-1` is insufficient.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+fib 0 = 0 <= 1 = 2^0 -- (FI0), exponent zero
+fib 1 = 1 <= 2 = 2^1 -- (FI1), arithmetic
+Both values are non-negative -- arithmetic
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+For every `k` with `0 <= k < m`, both `fib k >= 0` and `fib k <= 2^k`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+fib m
+= fib (m-1) + fib (m-2)     -- (FI2), m >= 2
+>= 0                        -- IH at m-1 and m-2
+fib m
+<= 2^(m-1) + 2^(m-2)       -- (FI2), both upper-bound IHs
+<= 2^(m-1) + 2^(m-1)       -- exponent monotonicity, m >= 2
+= 2^m                       -- exponent law
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The proof genuinely uses two smaller indices. At `n = 4`, `fib 4 = 3 <= 16`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: A partial list function (6 marks)
+
+Prove `init (xs ++ [x]) = xs`. Explain why the call is safe even for an empty `xs`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The command is ?prove?, with a safety explanation. Appending one final element ensures the argument to `init` is never empty. Check `xs = [1]`, `x = 2`: `init [1,2] = [1]`.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Collect (A0), (A1), (IN0), (IN1). The suffix `[x]` supplies the non-empty condition for (IN1).
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `xs`, the first argument of append. Starting with an induction on the appended element would not unfold anything.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+init ([] ++ [x]) = init [x] = [] -- (A0), (IN0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+`init (xs ++ [x]) = xs`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+init ((y:ys) ++ [x])
+= init (y : (ys ++ [x])) -- (A1)
+= y : init (ys ++ [x])   -- (IN1), ys ++ [x] non-empty
+= y : ys                 -- IH
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The call is always safe, including `xs = []`, because appending `[x]` makes a non-empty list. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: Generalise a fold (8 marks)
+
+Prove equality of `foldl (+) 0 xs` and `foldr (+) 0 xs` for finite total `[Integer] xs`. State the stronger claim.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The command is ?prove?, and the changing accumulator signals generalisation. At `[1,-2]`, both sums give `-1`. We prove all starting totals at once.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Collect (FL0), (FL1), (FR0), (FR1), associativity and the identity of integer addition.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `xs`, keeping the accumulator arbitrary. This is stronger than the requested zero-accumulator result, so it supports the recursive call.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+foldl (+) a [] = a -- (FL0)
+a + foldr (+) 0 [] = a+0 = a -- (FR0), additive identity
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+For every `a`, `foldl (+) a xs = a + foldr (+) 0 xs`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+foldl (+) a (x:xs)
+= foldl (+) (a+x) xs       -- (FL1)
+= (a+x) + foldr (+) 0 xs   -- IH at the CHANGED accumulator a+x
+= a + (x + foldr (+) 0 xs) -- associativity of integer addition
+= a + foldr (+) 0 (x:xs)   -- (FR1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+At accumulator `10` and list `[1,-2]`, both sides are `9`. At zero this proves equality of the two fold sums. Floating-point addition is not associative, so it is outside this claim. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: A tree bound (8 marks)
+
+Prove `size t < 2 ^ height t`. State the integer form used for the induction.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The command is ?prove?. Convert the strict bound to `size t <= 2^height t - 1`; integer arithmetic makes the forms equivalent. A singleton gives `1 < 2`.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Collect (SZ0), (SZ1), (H0), (H1), the power successor law and monotonicity of powers.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on the tree; a node supplies one hypothesis for each child. Name the maximum height so both subtree powers have the same upper bound.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+size Leaf = 0 = 2^0 - 1 -- (SZ0), (H0), arithmetic
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+`size l <= 2^height l - 1` and similarly for `r`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Let h = max (height l) (height r). -- definition of h
+size (Node l x r)
+= size l + 1 + size r        -- (SZ1)
+<= (2^height l-1) + 1 + (2^height r-1) -- both IHs
+<= (2^h-1) + 1 + (2^h-1)    -- h bounds each height; powers monotone
+= 2^(h+1)-1                  -- arithmetic, exponent law
+= 2^height (Node l x r)-1    -- (H1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+For integers, being at most `v-1` means being strictly below `v`. At `Leaf`, `0 < 1`; a singleton has `1 < 2`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: A mutually recursive family (8 marks)
+
+Prove the traversal-count claims for `Rose` and `Forest` together.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The command is ?prove?. A traversal emits each root once and joins the child traversals. A root with two leaf children emits three values.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Collect (RL), (FF0), (FF1), (RC), (FC0), (FC1), (CO0), (CO1) and count of an append.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Use mutual structural induction: a Rose contains a Forest, and a non-empty Forest contains both a Rose and another Forest.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+count (forestList FNil) = 0 = forestCount FNil -- (FF0), (CO0), (FC0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+For each recursive field, assume the claim for its own type.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Rose x fs:
+count (roseList (Rose x fs))
+= 1 + count (forestList fs) -- (RL), (CO1)
+= 1 + forestCount fs       -- forest IH
+= roseCount (Rose x fs)    -- (RC), backwards
+FCons t ts:
+count (forestList (FCons t ts))
+= count (roseList t ++ forestList ts) -- (FF1)
+= count (roseList t) + count (forestList ts) -- count-append lemma
+= roseCount t + forestCount ts       -- rose IH and forest IH
+= forestCount (FCons t ts)           -- (FC1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The Rose step uses a forest fact; the FCons step uses both kinds. A rose root with two leaf children counts three. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: refute and diagnose (6 marks)
+
+Disprove `unzip (zip xs ys) = (xs,ys)` without a length precondition. Then find the error in `1 - (2 - 3) = (1 - 2) - 3`, allegedly justified by associativity.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The first command is ?disprove?, so one unequal pair of results suffices. The second is ?find the error?, so identify the invalid law. Neither needs induction.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (Z0)?(Z2), (UZ0)?(UZ1), and ordinary integer subtraction.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Choose unequal lengths for the counterexample. For the alleged algebraic identity, choose a non-zero final operand so reassociation changes the result.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+Not applicable: we are refuting universal statements, not proving them by induction.
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+No hypothesis is assumed. Assuming either disputed equality would be circular.
+
+  </Step>
+
+  <Step title="6. Step">
+
+
+```text
+unzip (zip [1,2] [True])
+= unzip [(1,True)] -- (Z2), (Z1)
+= ([1],[True])     -- (UZ1), (UZ0)
+([1],[True]) /= ([1,2],[True]) -- unequal first lists
+1 - (2 - 3) = 1 - (-1) = 2 -- integer subtraction
+(1 - 2) - 3 = (-1) - 3 = -4 -- integer subtraction
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+Both claims fail on allowed total inputs. Zip truncates, and subtraction is not associative. Equal lengths repair the zip statement; retaining parentheses repairs the arithmetic.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+- State the domain before proving anything: natural indices, total data, exact arithmetic and safe partial calls.
+- Keep the layout: claim, induct on, base case, hypothesis, step, conclusion; justify every line.
+- Strong induction supplies all smaller indices; structural induction supplies every recursive field.
+- Keep accumulators and second lists arbitrary. Split guards and constructors exactly as the equations do.
+- State fusion conditions and invariant lemmas explicitly. Test the smallest troublesome cases before induction.
+- One valid counterexample defeats a universal claim; a type-correct expression can still be mathematically false.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+  <CheckQuestion question="Why does the Fibonacci bound need two base values?">
+    The recurrence applies only at indices at least two. Zero and one must be checked directly before using both smaller indices.
+  </CheckQuestion>
+  <CheckQuestion question="What changes in the foldl induction hypothesis?">
+    It must quantify over every accumulator, so it can be used at `a+x` in the recursive call.
+  </CheckQuestion>
+  <CheckQuestion question="When does unzip after zip recover the original lists?">
+    For finite total lists of equal length; otherwise only the matched prefixes are recovered.
+  </CheckQuestion>
+  <CheckQuestion question="Why is orderedness of the left subtree alone insufficient for insertion?">
+    Its keys must also all remain smaller than the ancestor root. The predicate-preservation lemma keeps that bound after insertion.
+  </CheckQuestion>
+  <CheckQuestion question="What is wrong with proving replicate length for every Int count?">
+    Negative counts produce an empty list of length zero. Require a non-negative count or use `max 0 n` as the right side.
+  </CheckQuestion>
+</CheckQuestions>
+
+Continue with [Proof Patterns Lab](/docs/sem3/csi243/10-reasoning-revision/notes/lab-proof-patterns).

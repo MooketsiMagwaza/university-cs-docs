@@ -1,0 +1,5003 @@
+---
+title: "Arithmetic by Example"
+description: "Choose arithmetic operations by their types and domains, trace signed calculations, convert numbers deliberately, and test floating results."
+---
+
+[Expressions and Types](/docs/sem3/csi243/02-expressions-types/notes/expressions-types) gives the first type checks and precedence rules. [Values, Names, Types, and Text](/docs/sem3/csi243/02-expressions-types/notes/values-text) explains literals and application. Here we use that knowledge to decide which arithmetic a question actually requires, including negative inputs and results that are not finite numbers.
+
+<LearningObjectives items={[
+  'Trace mixed arithmetic and Boolean expressions and translate a written calculation',
+  'Choose signed division, paired remainders and exponent operators from their domains',
+  'Convert numeric types before information is lost and justify each rounding rule',
+  'State repetition preconditions and distinguish Int limits from Integer arithmetic',
+  'Use floating functions in their real domains and compare approximate answers safely',
+]} />
+
+The conversion and rounding introductions in [The Standard Type Classes](/docs/sem3/csi243/09-polymorphism/notes/standard-classes) are prerequisites; these cases extend them with negative values, signed divisors, contextual types and boundary policies. A constraint before `=>` states which operations a type supports. Templates use `x`, `n` and `resultType` for an expression, exponent and chosen type.
+
+## 1. Arithmetic precedence and associativity
+
+Precedence decides which operator binds more tightly. Associativity groups operators with equal precedence; it does not promise an evaluation order for unrelated arguments. Application binds tighter than infix arithmetic. Powers group right, multiplication and division group left, and addition and subtraction group left.
+
+**Template.**
+
+```text
+parenthesise applications -> powers -> multiplication/division -> addition/subtraction
+x - y - z = (x - y) - z
+x ^ y ^ z = x ^ (y ^ z)
+```
+
+Rewrite grouping first, then reduce one operation per line. Prefix negation needs care: `-2 ^ 2` means `-(2 ^ 2)`; `(-2) ^ 2` squares a negative base.
+
+### Worked variation: multiplication inside addition
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (8 + 3 * 4 - 2 :: Integer)
+```
+
+
+
+```text
+18
+```
+
+</HaskellTryIt>
+
+`8 + (3 * 4) - 2 = 8 + 12 - 2 = 20 - 2 = 18`. Multiplication binds tighter; additions/subtractions group left.
+
+### Worked variation: division and subtraction group left
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (20 - 12 `div` 3 * 2 :: Integer)
+```
+
+
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+`20 - ((12 div 3) * 2) = 20 - (4 * 2) = 12`. Moving multiplication inside the divisor changes the expression.
+
+### Worked variation: powers group right
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((2 ^ (3 ^ 2), (2 ^ 3) ^ 2, -2 ^ 2, (-2) ^ 2) :: (Integer,Integer,Integer,Integer))
+```
+
+
+
+```text
+(512,64,-4,4)
+```
+
+</HaskellTryIt>
+
+`3^2 = 9`, then `2^9 = 512`; the alternative gives `8^2 = 64`. Negating `2^2` gives `-4`; two negative factors give `4`.
+
+### Exam question: Arithmetic precedence and associativity (4 marks)
+
+Evaluate `30 - 4 * 3 - 2 :: Integer`, showing grouping.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate `30 - 4 * 3 - 2 :: Integer`, showing grouping. The command asks for a value, so give a reduction with the stated grouping and numeric type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use multiplication before subtraction, then left associativity.
+
+</Step>
+
+<Step title="3. Solution">
+
+`(30 - (4 * 3)) - 2 = (30 - 12) - 2 = 18 - 2 = 16`.
+
+</Step>
+
+<Step title="4. Check">
+
+The first subtraction leaves 18; taking away another 2 leaves 16. Grouping as `30 - (12 - 2)` would give 20.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Expecting `20 - 5 - 2` to be `17` is a logical error: GHC accepts it and prints `13`. Write `20 - (5 - 2)` for `17`. Parenthesise negative operands after operators, as in `3 * (-2)`, to avoid a parse error.
+
+### Practice with answers
+
+Trace `18 div 3 * 2`, `10 - 3 - 2` and `3 ^ 2 ^ 2` (use backticks around div in source).
+
+<details>
+<summary>Answer</summary>
+
+`(18 div 3) * 2 = 12`; `(10 - 3) - 2 = 5`; `3 ^ (2 ^ 2) = 81`.
+
+</details>
+
+## 2. Boolean and comparison traces
+
+Comparisons turn numeric results into Bool. `not` is a function, `&&` requires both conditions, and `||` requires at least one. Arithmetic binds above comparisons; comparisons bind above `&&`, which binds above `||`. Comparisons do not chain like mathematical inequalities.
+
+**Template.**
+
+```text
+arithmetic -> comparison -> && -> ||
+not (comparison)
+lower <= x && x <= upper
+```
+
+Each comparison has numeric operands of the same type and produces Bool. Parentheses are needed when applying not to a whole comparison.
+
+### Worked variation: arithmetic then comparisons
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (8 + 2 * 3 >= 14 && 5 /= (0 :: Integer))
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`8 + 6 >= 14 && 5 /= 0 = 14 >= 14 && True = True && True = True`.
+
+### Worked variation: and inside or
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (3 > (9 :: Integer) || 4 == 4 && not False)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`False || (True && not False) = False || (True && True) = False || True = True`.
+
+### Worked variation: negative range boundary
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((-3 :: Integer) >= (-3) && (-3) < 0 || False)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`(True && True) || False = True || False = True`; the inclusive lower boundary passes.
+
+### Exam question: Boolean and comparison traces (4 marks)
+
+Evaluate `not (2 + 3 == 6) && 7 > 4 || False`, giving Boolean reductions.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate `not (2 + 3 == 6) && 7 > 4 || False`, giving Boolean reductions. The command asks for a value, so give a reduction with the stated grouping and numeric type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Reduce addition and comparisons before combining the Bools.
+
+</Step>
+
+<Step title="3. Solution">
+
+`not (5 == 6) && True || False = not False && True || False = True && True || False = True`.
+
+</Step>
+
+<Step title="4. Check">
+
+The sum is 5; its comparison with 6 is False; negation makes the condition True.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`1 < 2 < 3` is rejected because comparisons are non-associative: `Precedence parsing error`. Repair to `1 < 2 && 2 < (3 :: Integer)`. Do not write `not x == y` when you mean `not (x == y)`.
+
+### Practice with answers
+
+Trace `2 * 4 == 8 && not (3 > 5)` and `False && True || True`.
+
+<details>
+<summary>Answer</summary>
+
+Both are `True`: the first combines two True conditions; the second groups `(False && True) || True`.
+
+</details>
+
+## 3. Constructing expressions from prose
+
+Translate the sentence`s operation order before calculating. `Add, then multiply` differs from `add the product`. Signatures say whether measurements are approximate and counts integral. A formula can be well typed while violating a physical requirement such as a non-negative width.
+
+**Template.**
+
+```text
+name inputs = translated expression
+combined = (first + second) * scale
+changed = original * numerator / denominator + offset
+```
+
+Inputs represent quantities in the question. Parentheses preserve the stated order; units say what the result means.
+
+### Worked variation: add twice before scaling
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((19 + 1) + 5) * 10 :: Integer)
+```
+
+
+
+```text
+250
+```
+
+</HaskellTryIt>
+
+19 plus 1 is 20, plus 5 is 25; multiply the whole result by 10. Without grouping only 5 would be scaled.
+
+### Worked variation: fractional rectangle
+
+<HaskellTryIt>
+
+```haskell
+rectangleArea :: Double -> Double -> Double
+rectangleArea width height = width * height
+
+main :: IO ()
+main = print (rectangleArea 2.5 4)
+```
+
+
+
+```text
+10.0
+```
+
+</HaskellTryIt>
+
+Substitute 2.5 and 4 into `width * height`; Double gives printed output `10.0`.
+
+### Worked variation: negative temperature
+
+<HaskellTryIt>
+
+```haskell
+celsiusToFahrenheit :: Double -> Double
+celsiusToFahrenheit c = c * 9 / 5 + 32
+
+main :: IO ()
+main = print (celsiusToFahrenheit (-40))
+```
+
+
+
+```text
+-40.0
+```
+
+</HaskellTryIt>
+
+`(-40) * 9 / 5 + 32 = (-360) / 5 + 32 = -72 + 32 = -40`. Negative input is meaningful here.
+
+### Exam question: Constructing expressions from prose (4 marks)
+
+Write an expression that adds 7 to 5, doubles the total, then subtracts 3.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write an expression that adds 7 to 5, doubles the total, then subtracts 3. The command asks for code. Preserve the required input and result types, then state any precondition before choosing the operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Follow the words in order; group the total before doubling.
+
+</Step>
+
+<Step title="3. Solution">
+
+`(7 + 5) * 2 - 3 :: Integer` gives `12 * 2 - 3 = 24 - 3 = 21`.
+
+</Step>
+
+<Step title="4. Check">
+
+Working backwards: 21 plus 3 is 24, half is 12, and 7 plus 5 is 12.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`7 + 5 * 2 - 3` compiles but gives `14`: a logical error without a GHC diagnostic. `9 / 5 :: Integer` instead causes a type error: `No instance for (Fractional Integer)`.
+
+### Practice with answers
+
+Construct `subtract 4 from 13, then divide by 2 with a fractional result`.
+
+<details>
+<summary>Answer</summary>
+
+`(13 - 4) / 2 :: Double` gives `4.5`; integral div gives 4.
+
+</details>
+
+## 4. Signed div, mod, quot and rem
+
+`div` rounds towards negative infinity; `quot` truncates towards zero. `mod` belongs with div, and `rem` with quot. Nonzero mod has the divisor`s sign; nonzero rem has the dividend`s sign. All four need integral operands and a nonzero divisor.
+
+**Template.**
+
+```text
+q = a `div` b; r = a `mod` b
+q = a `quot` b; r = a `rem` b
+a = b*q + r; abs r < abs b
+```
+
+Here a is the dividend and b the nonzero divisor. Compute r from the identity once q is chosen. Prefix `div a b`, `mod a b`, `quot a b` and `rem a b` are equivalent to the backtick forms.
+
+### Worked variation: both positive
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((7 `div` 3, 7 `mod` 3, 7 `quot` 3, 7 `rem` 3) :: (Integer,Integer,Integer,Integer))
+```
+
+
+
+```text
+(2,1,2,1)
+```
+
+</HaskellTryIt>
+
+`7/3` lies between 2 and 3. Both quotients are 2; `7 - 3*2 = 1`.
+
+### Worked variation: negative dividend
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((-7) `div` 3, (-7) `mod` 3, (-7) `quot` 3, (-7) `rem` 3) :: (Integer,Integer,Integer,Integer))
+```
+
+
+
+```text
+(-3,2,-2,-1)
+```
+
+</HaskellTryIt>
+
+`-7/3` lies between -3 and -2. Floor gives -3, truncation gives -2. Remainders: `-7 - 3*(-3) = 2` and `-7 - 3*(-2) = -1`.
+
+### Worked variation: negative divisor
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((7 `div` (-3), 7 `mod` (-3), 7 `quot` (-3), 7 `rem` (-3)) :: (Integer,Integer,Integer,Integer))
+```
+
+
+
+```text
+(-3,-2,-2,1)
+```
+
+</HaskellTryIt>
+
+`7/(-3)` lies between -3 and -2. Floor gives -3 with `7 - (-3)*(-3) = -2`; truncation gives -2 with `7 - (-3)*(-2) = 1`.
+
+### Worked variation: both negative
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((-7) `div` (-3), (-7) `mod` (-3), (-7) `quot` (-3), (-7) `rem` (-3)) :: (Integer,Integer,Integer,Integer))
+```
+
+
+
+```text
+(2,-1,2,-1)
+```
+
+</HaskellTryIt>
+
+The quotient lies between 2 and 3, so both give 2. `-7 - (-3)*2 = -1` in each convention.
+
+### Worked variation: zero dividend
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((0 `div` (-3), 0 `mod` (-3), 0 `quot` (-3), 0 `rem` (-3)) :: (Integer,Integer,Integer,Integer))
+```
+
+
+
+```text
+(0,0,0,0)
+```
+
+</HaskellTryIt>
+
+Zero divided by a nonzero number is zero, remainder zero. Zero dividend is allowed; zero divisor is not.
+
+### Exam question: Signed div, mod, quot and rem (4 marks)
+
+Give all four results for dividend -10 and divisor 4; explain the remainder signs.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Give all four results for dividend -10 and divisor 4; explain the remainder signs. The command asks for the specified results and their justification. Identify each operation and retain its sign, unit and result type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Locate -10/4 between -3 and -2. Choose floor or truncation; use `r = a - b*q`.
+
+</Step>
+
+<Step title="3. Solution">
+
+`div = -3`, `mod = 2`, `quot = -2`, `rem = -2`. Thus `-10 = 4*(-3)+2` and `-10 = 4*(-2)-2`.
+
+</Step>
+
+<Step title="4. Check">
+
+Both remainder magnitudes are below 4. Mod is positive like 4; rem negative like -10.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`Every remainder is positive` is false: `7 mod (-3)` is `-2`. Integral zero division fails at runtime with `divide by zero`. Div with an explicitly Double operand is rejected with `No instance for (Integral Double)`. Use / for fractional division.
+
+### Practice with answers
+
+Find both quotient/remainder pairs for `10 / (-4)` and `(-12) / 4` using integral operations.
+
+<details>
+<summary>Answer</summary>
+
+div/mod: `(-3,-2)` and `(-3,0)`; quot/rem: `(-2,2)` and `(-3,0)`. Exact division has zero remainder.
+
+</details>
+
+## 5. divMod and quotRem pairs
+
+`divMod` returns div and mod together; `quotRem` returns quot and rem together. They prevent mixing conventions. The quotient comes first.
+
+**Template.**
+
+```text
+(q,r) = divMod a b
+(q,r) = quotRem a b
+check = a == b*q+r && abs r < abs b
+```
+
+Use either pair consistently. Infix forms require backticks. Pattern binding `(q,r)` names the components. Each operation has type `Integral a => a -> a -> (a,a)`.
+
+### Worked variation: both positive
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((divMod 7 3, quotRem 7 3) :: ((Integer,Integer),(Integer,Integer)))
+```
+
+
+
+```text
+((2,1),(2,1))
+```
+
+</HaskellTryIt>
+
+`7/3` lies between 2 and 3. Both quotients are 2; `7 - 3*2 = 1`. First tuple: floor; second tuple: truncation.
+
+### Worked variation: negative dividend
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((divMod (-7) 3, quotRem (-7) 3) :: ((Integer,Integer),(Integer,Integer)))
+```
+
+
+
+```text
+((-3,2),(-2,-1))
+```
+
+</HaskellTryIt>
+
+`-7/3` lies between -3 and -2. Floor gives -3, truncation gives -2. Remainders: `-7 - 3*(-3) = 2` and `-7 - 3*(-2) = -1`. First tuple: floor; second tuple: truncation.
+
+### Worked variation: negative divisor
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((divMod 7 (-3), quotRem 7 (-3)) :: ((Integer,Integer),(Integer,Integer)))
+```
+
+
+
+```text
+((-3,-2),(-2,1))
+```
+
+</HaskellTryIt>
+
+`7/(-3)` lies between -3 and -2. Floor gives -3 with `7 - (-3)*(-3) = -2`; truncation gives -2 with `7 - (-3)*(-2) = 1`. First tuple: floor; second tuple: truncation.
+
+### Worked variation: both negative
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((divMod (-7) (-3), quotRem (-7) (-3)) :: ((Integer,Integer),(Integer,Integer)))
+```
+
+
+
+```text
+((2,-1),(2,-1))
+```
+
+</HaskellTryIt>
+
+The quotient lies between 2 and 3, so both give 2. `-7 - (-3)*2 = -1` in each convention. First tuple: floor; second tuple: truncation.
+
+### Worked variation: zero dividend
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((divMod 0 (-3), quotRem 0 (-3)) :: ((Integer,Integer),(Integer,Integer)))
+```
+
+
+
+```text
+((0,0),(0,0))
+```
+
+</HaskellTryIt>
+
+Zero divided by a nonzero number is zero, remainder zero. Zero dividend is allowed; zero divisor is not. First tuple: floor; second tuple: truncation.
+
+### Exam question: divMod and quotRem pairs (4 marks)
+
+Use divMod to decompose -17 into multiples of 5 and a remainder; check the identity.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Use divMod to decompose -17 into multiples of 5 and a remainder; check the identity. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a = -17, b = 5. Floor -3.4 to -4.
+
+</Step>
+
+<Step title="3. Solution">
+
+`divMod (-17) 5 = (-4,3)` because `-17 - 5*(-4) = 3`.
+
+</Step>
+
+<Step title="4. Check">
+
+`5*(-4)+3 = -17` and `0 <= 3 && 3 < 5`. Mixing quot`s -3 with mod`s 3 gives -12.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Swapping `(q,r)` to `(r,q)` compiles but changes meaning. Mixing div with rem is another logical error. Zero-divisor pairs fail with `divide by zero`; check b before demanding a result.
+
+### Practice with answers
+
+Give `quotRem (-17) 5` and verify independently.
+
+<details>
+<summary>Answer</summary>
+
+`(-3,-2)`; `5*(-3)+(-2) = -17` and `abs (-2) < abs 5`.
+
+</details>
+
+## 6. Non-negative integral exponents with ^
+
+`(^)` multiplies a base by itself a whole number of times. The base can be any Num type, including Integer or Double; the exponent must be Integral and non-negative. The empty product for exponent zero is 1, including `0 ^ 0` in this programming convention.
+
+**Template.**
+
+```text
+(^) :: (Num a, Integral b) => a -> b -> a
+base ^ nonNegativeExponent
+```
+
+The type variables are independent: base and exponent may have different types.
+
+### Worked variation: integer base
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (3 ^ (4 :: Integer) :: Integer)
+```
+
+
+
+```text
+81
+```
+
+</HaskellTryIt>
+
+Four factors give `3*3*3*3 = 81`.
+
+### Worked variation: negative base
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((-3) ^ (3 :: Integer) :: Integer)
+```
+
+
+
+```text
+-27
+```
+
+</HaskellTryIt>
+
+Three factors give `(-3)*(-3)*(-3) = 9*(-3) = -27`.
+
+### Worked variation: zero exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (0 ^ (0 :: Integer) :: Integer)
+```
+
+
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+No factors means the multiplicative identity 1.
+
+### Worked variation: fractional base
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((0.5 :: Double) ^ (3 :: Integer))
+```
+
+
+
+```text
+0.125
+```
+
+</HaskellTryIt>
+
+`0.5 * 0.5 * 0.5 = 0.125`, exactly representable in binary.
+
+### Exam question: Non-negative integral exponents with ^ (4 marks)
+
+State a general type for `power x n = x ^ n`; compute `power (-2) 4 :: Integer`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+State a general type for `power x n = x ^ n`; compute `power (-2) 4 :: Integer`. There are two commands: state the general type, then compute the supplied call. Keep the base and exponent constraints separate.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the operator signature; only the exponent must be Integral. Count four factors.
+
+</Step>
+
+<Step title="3. Solution">
+
+`power :: (Num a, Integral b) => a -> b -> a`. `(-2)*(-2)*(-2)*(-2) = 16`.
+
+</Step>
+
+<Step title="4. Check">
+
+An even exponent removes the sign; `power 2 0` is 1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+An integral negative exponent passes type checking but fails at runtime with `Negative exponent`. A Double exponent is a type error: `No instance for (Integral Double)`. Parenthesise negative arguments.
+
+### Practice with answers
+
+Predict `(-2) ^ 5 :: Integer` and `7 ^ 0 :: Integer`.
+
+<details>
+<summary>Answer</summary>
+
+`-32` and `1`: five factors retain a negative sign; zero factors yield 1.
+
+</details>
+
+## 7. Signed integral exponents with ^^
+
+`(^^)` extends integral exponents to negative values by taking a reciprocal. The base must therefore be Fractional. A negative exponent does not mean a negative answer: base sign and exponent parity decide that.
+
+**Template.**
+
+```text
+(^^) :: (Fractional a, Integral b) => a -> b -> a
+x ^^ (-n) = recip (x ^ n)
+```
+
+For negative exponents a nonzero base is required for a finite real answer. Double reciprocal of zero can produce Infinity.
+
+### Worked variation: negative exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((2 :: Double) ^^ (-3 :: Integer))
+```
+
+
+
+```text
+0.125
+```
+
+</HaskellTryIt>
+
+`recip (2^3) = 1/8 = 0.125`.
+
+### Worked variation: negative base and exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((-2 :: Double) ^^ (-3 :: Integer))
+```
+
+
+
+```text
+-0.125
+```
+
+</HaskellTryIt>
+
+`recip ((-2)^3) = recip (-8) = -0.125`.
+
+### Worked variation: zero exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((0 :: Double) ^^ (0 :: Integer))
+```
+
+
+
+```text
+1.0
+```
+
+</HaskellTryIt>
+
+Zero exponent uses the empty-product convention.
+
+### Worked variation: positive exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((0.5 :: Double) ^^ (2 :: Integer))
+```
+
+
+
+```text
+0.25
+```
+
+</HaskellTryIt>
+
+`0.5 * 0.5 = 0.25` in the non-negative case.
+
+### Exam question: Signed integral exponents with ^^ (4 marks)
+
+Choose an operator for 4 raised to -2 and give its type requirements and result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Choose an operator for 4 raised to -2 and give its type requirements and result. The command asks for an operation or policy. The exponent, numeric type or permitted error in the question determines that choice.
+
+</Step>
+
+<Step title="2. Plan">
+
+The exponent is integral but negative: use ^^ with a Fractional base.
+
+</Step>
+
+<Step title="3. Solution">
+
+`(4 :: Double) ^^ (-2 :: Integer) = recip (4^2) = 1/16 = 0.0625`.
+
+</Step>
+
+<Step title="4. Check">
+
+Multiplying 0.0625 by 16 gives 1. The negative exponent means inverse power.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`(4 :: Integer) ^^ (-2 :: Integer)` is rejected: `No instance for (Fractional Integer)`. Use a Double base. Replacing ^^ with ^ instead gives runtime `Negative exponent`.
+
+### Practice with answers
+
+Calculate `(-4 :: Double) ^^ (-2 :: Integer)` and `2 ^^ 0 :: Double`.
+
+<details>
+<summary>Answer</summary>
+
+`0.0625` and `1.0`; an even power of -4 is positive.
+
+</details>
+
+## 8. Floating exponents with **
+
+`(**)` accepts floating bases and exponents, including fractional exponents. Both have the same Floating type. A fractional power need not be exact even when its mathematical value is simple. A negative base with a non-integral exponent generally has no real result and gives NaN for Double.
+
+**Template.**
+
+```text
+(**) :: Floating a => a -> a -> a
+base ** exponent
+```
+
+Use ** for a fractional exponent. For exact Integer results and non-negative integral exponents, prefer ^. All three power operators associate right.
+
+### Worked variation: fractional exponent with tolerance
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs ((4 :: Double) ** 0.5 - 2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The mathematical root is 2. This checks the computed approximation within tolerance, without claiming exact equality.
+
+### Worked variation: negative exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((2 :: Double) ** (-2))
+```
+
+
+
+```text
+0.25
+```
+
+</HaskellTryIt>
+
+The inverse square is `1/4 = 0.25`, exactly representable here.
+
+### Worked variation: zero exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((5 :: Double) ** 0)
+```
+
+
+
+```text
+1.0
+```
+
+</HaskellTryIt>
+
+Zero power gives the multiplicative identity.
+
+### Worked variation: negative base outside real domain
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (isNaN ((-4 :: Double) ** 0.5))
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+No real square root of -4 exists. Types are valid; NaN records a floating domain failure.
+
+### Exam question: Floating exponents with ** (4 marks)
+
+Choose an operator for x raised to 1.5 when x is Double. Is the result always finite`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Choose an operator for x raised to 1.5 when x is Double. Is the result always finite` The command asks for an operation or policy. The exponent, numeric type or permitted error in the question determines that choice.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use ** for a fractional exponent, then check the real domain and overflow.
+
+</Step>
+
+<Step title="3. Solution">
+
+`x ** 1.5 :: Double` is well typed. Negative finite x generally gives NaN for this exponent; large non-negative x can overflow.
+
+</Step>
+
+<Step title="4. Check">
+
+At x = 4 the mathematical result is 8 and can be checked within tolerance. At x = -4 no real result exists.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`(2 :: Integer) ** 3` is rejected: `No instance for (Floating Integer)`. Negative Double bases and fractional exponents are domain problems instead. Do not promise exact fractional powers.
+
+### Practice with answers
+
+Choose for an Integer base with exponent 20, a Double base with exponent -3, and a Double exponent 0.25.
+
+<details>
+<summary>Answer</summary>
+
+`^`, `^^`, `**` respectively. The second can also use ** with a floating exponent, but ^^ expresses the integral requirement.
+
+</details>
+
+## 9. Repeated addition and its precondition
+
+Repeating addition n times models multiplication only when the repetition count is non-negative. `replicate` uses an Int count; negative counts produce an empty list. Therefore the often-quoted squareByAdding definition does not square negative n. Its intended domain must also fit the Int count and available memory.
+
+**Template.**
+
+```text
+squareByAdding n = sum (replicate (fromIntegral n) n)
+precondition: 0 <= n and n fits in Int
+```
+
+The count determines the number of copies; the value determines what is added. These are separate roles, even when both happen to be n. For arbitrary signed Integer squares, `n*n` avoids the repetition-count conversion.
+
+### Worked variation: positive repetition
+
+<HaskellTryIt>
+
+```haskell
+squareByAdding :: Integer -> Integer
+squareByAdding n = sum (replicate (fromIntegral n) n)
+
+main :: IO ()
+main = print (squareByAdding 4)
+```
+
+
+
+```text
+16
+```
+
+</HaskellTryIt>
+
+`replicate 4 4 = [4,4,4,4]`; `sum = 4+4+4+4 = 16`.
+
+### Worked variation: zero copies
+
+<HaskellTryIt>
+
+```haskell
+squareByAdding :: Integer -> Integer
+squareByAdding n = sum (replicate (fromIntegral n) n)
+
+main :: IO ()
+main = print (squareByAdding 0)
+```
+
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+`replicate 0 0 = []` and `sum [] = 0`, so the zero boundary agrees with the square.
+
+### Worked variation: negative counterexample
+
+<HaskellTryIt>
+
+```haskell
+squareByAdding :: Integer -> Integer
+squareByAdding n = sum (replicate (fromIntegral n) n)
+
+main :: IO ()
+main = print ((squareByAdding (-3), (-3)*(-3)))
+```
+
+
+
+```text
+(0,9)
+```
+
+</HaskellTryIt>
+
+A count of -3 produces `[]`, whose sum is 0. Multiplication instead gives 9, disproving universal agreement.
+
+### Worked variation: signed repair
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (sum (replicate 3 (abs (-3 :: Integer))))
+```
+
+
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+Use magnitude 3 for both count and summand. This repairs small negative inputs, but still has the Int count limitation.
+
+### Exam question: Repeated addition and its precondition (4 marks)
+
+Refute `squareByAdding n equals n*n for every Integer n`, then state a valid domain.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Refute `squareByAdding n equals n*n for every Integer n`, then state a valid domain. The command is refute: one valid counterexample is enough. A collection of passing tests cannot establish the universal claim.
+
+</Step>
+
+<Step title="2. Plan">
+
+One counterexample suffices. Choose a small negative n whose conversion to Int is unproblematic.
+
+</Step>
+
+<Step title="3. Solution">
+
+At `n = -3`, the repeated-addition result is `sum [] = 0`; the square is `9`. Agreement holds for non-negative n representable as Int, when the finite computation completes.
+
+</Step>
+
+<Step title="4. Check">
+
+At n = 0 both give 0; at n = 2 both give 4. Neither passing test rescues the universal claim.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+This is a logical error: GHC prints 0 for the negative case without an error. Converting a huge Integer count to Int is not a proof that it fits. Prefer `n*n` for a general Integer square.
+
+### Practice with answers
+
+Predict `squareByAdding (-1)` and give the intended square. How can the implementation be repaired`
+
+<details>
+<summary>Answer</summary>
+
+The results are 0 and 1. Use `square n = n*n` for all Integer inputs; using magnitude for a replication count needs a range precondition.
+
+</details>
+
+## 10. Repeated multiplication
+
+Multiplication repeated n times gives a power when n is a non-negative count. The empty product is 1. A negative replication count also produces the empty list, so this implementation cannot implement negative powers; it needs an explicit domain.
+
+**Template.**
+
+```text
+powerByMultiplying x n = product (replicate n x)
+precondition: n >= 0; n :: Int
+```
+
+The base x may be negative. It is the repetition count n that cannot be negative in the specification.
+
+### Worked variation: positive exponent
+
+<HaskellTryIt>
+
+```haskell
+powerByMultiplying :: Integer -> Int -> Integer
+powerByMultiplying x n = product (replicate n x)
+
+main :: IO ()
+main = print (powerByMultiplying 3 4)
+```
+
+
+
+```text
+81
+```
+
+</HaskellTryIt>
+
+Four copies give `product [3,3,3,3] = 81`.
+
+### Worked variation: negative base
+
+<HaskellTryIt>
+
+```haskell
+powerByMultiplying :: Integer -> Int -> Integer
+powerByMultiplying x n = product (replicate n x)
+
+main :: IO ()
+main = print (powerByMultiplying (-2) 3)
+```
+
+
+
+```text
+-8
+```
+
+</HaskellTryIt>
+
+Three negative factors give `(-2)*(-2)*(-2) = -8`.
+
+### Worked variation: zero exponent
+
+<HaskellTryIt>
+
+```haskell
+powerByMultiplying :: Integer -> Int -> Integer
+powerByMultiplying x n = product (replicate n x)
+
+main :: IO ()
+main = print (powerByMultiplying 0 0)
+```
+
+
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+`replicate 0 0 = []` and `product [] = 1`, matching the power convention.
+
+### Worked variation: negative count exposes limitation
+
+<HaskellTryIt>
+
+```haskell
+powerByMultiplying :: Integer -> Int -> Integer
+powerByMultiplying x n = product (replicate n x)
+
+main :: IO ()
+main = print (powerByMultiplying 2 (-3))
+```
+
+
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+The count is negative, so replicate returns `[]`. Its product is 1, not the reciprocal 0.125.
+
+### Exam question: Repeated multiplication (4 marks)
+
+Explain why repeated multiplication with replicate cannot implement all signed integral exponents.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain why repeated multiplication with replicate cannot implement all signed integral exponents. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect negative counts and the Integer result type.
+
+</Step>
+
+<Step title="3. Solution">
+
+`product (replicate (-2) 4) = product [] = 1`. The mathematical inverse square is 1/16, which is not an Integer. Restrict the count to non-negative values or choose a Fractional result and ^^.
+
+</Step>
+
+<Step title="4. Check">
+
+Count 2 gives `4*4 = 16`; count 0 gives 1. Count -2 cannot be obtained merely by using fewer factors.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Expecting a runtime rejection for negative replicate counts is wrong: there is no GHC error; the result is the empty product. Validate the count if failure is part of the specification.
+
+### Practice with answers
+
+Predict `powerByMultiplying (-3) 2` and `powerByMultiplying 9 0`.
+
+<details>
+<summary>Answer</summary>
+
+9 and 1: two negative factors give a positive result; no factors give 1.
+
+</details>
+
+## 11. negate
+
+`negate` changes the sign. For ordinary mathematical integers, applying it twice restores the input. It is the function form of prefix minus, useful when a one-argument function is required.
+
+**Template.**
+
+```text
+negate :: Num a => a -> a
+negate x = 0 - x
+```
+
+x is the input value; a must support Num operations. Use Integer below to avoid bounded overflow.
+
+### Worked variation: positive
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (negate (7 :: Integer))
+```
+
+
+
+```text
+-7
+```
+
+</HaskellTryIt>
+
+`0 - 7 = -7`.
+
+### Worked variation: negative
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (negate (-7 :: Integer))
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+`0 - (-7) = 7`.
+
+### Worked variation: zero
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (negate (0 :: Integer))
+```
+
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The additive inverse of zero is zero.
+
+### Exam question: negate (4 marks)
+
+Explain the difference between `negate 3` and `subtract 3`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain the difference between `negate 3` and `subtract 3`. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+One negates a single value; the other waits for a value from which to subtract 3.
+
+</Step>
+
+<Step title="3. Solution">
+
+`negate 3 = -3`. `subtract 3` is a function; `subtract 3 10 = 10-3 = 7`.
+
+</Step>
+
+<Step title="4. Check">
+
+Check the forms at 0: negate 0 gives 0, while subtract 3 0 gives -3.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`(-3)` is a negative number, not a `subtract 3` section. Applying it as a function is rejected; a diagnostic includes `Num` for a function type. Use `subtract 3` or `(\x -> x - 3)`.
+
+### Practice with answers
+
+Predict `negate (negate (-8 :: Integer))`.
+
+<details>
+<summary>Answer</summary>
+
+It is -8: each negation changes the sign.
+
+</details>
+
+## 12. abs
+
+`abs` returns magnitude: negative inputs become positive; non-negative inputs stay the same. It is useful for distances and remainder bounds. For bounded Int, `abs minBound` cannot represent the mathematical magnitude; use Integer when that boundary matters.
+
+**Template.**
+
+```text
+abs :: Num a => a -> a
+abs x  -- magnitude of x
+```
+
+x is the input value; a must support Num operations. Use Integer below to avoid bounded overflow.
+
+### Worked variation: negative
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (-12 :: Integer))
+```
+
+
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+Magnitude discards the negative sign.
+
+### Worked variation: positive
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (12 :: Integer))
+```
+
+
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+Already non-negative, so unchanged.
+
+### Worked variation: zero
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (0 :: Integer))
+```
+
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Zero is its own magnitude.
+
+### Exam question: abs (4 marks)
+
+Find the distance between -7 and 4 as an Integer expression.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Find the distance between -7 and 4 as an Integer expression. The command asks for the specified results and their justification. Identify each operation and retain its sign, unit and result type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Subtract the positions and take magnitude.
+
+</Step>
+
+<Step title="3. Solution">
+
+`abs ((-7) - 4) = abs (-11) = 11 :: Integer`.
+
+</Step>
+
+<Step title="4. Check">
+
+Reversing the positions gives `abs (4-(-7)) = abs 11 = 11`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using `x-y` as a distance can produce a negative result, with no GHC error. Apply abs. For Int minimum, converting after abs is too late: use `abs (toInteger x)`.
+
+### Practice with answers
+
+Find `abs ((-5) + 2) :: Integer`.
+
+<details>
+<summary>Answer</summary>
+
+`abs (-3) = 3`.
+
+</details>
+
+## 13. signum
+
+`signum` reports the sign: -1 for negative values, 0 for zero, 1 for positive values. It keeps the numeric type. For Integers, `abs x * signum x = x`.
+
+**Template.**
+
+```text
+signum :: Num a => a -> a
+signum x
+```
+
+x is the input value; a must support Num operations. Use Integer below to avoid bounded overflow.
+
+### Worked variation: negative
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (signum (-25 :: Integer))
+```
+
+
+
+```text
+-1
+```
+
+</HaskellTryIt>
+
+Only the direction remains; magnitude 25 is discarded.
+
+### Worked variation: positive
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (signum (25 :: Integer))
+```
+
+
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+Positive magnitude is reduced to the sign marker 1.
+
+### Worked variation: zero
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (signum (0 :: Integer))
+```
+
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Zero has neither positive nor negative sign.
+
+### Exam question: signum (4 marks)
+
+Reconstruct -9 using abs and signum.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Reconstruct -9 using abs and signum. The command asks for the specified results and their justification. Identify each operation and retain its sign, unit and result type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compute the magnitude and sign separately, then multiply.
+
+</Step>
+
+<Step title="3. Solution">
+
+`abs (-9) * signum (-9) = 9 * (-1) = -9 :: Integer`.
+
+</Step>
+
+<Step title="4. Check">
+
+At zero the same identity gives `0*0 = 0`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Expecting signum to return Bool is a type mistake. A signature `isPositive :: Integer -> Bool` with body `signum n` is rejected with `Couldn't match expected type`. Use `n > 0` for Bool.
+
+### Practice with answers
+
+What is `signum (-0.5 :: Double)``
+
+<details>
+<summary>Answer</summary>
+
+`-1.0`, retaining Double.
+
+</details>
+
+## 14. subtract
+
+`subtract n x` means `x - n`. The first argument is the amount removed. It supplies the missing subtraction section: `(-n)` is prefix negation instead.
+
+**Template.**
+
+```text
+subtract :: Num a => a -> a -> a
+subtract amount value = value - amount
+```
+
+x is the input value; a must support Num operations. Use Integer below to avoid bounded overflow.
+
+### Worked variation: positive amount
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (subtract 3 (10 :: Integer))
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+`10 - 3 = 7`; argument order is deliberately reversed from (-).
+
+### Worked variation: negative amount
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (subtract (-3) (10 :: Integer))
+```
+
+
+
+```text
+13
+```
+
+</HaskellTryIt>
+
+`10 - (-3) = 13`; subtracting a negative adds its magnitude.
+
+### Worked variation: zero value
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (subtract 3 (0 :: Integer))
+```
+
+
+
+```text
+-3
+```
+
+</HaskellTryIt>
+
+`0 - 3 = -3`; this operation is not truncated at zero.
+
+### Exam question: subtract (4 marks)
+
+Write a one-argument function that subtracts 6 from its input; test at 2.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write a one-argument function that subtracts 6 from its input; test at 2. The command asks for code. Preserve the required input and result types, then state any precondition before choosing the operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use subtract with the amount first, or an explicit lambda.
+
+</Step>
+
+<Step title="3. Solution">
+
+`removeSix = subtract 6`, equivalently `removeSix x = x - 6`. At 2 the result is -4.
+
+</Step>
+
+<Step title="4. Check">
+
+At 6 the result is zero, checking that argument order is right.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`(6 -)` means `\x -> 6-x`; it compiles but gives the opposite subtraction. `(-6)` is a number, not a function. Use subtract 6.
+
+### Practice with answers
+
+Calculate `subtract 8 (-2 :: Integer)`.
+
+<details>
+<summary>Answer</summary>
+
+`-2 - 8 = -10`.
+
+</details>
+
+## 15. recip
+
+`recip x` computes `1/x`. Its argument and result share a Fractional type. A nonzero finite input has a mathematical reciprocal; on Double, zero can produce Infinity instead of an integral division exception.
+
+**Template.**
+
+```text
+recip :: Fractional a => a -> a
+recip x = 1 / x
+```
+
+Use a Fractional type such as Double. Integer cannot hold general reciprocals. These blocks explicitly define the Prelude equation because the site interpreter does not expose recip; hiding the imported name keeps the complete programs valid in GHC.
+
+### Worked variation: positive
+
+<HaskellTryIt>
+
+```haskell
+import Prelude hiding (recip)
+
+recip :: Fractional a => a -> a
+recip x = 1 / x
+
+main :: IO ()
+main = print (recip (8 :: Double))
+```
+
+
+
+```text
+0.125
+```
+
+</HaskellTryIt>
+
+`1/8 = 0.125` is exactly representable.
+
+### Worked variation: negative
+
+<HaskellTryIt>
+
+```haskell
+import Prelude hiding (recip)
+
+recip :: Fractional a => a -> a
+recip x = 1 / x
+
+main :: IO ()
+main = print (recip (-4 :: Double))
+```
+
+
+
+```text
+-0.25
+```
+
+</HaskellTryIt>
+
+`1/(-4) = -0.25`; the reciprocal keeps this sign.
+
+### Worked variation: zero input
+
+<HaskellTryIt>
+
+```haskell
+import Prelude hiding (recip)
+
+recip :: Fractional a => a -> a
+recip x = 1 / x
+
+main :: IO ()
+main = print (isInfinite (recip (0 :: Double)))
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The Double reciprocal of positive zero is positive Infinity; isInfinite recognises it.
+
+### Exam question: recip (4 marks)
+
+Explain the result and type requirements of `recip (-2 :: Double)`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain the result and type requirements of `recip (-2 :: Double)`. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the reciprocal template with a Fractional base.
+
+</Step>
+
+<Step title="3. Solution">
+
+`1/(-2) = -0.5`, of type Double. With an explicitly Integer argument, it would be rejected.
+
+</Step>
+
+<Step title="4. Check">
+
+`(-2)*(-0.5) = 1`, the reciprocal identity for this finite nonzero input.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`recip (2 :: Integer)` fails with `No instance for (Fractional Integer)`. Convert to Double first. The runtime behaviour of Double zero differs from integral zero division.
+
+### Practice with answers
+
+Predict `recip (0.5 :: Double)`.
+
+<details>
+<summary>Answer</summary>
+
+`2.0`, since `1/0.5 = 2`.
+
+</details>
+
+## 16. Fractional division with /
+
+`(/)` divides two values of the same Fractional type. Integer-looking literals can be interpreted as Double in this context; existing Int or Integer variables cannot be converted just by using /. Converting after integral division cannot recover the discarded remainder.
+
+**Template.**
+
+```text
+(/) :: Fractional a => a -> a -> a
+fromIntegral numerator / fromIntegral denominator :: Double
+```
+
+The annotation chooses the result type and hence the converted operands. This is numerical conversion, not a change to how the result is displayed.
+
+### Worked variation: fractional quotient
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((7 :: Double) / 4)
+```
+
+
+
+```text
+1.75
+```
+
+</HaskellTryIt>
+
+`7/4 = 1 + 3/4 = 1.75`.
+
+### Worked variation: negative quotient
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((-7 :: Double) / 4)
+```
+
+
+
+```text
+-1.75
+```
+
+</HaskellTryIt>
+
+Division retains the negative sign, without rounding to a whole-number quotient.
+
+### Worked variation: conversion before versus after
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((fromIntegral (7 `div` 4) :: Double, fromIntegral (7 :: Int) / fromIntegral (4 :: Int) :: Double))
+```
+
+
+
+```text
+(1.0,1.75)
+```
+
+</HaskellTryIt>
+
+The first route computes div first: 1, then 1.0. The second converts both inputs before division and retains 0.75.
+
+### Exam question: Fractional division with / (4 marks)
+
+Compute a fractional mean of total 17 and count 4, both Int, and explain the conversions.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Compute a fractional mean of total 17 and count 4, both Int, and explain the conversions. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Convert both existing Int operands before using /.
+
+</Step>
+
+<Step title="3. Solution">
+
+`fromIntegral (17 :: Int) / fromIntegral (4 :: Int) :: Double` gives `4.25`.
+
+</Step>
+
+<Step title="4. Check">
+
+Four lots of 4.25 total 17. Converting `17 div 4` would instead yield 4.0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`(7 :: Int) / 4` is rejected: `No instance for (Fractional Int)`. Appending `:: Double` to an Int variable is not conversion. Use fromIntegral. Double zero division can yield Infinity or NaN.
+
+### Practice with answers
+
+Compute a fractional ratio of -9 and 4, both Integer.
+
+<details>
+<summary>Answer</summary>
+
+`fromIntegral (-9 :: Integer) / fromIntegral (4 :: Integer) :: Double` gives `-2.25`.
+
+</details>
+
+## 17. fromIntegral and target types
+
+`fromIntegral` converts an Integral source to a Num target. The surrounding use or annotation chooses the target; it is not necessarily Double. Conversion to floating point can lose precision, and conversion to bounded Int can lose range.
+
+**Template.**
+
+```text
+fromIntegral :: (Integral a, Num b) => a -> b
+fromIntegral wholeNumber :: targetType
+```
+
+Source and target are distinct type variables. Read the annotation as a requirement on the result, not a conversion of arbitrary source types.
+
+### Worked variation: negative Int to Double
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fromIntegral (-7 :: Int) :: Double)
+```
+
+
+
+```text
+-7.0
+```
+
+</HaskellTryIt>
+
+The source is an Int; the target annotation requests Double.
+
+### Worked variation: zero Integer to Double
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fromIntegral (0 :: Integer) :: Double)
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+Zero is exactly representable in either type.
+
+### Worked variation: Int to Integer for exact arithmetic
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fromIntegral (12 :: Int) ^ (3 :: Int) :: Integer)
+```
+
+
+
+```text
+1728
+```
+
+</HaskellTryIt>
+
+Conversion occurs before cubing, so the product is computed as Integer. `12*12*12 = 1728`.
+
+### Exam question: fromIntegral and target types (4 marks)
+
+Convert an Int count n for use as a Double denominator. Why not convert the quotient afterwards`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Convert an Int count n for use as a Double denominator. Why not convert the quotient afterwards` The command asks for code. Preserve the required input and result types, then state any precondition before choosing the operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Target Double before dividing; integral division has already removed information.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `fromIntegral n :: Double`. In `total / fromIntegral n` with total Double, the context supplies the target annotation.
+
+</Step>
+
+<Step title="4. Check">
+
+With total = 9 and n = 4 the answer is 2.25; integral 9 div 4 converted afterwards is 2.0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`fromIntegral (2.5 :: Double)` is rejected: `No instance for (Integral Double)`. Use floor, ceiling, truncate or round for a deliberate fractional-to-integral policy.
+
+### Practice with answers
+
+Give an Integer expression that doubles an Int x after widening.
+
+<details>
+<summary>Answer</summary>
+
+`2 * (fromIntegral x :: Integer)`. For x = -4 this is -8.
+
+</details>
+
+## 18. toInteger and widening before arithmetic
+
+`toInteger` converts an integral source specifically to Integer. It is the specialised choice when the target must be unbounded whole-number arithmetic. Conversion after bounded arithmetic cannot repair overflow that has already occurred.
+
+**Template.**
+
+```text
+toInteger :: Integral a => a -> Integer
+toInteger x * toInteger y
+```
+
+Convert each input before multiplication. Unlike fromIntegral, the target of toInteger is fixed and needs no result annotation.
+
+### Worked variation: negative input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (toInteger (-8 :: Int))
+```
+
+
+
+```text
+-8
+```
+
+</HaskellTryIt>
+
+The Int value is preserved exactly as an Integer.
+
+### Worked variation: zero input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (toInteger (0 :: Int))
+```
+
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Widening changes the type, not the mathematical value.
+
+### Worked variation: widen first
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (toInteger (30000 :: Int) * toInteger (30000 :: Int))
+```
+
+
+
+```text
+900000000
+```
+
+</HaskellTryIt>
+
+Both operands are Integer when multiplication happens, so the result is their mathematical product.
+
+### Exam question: toInteger and widening before arithmetic (4 marks)
+
+Repair `toInteger (x*x)` when x is Int and its square might overflow.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Repair `toInteger (x*x)` when x is Int and its square might overflow. The command asks for code. Preserve the required input and result types, then state any precondition before choosing the operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Move conversion inside multiplication, before any bounded arithmetic.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `toInteger x * toInteger x`, or `let y = toInteger x in y*y`.
+
+</Step>
+
+<Step title="4. Check">
+
+At x = 3 both routes give 9; at large x only the widened arithmetic is guaranteed to represent the mathematical square if the computation completes.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`toInteger (3.5 :: Double)` fails with `No instance for (Integral Double)`. toInteger is not rounding. Choose a rounding function with result Integer.
+
+### Practice with answers
+
+How do `toInteger x` and `fromIntegral x :: Integer` compare for x :: Int`
+
+<details>
+<summary>Answer</summary>
+
+They give the same Integer value. toInteger states the fixed target directly.
+
+</details>
+
+## 19. floor
+
+`floor` gives the greatest integer not above the input. Its source must support RealFrac, such as Double, and its target is Integral, such as Integer. This adds signed and boundary cases to the earlier Standard Type Classes examples.
+
+**Template.**
+
+```text
+floor :: (RealFrac a, Integral b) => a -> b
+floor fractionalValue :: Integer
+```
+
+Choose the result type explicitly. These operations produce numeric integers; they do not format a floating value to a fixed number of decimal places. Only finite inputs within the chosen result range are intended.
+
+### Worked variation: negative fraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (floor (-4.25 :: Double) :: Integer)
+```
+
+
+
+```text
+-5
+```
+
+</HaskellTryIt>
+
+-5 is below -4.25; -4 is above it.
+
+### Worked variation: exact integer
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (floor (-4 :: Double) :: Integer)
+```
+
+
+
+```text
+-4
+```
+
+</HaskellTryIt>
+
+Already integral, so unchanged.
+
+### Worked variation: positive small fraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (floor (0.75 :: Double) :: Integer)
+```
+
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+0 is the greatest integer below 0.75.
+
+### Exam question: floor (4 marks)
+
+Evaluate `floor (-2.5 :: Double) :: Integer` and explain its direction.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate `floor (-2.5 :: Double) :: Integer` and explain its direction. The command asks for a value, so give a reduction with the stated grouping and numeric type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the definition of floor: greatest integer not above the input.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is -3: it is the greatest integer no larger than -2.5.
+
+</Step>
+
+<Step title="4. Check">
+
+Place -2.5 halfway between -3 and -2 on a number line, then apply the named rule. Do not transfer the rule of a different function.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+An incorrect direction is a logical error with no GHC diagnostic; floor moves down, not towards zero. Do not apply the function to Infinity or NaN: no mathematical integer is available. Passing a String instead of a number is a type error, not a rounding policy.
+
+### Practice with answers
+
+Find `floor (-1.75 :: Double) :: Integer` and `floor (1.75 :: Double) :: Integer`.
+
+<details>
+<summary>Answer</summary>
+
+-2 and 1.
+
+</details>
+
+## 20. ceiling
+
+`ceiling` gives the smallest integer not below the input. Its source must support RealFrac, such as Double, and its target is Integral, such as Integer. This adds signed and boundary cases to the earlier Standard Type Classes examples.
+
+**Template.**
+
+```text
+ceiling :: (RealFrac a, Integral b) => a -> b
+ceiling fractionalValue :: Integer
+```
+
+Choose the result type explicitly. These operations produce numeric integers; they do not format a floating value to a fixed number of decimal places. Only finite inputs within the chosen result range are intended.
+
+### Worked variation: negative fraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (ceiling (-4.25 :: Double) :: Integer)
+```
+
+
+
+```text
+-4
+```
+
+</HaskellTryIt>
+
+-4 is above -4.25, while -5 is below it.
+
+### Worked variation: exact integer
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (ceiling (-4 :: Double) :: Integer)
+```
+
+
+
+```text
+-4
+```
+
+</HaskellTryIt>
+
+Already integral, so unchanged.
+
+### Worked variation: positive small fraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (ceiling (0.25 :: Double) :: Integer)
+```
+
+
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+1 is the smallest integer above 0.25.
+
+### Exam question: ceiling (4 marks)
+
+Evaluate `ceiling (-2.5 :: Double) :: Integer` and explain its direction.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate `ceiling (-2.5 :: Double) :: Integer` and explain its direction. The command asks for a value, so give a reduction with the stated grouping and numeric type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the definition of ceiling: smallest integer not below the input.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is -2: it is the smallest integer no smaller than -2.5.
+
+</Step>
+
+<Step title="4. Check">
+
+Place -2.5 halfway between -3 and -2 on a number line, then apply the named rule. Do not transfer the rule of a different function.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+An incorrect direction is a logical error with no GHC diagnostic; ceiling moves up, not away from zero. Do not apply the function to Infinity or NaN: no mathematical integer is available. Passing a String instead of a number is a type error, not a rounding policy.
+
+### Practice with answers
+
+Find `ceiling (-1.75 :: Double) :: Integer` and `ceiling (1.75 :: Double) :: Integer`.
+
+<details>
+<summary>Answer</summary>
+
+-1 and 2.
+
+</details>
+
+## 21. truncate
+
+`truncate` gives the integer reached by discarding the fractional part towards zero. Its source must support RealFrac, such as Double, and its target is Integral, such as Integer. This adds signed and boundary cases to the earlier Standard Type Classes examples.
+
+**Template.**
+
+```text
+truncate :: (RealFrac a, Integral b) => a -> b
+truncate fractionalValue :: Integer
+```
+
+Choose the result type explicitly. These operations produce numeric integers; they do not format a floating value to a fixed number of decimal places. Only finite inputs within the chosen result range are intended.
+
+### Worked variation: negative fraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (truncate (-4.75 :: Double) :: Integer)
+```
+
+
+
+```text
+-4
+```
+
+</HaskellTryIt>
+
+Discarding the fractional part moves -4.75 towards zero.
+
+### Worked variation: positive fraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (truncate (4.75 :: Double) :: Integer)
+```
+
+
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+Discarding the fraction moves 4.75 down towards zero.
+
+### Worked variation: small negative fraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (truncate (-0.75 :: Double) :: Integer)
+```
+
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The magnitude is below one; truncation reaches zero.
+
+### Exam question: truncate (4 marks)
+
+Evaluate `truncate (-2.5 :: Double) :: Integer` and explain its direction.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate `truncate (-2.5 :: Double) :: Integer` and explain its direction. The command asks for a value, so give a reduction with the stated grouping and numeric type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the definition of truncate: integer reached by discarding the fractional part towards zero.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is -2: discard the fractional part towards zero.
+
+</Step>
+
+<Step title="4. Check">
+
+Place -2.5 halfway between -3 and -2 on a number line, then apply the named rule. Do not transfer the rule of a different function.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+An incorrect direction is a logical error with no GHC diagnostic; truncate agrees with floor on positive inputs but with ceiling on negative inputs. Do not apply the function to Infinity or NaN: no mathematical integer is available. Passing a String instead of a number is a type error, not a rounding policy.
+
+### Practice with answers
+
+Find `truncate (-1.75 :: Double) :: Integer` and `truncate (1.75 :: Double) :: Integer`.
+
+<details>
+<summary>Answer</summary>
+
+-1 and 1.
+
+</details>
+
+## 22. round
+
+`round` gives the nearest integer, choosing the even integer at an exact halfway tie. Its source must support RealFrac, such as Double, and its target is Integral, such as Integer. This adds signed and boundary cases to the earlier Standard Type Classes examples.
+
+**Template.**
+
+```text
+round :: (RealFrac a, Integral b) => a -> b
+round fractionalValue :: Integer
+```
+
+Choose the result type explicitly. These operations produce numeric integers; they do not format a floating value to a fixed number of decimal places. Only finite inputs within the chosen result range are intended.
+
+### Worked variation: negative tie towards zero
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (round (-4.5 :: Double) :: Integer)
+```
+
+
+
+```text
+-4
+```
+
+</HaskellTryIt>
+
+-4 and -5 are equally close; -4 is even.
+
+### Worked variation: negative tie away from zero
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (round (-5.5 :: Double) :: Integer)
+```
+
+
+
+```text
+-6
+```
+
+</HaskellTryIt>
+
+-5 and -6 are equally close; -6 is even.
+
+### Worked variation: non-tie and zero boundary
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((round (0.49 :: Double) :: Integer, round (0 :: Double) :: Integer))
+```
+
+
+
+```text
+(0,0)
+```
+
+</HaskellTryIt>
+
+0.49 is nearer 0 than 1; zero is already integral.
+
+### Exam question: round (4 marks)
+
+Evaluate `round (-2.5 :: Double) :: Integer` and explain its direction.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate `round (-2.5 :: Double) :: Integer` and explain its direction. The command asks for a value, so give a reduction with the stated grouping and numeric type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the definition of round: nearest integer, choosing the even integer at an exact halfway tie.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is -2: -2 and -3 tie in distance, and -2 is even.
+
+</Step>
+
+<Step title="4. Check">
+
+Place -2.5 halfway between -3 and -2 on a number line, then apply the named rule. Do not transfer the rule of a different function.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+An incorrect direction is a logical error with no GHC diagnostic; half-to-even is neither `always round up` nor `always round away from zero`. Do not apply the function to Infinity or NaN: no mathematical integer is available. Passing a String instead of a number is a type error, not a rounding policy.
+
+### Practice with answers
+
+Find `round (-1.75 :: Double) :: Integer` and `round (1.75 :: Double) :: Integer`.
+
+<details>
+<summary>Answer</summary>
+
+-2 and 2; these inputs are not ties.
+
+</details>
+
+## 23. Annotations, inference and numeric defaulting
+
+An annotation fixes a type, inference gathers constraints from use, and defaulting resolves eligible remaining numeric ambiguity. They are different steps. A literal 3 starts overloaded, not permanently Int. In ordinary GHCi numeric examples, unresolved integral arithmetic commonly defaults to Integer, and unresolved fractional arithmetic to Double. Do not turn those defaults into a claim about every binding or every GHCi setting.
+
+**Template.**
+
+```text
+expression :: chosenType
+n :: Integer
+n = 3
+result = fromIntegral n :: Double
+```
+
+A type annotation checks a value against a type; it does not coerce an existing variable into another type. Defaults depend on constraints and settings; signatures make an exam answer independent of them.
+
+### Worked variation: integral context
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((3 + 4 :: Integer))
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+The annotation fixes both literals and addition at Integer; no default is needed.
+
+### Worked variation: fractional context
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((3 + 4 :: Double))
+```
+
+
+
+```text
+7.0
+```
+
+</HaskellTryIt>
+
+The same written literals are Double in this expression; print includes the decimal point.
+
+### Worked variation: context supplies read result type
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((read "12" :: Integer) + 1)
+```
+
+
+
+```text
+13
+```
+
+</HaskellTryIt>
+
+The annotation determines how to interpret the text. After reading 12 as Integer, addition gives 13.
+
+### Worked variation: unresolved integral arithmetic
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (3 + 4)
+```
+
+
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+The literals and addition require Num. In this ordinary printed program with no other constraints, eligible numeric defaulting selects Integer. This is not a rule that every written 3 starts as Integer.
+
+### Worked variation: unresolved fractional arithmetic
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (3 / 4)
+```
+
+
+
+```text
+0.75
+```
+
+</HaskellTryIt>
+
+The operation requires Fractional. In this ordinary program, defaulting chooses Double, which can represent three quarters exactly.
+
+### Worked variation: a fractional literal without annotation
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (2.5 + 0.5)
+```
+
+
+
+```text
+3.0
+```
+
+</HaskellTryIt>
+
+The fractional literals create Fractional constraints. Ordinary defaulting supplies Double and the exact sum here prints with a decimal point.
+
+### Exam question: Annotations, inference and numeric defaulting (4 marks)
+
+Explain why `3 + 4` can be Integer or Double, but `(n :: Double)` cannot convert n :: Int.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain why `3 + 4` can be Integer or Double, but `(n :: Double)` cannot convert n :: Int. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Distinguish overloaded literals from already typed variables.
+
+</Step>
+
+<Step title="3. Solution">
+
+Literals can be chosen at a Num type from context. Once n is Int, a Double annotation conflicts. Use `fromIntegral n :: Double` for conversion.
+
+</Step>
+
+<Step title="4. Check">
+
+The first two runnable variations have the same arithmetic value and different printed forms. A conversion from Int 7 to Double also prints 7.0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`read "12"` without a determining context can be ambiguous; a key diagnostic is `Ambiguous type variable`. Annotate the intended result. A signature on an Int variable asserting Double instead gives `Couldn't match expected type`.
+
+### Practice with answers
+
+Give two ways to determine the type of `read "8"` without relying on defaulting.
+
+<details>
+<summary>Answer</summary>
+
+`read "8" :: Integer`; or use it as an argument of a function whose parameter is Integer. Context and an explicit annotation can supply the same information.
+
+</details>
+
+## 24. Int limits and Integer arithmetic
+
+Int is bounded and its width depends on the implementation. Integer expands to hold larger whole numbers, subject to resources; it is not constant-cost arithmetic for arbitrarily large values. Float has less precision than Double; both are approximate. Choosing Integer for counts does not change a library function that demands Int.
+
+**Template.**
+
+```text
+lo = minBound :: Int
+hi = maxBound :: Int
+wide = toInteger hi + 1
+safeSquare x = toInteger x * toInteger x
+```
+
+Ask the implementation for bounds instead of assuming 32 or 64 bits. Use comparisons and widened arithmetic to make portable checks. The simulator need not model every machine-overflow boundary.
+
+### Worked variation: portable lower bound
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((minBound :: Int) < 0)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+A signed Int includes negative values; its minimum is below zero.
+
+### Worked variation: portable upper bound
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((maxBound :: Int) > 0)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+A signed Int includes positive values; its maximum is above zero.
+
+### Worked variation: large exact power
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (10 ^ (30 :: Int) + 1 :: Integer)
+```
+
+
+
+```text
+1000000000000000000000000000001
+```
+
+</HaskellTryIt>
+
+Integer keeps the extra unit beyond the thirtieth power of ten. No floating representation is used.
+
+### Exam question: Int limits and Integer arithmetic (4 marks)
+
+Why should a program convert Int operands before multiplying if the result may exceed maxBound`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Why should a program convert Int operands before multiplying if the result may exceed maxBound` The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bounded arithmetic happens at the operand type. A later conversion only widens the result already computed.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `toInteger x * toInteger y`. Integer can hold the mathematical product when resources permit; `toInteger (x*y)` cannot undo an overflowing Int multiplication.
+
+</Step>
+
+<Step title="4. Check">
+
+At x = 0 both give 0. For a boundary argument, derive the mathematical product using Integer before comparing it with the Int bounds.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Int overflow is not necessarily reported as a GHC error; on GHC machine Int arithmetic wraps. `abs (minBound :: Int)` and negating minBound cannot represent the positive magnitude. Convert to Integer first. Do not promise constant-time multiplication of unbounded Integers.
+
+### Practice with answers
+
+Which type should store an exact 100-digit whole-number result` Is Double an exact substitute`
+
+<details>
+<summary>Answer</summary>
+
+Integer. Double has finite precision and cannot represent every 100-digit integer exactly; Int also lacks the required range.
+
+</details>
+
+## 25. Absolute tolerance
+
+Floating arithmetic rounds to representable binary values. Exact equality may therefore reject two calculations that represent the same intended real number. Absolute tolerance accepts a difference no larger than an allowed error in the result`s units. Choose the tolerance from the question, not just to make a test pass.
+
+**Template.**
+
+```text
+closeAbs eps x y = abs (x-y) <= eps
+precondition: eps >= 0; x and y finite
+```
+
+The subtraction is the error; abs ignores its sign. A passing tolerance check is an approximate numerical claim, not proof of exact equality.
+
+### Worked variation: decimal rounding
+
+<HaskellTryIt>
+
+```haskell
+closeAbs :: Double -> Double -> Double -> Bool
+closeAbs eps x y = abs (x - y) <= eps
+
+main :: IO ()
+main = print (closeAbs 0.000000001 (0.1 + 0.2) 0.3)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The two Double computations differ by much less than the allowed one-billionth.
+
+### Worked variation: reject a large error
+
+<HaskellTryIt>
+
+```haskell
+closeAbs :: Double -> Double -> Double -> Bool
+closeAbs eps x y = abs (x - y) <= eps
+
+main :: IO ()
+main = print (closeAbs 0.001 4 4.01)
+```
+
+
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+The difference is about 0.01, larger than 0.001; this test correctly fails.
+
+### Worked variation: near zero
+
+<HaskellTryIt>
+
+```haskell
+closeAbs :: Double -> Double -> Double -> Bool
+closeAbs eps x y = abs (x - y) <= eps
+
+main :: IO ()
+main = print (closeAbs 0.000001 0 0.0000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+An error of one ten-millionth is below one millionth, even though a relative error against zero is not useful.
+
+### Exam question: Absolute tolerance (4 marks)
+
+Write a Double comparison allowing absolute error 0.005 and test 2 against 2.004.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write a Double comparison allowing absolute error 0.005 and test 2 against 2.004. The command asks for code. Preserve the required input and result types, then state any precondition before choosing the operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use magnitude of the difference and an inclusive tolerance bound.
+
+</Step>
+
+<Step title="3. Solution">
+
+`abs (2 - 2.004) <= 0.005` is True. A definition is `within x y = abs (x-y) <= 0.005`.
+
+</Step>
+
+<Step title="4. Check">
+
+2.02 is outside the tolerance; 2 itself is inside. Test both acceptance and rejection.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using `x-y <= eps` without abs accepts arbitrarily large negative differences: a logical error without a GHC diagnostic. Exact `==` after floating arithmetic may be False. Guard non-finite inputs rather than applying a finite-error contract to NaN.
+
+### Practice with answers
+
+Would tolerance 0.01 accept -3 and -3.02`
+
+<details>
+<summary>Answer</summary>
+
+No: the magnitude of the difference is about 0.02, greater than 0.01.
+
+</details>
+
+## 26. Relative and combined tolerance
+
+An error of 1 may be huge for a value near zero and tiny for a value near a billion. Relative tolerance scales the allowance with the magnitude of the compared values. Combining it with an absolute floor handles values near zero.
+
+**Template.**
+
+```text
+allowed = max atol (rtol * max (abs x) (abs y))
+close = abs (x-y) <= allowed
+precondition: atol >= 0; rtol >= 0; x and y finite
+```
+
+The larger magnitude makes the rule symmetric. atol is an absolute error allowance; rtol is a dimensionless fraction such as one millionth. Assume the intermediate arithmetic stays finite as well.
+
+### Worked variation: large scale
+
+<HaskellTryIt>
+
+```haskell
+close :: Double -> Double -> Double -> Double -> Bool
+close atol rtol x y = abs (x - y) <= max atol (rtol * max (abs x) (abs y))
+
+main :: IO ()
+main = print (close 0.000001 0.000001 1000000 1000000.5)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The allowed relative error is slightly above 1, so the difference 0.5 passes.
+
+### Worked variation: small scale needs absolute floor
+
+<HaskellTryIt>
+
+```haskell
+close :: Double -> Double -> Double -> Double -> Bool
+close atol rtol x y = abs (x - y) <= max atol (rtol * max (abs x) (abs y))
+
+main :: IO ()
+main = print (close 0.000001 0.000001 0 0.0000005)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The relative allowance is tiny; the absolute floor 0.000001 accepts the 0.0000005 difference.
+
+### Worked variation: relative limit exceeded
+
+<HaskellTryIt>
+
+```haskell
+close :: Double -> Double -> Double -> Double -> Bool
+close atol rtol x y = abs (x - y) <= max atol (rtol * max (abs x) (abs y))
+
+main :: IO ()
+main = print (close 0.000001 0.000001 1000000 1000010)
+```
+
+
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+The allowance is about 1; the difference is 10, so this fails.
+
+### Exam question: Relative and combined tolerance (4 marks)
+
+Choose an error rule that works near zero and for large readings; explain both parameters.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Choose an error rule that works near zero and for large readings; explain both parameters. The command asks for an operation or policy. The exponent, numeric type or permitted error in the question determines that choice.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the maximum of an absolute allowance and a relative allowance.
+
+</Step>
+
+<Step title="3. Solution">
+
+`abs (x-y) <= max atol (rtol * max (abs x) (abs y))`. For atol = 0.001, rtol = 0.000001, values near zero get at least 0.001 allowance.
+
+</Step>
+
+<Step title="4. Check">
+
+At a magnitude of one million, the relative allowance is about 1. Near zero, the absolute allowance prevents an unreasonably tiny threshold.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Dividing by x to measure relative error fails at x = 0 and treats the two argument orders differently. There is no GHC diagnostic for that flawed policy. Use a symmetric scale and an absolute floor. This simple rule is intended for finite, moderate-sized inputs.
+
+### Practice with answers
+
+With atol = 0.01 and rtol = 0.001, are 100 and 100.05 close` What about 0 and 0.02`
+
+<details>
+<summary>Answer</summary>
+
+The first pair passes: error 0.05 is below relative allowance 0.10005. The second fails: allowance is 0.01, error is 0.02.
+
+</details>
+
+## 27. Infinity, NaN and failure categories
+
+A type error prevents execution. A runtime exception stops a demanded calculation. A mathematical domain error has no intended real answer; Double often records it as NaN or an infinity rather than throwing an exception. Infinity is an extended floating value, not an ordinary finite measurement; NaN means `not a number`.
+
+**Template.**
+
+```text
+isInfinite (1/0 :: Double)
+isNaN (0/0 :: Double)
+finite x = not (isNaN x || isInfinite x)
+```
+
+isNaN recognises NaN; equality cannot do that because NaN is unequal to itself. isInfinite recognises either sign of infinity. Validate domain and finiteness before rounding or treating a result as a measurement.
+
+### Worked variation: positive and negative infinities
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((isInfinite (1/0 :: Double), (1/0 :: Double) > 0, ((-1)/0 :: Double) < 0))
+```
+
+
+
+```text
+(True,True,True)
+```
+
+</HaskellTryIt>
+
+Nonzero numerator divided by zero gives signed infinities in these Double cases. Their sign comparisons succeed.
+
+### Worked variation: indeterminate zero quotient
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((isNaN (0/0 :: Double), (0/0 :: Double) == (0/0 :: Double)))
+```
+
+
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+Zero over zero gives NaN. Even comparing it with itself is False, so equality cannot detect it.
+
+### Worked variation: domain failure and infinity arithmetic
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((isNaN (sqrt (-1 :: Double)), isNaN ((1/0 :: Double) - (1/0 :: Double))))
+```
+
+
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+The negative square root has no real answer; Infinity minus itself is indeterminate. Both give NaN.
+
+### Exam question: Infinity, NaN and failure categories (4 marks)
+
+Classify `(1 :: Integer) / 0`, `1 div 0 :: Integer`, and `0/0 :: Double`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Classify `(1 :: Integer) / 0`, `1 div 0 :: Integer`, and `0/0 :: Double`. The command is classify: decide between type rejection, a runtime exception and a floating value before predicting output.
+
+</Step>
+
+<Step title="2. Plan">
+
+First check type constraints, then runtime integral division, then floating results.
+
+</Step>
+
+<Step title="3. Solution">
+
+The first is rejected: `No instance for (Fractional Integer)`. The second is a runtime exception: `divide by zero`. The third is well typed and yields NaN.
+
+</Step>
+
+<Step title="4. Check">
+
+Replace the denominators by 2: Integer / still fails its type; integral div runs; Double / gives a finite value.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`x == (0/0)` never recognises NaN. Use isNaN. Nor is approximate comparison a universal repair for non-finite values: subtracting equal infinities gives NaN. State a finite-input policy.
+
+### Practice with answers
+
+What is wrong with `all division by zero raises an exception``
+
+<details>
+<summary>Answer</summary>
+
+It confuses numeric types: integral div raises divide by zero, while Double / can produce Infinity or NaN.
+
+</details>
+
+## 28. sqrt
+
+`sqrt` computes the non-negative square root. For real arithmetic the domain is: `x >= 0` for a finite real input. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+sqrt (input :: Double)
+abs (sqrt input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: perfect square
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (sqrt (81 :: Double))
+```
+
+
+
+```text
+9.0
+```
+
+</HaskellTryIt>
+
+9 is the non-negative value whose square is 81.
+
+### Worked variation: zero boundary
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (sqrt (0 :: Double))
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+Zero is in the domain and its root is zero.
+
+### Worked variation: irrational root
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (sqrt (2 :: Double) ^ (2 :: Int) - 2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The computed root is approximate; squaring it recovers 2 within tolerance.
+
+### Exam question: sqrt (4 marks)
+
+Find the hypotenuse for legs 3 and 4 using sqrt.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Find the hypotenuse for legs 3 and 4 using sqrt. The command asks for the specified results and their justification. Identify each operation and retain its sign, unit and result type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the sum of squares, then the non-negative root.
+
+</Step>
+
+<Step title="3. Solution">
+
+`sqrt (3*3 + 4*4) = sqrt 25 = 5 :: Double`.
+
+</Step>
+
+<Step title="4. Check">
+
+Its square is 25, matching the sum of squared legs.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+A negative Double argument returns NaN rather than a real root. `sqrt (9 :: Integer)` is a type error: `No instance for (Floating Integer)`. Convert first.
+
+### Practice with answers
+
+What are the real roots of x squared = 9, and which one does sqrt return`
+
+<details>
+<summary>Answer</summary>
+
+The equation has -3 and 3; sqrt 9 returns the non-negative root, 3.0.
+
+</details>
+
+## 29. log
+
+`log` computes the natural logarithm, inverse to exp. For real arithmetic the domain is: `x > 0` for a finite real input. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+log (input :: Double)
+abs (log input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: identity
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (log (1 :: Double))
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+The natural logarithm of 1 is 0 because exp 0 is 1.
+
+### Worked variation: positive round trip
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (log (exp (2 :: Double)) - 2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+exp maps 2 to a positive value; log brings it back within tolerance.
+
+### Worked variation: zero boundary is not finite
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (isInfinite (log (0 :: Double)))
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+At zero the Double result is negative Infinity; zero is outside the finite real logarithm domain.
+
+### Exam question: log (4 marks)
+
+Is log a base-ten logarithm` Explain how to check log (exp 3).
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Is log a base-ten logarithm` Explain how to check log (exp 3). The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Read log as natural logarithm, with base e. Use the inverse relationship.
+
+</Step>
+
+<Step title="3. Solution">
+
+For finite moderate inputs, `log (exp 3)` approximates 3. Base ten instead uses `logBase 10 x`.
+
+</Step>
+
+<Step title="4. Check">
+
+`log 1 = 0` checks the multiplicative identity; a negative argument gives NaN for Double.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using log for base ten is a logical error without a diagnostic. log 0 is negative Infinity; log of a negative Double is NaN. A valid type does not establish a valid real domain.
+
+### Practice with answers
+
+What sign does log 0.5 have`
+
+<details>
+<summary>Answer</summary>
+
+Negative: 0.5 is between 0 and 1, so its natural logarithm is below zero.
+
+</details>
+
+## 30. exp
+
+`exp` computes e raised to the input power. For real arithmetic the domain is: every finite real input mathematically; floating overflow is possible. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+exp (input :: Double)
+abs (exp input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: zero exponent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (exp (0 :: Double))
+```
+
+
+
+```text
+1.0
+```
+
+</HaskellTryIt>
+
+The zeroth power of e is 1.
+
+### Worked variation: positive inverse check
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (log (exp (1 :: Double)) - 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Natural log reverses exp at this moderate argument within tolerance.
+
+### Worked variation: negative argument
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (exp (-1 :: Double) * exp 1 - 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The negative exponent supplies the reciprocal, so the mathematical product is 1.
+
+### Exam question: exp (4 marks)
+
+Does a finite Double input always give a finite exp result`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Does a finite Double input always give a finite exp result` The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate the mathematical domain from finite floating range.
+
+</Step>
+
+<Step title="3. Solution">
+
+No. exp is defined mathematically on all real inputs, but a sufficiently large finite Double input overflows to Infinity. A very negative input may underflow towards zero.
+
+</Step>
+
+<Step title="4. Check">
+
+At input 0 the result is 1; at input -1 it is positive and below 1. Neither guarantees range safety at huge inputs.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Treating exp as `multiply by e` is a logical error. It computes a power. Check isInfinite when the application needs a finite result; no type error is required for overflow.
+
+### Practice with answers
+
+Compare exp (-2) with exp 0 without calculating decimal expansions.
+
+<details>
+<summary>Answer</summary>
+
+exp (-2) is positive and below exp 0 = 1.
+
+</details>
+
+## 31. sin
+
+`sin` computes the sine of an angle measured in radians. For real arithmetic the domain is: every finite real angle. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+sin (input :: Double)
+abs (sin input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: zero angle
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (sin (0 :: Double))
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+At zero radians, sine is zero.
+
+### Worked variation: quarter turn
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (sin (pi / 2 :: Double) - 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+pi/2 radians is a quarter turn; its sine approximates 1.
+
+### Worked variation: negative quarter turn
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (sin (-pi / 2 :: Double) + 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Sine is odd: the sine of the negative quarter turn approximates -1.
+
+### Exam question: sin (4 marks)
+
+Write a sine calculation for 30 degrees.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write a sine calculation for 30 degrees. The command asks for code. Preserve the required input and result types, then state any precondition before choosing the operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Convert degrees to radians by multiplying by pi/180.
+
+</Step>
+
+<Step title="3. Solution">
+
+`sin (30 * pi / 180 :: Double)` approximates 0.5.
+
+</Step>
+
+<Step title="4. Check">
+
+30 degrees is pi/6 radians. At zero degrees, the same conversion gives zero radians and sine zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`sin 30` interprets 30 radians, not degrees, and compiles without a diagnostic. Convert units first. Very large angles can lose numerical accuracy in floating argument reduction.
+
+### Practice with answers
+
+How do you compute sine of -90 degrees`
+
+<details>
+<summary>Answer</summary>
+
+`sin ((-90) * pi / 180 :: Double)`, approximately -1.
+
+</details>
+
+## 32. cos
+
+`cos` computes the cosine of an angle measured in radians. For real arithmetic the domain is: every finite real angle. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+cos (input :: Double)
+abs (cos input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: zero angle
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (cos (0 :: Double))
+```
+
+
+
+```text
+1.0
+```
+
+</HaskellTryIt>
+
+Cosine starts at 1 at zero radians.
+
+### Worked variation: half turn
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (cos (pi :: Double) + 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+A half turn is pi radians; cosine approximates -1.
+
+### Worked variation: negative half turn
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (cos (-pi :: Double) + 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Cosine is even: negating the angle leaves the cosine unchanged.
+
+### Exam question: cos (4 marks)
+
+Evaluate cos at 180 degrees, stating the unit conversion.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate cos at 180 degrees, stating the unit conversion. The command asks for a value, so give a reduction with the stated grouping and numeric type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Convert 180 degrees to pi radians.
+
+</Step>
+
+<Step title="3. Solution">
+
+`cos (180*pi/180 :: Double)` approximates -1.
+
+</Step>
+
+<Step title="4. Check">
+
+At zero degrees cosine is 1, providing a second boundary check.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Expecting `cos (pi/2)` to be exactly zero is unsafe: floating pi is approximate. Compare the error with a tolerance. Wrong units are a logical error without a GHC diagnostic.
+
+### Practice with answers
+
+Compare cos (-60 degrees) with cos (60 degrees).
+
+<details>
+<summary>Answer</summary>
+
+They are equal mathematically because cosine is even; both approximate 0.5 after converting to radians.
+
+</details>
+
+## 33. tan
+
+`tan` computes the tangent, mathematically sin divided by cos. For real arithmetic the domain is: angles where cos is nonzero; exclude pi/2 + k*pi for integer k. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+tan (input :: Double)
+abs (tan input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: zero angle
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (tan (0 :: Double))
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+Sine zero divided by cosine one is zero.
+
+### Worked variation: eighth turn
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (tan (pi / 4 :: Double) - 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+At pi/4 the sine and cosine agree, so tangent approximates 1.
+
+### Worked variation: negative eighth turn
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (tan (-pi / 4 :: Double) + 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Tangent is odd; the negative angle gives approximately -1.
+
+### Exam question: tan (4 marks)
+
+Why is tan (pi/2) a poor way to demonstrate an exact pole`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Why is tan (pi/2) a poor way to demonstrate an exact pole` The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+The mathematical pole is at exactly pi/2; floating pi is only an approximation.
+
+</Step>
+
+<Step title="3. Solution">
+
+The finite stored argument is near the pole, so the library may return a very large finite value. Do not claim it must return Infinity or an exception.
+
+</Step>
+
+<Step title="4. Check">
+
+At pi/4, away from the pole, the result is near 1. A tiny angle change near pi/2 can cause a huge output change.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Assuming every mathematically undefined tangent produces NaN is wrong. Floating arguments may miss the exact pole; GHC accepts the program. Exclude near-pole inputs under the application`s policy.
+
+### Practice with answers
+
+Give the tangent of -45 degrees approximately.
+
+<details>
+<summary>Answer</summary>
+
+-1 after converting -45 degrees to -pi/4 radians.
+
+</details>
+
+## 34. asin
+
+`asin` computes the principal inverse sine, returning radians. For real arithmetic the domain is: `-1 <= x <= 1`; result lies between -pi/2 and pi/2. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+asin (input :: Double)
+abs (asin input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: zero input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (asin (0 :: Double))
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+The principal angle whose sine is zero is zero.
+
+### Worked variation: upper endpoint
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (asin (1 :: Double) - pi/2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+At the upper endpoint the principal angle is pi/2 radians.
+
+### Worked variation: lower endpoint
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (asin (-1 :: Double) + pi/2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+At the lower endpoint the principal angle is -pi/2 radians.
+
+### Exam question: asin (4 marks)
+
+Find the principal angle with sine -1 and explain the domain.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Find the principal angle with sine -1 and explain the domain. The command asks for the specified results and their justification. Identify each operation and retain its sign, unit and result type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use asin on an input in the closed interval from -1 to 1.
+
+</Step>
+
+<Step title="3. Solution">
+
+`asin (-1 :: Double)` approximates -pi/2 radians, or -90 degrees.
+
+</Step>
+
+<Step title="4. Check">
+
+Taking sine of that angle returns approximately -1. An input of -2 would be outside the real domain and give NaN for Double.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+asin is an inverse function, not the reciprocal of sin. The latter would be `recip (sin x)`. Confusing them compiles but computes a different value.
+
+### Practice with answers
+
+Is asin 2 a valid real calculation` What about asin 0.5`
+
+<details>
+<summary>Answer</summary>
+
+2 is outside the domain and gives NaN for Double; 0.5 is valid and gives approximately pi/6 radians.
+
+</details>
+
+## 35. acos
+
+`acos` computes the principal inverse cosine, returning radians. For real arithmetic the domain is: `-1 <= x <= 1`; result lies between 0 and pi. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+acos (input :: Double)
+abs (acos input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: upper endpoint
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (acos (1 :: Double))
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+The principal angle with cosine 1 is zero.
+
+### Worked variation: zero input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (acos (0 :: Double) - pi/2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Cosine is zero at the principal quarter-turn angle.
+
+### Worked variation: lower endpoint
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (acos (-1 :: Double) - pi) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The principal angle with cosine -1 is pi radians.
+
+### Exam question: acos (4 marks)
+
+Explain why acos (-1) is not -pi.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain why acos (-1) is not -pi. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the principal-result range, from 0 to pi radians.
+
+</Step>
+
+<Step title="3. Solution">
+
+`acos (-1 :: Double)` approximates pi. Other angles can have the same cosine, but acos selects its principal result.
+
+</Step>
+
+<Step title="4. Check">
+
+cos pi approximates -1, so the answer reverses the cosine at the endpoint.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using a degree result directly as the output of acos is a units error with no diagnostic. Multiply the returned radians by 180/pi for degrees. Inputs outside [-1,1] give NaN for Double.
+
+### Practice with answers
+
+Give acos 0 in radians and degrees.
+
+<details>
+<summary>Answer</summary>
+
+Approximately pi/2 radians, or 90 degrees.
+
+</details>
+
+## 36. atan
+
+`atan` computes the principal inverse tangent, returning radians. For real arithmetic the domain is: every finite real input; result lies strictly between -pi/2 and pi/2. Its general type is `Floating a => a -> a`; these examples choose Double.
+
+**Template.**
+
+```text
+atan (input :: Double)
+abs (atan input - expected) <= tolerance
+```
+
+The input is a numeric value; trigonometric angles use radians. Predicate examples print Bool so the expected output does not pretend that an irrational result is an exact decimal.
+
+### Worked variation: zero input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (atan (0 :: Double))
+```
+
+
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+The principal angle with tangent zero is zero.
+
+### Worked variation: positive input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (atan (1 :: Double) - pi/4) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The tangent of pi/4 is 1.
+
+### Worked variation: negative input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (atan (-1 :: Double) + pi/4) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Atan is odd; input -1 gives the negative eighth-turn angle.
+
+### Exam question: atan (4 marks)
+
+Explain the result of atan (-1), including its unit and principal range.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain the result of atan (-1), including its unit and principal range. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the inverse tangent and select the result in its principal interval.
+
+</Step>
+
+<Step title="3. Solution">
+
+`atan (-1 :: Double)` approximates -pi/4 radians, or -45 degrees.
+
+</Step>
+
+<Step title="4. Check">
+
+Taking tangent of -pi/4 gives approximately -1. Unlike asin, atan allows finite inputs whose magnitude exceeds 1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Atan of y/x loses quadrant information and divides by zero when x is zero. GHC may still run it. For a planar direction, consider atan2 y x with both coordinates.
+
+### Practice with answers
+
+Is atan 2 outside its real domain`
+
+<details>
+<summary>Answer</summary>
+
+No. Every finite real input is allowed. Its result is between 0 and pi/2 radians.
+
+</details>
+
+## 37. logBase and logarithm bases
+
+`logBase b x` is the logarithm of x to base b. It belongs beside natural log because a question may specify base ten or base two. In real arithmetic b must be positive and unequal to 1, and x must be positive. Double results remain approximate.
+
+**Template.**
+
+```text
+logBase :: Floating a => a -> a -> a
+logBase base value = log value / log base
+```
+
+Both arguments have the same floating type. The base comes first. Rejecting invalid bases belongs in the specification; the type alone cannot do it.
+
+### Worked variation: base two
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (logBase (2 :: Double) 8 - 3) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`2^3 = 8`, so the mathematical logarithm is 3; check within tolerance.
+
+### Worked variation: base ten
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (logBase (10 :: Double) 100 - 2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`10^2 = 100`, giving logarithm 2 within tolerance.
+
+### Worked variation: value below one
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (logBase (2 :: Double) 0.5 + 1) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`2^(-1) = 0.5`, so the result approximates -1.
+
+### Exam question: logBase and logarithm bases (4 marks)
+
+Express the base-two logarithm of 16 and state its mathematical value.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Express the base-two logarithm of 16 and state its mathematical value. The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use logBase with base first and value second.
+
+</Step>
+
+<Step title="3. Solution">
+
+`logBase (2 :: Double) 16` approximates 4, because `2^4 = 16`.
+
+</Step>
+
+<Step title="4. Check">
+
+At value 1 the logarithm is 0. Base 1 would instead make the denominator log 1 zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Swapping arguments compiles but answers a different question. Base 1 and non-positive inputs fail the stated real domain without necessarily causing an exception.
+
+### Practice with answers
+
+What is the base-ten logarithm of 0.01 mathematically`
+
+<details>
+<summary>Answer</summary>
+
+-2, because ten to power -2 is 0.01; use tolerance for Double.
+
+</details>
+
+## 38. atan2 and planar direction
+
+`atan2 y x` gives a direction angle in radians using both coordinates, preserving quadrant information lost by atan (y/x). It is a RealFloat operation. For direction geometry exclude the origin, whose angle is undefined; floating signed-zero conventions should not substitute for that specification.
+
+**Template.**
+
+```text
+atan2 :: RealFloat a => a -> a -> a
+angle = atan2 vertical horizontal
+```
+
+The vertical coordinate y comes first. Ordinary nonzero vectors have principal directions between -pi and pi radians, with endpoint conventions on the negative horizontal axis.
+
+### Worked variation: first quadrant
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (atan2 (1 :: Double) 1 - pi/4) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Both coordinates positive select the first quadrant, near pi/4.
+
+### Worked variation: second quadrant
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (atan2 (1 :: Double) (-1) - 3*pi/4) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Negative horizontal and positive vertical coordinates select the second quadrant, near 3*pi/4.
+
+### Worked variation: vertical axis
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (abs (atan2 (1 :: Double) 0 - pi/2) < 0.000000001)
+```
+
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+No explicit division by zero is needed: the vector points straight up, near pi/2.
+
+### Exam question: atan2 and planar direction (4 marks)
+
+Why do atan (1/(-1)) and atan2 1 (-1) give different direction angles`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Why do atan (1/(-1)) and atan2 1 (-1) give different direction angles` The question asks for an explanation or assessment. Identify the claim, then use the operation definition and the supplied domain to justify or refute it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Atan sees only ratio -1; atan2 also sees which coordinate was negative.
+
+</Step>
+
+<Step title="3. Solution">
+
+Atan gives approximately -pi/4. Atan2 gives approximately 3*pi/4 for vector (-1,1).
+
+</Step>
+
+<Step title="4. Check">
+
+The tangent ratios agree, but the angles differ by pi. A direction question needs the quadrant.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using atan2 x y swaps roles and compiles without a diagnostic. The origin has no mathematical direction even if a floating implementation returns a value; reject the zero vector.
+
+### Practice with answers
+
+Which function avoids dividing y by zero for vector (0,-1)`
+
+<details>
+<summary>Answer</summary>
+
+`atan2 (-1 :: Double) 0`, approximately -pi/2 radians.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Check types, grouping and domain in that order. Keep div with mod and quot with rem; verify `a = b*q+r`. Choose powers by exponent domain. Convert before losing a remainder or overflowing. Rounding rules differ on negatives and ties. Repetition has a non-negative count precondition. Floating comparisons need an error policy, real-domain checks and a policy for non-finite results. Trigonometric functions use radians.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="How do the integral division pairs differ at a negative non-exact quotient`">
+
+div floors towards negative infinity; quot truncates towards zero. Matching remainders restore the dividend through `a = b*q+r`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does an annotation not replace fromIntegral`">
+
+An annotation checks a type. Conversion constructs a value of another numeric type. An existing Int does not become Double by asserting it has type Double.
+
+</CheckQuestion>
+
+<CheckQuestion question="What invalidates the universal squareByAdding claim`">
+
+At -3 the negative replication count produces an empty list, sum 0, whereas the square is 9. Small positive tests do not cover that partition.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does round always send halfway values away from zero`">
+
+No. It chooses the even neighbour: round (-4.5) is -4; round (-5.5) is -6.
+
+</CheckQuestion>
+
+<CheckQuestion question="Is a well-typed Double result necessarily a valid finite real answer`">
+
+No. Domain errors and overflow can produce NaN or Infinity. Check the domain and finiteness required by the problem.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why compare a root or trigonometric result using tolerance`">
+
+The real result or input pi may be inexact in binary floating point. The tolerance states the permitted error without claiming exact equality.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Arithmetic Exam Practice](/docs/sem3/csi243/02-expressions-types/notes/arithmetic-exam-practice).

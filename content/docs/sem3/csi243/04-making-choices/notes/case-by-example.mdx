@@ -1,0 +1,3061 @@
+---
+title: "Case by Example"
+description: "Trace case expressions over many data shapes, follow guarded fall-through, and repair incomplete choices."
+---
+
+A complete `case` answer explains why earlier alternatives fail, which names the successful pattern binds, which guard succeeds, and what result follows. This lesson extends [Case Expressions](/docs/sem3/csi243/04-making-choices/notes/case-expressions) with many data shapes and detailed tracing.
+
+<LearningObjectives items={[
+  'Trace alternatives and guards in order, including guarded fall-through',
+  'Match literals, tuples, lists, optional values and custom constructors',
+  'Use nested patterns, wildcards and as-patterns precisely',
+  'Place case expressions inside calculations and local definitions',
+  'Repair missing cases, layout errors and incompatible types',
+]} />
+
+## 1. The matching template
+
+The **scrutinee** is the expression being inspected. An **alternative** is a pattern together with its result, or its guarded results.
+
+```haskell
+-- Template: replace the placeholder names.
+case expression of
+  patternA -> resultA
+  patternB -> resultB
+  _        -> fallback
+```
+
+Read `expression` as the value to inspect, `of` as the start of the choices, `patternA` as a shape to try, and `->` as the separator before its result. Every result must have one compatible type. A variable pattern matches anything and binds a name; `_` matches anything without naming it.
+
+For unguarded alternatives, the first matching pattern wins. With guards, the pattern must match **and one guard must succeed**. Use this tracing template:
+
+```text
+1. Identify the scrutinee and the result type.
+2. Try the first pattern; if it fails, move down one alternative.
+3. If it matches, record every variable binding.
+4. Try its guards, if any, from top to bottom.
+5. Select the first successful guarded result, or the unguarded result.
+6. If every guard fails, try the NEXT alternative on the same scrutinee.
+7. Substitute bindings into the selected result and evaluate it.
+```
+
+A failed Boolean guard is `False`. A guard that raises an exception does not mean "try the next alternative". Each runnable block below is a complete program with its question in a comment; to practise, keep the comment and replace the solution before revealing the explanation.
+
+## 2. Boolean scrutinees
+
+A Boolean has two constructors: `True` and `False`. The useful step is often computing the test before matching it. The result may be a number, string, list or tuple.
+
+```haskell
+case test of
+  True -> whenTrue
+  False -> whenFalse
+```
+
+
+### Permission rather than arithmetic
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Permission rather than arithmetic
+choose :: Bool -> String
+choose value = case value of
+  True -> "enter"
+  False -> "wait"
+
+main :: IO ()
+main = print (choose False)
+```
+
+```text
+"wait"
+```
+
+</HaskellTryIt>
+
+`False` fails the first pattern, then matches the second; its result is `"wait"`.
+
+### A Boolean controls a list
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A Boolean controls a list
+choose :: Bool -> [Int]
+choose value = case value of
+  True -> [1,2]
+  False -> []
+
+main :: IO ()
+main = print (choose True)
+```
+
+```text
+[1,2]
+```
+
+</HaskellTryIt>
+
+`True` matches immediately; the second alternative is not tried. Both results are lists of integers.
+
+### A Boolean produces a tuple
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A Boolean produces a tuple
+choose :: Bool -> (String, Int)
+choose value = case value of
+  True -> ("ready",1)
+  False -> ("closed",0)
+
+main :: IO ()
+main = print (choose False)
+```
+
+```text
+("closed",0)
+```
+
+</HaskellTryIt>
+
+`True` fails, `False` succeeds, and the entire pair is the value of the expression.
+
+### Now compute a Boolean from an integer
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Now compute a Boolean from an integer
+choose :: Int -> Int
+choose value = case value of
+  n -> case n > 0 of
+    True -> n
+    False -> 0
+
+main :: IO ()
+main = print (choose (-4))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The outer variable pattern binds `n = -4`. The inner scrutinee is `False`: `True` fails, `False` returns `0`.
+
+### Exam question: a computed test
+
+Write `freezing :: Int -> String` using a Boolean scrutinee: return `"ice"` at or below zero, otherwise `"water"`. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give a definition, not just an example output. Identify the input shape and the promised result before choosing patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compute `t <= 0`; match both Boolean constructors.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+freezing :: Int -> String
+freezing t = case t <= 0 of
+  True -> "ice"
+  False -> "water"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At `0` the test is `True`, giving `"ice"`; at `1`, `True` fails and `False` gives `"water"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+Missing `False` is a coverage error even if your first test uses `True`. With `-Wincomplete-patterns`, GHC warns `Pattern match(es) are non-exhaustive`. Cover both constructors.
+
+</Callout>
+
+## 3. Integer and character literals
+
+A literal pattern tests one exact value, not a range. Characters have single quotes. Put special literals before a variable or wildcard default.
+
+```haskell
+case value of
+  literal -> specialResult
+  name -> resultUsingName
+```
+
+
+### An integer protocol code
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An integer protocol code
+choose :: Int -> String
+choose value = case value of
+  200 -> "ok"
+  404 -> "absent"
+  _ -> "other"
+
+main :: IO ()
+main = print (choose 404)
+```
+
+```text
+"absent"
+```
+
+</HaskellTryIt>
+
+`404` fails `200`, then matches `404`; the wildcard is skipped.
+
+### A negative integer literal
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A negative integer literal
+choose :: Int -> Int
+choose value = case value of
+  -1 -> 99
+  0 -> 10
+  n -> n + 1
+
+main :: IO ()
+main = print (choose (-1))
+```
+
+```text
+99
+```
+
+</HaskellTryIt>
+
+The first literal matches exactly. The parentheses are required around the negative argument in the call.
+
+### A character command
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A character command
+choose :: Char -> String
+choose value = case value of
+  'n' -> "north"
+  's' -> "south"
+  _ -> "unknown"
+
+main :: IO ()
+main = print (choose 'x')
+```
+
+```text
+"unknown"
+```
+
+</HaskellTryIt>
+
+`'x'` fails `'n'` and `'s'`; `_` matches and returns the default.
+
+### An escaped character
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An escaped character
+choose :: Char -> Int
+choose value = case value of
+  '\n' -> 0
+  ' ' -> 1
+  _ -> 2
+
+main :: IO ()
+main = print (choose '\n')
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The escaped newline is one character and matches the first pattern.
+
+### Exam question: command characters
+
+Write `command :: Char -> String`: `'q'` gives `"stop"`, `'?'` gives `"help"`, everything else gives `"run"`. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give a definition, not just an example output. Identify the input shape and the promised result before choosing patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use two exact literals, then a wildcard.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+command :: Char -> String
+command c = case c of
+  'q' -> "stop"
+  '?' -> "help"
+  _ -> "run"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`command '?'` fails the first alternative and takes the second. Upper-case `'Q'` reaches the wildcard.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+A string pattern `"q"` does not fit a `Char` scrutinee; GHC reports `Couldn't match type`. Repair it with `'q'`. A range such as `n > 5` belongs in a guard, not in a pattern.
+
+</Callout>
+
+## 4. Tuples and combinations of tests
+
+A tuple pattern matches all its components together. A nested pair is different from a triple. Components may have different types.
+
+```haskell
+case (first, second) of
+  (patternA, patternB) -> result
+  _ -> fallback
+```
+
+
+### A coordinate on an axis
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A coordinate on an axis
+choose :: (Int, Int) -> String
+choose value = case value of
+  (0,0) -> "origin"
+  (0,_) -> "vertical"
+  (_,0) -> "horizontal"
+  _ -> "away"
+
+main :: IO ()
+main = print (choose (0,7))
+```
+
+```text
+"vertical"
+```
+
+</HaskellTryIt>
+
+`(0,0)` fails on the second component; `(0,_)` succeeds, ignoring `7`.
+
+### Bind both components
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Bind both components
+choose :: (Int, Int) -> Int
+choose value = case value of
+  (x,y) -> x * 10 + y
+
+main :: IO ()
+main = print (choose (3,4))
+```
+
+```text
+34
+```
+
+</HaskellTryIt>
+
+The sole alternative binds `x = 3`, `y = 4`; substitution gives `3 * 10 + 4 = 34`.
+
+### The tuple-of-tests idiom
+
+<HaskellTryIt>
+
+```haskell
+-- Question: The tuple-of-tests idiom
+choose :: (Int, Int) -> String
+choose value = case value of
+  (x,y) -> case (x > 0, y > 0) of
+    (True,True) -> "both"
+    (True,False) -> "x only"
+    (False,True) -> "y only"
+    (False,False) -> "neither"
+
+main :: IO ()
+main = print (choose (-2,5))
+```
+
+```text
+"y only"
+```
+
+</HaskellTryIt>
+
+Bind `x = -2`, `y = 5`. The inner scrutinee is `(False,True)`: alternatives one and two fail on the first field, then alternative three matches. Zero also makes `> 0` false.
+
+### A nested tuple
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A nested tuple
+choose :: ((Int, Int), Bool) -> Int
+choose value = case value of
+  ((x,y),True) -> x + y
+  ((x,_),False) -> x
+
+main :: IO ()
+main = print (choose ((2,8),False))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The first alternative fails on the outer Boolean. The second binds `x = 2` inside the inner pair and ignores `8`.
+
+### Exam question: either coordinate zero
+
+Write `axis :: (Int, Int) -> Bool`, true when either coordinate is zero. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give a definition, not just an example output. Identify the input shape and the promised result before choosing patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+A zero in the first position succeeds; if that fails, try zero in the second position.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+axis :: (Int, Int) -> Bool
+axis p = case p of
+  (0,_) -> True
+  (_,0) -> True
+  _ -> False
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`axis (2,0)` takes the second alternative. `(0,0)` takes the first, and `(2,3)` reaches the wildcard.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+A triple pattern cannot match a pair. GHC reports `Couldn't match type`. Count fields at every nesting level: `((a,b),c)` has two outer fields.
+
+</Callout>
+
+## 5. Lists: exact lengths and open tails
+
+`[x]` requires exactly one element, `[x,y]` exactly two. `(x:xs)` requires at least one and binds the tail. `(x:y:rest)` requires at least two; `rest` may be empty.
+
+```haskell
+case xs of
+  [] -> emptyResult
+  [x] -> singletonResult
+  [x,y] -> pairResult
+  (x:y:rest) -> longerResult
+```
+
+
+### Distinguish four lengths
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Distinguish four lengths
+choose :: [Int] -> String
+choose value = case value of
+  [] -> "none"
+  [x] -> "one"
+  [x,y] -> "two"
+  (x:y:rest) -> "many"
+
+main :: IO ()
+main = print (choose [5,6,7])
+```
+
+```text
+"many"
+```
+
+</HaskellTryIt>
+
+The first three exact lengths fail. The final pattern binds `x = 5`, `y = 6`, `rest = [7]`.
+
+### An empty-list default
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An empty-list default
+choose :: [Int] -> Int
+choose value = case value of
+  [] -> 100
+  (x:xs) -> x + length xs
+
+main :: IO ()
+main = print (choose [])
+```
+
+```text
+100
+```
+
+</HaskellTryIt>
+
+The first alternative matches immediately. No nonexistent head is accessed.
+
+### A singleton calculation
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A singleton calculation
+choose :: [Int] -> Int
+choose value = case value of
+  [] -> 0
+  [x] -> x * x
+  (x:xs) -> sum xs
+
+main :: IO ()
+main = print (choose [6])
+```
+
+```text
+36
+```
+
+</HaskellTryIt>
+
+The empty pattern fails; `[x]` binds `x = 6`, giving `6 * 6 = 36`. The cons alternative is skipped.
+
+### A tail that is empty
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A tail that is empty
+choose :: [Int] -> (Int, [Int])
+choose value = case value of
+  (x:y:rest) -> (x + y,rest)
+  _ -> (0,[])
+
+main :: IO ()
+main = print (choose [4,9])
+```
+
+```text
+(13,[])
+```
+
+</HaskellTryIt>
+
+The input has two cons cells, so the first pattern binds `x = 4`, `y = 9`, `rest = []`; the result is `(13,[])`.
+
+### Exam question: safe second element
+
+Write `second :: [Int] -> Maybe Int`, returning the second element if present. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give a definition, not just an example output. Identify the input shape and the promised result before choosing patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+Expose two cons cells, then use a catch-all for lengths zero and one.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+second :: [Int] -> Maybe Int
+second xs = case xs of
+  (_:y:_) -> Just y
+  _ -> Nothing
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`second [8,3,9] = Just 3`. `[]` and `[8]` both fail the first pattern and give `Nothing`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+Putting `(x:xs)` before `[x]` makes the singleton alternative unreachable: GHC can warn `Pattern match is redundant`. Also, `[x:xs]` describes a singleton list containing a list; it is not the ordinary head-and-tail pattern.
+
+</Callout>
+
+## 6. Maybe and lookup
+
+`Nothing` represents absence; `Just value` represents presence. Case analysis makes a failed lookup part of the answer instead of silently assuming success.
+
+```haskell
+case lookup key table of
+  Nothing -> missingResult
+  Just value -> resultUsingValue
+```
+
+
+### A present payload
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A present payload
+choose :: Maybe Int -> Int
+choose value = case value of
+  Nothing -> 0
+  Just n -> n + 1
+
+main :: IO ()
+main = print (choose (Just 2))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+`Nothing` fails. `Just n` matches with `n = 2`; the result is `3`.
+
+### An absent payload
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An absent payload
+choose :: Maybe Int -> String
+choose value = case value of
+  Nothing -> "missing"
+  Just n -> show n
+
+main :: IO ()
+main = print (choose Nothing)
+```
+
+```text
+"missing"
+```
+
+</HaskellTryIt>
+
+The first constructor matches. No value named `n` exists in this alternative.
+
+### A successful lookup
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A successful lookup
+choose :: String -> Int
+choose value = case value of
+  key -> case lookup key [("pen",3),("book",8)] of
+    Nothing -> 0
+    Just cost -> cost
+
+main :: IO ()
+main = print (choose "pen")
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The variable pattern binds the key. Lookup yields `Just 3`; the inner `Nothing` fails and `Just cost` binds `3`.
+
+### A missing lookup
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A missing lookup
+choose :: String -> Bool
+choose value = case value of
+  key -> case lookup key [("red",1),("blue",2)] of
+    Nothing -> False
+    Just _ -> True
+
+main :: IO ()
+main = print (choose "green")
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+The outer variable matches; lookup finds no key, producing `Nothing`. The first inner alternative returns `False`.
+
+### Exam question: double a found value
+
+Write `doubleFound :: String -> [(String, Int)] -> Maybe Int`, looking up a key and doubling a found value. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give a definition, not just an example output. Identify the input shape and the promised result before choosing patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+Match the lookup result. Preserve absence and rebuild `Just` after arithmetic.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+doubleFound :: String -> [(String, Int)] -> Maybe Int
+doubleFound k table = case lookup k table of
+  Nothing -> Nothing
+  Just v -> Just (2 * v)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+For `"a"` in `[("a",3)]`, lookup gives `Just 3`, then the answer is `Just 6`. A missing key gives `Nothing`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+With an `Int` payload, `Just n -> n` alongside `Nothing -> Nothing` mixes `Int` and `Maybe Int`. GHC reports `Couldn't match type`. Return `Just n` if the result must remain optional.
+
+</Callout>
+
+## 7. Ordering and compare
+
+`compare a b` returns one constructor of `Ordering`: `LT`, `EQ` or `GT`. Matching these constructors avoids repeating comparisons.
+
+```haskell
+case compare left right of
+  LT -> smallerResult
+  EQ -> equalResult
+  GT -> largerResult
+```
+
+
+### Numerical comparison
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Numerical comparison
+choose :: Int -> String
+choose value = case value of
+  n -> case compare n 7 of
+    LT -> "before"
+    EQ -> "same"
+    GT -> "after"
+
+main :: IO ()
+main = print (choose 2)
+```
+
+```text
+"before"
+```
+
+</HaskellTryIt>
+
+Bind `n = 2`. Compare returns `LT`, matching the first inner alternative.
+
+### Character comparison
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Character comparison
+choose :: Char -> Int
+choose value = case value of
+  c -> case compare c 'a' of
+    LT -> 1
+    EQ -> 0
+    GT -> 2
+
+main :: IO ()
+main = print (choose 'z')
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The variable binds `'z'`. Comparison yields `GT`; `LT` and `EQ` fail, then `GT` gives `2`.
+
+### Equal strings
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Equal strings
+choose :: String -> Bool
+choose value = case value of
+  s -> case compare s "cat" of
+    LT -> False
+    EQ -> True
+    GT -> False
+
+main :: IO ()
+main = print (choose "cat")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Compare yields `EQ`; the first inner pattern fails and the second returns `True`.
+
+### An Ordering result
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An Ordering result
+choose :: Int -> Ordering
+choose value = case value of
+  0 -> EQ
+  n -> compare n 0
+
+main :: IO ()
+main = print (choose (-4))
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+The zero pattern fails; `n = -4`, so `compare n 0 = LT`. A constructor prints without quotes.
+
+### Exam question: a three-way fee
+
+Write `fee :: Int -> Int`: return `2` below 10, `0` at 10 and `5` above 10, using `compare`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give a definition, not just an example output. Identify the input shape and the promised result before choosing patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare with the boundary and cover all three constructors.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+fee :: Int -> Int
+fee n = case compare n 10 of
+  LT -> 2
+  EQ -> 0
+  GT -> 5
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Inputs `9`, `10`, `11` choose `LT`, `EQ`, `GT`, giving `2`, `0`, `5` respectively.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+`"LT"` is a string, not an `Ordering` constructor: GHC reports `Couldn't match type`. Lower-case `lt` is a variable pattern and matches every ordering; it does not mean `LT`.
+
+</Callout>
+
+## 8. Strings are lists of characters
+
+A literal string pattern tests the entire string. A cons pattern exposes one `Char` and a remaining `String`. The patterns `""` and `[]` describe the same empty value.
+
+```haskell
+case text of
+  "exact" -> exactResult
+  [] -> emptyResult
+  (c:rest) -> resultUsingCharacterAndTail
+```
+
+
+### An exact word is not a prefix
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An exact word is not a prefix
+choose :: String -> Int
+choose value = case value of
+  "save" -> 1
+  "load" -> 2
+  _ -> 0
+
+main :: IO ()
+main = print (choose "save now")
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The input differs from both complete literals. The wildcard gives `0`; literal matching does not test prefixes.
+
+### The empty string
+
+<HaskellTryIt>
+
+```haskell
+-- Question: The empty string
+choose :: String -> String
+choose value = case value of
+  "" -> "blank"
+  (c:rest) -> rest
+
+main :: IO ()
+main = print (choose "")
+```
+
+```text
+"blank"
+```
+
+</HaskellTryIt>
+
+The first literal matches the empty list of characters. There is no head to extract.
+
+### A leading marker
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A leading marker
+choose :: String -> String
+choose value = case value of
+  ('#':rest) -> rest
+  _ -> "plain"
+
+main :: IO ()
+main = print (choose "#note")
+```
+
+```text
+"note"
+```
+
+</HaskellTryIt>
+
+The first character is `'#'`; the first pattern binds `rest = "note"` and returns it.
+
+### Exactly two characters
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Exactly two characters
+choose :: String -> String
+choose value = case value of
+  [a,b] -> [b,a]
+  _ -> "wrong length"
+
+main :: IO ()
+main = print (choose "ab")
+```
+
+```text
+"ba"
+```
+
+</HaskellTryIt>
+
+The first pattern binds `a = 'a'`, `b = 'b'`. The reversed character list prints as `"ba"`.
+
+### Exam question: strip one marker
+
+Write `strip :: String -> String`, removing one leading `'!'` and otherwise preserving the string. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give a definition, not just an example output. Identify the input shape and the promised result before choosing patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a cons pattern for the marked form and a variable default to preserve the complete original value.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+strip :: String -> String
+strip s = case s of
+  ('!':rest) -> rest
+  other -> other
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`strip "!yes" = "yes"`; `strip "" = ""`. The empty string safely fails the cons pattern.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+`("#":rest)` expects elements that are strings; it cannot match a `String` input whose elements are characters. GHC reports `Couldn't match type`. Use `'#'` before the colon.
+
+</Callout>
+
+## 9. User-defined constructors and fields
+
+A declaration tells you the constructors available for matching. Enumeration constructors hold no fields; constructors with fields let patterns bind each stored value.
+
+```haskell
+data Item = Empty | Filled Int
+
+measure item = case item of
+  Empty -> 0
+  Filled n -> n
+```
+
+
+### An enumeration
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An enumeration
+data Signal = Red | Amber | Green
+
+main :: IO ()
+main = print (case Amber of
+  Red -> "stop"
+  Amber -> "prepare"
+  Green -> "go")
+```
+
+```text
+"prepare"
+```
+
+</HaskellTryIt>
+
+`Amber` fails `Red`, then matches `Amber`. Constructor identity makes the choice.
+
+### One stored field
+
+<HaskellTryIt>
+
+```haskell
+-- Question: One stored field
+data Credit = None | Credit Int
+
+main :: IO ()
+main = print (case Credit 12 of
+  None -> 0
+  Credit amount -> amount - 2)
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+`Credit 12` fails `None`. The second pattern binds `amount = 12`; subtraction gives `10`.
+
+### Different numbers of fields
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Different numbers of fields
+data Parcel = Letter Int | Box Int Int
+
+main :: IO ()
+main = print (case Box 3 4 of
+  Letter weight -> weight
+  Box width height -> width * height)
+```
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+The input constructor is not `Letter`. `Box width height` binds `3` and `4`, giving area `12`.
+
+### A recursive type
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A recursive type
+data Tree = Leaf | Node Tree Int Tree
+
+root :: Tree -> Maybe Int
+root t = case t of
+  Leaf -> Nothing
+  Node _ x _ -> Just x
+
+main :: IO ()
+main = print (root (Node Leaf (-3) Leaf))
+```
+
+```text
+Just (-3)
+```
+
+</HaskellTryIt>
+
+The input is not `Leaf`. The second alternative binds `x = -3`, ignores both children and returns `Just (-3)`. GHC prints parentheses around the negative constructor argument.
+
+### Exam question: cost from a field
+
+Given `data Ride = Walk | Bus Int`, write `cost :: Ride -> Int`: walking costs zero, and a bus costs twice its stored zones. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "write" requires a definition. Read the input type and identify every shape the specification permits.
+
+</Step>
+
+<Step title="2. Plan">
+
+Cover both constructors; bind the bus field and multiply it.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Ride = Walk | Bus Int
+
+cost :: Ride -> Int
+cost ride = case ride of
+  Walk -> 0
+  Bus zones -> 2 * zones
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`cost Walk = 0`; `cost (Bus 3) = 6`. Every constructor has an alternative.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+For `Box Int Int`, the pattern `Box w` is missing a field. GHC reports `should have 2 arguments, but has been given 1`. Supply one pattern per field, using `_` for ignored fields.
+
+</Callout>
+
+## 10. Nested patterns
+
+A nested pattern checks several layers together. An outer constructor match does not rescue a failing inner shape: the entire pattern must succeed.
+
+```haskell
+case value of
+  Just (x:xs) -> result
+  _ -> fallback
+```
+
+
+### An optional empty list
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An optional empty list
+choose :: Maybe [Int] -> Int
+choose value = case value of
+  Just (x:_) -> x
+  _ -> 0
+
+main :: IO ()
+main = print (choose (Just []))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The outer `Just` fits, but the inner empty list has no cons cell. The first alternative fails completely; `_` returns `0`.
+
+### An optional pair
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An optional pair
+choose :: Maybe (Int, Bool) -> Int
+choose value = case value of
+  Just (n,True) -> n
+  Just (_,False) -> 0
+  Nothing -> -1
+
+main :: IO ()
+main = print (choose (Just (7,False)))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The first pattern fails on the inner Boolean. The second fits both layers and ignores the integer.
+
+### Two present values at the front
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Two present values at the front
+choose :: [Maybe Int] -> Int
+choose value = case value of
+  (Just x:Just y:_) -> x + y
+  _ -> 0
+
+main :: IO ()
+main = print (choose [Just 2,Just 5,Nothing])
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+Two cons cells and two `Just` constructors fit, binding `x = 2`, `y = 5`. The unrestricted tail may contain `Nothing`.
+
+### Either containing Maybe
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Either containing Maybe
+choose :: Either String (Maybe Int) -> Int
+choose value = case value of
+  Left _ -> -1
+  Right Nothing -> 0
+  Right (Just n) -> n
+
+main :: IO ()
+main = print (choose (Right (Just 8)))
+```
+
+```text
+8
+```
+
+</HaskellTryIt>
+
+`Left` fails. `Right Nothing` fails on the inner constructor. The third pattern binds `n = 8`.
+
+### Exam question: nested optional list
+
+Write `firstPresent :: Maybe [Int] -> Maybe Int`, returning the head only when the optional list exists and is non-empty. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "write" requires a definition. Read the input type and identify every shape the specification permits.
+
+</Step>
+
+<Step title="2. Plan">
+
+The successful pattern must contain both `Just` and a cons cell. One default can cover both absence and an empty list.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+firstPresent :: Maybe [Int] -> Maybe Int
+firstPresent value = case value of
+  Just (x:_) -> Just x
+  _ -> Nothing
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`firstPresent (Just [3]) = Just 3`. `Just []` fails the inner cons, and `Nothing` fails the outer constructor; both give `Nothing`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+Claiming `Just [4]` matches `Just [x,y]` is a tracing error, not a compiler error. The inner list needs exactly two elements. Check every required shape before declaring success.
+
+</Callout>
+
+## 11. Wildcards
+
+`_` accepts one value without naming it. It can ignore a whole value or one component. Several wildcards do not require their values to be equal.
+
+```haskell
+case value of
+  Constructor _ kept _ -> resultUsingKept
+  _ -> fallback
+```
+
+
+### Ignore a whole pair
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Ignore a whole pair
+choose :: (Int, Bool) -> String
+choose value = case value of
+  _ -> "accepted"
+
+main :: IO ()
+main = print (choose (4,False))
+```
+
+```text
+"accepted"
+```
+
+</HaskellTryIt>
+
+The first and only wildcard matches the whole pair without inspecting either component.
+
+### Ignore the second coordinate
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Ignore the second coordinate
+choose :: (Int, Int) -> Int
+choose value = case value of
+  (x,_) -> x * 2
+
+main :: IO ()
+main = print (choose (5,99))
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+The pair matches, binds `x = 5` and ignores `99`. Substitution gives `10`.
+
+### Ignore a list head
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Ignore a list head
+choose :: [Int] -> [Int]
+choose value = case value of
+  [] -> []
+  (_:rest) -> rest
+
+main :: IO ()
+main = print (choose [7,8,9])
+```
+
+```text
+[8,9]
+```
+
+</HaskellTryIt>
+
+The empty pattern fails. The cons alternative ignores `7`, binds `rest = [8,9]`, and returns it.
+
+### Independent wildcards
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Independent wildcards
+choose :: (Bool, Bool) -> Int
+choose value = case value of
+  (_,_) -> 1
+
+main :: IO ()
+main = print (choose (True,False))
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+Both wildcard positions accept their respective values. The different Booleans do not prevent matching.
+
+### Exam question: ignore an optional payload
+
+Write `present :: Maybe a -> Bool`, without naming the payload. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "write" requires a definition. Read the input type and identify every shape the specification permits.
+
+</Step>
+
+<Step title="2. Plan">
+
+Only the constructor matters; use `_` in the `Just` field.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+present :: Maybe a -> Bool
+present m = case m of
+  Nothing -> False
+  Just _ -> True
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`present (Just 9)` and `present (Just "x")` both give `True`. Absence gives `False`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+A wildcard cannot be used as a result variable. A result `_` is a typed hole, and GHC reports `Found hole: _`. Bind a real name if you need the value later.
+
+</Callout>
+
+## 12. As-patterns: the whole and the parts
+
+`whole@pattern` matches the same values as `pattern`, while also binding the complete matched value. Use it when the result needs both the original object and its components.
+
+```haskell
+case xs of
+  whole@(x:rest) -> resultUsingWholeAndX
+  [] -> emptyResult
+```
+
+
+### A list and its head
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A list and its head
+choose :: [Int] -> ([Int], Int)
+choose value = case value of
+  whole@(x:_) -> (whole,x)
+  [] -> ([],0)
+
+main :: IO ()
+main = print (choose [3,4])
+```
+
+```text
+([3,4],3)
+```
+
+</HaskellTryIt>
+
+The cons matches, binding `whole = [3,4]` and `x = 3` together. The empty alternative is skipped.
+
+### A singleton and its element
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A singleton and its element
+choose :: [Int] -> [Int]
+choose value = case value of
+  whole@[x] -> whole ++ [x]
+  other -> other
+
+main :: IO ()
+main = print (choose [6])
+```
+
+```text
+[6,6]
+```
+
+</HaskellTryIt>
+
+The exact-length pattern fits with `whole = [6]`, `x = 6`. Appending `[x]` gives `[6,6]`.
+
+### An optional value and its payload
+
+<HaskellTryIt>
+
+```haskell
+-- Question: An optional value and its payload
+choose :: Maybe Int -> (Maybe Int, Int)
+choose value = case value of
+  whole@(Just n) -> (whole,n)
+  Nothing -> (Nothing,0)
+
+main :: IO ()
+main = print (choose (Just 3))
+```
+
+```text
+(Just 3,3)
+```
+
+</HaskellTryIt>
+
+`Just` matches the first alternative. `whole = Just 3`, while `n = 3` is only its field.
+
+### A tuple and its sum
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A tuple and its sum
+choose :: (Int, Int) -> ((Int, Int), Int)
+choose value = case value of
+  whole@(x,y) -> (whole,x + y)
+
+main :: IO ()
+main = print (choose (2,9))
+```
+
+```text
+((2,9),11)
+```
+
+</HaskellTryIt>
+
+The pair matches and binds all three names. The result retains `(2,9)` and adds `2 + 9`.
+
+### Exam question: preserve an exact-length list
+
+Write `keepPair :: [Int] -> [Int]`, returning a two-element input unchanged and `[]` for every other length. Use an as-pattern. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "write" requires a definition. Read the input type and identify every shape the specification permits.
+
+</Step>
+
+<Step title="2. Plan">
+
+Name the complete exact-length pattern rather than rebuilding its elements.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+keepPair :: [Int] -> [Int]
+keepPair xs = case xs of
+  whole@[_,_] -> whole
+  _ -> []
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`keepPair [2,7] = [2,7]`. Both shorter and longer lists fail the exact-length test and give `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+Adding `whole@` does not make a pattern exhaustive: `whole@(x:_)` still fails on `[]`. With `-Wincomplete-patterns`, an omitted empty case can produce `Pattern match(es) are non-exhaustive`.
+
+</Callout>
+
+## 13. Guards inside case alternatives
+
+A pattern answers "does the value have this shape?" A guard answers "does this extra condition hold?" Use the pattern to expose fields, then guards to test ranges or relationships between those fields.
+
+```haskell
+-- Template: this is a case alternative, not a function equation.
+case expression of
+  pattern
+    | guard1 -> result1
+    | guard2 -> result2
+    | otherwise -> result3
+  nextPattern -> nextResult
+```
+
+Read it in two stages. First match `pattern`, binding any names it introduces. Those names are visible in that alternative's guards and results. Next try `guard1`; if it is `True`, select `result1` and stop. Otherwise try `guard2`. **The first `True` guard wins**, even when later guards would also be true.
+
+`otherwise` is a Prelude name defined as `True`; it is not a special pattern or keyword. It succeeds whenever reached, so put it last. If there is no `otherwise` and every guard is false, try the **next alternative**, not the next guard of some unrelated pattern. Bindings introduced by one alternative do not become bindings of the next.
+
+### Arrows in alternatives, equals in equations
+
+| Location | Correct form | Meaning |
+|---|---|---|
+| Guard of a function equation | `f n \| n > 0 = n` | Defines the result of an equation |
+| Guard of a case alternative | `n \| n > 0 -> n` | Selects the result of an alternative |
+
+The initial function definition still needs `=`: `f x = case x of ...`. After a case guard, use `->`. These are separate grammatical positions.
+
+### Variable pattern: negative, zero, positive
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Variable pattern: negative, zero, positive
+signText :: Int -> String
+signText value = case value of
+  n
+    | n < 0 -> "negative"
+    | n == 0 -> "zero"
+    | otherwise -> "positive"
+
+main :: IO ()
+main = do
+  print (signText (-2))
+  print (signText 0)
+  print (signText 4)
+```
+
+```text
+"negative"
+"zero"
+"positive"
+```
+
+</HaskellTryIt>
+
+The variable pattern always binds `n`. For `-2`, the first guard is true and the others are skipped. For `0`, `n < 0` is false and `n == 0` is true. For `4`, both tests fail and `otherwise` is true. A variable pattern does not itself test a range.
+
+### Tuple pattern: compare bound fields
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Tuple pattern: compare bound fields
+lead :: (Int, Int) -> String
+lead scores = case scores of
+  (home,away)
+    | home > away -> "home"
+    | home == away -> "draw"
+    | otherwise -> "away"
+
+main :: IO ()
+main = print (lead (2,5))
+```
+
+```text
+"away"
+```
+
+</HaskellTryIt>
+
+The tuple pattern binds `home = 2`, `away = 5`. Both named comparisons are false, so `otherwise` selects `"away"`. Names come from the pattern before any guard is tested.
+
+### List pattern: guarded fall-through
+
+<HaskellTryIt>
+
+```haskell
+-- Question: List pattern: guarded fall-through
+headLabel :: [Int] -> String
+headLabel xs = case xs of
+  (x:_)
+    | x > 10 -> "large"
+    | x > 0 -> "small positive"
+  [] -> "empty"
+  (_:_) -> "non-positive"
+
+main :: IO ()
+main = do
+  print (headLabel [-2,9])
+  print (headLabel [12])
+  print (headLabel [])
+```
+
+```text
+"non-positive"
+"large"
+"empty"
+```
+
+</HaskellTryIt>
+
+For `[12]`, both `x > 10` and `x > 0` would be true. Only the first is used: the answer is `"large"`. For `[]`, the first cons pattern fails without testing any guards; the empty alternative matches.
+
+The required fall-through trace for `headLabel [-2,9]` is:
+
+| Step | What is tried | Outcome |
+|---|---|---|
+| 1 | `(x:_)` against `[-2,9]` | Matches; bind `x = -2` |
+| 2 | `x > 10` | `False`; try the next guard |
+| 3 | `x > 0` | `False`; no guards remain |
+| 4 | Next alternative `[]` against the original `[-2,9]` | Fails |
+| 5 | Next alternative `(_:_)` against `[-2,9]` | Matches |
+| 6 | Its unguarded result | `"non-positive"` |
+
+It would be wrong to stop at step 1 and call the match successful overall. It would also be wrong to restart on the tail `[9]`: fall-through uses the **same scrutinee**.
+
+### Maybe pattern: reject a present but invalid value
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Maybe pattern: reject a present but invalid value
+validCount :: Maybe Int -> Int
+validCount m = case m of
+  Just n
+    | n >= 0 -> n
+  _ -> 0
+
+main :: IO ()
+main = do
+  print (validCount (Just (-3)))
+  print (validCount (Just 4))
+  print (validCount Nothing)
+```
+
+```text
+0
+4
+0
+```
+
+</HaskellTryIt>
+
+`Just (-3)` matches `Just n`, but `n >= 0` is false; the wildcard then gives `0`. `Just 4` succeeds at the guard and gives `4`. `Nothing` fails the constructor pattern and reaches the wildcard directly.
+
+### A user-defined type with guarded fields
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A user-defined type with guarded fields
+data Account = Frozen | Open Int
+
+status :: Account -> String
+status account = case account of
+  Frozen -> "locked"
+  Open balance
+    | balance < 0 -> "debt"
+    | balance == 0 -> "empty"
+    | otherwise -> "credit"
+
+main :: IO ()
+main = print (status (Open 0))
+```
+
+```text
+"empty"
+```
+
+</HaskellTryIt>
+
+The input fails `Frozen`, then `Open balance` binds `balance = 0`. The negative guard fails, the equality guard succeeds, and `otherwise` is not tested.
+
+### Guards call a function and share an equation binding
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Guards call a function and share an equation binding
+admit :: [Int] -> String
+admit xs = case xs of
+  [] -> "no marks"
+  marks
+    | all (>= passMark) marks -> "all pass"
+    | otherwise -> "retry"
+  where
+    passMark = 50
+
+main :: IO ()
+main = do
+  print (admit [50,72])
+  print (admit [49,72])
+```
+
+```text
+"all pass"
+"retry"
+```
+
+</HaskellTryIt>
+
+Both non-empty inputs fail `[]` and bind `marks`. `passMark` is visible because the `where` belongs to the whole equation. `all (>= 50) [50,72]` is true; `all (>= 50) [49,72]` is false, so that call reaches `otherwise`.
+
+### Pattern guards: obtain a value while testing
+
+A **pattern guard** has the form `pattern <- expression`. It succeeds if the expression matches the pattern, and binds names for later guards in the same comma-separated sequence and for its result. This is matching, not assignment and not a Boolean comparison.
+
+```haskell
+-- Template: qualifiers in one guard sequence are tried left to right.
+case key of
+  k
+    | Just v <- lookup k table, v > 0 -> resultUsingV
+    | otherwise -> fallback
+```
+
+The lookup must return `Just v` **and** the Boolean condition must hold. If lookup returns `Nothing`, `v > 0` is not attempted. If lookup succeeds but `v > 0` is false, that guard sequence fails. A name bound in this sequence is not automatically available in the next `|` sequence.
+
+### Pattern guard: lookup succeeds and its Boolean test passes
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Pattern guard: lookup succeeds and its Boolean test passes
+reward :: String -> Int
+reward key = case key of
+  k
+    | Just v <- lookup k [("a",3),("b",-2)], v > 0 -> v * 2
+    | otherwise -> 0
+
+main :: IO ()
+main = print (reward "a")
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+`k` binds `"a"`. Lookup produces `Just 3`, binding `v = 3`; `v > 0` is true. The result is `3 * 2 = 6`.
+
+### Pattern guard: lookup succeeds but its Boolean test fails
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Pattern guard: lookup succeeds but its Boolean test fails
+reward :: String -> Int
+reward key = case key of
+  k
+    | Just v <- lookup k [("a",3),("b",-2)], v > 0 -> v * 2
+    | otherwise -> 0
+
+main :: IO ()
+main = print (reward "b")
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The variable pattern matches. Lookup gives `Just (-2)`, so the pattern guard succeeds and binds `v = -2`. The next qualifier is false. The next guard, `otherwise`, returns `0`. A successful lookup alone is not enough.
+
+### Pattern guard: lookup fails before the Boolean test
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Pattern guard: lookup fails before the Boolean test
+reward :: String -> Int
+reward key = case key of
+  k
+    | Just v <- lookup k [("a",3),("b",-2)], v > 0 -> v * 2
+    | otherwise -> 0
+
+main :: IO ()
+main = print (reward "missing")
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Lookup returns `Nothing`, which fails `Just v`. The Boolean qualifier is skipped; the next guard returns `0`. No value of `v` is invented.
+
+### Rewrite function guards as case guards, and back
+
+A function guard tests its equation's arguments; a case guard can test names from any matched scrutinee. To move function guards into a `case`, introduce a variable pattern, preserve guard order, and replace each guard's `=` with `->`. To move back, make that variable the function parameter and replace `->` with `=`. Do not move a payload-dependent guard outside the pattern that binds its payload.
+
+### Two equivalent guarded definitions
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Two equivalent guarded definitions
+discountEquation :: Int -> Int
+discountEquation n
+  | n >= 10 = 2
+  | otherwise = 0
+
+discountCase :: Int -> Int
+discountCase value = case value of
+  n
+    | n >= 10 -> 2
+    | otherwise -> 0
+
+main :: IO ()
+main = do
+  print (discountEquation 10, discountCase 10)
+  print (discountEquation 9, discountCase 9)
+```
+
+```text
+(2,2)
+(0,0)
+```
+
+</HaskellTryIt>
+
+The case variable pattern always matches. For `10`, the first guard is true in both definitions. For `9`, it is false and `otherwise` wins in both. The guard separators differ; the decision order does not.
+
+### Non-exhaustive guards and their repair
+
+Matching a variable pattern does **not** guarantee a result when that alternative has guards. This deliberately failing program belongs in a plain fence:
+
+```haskell
+-- Incorrect: no result when n is zero or negative.
+onlyPositive :: Int -> Int
+onlyPositive x = case x of
+  n | n > 0 -> n
+
+main :: IO ()
+main = print (onlyPositive 0)
+```
+
+The stable key part of the run-time message is `Non-exhaustive patterns in case` (GHC also includes a source location). With `-Wincomplete-patterns`, the warning includes `Pattern match(es) are non-exhaustive`. Repair it by adding `| otherwise -> 0` to the variable alternative, or `_ -> 0` as a later alternative. The `validCount` example demonstrates the latter repair.
+
+### Guard mistakes, diagnosis and repair
+
+These examples are intentionally rejected; they are not runnable exercises.
+
+```haskell
+-- Incorrect: function-equation punctuation in a case guard.
+badArrow :: Int -> Int
+badArrow x = case x of
+  n | n > 0 = n
+  _ -> 0
+```
+
+GHC's key diagnostic is `parse error on input '='`. Repair the guard separator to `->`. In the reverse direction, a function equation written `f n | n > 0 -> n` has `parse error on input '->'`; use `=` there.
+
+```haskell
+-- Incorrect: n is Int, but a Boolean guard must have type Bool.
+badTest :: Int -> Int
+badTest x = case x of
+  n | n -> 1
+  _ -> 0
+```
+
+GHC's diagnostic includes `Couldn't match expected type 'Bool' with actual type 'Int'`. Repair the guard to a test such as `n /= 0`.
+
+```haskell
+-- Incorrect: the guard escaped from its case alternative.
+badLayout :: Int -> Int
+badLayout x = case x of
+  n
+| n > 0 -> n
+```
+
+The key diagnostic is `parse error on input '|'`. Indent the guard beneath its pattern, with all guards aligned. A missing catch-all is different: it can compile successfully yet fail at run time, as `onlyPositive` shows. A name from another alternative is also unavailable: `Nothing -> n` cannot use the `n` from `Just n`; GHC reports `Variable not in scope`.
+
+### Exam question: guard order and fall-through
+
+Write `band :: Int -> String` using a guarded variable alternative for values above 100 and above 50, followed by an unguarded catch-all returning `"low"`. Explain `band 50`. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" needs a definition, and "explain" needs a trace. The strict boundaries are above 100 and above 50, so equality at 50 must fail both tests.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a variable pattern to bind the integer. Put the narrower high range first. Leave out `otherwise` in that alternative so the final default demonstrates fall-through.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+band :: Int -> String
+band value = case value of
+  n
+    | n > 100 -> "high"
+    | n > 50 -> "middle"
+  _ -> "low"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+For `50`, bind `n = 50`; `50 > 100` is false and `50 > 50` is false. All guards fail. Try the next alternative `_` on `50`, returning `"low"`. For `101`, both guards would be true, but the first wins, giving `"high"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 14. A whole-equation where and an alternative-local let
+
+Use `where` for names needed across the equation, including several alternatives. Use `let ... in` inside one result for names needed only there. An equation-level `where` can see the function's parameters, but it cannot see a name bound only by a case alternative.
+
+```haskell
+-- Template: shared can see input; local can also see field.
+f input = case input of
+  Just field -> let local = field + shared in local
+  Nothing -> shared
+  where
+    shared = 10
+```
+
+| Place | Can see the function parameter? | Can see this alternative's pattern variables? |
+|---|---|---|
+| Equation-level `where` | Yes | No |
+| Guard or result of the alternative | Yes | Yes |
+| `let` within that result | Yes | Yes |
+| Another alternative | Yes | No |
+
+### Share a value across alternatives
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Share a value across alternatives
+charge :: Maybe Int -> Int
+charge m = case m of
+  Nothing -> base
+  Just n -> base + n
+  where
+    base = 5
+
+main :: IO ()
+main = print (charge Nothing, charge (Just 3))
+```
+
+```text
+(5,8)
+```
+
+</HaskellTryIt>
+
+For `Nothing`, the first alternative selects `base = 5`. For `Just 3`, the first fails, the second binds `n = 3` and computes `5 + 3`. Both alternatives can see the equation-level name.
+
+### A local calculation uses a pattern field
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A local calculation uses a pattern field
+squareFound :: Maybe Int -> Int
+squareFound m = case m of
+  Nothing -> 0
+  Just n -> let square = n * n in square + 1
+
+main :: IO ()
+main = print (squareFound (Just 4))
+```
+
+```text
+17
+```
+
+</HaskellTryIt>
+
+`Nothing` fails; `Just n` binds `4`. The local binding computes `square = 16` when the result needs it, then returns `17`. `square` is not in scope in the `Nothing` result.
+
+### A where binding uses the original parameter
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A where binding uses the original parameter
+adjust :: [Int] -> Int
+adjust xs = case xs of
+  [] -> size
+  (x:_) -> x + size
+  where
+    size = length xs
+
+main :: IO ()
+main = print (adjust [7,8,9])
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+The empty pattern fails; the cons pattern binds `x = 7`. The equation-level `size` uses parameter `xs`, not `x`, and gives `3`; `7 + 3 = 10`.
+
+### Both scopes in one definition
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Both scopes in one definition
+total :: Maybe Int -> Int
+total input = case input of
+  Nothing -> base
+  Just n -> let extra = n * rate in base + extra
+  where
+    base = 2
+    rate = 3
+
+main :: IO ()
+main = print (total (Just 4))
+```
+
+```text
+14
+```
+
+</HaskellTryIt>
+
+`Nothing` fails, `Just n` binds `4`. Local `extra` sees `n` and shared `rate`, giving `12`. Shared `base` gives `2`; the total is `14`.
+
+### Exam question: choose the scope
+
+Write `boost :: Maybe Int -> Int`, returning 5 for absence and five plus the square of a present value. Use a shared `where` constant and a local `let`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" asks for a definition with two specified binding locations.
+
+</Step>
+
+<Step title="2. Plan">
+
+Share the constant across the whole equation; square the payload only inside its successful alternative.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+boost :: Maybe Int -> Int
+boost m = case m of
+  Nothing -> base
+  Just n -> let square = n * n in base + square
+  where
+    base = 5
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`boost Nothing = 5`; `boost (Just 2) = 5 + 4 = 9`. The shared binding never refers to `n`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common scope error">
+
+Moving `square = n * n` from the `Just n` result to the whole-equation `where` fails: GHC reports `Variable not in scope: n`. Keep it in a `let` under that alternative, or make a helper with its own parameter, such as `square n = n * n`.
+
+</Callout>
+
+## 15. Case nested inside case
+
+An outer match can expose a value whose shape needs a second decision. Indentation must show which alternatives belong to which `case`. A nested match can make a long pattern easier to discuss, while a nested pattern can make a short decision more compact.
+
+```haskell
+-- Template: the inner choices are further indented.
+case outerValue of
+  Outer inner -> case inner of
+    InnerA -> resultA
+    InnerB -> resultB
+  Other -> fallback
+```
+
+### Inspect an optional list in two stages
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Inspect an optional list in two stages
+describe :: Maybe [Int] -> String
+describe m = case m of
+  Nothing -> "absent"
+  Just xs -> case xs of
+    [] -> "empty"
+    (_:_) -> "non-empty"
+
+main :: IO ()
+main = print (describe (Just []))
+```
+
+```text
+"empty"
+```
+
+</HaskellTryIt>
+
+The outer `Nothing` fails and `Just xs` binds `[]`. The first inner alternative then matches. The result is `"empty"`, not `"absent"`.
+
+### Two optional values
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Two optional values
+addBoth :: Maybe Int -> Maybe Int -> Maybe Int
+addBoth first second = case first of
+  Nothing -> Nothing
+  Just x -> case second of
+    Nothing -> Nothing
+    Just y -> Just (x + y)
+
+main :: IO ()
+main = print (addBoth (Just 2) (Just 5))
+```
+
+```text
+Just 7
+```
+
+</HaskellTryIt>
+
+The first outer pattern fails; bind `x = 2`. The inner `Nothing` fails; bind `y = 5`, then return `Just 7`.
+
+### A character followed by a test
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A character followed by a test
+tag :: String -> String
+tag text = case text of
+  [] -> "blank"
+  (c:_) -> case c == '!' of
+    True -> "urgent"
+    False -> "ordinary"
+
+main :: IO ()
+main = print (tag "hello")
+```
+
+```text
+"ordinary"
+```
+
+</HaskellTryIt>
+
+The outer empty case fails and binds `c = 'h'`. The inner test is `False`; `True` fails, then `False` returns `"ordinary"`.
+
+### Only inspect the tail after a non-empty match
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Only inspect the tail after a non-empty match
+two :: [Int] -> Bool
+two xs = case xs of
+  [] -> False
+  (_:rest) -> case rest of
+    [] -> False
+    (_:_) -> True
+
+main :: IO ()
+main = print (two [9], two [9,8])
+```
+
+```text
+(False,True)
+```
+
+</HaskellTryIt>
+
+For `[9]`, the outer cons matches with `rest = []`, so the first inner alternative returns `False`. For `[9,8]`, `rest = [8]`; the inner empty pattern fails and its cons returns `True`.
+
+### Exam question: flatten a nested decision
+
+Write `hasHead :: Maybe [Int] -> Bool` using one case and nested patterns instead of nested cases. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The required output records both presence and non-emptiness.
+
+</Step>
+
+<Step title="2. Plan">
+
+Combine the outer `Just` and the inner cons in one pattern.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+hasHead :: Maybe [Int] -> Bool
+hasHead m = case m of
+  Just (_:_) -> True
+  _ -> False
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`Just []` fails the inner cons. `Nothing` fails the outer constructor. Both reach `False`; `Just [1]` gives `True`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common nesting error">
+
+Aligning an outer alternative with the inner alternatives can attach it to the wrong case. This can produce `Couldn't match type` when the pattern belongs to the outer type. Check which scrutinee each pattern is matching; align outer alternatives with each other, and indent inner alternatives further.
+
+</Callout>
+
+## 16. A case is a value inside a larger expression
+
+A `case` does not have to occupy the entire right-hand side. It may contribute a number to arithmetic, supply an argument, or define a local value. Parentheses make its boundary clear.
+
+```haskell
+-- Templates; replace the placeholders.
+1 + (case value of { pattern -> result; _ -> fallback })
+function (case value of { pattern -> result; _ -> fallback })
+let name = case value of { pattern -> result; _ -> fallback }
+in expressionUsingName
+```
+
+### Arithmetic around the choice
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Arithmetic around the choice
+score :: Maybe Int -> Int
+score m = 1 + (case m of
+  Nothing -> 0
+  Just n -> n)
+
+main :: IO ()
+main = print (score (Just 4))
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+`Nothing` fails; `Just n` binds `4` and makes the case value `4`. The surrounding addition then gives `1 + 4 = 5`.
+
+### The choice supplies an argument
+
+<HaskellTryIt>
+
+```haskell
+-- Question: The choice supplies an argument
+main :: IO ()
+main = print (length (case True of
+  True -> "long"
+  False -> "x"))
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+The first pattern matches `True`, returning `"long"`. This string is the argument to `length`; `print` receives `4`.
+
+### A case in a let binding
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A case in a let binding
+main :: IO ()
+main = print (let count = case [2,3] of
+                   [] -> 0
+                   (_:rest) -> 1 + length rest
+              in count * 10)
+```
+
+```text
+20
+```
+
+</HaskellTryIt>
+
+The local scrutinee is non-empty, so `[]` fails and `rest = [3]`. The case yields `2`, binding `count`; the final expression multiplies it by `10`.
+
+### A choice inside a tuple
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A choice inside a tuple
+main :: IO ()
+main = print ("state", case compare (8 :: Int) 3 of
+  LT -> "behind"
+  EQ -> "level"
+  GT -> "ahead")
+```
+
+```text
+("state","ahead")
+```
+
+</HaskellTryIt>
+
+Comparison produces `GT`. `LT` and `EQ` fail; the case supplies `"ahead"` as the second tuple component.
+
+### Exam question: use the value in arithmetic
+
+Write `bonus :: Maybe Int -> Int`, adding 10 to a case expression that yields zero for absence and the payload otherwise. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The question requires the addition outside the case.
+
+</Step>
+
+<Step title="2. Plan">
+
+Make both alternatives return `Int`, then add 10 to their common expression.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+bonus :: Maybe Int -> Int
+bonus m = 10 + (case m of
+  Nothing -> 0
+  Just n -> n)
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`bonus Nothing = 10 + 0 = 10`; `bonus (Just 3) = 10 + 3 = 13`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common result-type error">
+
+A case cannot choose between an `Int` and a `Bool` just because a surrounding `print` could print either separately. Each expression has one type. GHC reports `Couldn't match expected type` for incompatible results. Convert both results to the intended common type.
+
+</Callout>
+
+## 17. Four equivalent ways to implement a specification
+
+Specification: an empty queue has fee 0; every non-empty queue has fee 2. This decision can be expressed with `if`, function guards, multiple equations, or `case`. Unlike a numerical recurrence, this example has no hidden restriction to positive inputs.
+
+```haskell
+-- Conversion templates.
+f [] = emptyResult
+f (x:xs) = nonEmptyResult
+
+f input = case input of
+  [] -> emptyResult
+  (x:xs) -> nonEmptyResult
+```
+
+| Conversion | Rule |
+|---|---|
+| Equations to case | Make one equation over a fresh parameter; move each argument pattern to an alternative and replace its `=` with `->` |
+| Case to equations | Move each pattern to the function's argument position, preserving order; replace `->` with `=` |
+| If to case | Match the condition against `True` and `False`; reverse this to recover `if` |
+| Function guards to case guards | Bind a variable pattern and preserve the tests and their order; replace guard `=` with `->`; reverse these changes to move back |
+
+For several arguments, case-match a tuple of them. A computed scrutinee may need a helper equation to move back to multiple equations; it cannot simply become an argument pattern containing a function call.
+
+### Conditional form
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Conditional form
+queueFee :: [Int] -> Int
+queueFee xs = if null xs then 0 else 2
+
+main :: IO ()
+main = print (queueFee [], queueFee [7])
+```
+
+```text
+(0,2)
+```
+
+</HaskellTryIt>
+
+For `[]`, `null` is true, so select the first result. For `[7]`, it is false, so select the second.
+
+### Function-guard form
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Function-guard form
+queueFee :: [Int] -> Int
+queueFee xs
+  | null xs = 0
+  | otherwise = 2
+
+main :: IO ()
+main = print (queueFee [], queueFee [7])
+```
+
+```text
+(0,2)
+```
+
+</HaskellTryIt>
+
+For `[]`, the first guard succeeds. For `[7]`, it fails and `otherwise` succeeds.
+
+### Multiple-equation form
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Multiple-equation form
+queueFee :: [Int] -> Int
+queueFee [] = 0
+queueFee (_:_) = 2
+
+main :: IO ()
+main = print (queueFee [], queueFee [7])
+```
+
+```text
+(0,2)
+```
+
+</HaskellTryIt>
+
+For `[]`, the first equation matches. `[7]` fails it and matches the cons equation.
+
+### Case form
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Case form
+queueFee :: [Int] -> Int
+queueFee xs = case xs of
+  [] -> 0
+  (_:_) -> 2
+
+main :: IO ()
+main = print (queueFee [], queueFee [7])
+```
+
+```text
+(0,2)
+```
+
+</HaskellTryIt>
+
+For `[]`, the first alternative matches. `[7]` fails it and matches the cons alternative. No Boolean test is needed.
+
+### Exam question: convert without changing boundaries
+
+Write `small :: Int -> Bool` using `case` on a Boolean, equivalent to `small n = if n < 5 then True else False`. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The conversion must preserve the strict comparison.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `n < 5` as scrutinee and retain the true and false results.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+small :: Int -> Bool
+small n = case n < 5 of
+  True -> True
+  False -> False
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+At `4`, the test is true. At `5`, it is false. Changing the comparison to `<=` would change the boundary behaviour.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common conversion error">
+
+A pattern cannot be an arbitrary calculation such as `length xs`. GHC can report `Parse error in pattern`. Match on the calculation as the scrutinee, or use a variable pattern with a guard that calls the calculation.
+
+</Callout>
+
+## 18. Order, overlap, completeness and layout
+
+An earlier general alternative can hide a later specific one. Completeness asks a different question: is there a successful alternative for every input? Check both pattern coverage and guard coverage.
+
+```haskell
+-- Ordering template: special shapes before the general fallback.
+f input = case input of
+  specificPattern -> specialResult
+  generalPattern -> remainingResult
+```
+
+### Correct order for exact and open lengths
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Correct order for exact and open lengths
+sizeTag :: [Int] -> String
+sizeTag xs = case xs of
+  [] -> "empty"
+  [_] -> "single"
+  (_:_:_) -> "longer"
+
+main :: IO ()
+main = print (sizeTag [], sizeTag [4], sizeTag [4,5])
+```
+
+```text
+("empty","single","longer")
+```
+
+</HaskellTryIt>
+
+`[]` matches first. `[4]` fails empty and matches the singleton. `[4,5]` fails both exact patterns and matches at least two cons cells. Together these cover every list length.
+
+### A repaired optional match
+
+<HaskellTryIt>
+
+```haskell
+-- Question: A repaired optional match
+safe :: Maybe Int -> Int
+safe m = case m of
+  Just n -> n
+  Nothing -> 0
+
+main :: IO ()
+main = print (safe Nothing, safe (Just 3))
+```
+
+```text
+(0,3)
+```
+
+</HaskellTryIt>
+
+`Nothing` fails the `Just` pattern, then matches absence. `Just 3` matches the first alternative with `n = 3`. Neither input falls off the end.
+
+### Aligned alternatives and guards
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Aligned alternatives and guards
+label :: Int -> String
+label x = case x of
+  0 -> "zero"
+  n
+    | n < 0 -> "minus"
+    | otherwise -> "plus"
+
+main :: IO ()
+main = print (label (-1))
+```
+
+```text
+"minus"
+```
+
+</HaskellTryIt>
+
+The zero pattern fails. The aligned variable alternative binds `n = -1`; its first guard is true. The extra indentation ties the guards to `n`.
+
+### Explicit braces and semicolons
+
+<HaskellTryIt>
+
+```haskell
+-- Question: Explicit braces and semicolons
+digit :: Int -> String
+digit n = case n of { 0 -> "zero"; 1 -> "one"; _ -> "other" }
+
+main :: IO ()
+main = print (digit 1)
+```
+
+```text
+"one"
+```
+
+</HaskellTryIt>
+
+The first literal fails, the second matches. Braces mark the alternative group and semicolons separate alternatives, replacing layout. Prefer line breaks for long guarded choices.
+
+### Unreachable alternatives and incomplete matches
+
+```haskell
+-- Incorrect order: the later alternative is unreachable.
+hidden :: [Int] -> Int
+hidden xs = case xs of
+  _ -> 0
+  [] -> 1
+```
+
+With overlap warnings enabled, GHC's key message is `Pattern match is redundant`. `hidden []` would select `_` and yield `0`. Repair by moving the empty pattern first. Similarly, `(x:xs)` before `[x]` hides a singleton alternative.
+
+```haskell
+-- Incorrect: deliberately crashes for an absent value.
+unsafe :: Maybe Int -> Int
+unsafe m = case m of
+  Just n -> n
+
+main :: IO ()
+main = print (unsafe Nothing)
+```
+
+With `-Wincomplete-patterns`, GHC warns `Pattern match(es) are non-exhaustive`. At run time the key text is `Non-exhaustive patterns in case`; a source location is included too. The `safe` variation above repairs the missing constructor. A wildcard also repairs coverage, but naming each constructor can make a future type extension easier to notice.
+
+### Syntax and type errors to recognise
+
+```haskell
+-- Incorrect: missing of.
+badOf :: Int -> Int
+badOf n = case n
+  0 -> 1
+  _ -> 2
+```
+
+The key diagnostic is `parse error on input '->'`. Insert `of` after the scrutinee.
+
+```haskell
+-- Incorrect: the second alternative escaped the layout block.
+badIndent :: Int -> Int
+badIndent n = case n of
+  0 -> 1
+_ -> 2
+```
+
+The key diagnostic is `parse error on input '->'`. Align `_` with `0` inside the case.
+
+```haskell
+-- Incorrect: a Bool pattern cannot match an Int input.
+badPattern :: Int -> Int
+badPattern n = case n of
+  True -> 1
+  _ -> 0
+```
+
+GHC's key diagnostic includes `Couldn't match expected type 'Int' with actual type 'Bool'`. Use integer patterns, or change the scrutinee to a Boolean test.
+
+```haskell
+-- Incorrect: all alternatives must return the same type.
+badResult :: Bool -> Int
+badResult b = case b of
+  True -> 1
+  False -> False
+```
+
+GHC's diagnostic includes `Couldn't match expected type 'Int' with actual type 'Bool'`. Repair the second result to an integer, such as `0`. The earlier guard section covers a non-Boolean guard separately: the guard has type `Bool`, while its result has the case's result type.
+
+### Exam question: complete a match
+
+Write `describe :: Maybe Bool -> String`, distinguishing absence, present true and present false. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The input has two outer constructors, with two possibilities inside `Just`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one absence pattern and two nested Boolean patterns.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+describe :: Maybe Bool -> String
+describe value = case value of
+  Nothing -> "absent"
+  Just True -> "yes"
+  Just False -> "no"
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`Just False` fails both earlier patterns and takes the third. Every fully defined input has one of these three shapes.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Try alternatives from top to bottom. A pattern must match throughout; its names then become available in that alternative. Try guards in order and stop at the first `True`. If every guard fails, continue with the next alternative on the original scrutinee. Use `->` after a case pattern or guard, `=` after a function-equation guard. All results share one type. Check overlap, missing shapes, missing guarded outcomes and indentation before claiming a definition is complete.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Does a matching variable pattern guarantee a result?">
+
+Only if it is unguarded, or one of its guards succeeds. If all guards are false, matching moves to the next alternative; if none succeeds, evaluation fails.
+
+</CheckQuestion>
+
+<CheckQuestion question="How do [x,y] and (x:y:rest) differ?">
+
+The first requires exactly two elements. The second requires at least two and binds the remaining tail, which may be empty.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does whole@(Just n) bind?">
+
+It binds `whole` to the complete optional value and `n` to the payload. It does not match `Nothing`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can an equation-level where see a name introduced by Just n?">
+
+No. Put a calculation using `n` in that alternative's result with `let`, or use a helper that takes `n` as a parameter.
+
+</CheckQuestion>
+
+<CheckQuestion question="What happens after Just v succeeds in a pattern guard but v > 0 fails?">
+
+That comma-separated guard sequence fails. Try the next guard sequence, or the next alternative if no guards remain.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Case Exam Practice](/docs/sem3/csi243/04-making-choices/notes/case-exam-practice).

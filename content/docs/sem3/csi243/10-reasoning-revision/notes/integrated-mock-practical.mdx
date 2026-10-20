@@ -1,0 +1,2252 @@
+---
+title: "Integrated Mock Practical"
+description: "Attempt an independent sensor-network practical and written diagnostic, then compare a complete narrated solution against a 100-mark scheme."
+---
+
+Attempt this mock without opening the answers. Its sensor-network specification is self-contained: no grade-book definitions or datasets are needed. It combines modelling, missing data, policy choices, validation, pure reporting, module design, tests and cost reasoning.
+
+<LearningObjectives items={["Implement an unfamiliar complete specification under time pressure", "Trace reports and distinguish aggregation policies", "Diagnose type, import and logical errors", "Justify tests and a cost comparison", "Mark an answer using an explicit 100-mark scheme"]} />
+
+The prerequisite techniques are in [Custom Data Types](/docs/sem3/csi243/08-modules-types/notes/custom-types), [List Comprehensions](/docs/sem3/csi243/06-lists-tuples/notes/list-comprehensions), [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth), [Either in Depth](/docs/sem3/csi243/09-polymorphism/notes/either-in-depth), [Modules](/docs/sem3/csi243/08-modules-types/notes/modules) and [Errors and Testing](/docs/sem3/csi243/10-reasoning-revision/notes/errors-and-testing). You may use Prelude functions unless a question says otherwise.
+
+## 1. Candidate paper and specification
+
+Allow 90 minutes: 60 for practical questions 1–7 (58 marks), then 30 for written questions 8–12 (42 marks). Stop before section 3, save your attempt, then mark it. Award method marks for a correct policy and reasoning even if a later unrelated part fails. Do not deduct twice for the same carried-forward mistake.
+
+A sensor has a case-sensitive identifier String and a finite list of Double temperature readings. Empty readings mean offline, not zero. A valid identifier is non-empty; whitespace-only identifiers count as non-empty in this mock. Identifiers must be unique. Every reading is finite and lies in the inclusive interval from -40 to 60 Celsius. Validate rows in encounter order; within a row check empty identifier, duplicate identifier, then readings. Return the first reason, exactly as specified below.
+
+A present mean is the sum divided by the number of readings. Bands classify the unrounded mean: at least 30 is Hot, at least 10 is Mild, otherwise Cold. A network mean gives each online sensor equal influence; a pooled mean gives each reading equal influence. No contributing values means Nothing.
+
+An individual line is `id: offline` or `id: value C - band` using show for the Double. The network report is `Network mean: ` followed by show of the optional equal-sensor mean. An invalid dataset instead reports `ERROR: ` followed by the reason. Error reasons are `empty id`, `duplicate id: id` or `invalid reading: id`. A valid empty dataset is reportable. Validation must preserve accepted rows exactly.
+
+Use these four complete fixtures. They are input values, not hidden answers.
+
+```haskell
+datasets :: [[Sensor]]
+datasets =
+  [ []
+  , [Sensor "North" [],Sensor "South" []]
+  , [Sensor "North" [40],Sensor "South" [0,0,0]]
+  , [Sensor "North" [-40,60],Sensor "Relay" [],Sensor "South" [30]]
+  ]
+```
+
+For validation tests also use `[Sensor "X" [61]]` and `[Sensor "X" [20],Sensor "X" [61]]`.
+
+| Question | Candidate task | Marks |
+| --- | --- | --- |
+| 1 | Declare Sensor with sensorId and readings; give its constructor type and explain the representation's limits. | 8 |
+| 2 | Write meanReading safely for empty, singleton and longer lists. | 8 |
+| 3 | Write band and choose boundary tests that distinguish strict from inclusive comparisons. | 8 |
+| 4 | Write networkMean using constructor-pattern comprehensions, then pooledMean; compare policies on unequal counts. | 10 |
+| 5 | Write validateNetwork with the exact priority and reasons. | 8 |
+| 6 | Write sensorLine and reportNetwork, preserving absence and validation failures. | 8 |
+| 7 | Split model, core, report, application and tests into files. Write the complete application and local commands. | 8 |
+| 8 | Dry run all four fixtures and the duplicate-invalid fixture. Give exact reports and justify the path taken. | 8 |
+| 9 | Supply exact, approximate and property oracles, labelled tests and a runner which fails the process on a false result. | 8 |
+| 10 | Diagnose and repair the three faulty fragments below; classify the faults. | 8 |
+| 11 | Compare cached one-pass-per-sensor aggregation with a comprehension that recomputes a mean once for every reading. Derive the cost and explain whether results agree. | 10 |
+| 12 | Design a safe duration-weighted mean for (temperature,hours) pairs. Hours lie in 0 through 24, zero weights are permitted, and total hours must be positive. Explain its policy. | 8 |
+
+For question 10, assume the candidate signatures above. These intentionally faulty fragments are not executable examples:
+
+```haskell
+-- Incorrect: wrong successful return type.
+meanBad :: [Double] -> Maybe Double
+meanBad [] = Nothing
+meanBad xs = sum xs / fromIntegral (length xs)
+```
+
+GHC key phrase: `Couldn't match`.
+
+```haskell
+-- Incorrect: retained wrappers.
+networkBad sensors = meanReading [meanReading xs | Sensor _ xs <- sensors]
+```
+
+GHC key phrase: `Couldn't match`.
+
+```haskell
+-- Incorrect policy: divides by every enrolled sensor.
+networkWrong sensors =
+  case networkMean sensors of
+    Nothing -> Nothing
+    Just m -> Just (m / fromIntegral (length sensors))
+```
+
+The third fragment compiles. You must give an input that exposes its logical error.
+
+## 2. Independent starter
+
+Save this as MockStarter.hs. It provides the complete question contract above through requested signatures and fixtures, with no solutions. The diagnostic main deliberately prints only fixture sizes, so it runs before you implement the functions. Replace it with the specified application and tests during the practical. Do not execute an undefined body as a normal check.
+
+**MockStarter.hs**
+
+```haskell
+-- Implement questions 1–12 using the specification in this paper.
+-- Replace this temporary representation by the required record in Q1.
+data Sensor = Sensor String [Double] deriving (Eq, Show)
+
+sensorId :: Sensor -> String
+sensorId = undefined
+readings :: Sensor -> [Double]
+readings = undefined
+meanReading :: [Double] -> Maybe Double
+meanReading = undefined
+band :: Double -> String
+band = undefined
+networkMean :: [Sensor] -> Maybe Double
+networkMean = undefined
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean = undefined
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = undefined
+sensorLine :: Sensor -> String
+sensorLine = undefined
+reportNetwork :: [Sensor] -> String
+reportNetwork = undefined
+durationMean :: [(Double,Double)] -> Maybe Double
+durationMean = undefined
+
+datasets :: [[Sensor]]
+datasets =
+  [ []
+  , [Sensor "North" [],Sensor "South" []]
+  , [Sensor "North" [40],Sensor "South" [0,0,0]]
+  , [Sensor "North" [-40,60],Sensor "Relay" [],Sensor "South" [30]]
+  ]
+
+main :: IO ()
+main = print (map length datasets)
+```
+
+The starter prints `[0,2,2,3]` without evaluating any unfinished function. Once you declare the record in Q1, remove the two temporary accessor declarations: the record generates them.
+
+## 3. Full mark scheme
+
+Each row totals the question's marks. Equivalent correct definitions earn full credit; preserve the specification's outputs, error priority and averaging unit.
+
+| Question | Award marks for |
+| --- | --- |
+| 1 | Record and correct field types 3; Eq/Show 1; constructor type 2; raw model permits invalid values and duplicate labels 2. |
+| 2 | Signature 1; empty case 2; sum and count 2; conversion and Just 2; singleton check 1. |
+| 3 | High threshold first 2; inclusive thresholds 2; correct three labels 1; below/at/above test choices 3. |
+| 4 | Equal-sensor two-stage collection 4; skips Nothing 1; safe outer mean 1; pooled flattening 2; 20 versus 10 comparison 2. |
+| 5 | Signature 1; row-order recursion 1; exact reasons and priority 3; range endpoints 1; seen identifiers 1; preserves successful rows including missing data 1. |
+| 6 | Individual absent/present branches 3; exact formatting 2; validate before network result 2; preserves first error 1. |
+| 7 | Acyclic responsibilities 2; correct headers/imports 2; ordered application output 2; separate app/test commands and search paths 2. |
+| 8 | Four network reports 4; unequal-policy explanation 1; duplicate-invalid error and priority 2; individual offline path 1. |
+| 9 | Three suitable oracle kinds 3; presence check 1; independent expectations/labels 1; IO Bool and sequence 1; count and non-zero failure status 1; evidence versus proof 1. |
+| 10 | Identify bare payload type error and repair 3; identify retained wrappers and repair 3; logical counterexample and repair 2. |
+| 11 | Defines s and per-sensor sizes 2; cached total linear cost 2; repeated quadratic sum bound 2; identifies changed weighting 2; separates numeric assumptions/output/space 2. |
+| 12 | Signature and pair representation 1; valid temperature/hour intervals 2; empty/zero-total rejection 2; weighted numerator and denominator 2; policy/check 1. |
+
+<Callout type="note" title="Open the solutions after attempting the paper">
+
+The twelve answers below narrate the command word, plan, solution and check. Each integration concept includes at least three runnable worked variations. The full single-file core near the end also supports experiments with your own fixtures.
+
+</Callout>
+
+## 4. Model, missing data and classification answers
+
+A sensor record groups one identifier with a list of measurements; it does not establish the validity of those measurements. An empty readings list is legitimate offline data.
+
+**Template:** `data Domain = Constructor { identifier :: String, values :: [Double] } deriving (Eq,Show)`. Choose fields to match the specification, then validate the rules the field types cannot express.
+
+### Variation: read an identifier
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+
+main :: IO ()
+main = print (sensorId (Sensor "North" [20]))
+```
+
+```text
+"North"
+```
+
+</HaskellTryIt>
+
+The accessor returns the label; print adds String quotes.
+
+### Variation: read offline data
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+
+main :: IO ()
+main = print (readings (Sensor "Relay" []))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+Offline data is an empty readings list, not a singleton zero.
+
+### Variation: retain endpoints
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+
+main :: IO ()
+main = print (readings (Sensor "Edge" [-40,60]))
+```
+
+```text
+[-40.0,60.0]
+```
+
+</HaskellTryIt>
+
+The record keeps both Double endpoints; it does not silently normalise them.
+
+### Exam question 1: model an unfamiliar domain (8 marks)
+
+Declare the Sensor record and state its constructor type and limits.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Declare” needs a data definition; “state” needs the constructor signature and what types cannot guarantee.
+
+</Step>
+
+<Step title="2. Plan">
+
+One sensor groups one identifier with many readings. Reuse the existing record technique, then distinguish representation from validation.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+```
+`Sensor :: String -> [Double] -> Sensor`. Neither field enforces non-empty identity, uniqueness, finiteness or the allowed range.
+
+</Step>
+
+<Step title="4. Check">
+
+A sensor with [] is representable and meaningful as offline; Sensor "" [61] is representable but invalid under the contract.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** reversing the constructor arguments gives GHC `Couldn't match`. Keeping the starter accessor definitions after introducing record fields creates duplicate definitions; remove them. A successful construction is not a successful validation.
+
+**Practice:** Can you represent two sensors named North?
+
+<details>
+<summary>Answer</summary>
+
+Yes. A list can contain both. Reject the duplicate at the validation boundary.
+
+</details>
+
+Missing sensor data must remain distinct from a real zero-degree mean. A successful mean divides the sum of exactly those readings by their count.
+
+**Template:** empty list → Nothing; non-empty list → Just of the sum divided by the converted count. Convert Int to Double before division.
+
+### Variation: no samples
+
+<HaskellTryIt>
+
+```haskell
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+
+main :: IO ()
+main = print (meanReading [])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+The empty equation avoids zero division.
+
+### Variation: negative singleton
+
+<HaskellTryIt>
+
+```haskell
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+
+main :: IO ()
+main = print (meanReading [-10])
+```
+
+```text
+Just (-10.0)
+```
+
+</HaskellTryIt>
+
+Sum -10 divided by one is -10.0. Show puts a negative constructor argument in parentheses.
+
+### Variation: several samples
+
+<HaskellTryIt>
+
+```haskell
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+
+main :: IO ()
+main = print (meanReading [0,20,40])
+```
+
+```text
+Just 20.0
+```
+
+</HaskellTryIt>
+
+The numerator is 60 and denominator 3.
+
+### Exam question 2: safe sensor mean (8 marks)
+
+Implement meanReading and check all three input shapes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Implement” asks for a result at every finite-list shape, including absence.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the empty/non-empty template. Convert the count before division and wrap only the numerical result.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+[] gives Nothing; [-10] gives Just (-10.0); [0,20,40] gives Just 20.0. Negative Celsius is valid, so it cannot serve as a missing sentinel.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** an Int length cannot be divided directly into a Double sum (`Couldn't match`); convert it. Returning zero for [] loses the distinction between offline and a real zero-degree reading.
+
+**Practice:** What is the difference between [] and [0]?
+
+<details>
+<summary>Answer</summary>
+
+Nothing versus Just 0.0. Only the second sensor is online.
+
+</details>
+
+Classification applies to an unrounded, valid mean. Overlapping inclusive lower bounds require testing the highest bound first.
+
+**Template:** highest bound → highest band; next bound → middle band; otherwise → lowest band.
+
+### Variation: lower boundary
+
+<HaskellTryIt>
+
+```haskell
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+
+main :: IO ()
+main = print (map band [9.5,10,10.5])
+```
+
+```text
+["Cold","Mild","Mild"]
+```
+
+</HaskellTryIt>
+
+Exactly 10 reaches the second inclusive guard.
+
+### Variation: upper boundary
+
+<HaskellTryIt>
+
+```haskell
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+
+main :: IO ()
+main = print (map band [29.5,30,30.5])
+```
+
+```text
+["Mild","Hot","Hot"]
+```
+
+</HaskellTryIt>
+
+Exactly 30 must reach the first guard.
+
+### Variation: negative and extreme valid readings
+
+<HaskellTryIt>
+
+```haskell
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+
+main :: IO ()
+main = print (map band [-40,0,60])
+```
+
+```text
+["Cold","Cold","Hot"]
+```
+
+</HaskellTryIt>
+
+Negative Celsius remains meaningful. The maximum valid reading is Hot.
+
+### Exam question 3: classify without rounding (8 marks)
+
+Implement band and give below/at/above boundary checks.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Implement” requires ordered guards; “give” requires discriminating inputs.
+
+</Step>
+
+<Step title="2. Plan">
+
+The two inclusive lower bounds overlap, so test 30 before 10.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+9.5, 10, 10.5 give Cold, Mild, Mild. 29.5, 30, 30.5 give Mild, Hot, Hot. A test using only 20 would miss both strict-boundary faults.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** checking 10 first makes Hot unreachable. Using strict comparisons misclassifies the boundaries. These compile, so tests must expose them. Rounding before classification changes the contract.
+
+**Practice:** Classify 29.75, even if a display shows 30.
+
+<details>
+<summary>Answer</summary>
+
+Mild. Decisions use the unrounded mean.
+
+</details>
+
+## 5. Aggregation, validation and report answers
+
+Aggregation has two levels: readings within a sensor, then sensors within the network. Validation and reporting consume that result without inventing absent values.
+
+**Aggregation template:** calculate each optional local result → collect present payloads → calculate one optional global result. Pooling flattens before calculating instead.
+
+### Variation: empty network
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+
+main :: IO ()
+main = do
+  let sensors = []
+  print (networkMean sensors, pooledMean sensors)
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+Neither policy has any values to average.
+
+### Variation: unequal counts
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+
+main :: IO ()
+main = do
+  let sensors = [Sensor "North" [40],Sensor "South" [0,0,0]]
+  print (networkMean sensors, pooledMean sensors)
+```
+
+```text
+(Just 20.0,Just 10.0)
+```
+
+</HaskellTryIt>
+
+Two sensor means average to 20; four readings average to 10.
+
+### Variation: offline sensor omitted
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+
+main :: IO ()
+main = do
+  let sensors = [Sensor "North" [30],Sensor "Relay" []]
+  print (networkMean sensors, pooledMean sensors)
+```
+
+```text
+(Just 30.0,Just 30.0)
+```
+
+</HaskellTryIt>
+
+The offline sensor contributes no mean and no readings, rather than an artificial zero.
+
+### Exam question 4: choose the unit of influence (10 marks)
+
+Implement networkMean and pooledMean, then compare the unequal fixture.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Implement” fixes both policies. “Compare” asks what gets counted in each denominator.
+
+</Step>
+
+<Step title="2. Plan">
+
+A constructor pattern extracts readings; the singleton Maybe generator drops offline sensors. For pooling, generate each raw reading instead.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+For North [40] and South [0,0,0], networkMean = (40+0)/2 = Just 20.0. PooledMean = 40/4 = Just 10.0. The different answers are required, not a bug.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** retained Maybe wrappers cannot be averaged as Doubles (`Couldn't match`). Dividing a collected sum by the total sensor count incorrectly includes offline sensors; GHC accepts that policy error. An equivalent collector is `mapMaybe (meanReading . readings)` followed by meanReading, with Data.Maybe imported.
+
+**Practice:** When do the policies agree mathematically?
+
+<details>
+<summary>Answer</summary>
+
+When online sensors have equal numbers of readings, or when their values happen to balance so both formulas coincide. Equal results on one fixture do not establish policy equivalence.
+
+</details>
+
+**Validation template:** thread seen identifiers → inspect current row rules in priority order → validate suffix → preserve accepted row. A first-error Either chain does not collect every defect.
+
+### Variation: valid endpoints with offline row
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+
+main :: IO ()
+main = do
+  let sensors = [Sensor "A" [-40,60],Sensor "B" []]
+  print (case validateNetwork sensors of Left _ -> False; Right checked -> checked == sensors)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Both endpoints pass. Empty readings pass all, and the distinct non-empty identifiers pass.
+
+### Variation: out of range
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+
+main :: IO ()
+main = do
+  let sensors = [Sensor "X" [61]]
+  putStrLn (case validateNetwork sensors of Left reason -> show reason; Right _ -> "accepted")
+```
+
+```text
+"invalid reading: X"
+```
+
+</HaskellTryIt>
+
+The first two rules pass; 61 violates the upper endpoint.
+
+### Variation: duplicate takes priority
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+
+main :: IO ()
+main = do
+  let sensors = [Sensor "X" [20],Sensor "X" [61]]
+  putStrLn (case validateNetwork sensors of Left reason -> show reason; Right _ -> "accepted")
+```
+
+```text
+"duplicate id: X"
+```
+
+</HaskellTryIt>
+
+The first X is remembered; the second fails identity before its readings rule.
+
+### Exam question 5: validate the complete input (8 marks)
+
+Implement validateNetwork with exact reasons and priority.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Implement” asks for a failure reason or the unchanged accepted list.
+
+</Step>
+
+<Step title="2. Plan">
+
+Track identifiers seen earlier. Check each row before the suffix; accept missing readings because offline is valid.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+An empty network returns Right []. The second X in [Sensor "X" [20],Sensor "X" [61]] produces duplicate id: X, before its out-of-range reading is inspected.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** clearing seen identifiers on recursion misses later duplicates. Silently dropping 61 changes evidence. Returning a String directly instead of Left gives `Couldn't match`. With raw constructors exported, clients can bypass validation, so the reporting entry checks raw input.
+
+**Practice:** Which defect wins in Sensor "" [61]?
+
+<details>
+<summary>Answer</summary>
+
+empty id, because within-row priority precedes the reading check. A non-finite reading also fails the bounded predicate.
+
+</details>
+
+**Report template:** optional local result → offline/present text; validated network → error/normal text. Formatting is pure; printing belongs to the application.
+
+### Variation: offline line
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = putStrLn (sensorLine (Sensor "Relay" []))
+```
+
+```text
+Relay: offline
+```
+
+</HaskellTryIt>
+
+The Nothing alternative avoids both show of a number and classification.
+
+### Variation: present mean
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = putStrLn (sensorLine (Sensor "North" [-40,60]))
+```
+
+```text
+North: 10.0 C - Mild
+```
+
+</HaskellTryIt>
+
+The mean is (-40+60)/2 = 10.0, exactly the Mild boundary.
+
+### Variation: invalid network line
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = putStrLn (reportNetwork [Sensor "X" [61]])
+```
+
+```text
+ERROR: invalid reading: X
+```
+
+</HaskellTryIt>
+
+Validation returns Left, so the report preserves its reason and omits the normal prefix.
+
+### Exam question 6: report both failure paths (8 marks)
+
+Implement sensorLine and reportNetwork with exact text.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Implement” includes absence, success and a validation failure.
+
+</Step>
+
+<Step title="2. Plan">
+
+Consume the optional local mean for a sensor. Validate raw network data before computing its aggregate.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+Sensor "A" [] gives A: offline; Sensor "A" [30] gives A: 30.0 C - Hot. An invalid network produces an ERROR line rather than a numeric report.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** print adds quotes while putStrLn does not. Showing a Maybe directly in an individual line violates the text contract; the network line deliberately retains the wrapper. Returning a number in one report branch and String in another gives `Couldn't match`.
+
+**Practice:** Can a valid network report still contain Nothing?
+
+<details>
+<summary>Answer</summary>
+
+Yes. Empty networks and all-offline networks are valid but have no aggregate.
+
+</details>
+
+## 6. Module layout and complete dry run
+
+**Boundary template:** Model owns representation; Core owns validation and arithmetic; Report owns pure text; separate Main entries own application effects and tests. Dependencies point towards Model. An export list specifies the names clients may mention; it can hide type names as well as functions.
+
+### Variation: model feeds calculation
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+
+main :: IO ()
+main = print (meanReading (readings (Sensor "A" [10,30])))
+```
+
+```text
+Just 20.0
+```
+
+</HaskellTryIt>
+
+Only a list of readings crosses the arithmetic boundary.
+
+### Variation: core feeds pure report
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = print (sensorLine (Sensor "A" [10]))
+```
+
+```text
+"A: 10.0 C - Mild"
+```
+
+</HaskellTryIt>
+
+The report returns testable text; print is an application choice.
+
+### Variation: report feeds IO
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = mapM_ (putStrLn . sensorLine) [Sensor "A" [],Sensor "B" [30]]
+```
+
+```text
+A: offline
+B: 30.0 C - Hot
+```
+
+</HaskellTryIt>
+
+The application sequences output in input order, without suppressing the online row after an offline row.
+
+**MonitorModel.hs**
+
+```haskell
+module MonitorModel (Sensor(..)) where
+
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+```
+
+**MonitorCore.hs**
+
+```haskell
+module MonitorCore
+  (meanReading, band, networkMean, pooledMean, validateNetwork) where
+import MonitorModel (Sensor(..))
+
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+```
+
+**MonitorReport.hs**
+
+```haskell
+module MonitorReport (sensorLine, reportNetwork) where
+import MonitorModel (Sensor(..))
+import MonitorCore (meanReading, band, networkMean, validateNetwork)
+
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+```
+
+**MonitorApp.hs**
+
+```haskell
+module Main where
+import MonitorModel (Sensor(..))
+import MonitorCore (validateNetwork)
+import MonitorReport (sensorLine, reportNetwork)
+
+sensors :: [Sensor]
+sensors = [Sensor "North" [40],Sensor "South" [0,0,0],Sensor "Relay" []]
+
+main :: IO ()
+main = case validateNetwork sensors of
+  Left reason -> putStrLn ("ERROR: " ++ reason)
+  Right checked -> do
+    putStrLn "Sensor network"
+    mapM_ (putStrLn . sensorLine) checked
+    putStrLn (reportNetwork checked)
+```
+
+Exact output, no input:
+
+```text
+Sensor network
+North: 40.0 C - Hot
+South: 0.0 C - Cold
+Relay: offline
+Network mean: Just 20.0
+```
+
+The app validates before any normal row output, avoiding a misleading partial success report on bad data. For this small design reportNetwork checks again when called independently. A larger API could expose an opaque validated-network type and let the report consume it, avoiding repeated validation without letting raw values bypass the invariant.
+
+### Exam question 7: deliver a modular application (8 marks)
+
+Split the solution into model, core, report, application and test files. Write commands to run the two entries.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Split” asks for real files with acyclic imports; “write” requires a complete effectful entry.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep arithmetic independent of text and IO. Export only the operations each downstream module needs.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use the five-file layout below plus a local TestSupport module. Save each named fence separately. Run `runhaskell MonitorApp.hs` and `runhaskell MonitorTest.hs` from that directory. The two Main entries are separate programs, not a single compilation unit.
+
+</Step>
+
+<Step title="4. Check">
+
+Changing report wording does not change validation or the mean. Both app and tests import the same Core and Report implementations.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** putting Report imports in Model creates a cycle. Missing module exports or using the wrong directory gives `Could not find module` or a name not in scope. Both Main files must run separately. These runnable boundary experiments do not verify the multi-file compiler search path.
+
+**Practice:** How should a private helper be tested?
+
+<details>
+<summary>Answer</summary>
+
+Prefer testing its observable effect through the exported operation. Expand the interface only when the helper itself belongs in the public contract.
+
+</details>
+
+### Exam question 8: dry run every fixture (8 marks)
+
+Give the four fixture network reports and the duplicate-invalid error, explaining the calculation and priority.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Dry run” asks for reached stages, not just final numbers. Use the fixed input order.
+
+</Step>
+
+<Step title="2. Plan">
+
+Validate first; collect online means; average; format the optional result. Trace the first failed validator separately.
+
+</Step>
+
+<Step title="3. Solution">
+
+Fixture 1 has no rows, so the collected list is []. Fixture 2 has rows but no online mean, so it also collects []. Fixture 3 collects [40,0], averaging to 20.0. Fixture 4 collects [10,30], averaging to 20.0; Relay is skipped. The second X in the duplicate-invalid input fails identity before its invalid reading.
+
+</Step>
+
+<Step title="4. Check">
+
+The exact runnable dry run below prints all four reports, the duplicate error, and the offline individual path. Pooling fixture 3 gives 10.0 rather than 20.0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+This is the complete runnable single-file answer for questions 1–6 and the fixture dry run. It contains all required definitions independently of other lessons.
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+datasets :: [[Sensor]]
+datasets =
+  [ []
+  , [Sensor "North" [],Sensor "South" []]
+  , [Sensor "North" [40],Sensor "South" [0,0,0]]
+  , [Sensor "North" [-40,60],Sensor "Relay" [],Sensor "South" [30]]
+  ]
+
+main :: IO ()
+main = do
+  mapM_ (putStrLn . reportNetwork) datasets
+  putStrLn (reportNetwork [Sensor "X" [20],Sensor "X" [61]])
+  putStrLn (sensorLine (Sensor "Relay" []))
+```
+
+```text
+Network mean: Nothing
+Network mean: Nothing
+Network mean: Just 20.0
+Network mean: Just 20.0
+ERROR: duplicate id: X
+Relay: offline
+```
+
+</HaskellTryIt>
+
+## 7. Oracles, tests and diagnostics
+
+**Oracle template:** calculate an expectation independently, choose exact/approximate/property comparison, label the assertion, then sequence its IO action. A present optional result needs a separate presence check; a zero fallback could hide an erroneous Nothing.
+
+### Variation: exact missing and text
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = do
+  print (meanReading [] == Nothing)
+  print (sensorLine (Sensor "A" []) == "A: offline")
+```
+
+```text
+True
+True
+```
+
+</HaskellTryIt>
+
+Exact comparison checks both the constructor and punctuation.
+
+### Variation: approximate present payload
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = do
+  print (case meanReading [0,1,1] of Nothing -> False; Just t -> abs (2/3-t) < 0.000001)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The numerator 2 and denominator 3 come from the fixture, not from calling the implementation again.
+
+### Variation: finite property and mutation detector
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+band :: Double -> String
+band t
+  | t >= 30 = "Hot"
+  | t >= 10 = "Mild"
+  | otherwise = "Cold"
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+validateNetwork :: [Sensor] -> Either String [Sensor]
+validateNetwork = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Sensor key xs):rest)
+      | null key = Left "empty id"
+      | key `elem` seen = Left ("duplicate id: " ++ key)
+      | not (all (\t -> t >= -40 && t <= 60) xs) = Left ("invalid reading: " ++ key)
+      | otherwise = case go (key:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+sensorLine :: Sensor -> String
+sensorLine (Sensor key xs) = case meanReading xs of
+  Nothing -> key ++ ": offline"
+  Just t -> key ++ ": " ++ show t ++ " C - " ++ band t
+
+reportNetwork :: [Sensor] -> String
+reportNetwork sensors = case validateNetwork sensors of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Network mean: " ++ show (networkMean checked)
+
+main :: IO ()
+main = do
+  print (all (\t -> meanReading [t] == Just t) [-40,0,60])
+  print (networkMean [Sensor "A" [40],Sensor "B" [0,0,0]] == Just 10)
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+Singleton preservation holds on these exact examples. The second check rejects the pooled expected value, showing why an unequal fixture matters.
+
+**TestSupport.hs**
+
+```haskell
+module TestSupport (assertEqual, assertTrue, assertApprox, runTests) where
+import System.Exit (exitFailure)
+
+assertEqual :: (Eq a, Show a) => String -> a -> a -> IO Bool
+assertEqual label expected actual = do
+  let passed = expected == actual
+  putStrLn (status passed ++ " " ++ label)
+  if passed
+    then pure True
+    else do
+      putStrLn ("    expected: " ++ show expected)
+      putStrLn ("    actual:   " ++ show actual)
+      pure False
+  where
+    status True = "PASS"
+    status False = "FAIL"
+
+assertTrue :: String -> Bool -> IO Bool
+assertTrue label = assertEqual label True
+
+assertApprox :: String -> Double -> Double -> IO Bool
+assertApprox label expected actual =
+  assertTrue label (abs (expected - actual) < 0.000001)
+
+runTests :: [IO Bool] -> IO ()
+runTests tests = do
+  results <- sequence tests
+  let passed = length (filter id results)
+      total = length results
+  putStrLn (show passed ++ "/" ++ show total ++ " tests passed")
+  if and results then pure () else exitFailure
+```
+
+These helpers are supplied here so the mock has no dependency on the capstone. The approximate helper uses strict absolute tolerance 0.000001 for finite Celsius values. At a very different scale choose a justified absolute/relative policy. Its failed diagnostic shows True versus False; include a descriptive label. Equality diagnostics display expected and actual values.
+
+**MonitorTest.hs**
+
+```haskell
+module Main where
+import MonitorModel (Sensor(..))
+import MonitorCore (meanReading, band, networkMean, validateNetwork)
+import MonitorReport (sensorLine, reportNetwork)
+import TestSupport (assertEqual, assertTrue, assertApprox, runTests)
+
+main :: IO ()
+main = runTests
+  [ assertEqual "empty mean" Nothing (meanReading [])
+  , assertEqual "hot boundary" "Hot" (band 30)
+  , assertEqual "offline text" "Relay: offline" (sensorLine (Sensor "Relay" []))
+  , assertEqual "invalid report" "ERROR: invalid reading: X"
+      (reportNetwork [Sensor "X" [61]])
+  , assertEqual "duplicate priority" (Left "duplicate id: X")
+      (validateNetwork [Sensor "X" [20],Sensor "X" [61]])
+  , assertTrue "equal sensor mean present" networkOK
+  , assertApprox "hand numeric calculation" 20 ((40+0)/2)
+  , assertTrue "singleton endpoints" (all (\t -> meanReading [t] == Just t) [-40,0,60])
+  ]
+  where
+    networkOK = case networkMean [Sensor "North" [40],Sensor "South" [0,0,0]] of
+      Nothing -> False
+      Just t -> abs (20-t) < 0.000001
+```
+
+Expected output:
+
+```text
+PASS empty mean
+PASS hot boundary
+PASS offline text
+PASS invalid report
+PASS duplicate priority
+PASS equal sensor mean present
+PASS hand numeric calculation
+PASS singleton endpoints
+8/8 tests passed
+```
+
+The numeric helper demonstration checks a hand arithmetic expression; the presence-and-closeness assertion checks the actual network function. An implementation that incorrectly pools produces this failure excerpt:
+
+```text
+FAIL equal sensor mean present
+    expected: True
+    actual:   False
+```
+
+All other ordinary returning assertions still run before the final count; an uncaught exception can interrupt them. An empty assertion list succeeds vacuously, providing no confidence.
+
+Run `runhaskell MonitorApp.hs` and `runhaskell MonitorTest.hs` separately in the bundle directory. Here TestSupport is local; if placed in a parent, use `runhaskell -i.. MonitorTest.hs`. A supplied PowerShell suite runner discovers test entry filenames, executes them and checks their exit status. Its job is orchestration, not Haskell semantics. Keep intentional rejection files and failure-exit demonstrations out of normal test discovery; a directory name alone does not exclude them.
+
+### Exam question 9: test the specification (8 marks)
+
+Supply three oracle kinds and a suite that reports labels, counts and failure process status.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Supply” requires runnable tests with independent expectations.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use exact results for absence/text, tolerance for means, and finite properties for relationships. Keep Bool checks separate from IO effects.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use the complete local TestSupport and MonitorTest files below. `sequence [IO Bool]` executes assertions in order; results are counted and combined with and. A false result chooses exitFailure; success chooses pure (). Passing cases support the contract but do not prove it for every valid network.
+
+</Step>
+
+<Step title="4. Check">
+
+The unequal-count oracle must expect 20.0, so accidentally pooling would fail. The range and duplicate cases must check precise reasons, not merely that some error occurred.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** expected and actual swapped in assertEqual reverse the diagnostics. A literal or a Bool is not an IO Bool action; construct assertions before sequencing. A circular oracle using networkMean to calculate its own expected value can pass a wrong implementation.
+
+
+**Practice:** What does a successful run establish?
+
+<details>
+<summary>Answer</summary>
+
+These eight assertions passed on their selected finite inputs. The domain includes many more inputs; the run is not a proof, nor does it demonstrate coverage of every error priority.
+
+</details>
+
+Repairing an unfamiliar program requires comparing both its types and its behaviour with the contract. A compiling formula can still implement the wrong denominator.
+
+**Repair template:** identify the expected type or policy → isolate the smallest conflicting expression → change that cause → check a boundary or counterexample. Keep deliberate type errors outside executable examples.
+
+### Variation: repaired successful wrapper
+
+<HaskellTryIt>
+
+```haskell
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+
+main :: IO ()
+main = print (meanReading [10,30])
+```
+
+```text
+Just 20.0
+```
+
+</HaskellTryIt>
+
+The sum 40 over two readings gives 20.0, wrapped as Maybe Double.
+
+### Variation: repaired payload collector
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+
+main :: IO ()
+main = print (networkMean [Sensor "A" [],Sensor "B" [30]])
+```
+
+```text
+Just 30.0
+```
+
+</HaskellTryIt>
+
+The absent sensor is skipped; the remaining payload is 30.0.
+
+### Variation: removed second division
+
+<HaskellTryIt>
+
+```haskell
+data Sensor = Sensor
+  { sensorId :: String
+  , readings :: [Double]
+  } deriving (Eq, Show)
+meanReading :: [Double] -> Maybe Double
+meanReading [] = Nothing
+meanReading xs = Just (sum xs / fromIntegral (length xs))
+networkMean :: [Sensor] -> Maybe Double
+networkMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, Just t <- [meanReading xs]]
+
+pooledMean :: [Sensor] -> Maybe Double
+pooledMean sensors = meanReading [t | Sensor _ xs <- sensors, t <- xs]
+
+main :: IO ()
+main = print (networkMean [Sensor "A" [20],Sensor "B" [20]])
+```
+
+```text
+Just 20.0
+```
+
+</HaskellTryIt>
+
+The two online means average to 20.0 exactly once.
+
+### Exam question 10: repair three faulty fragments (8 marks)
+
+Diagnose the candidate-paper fragments, repair each, and expose the logical fault with a small counterexample.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Diagnose” names the error category; “repair” must preserve the specification rather than merely type-check.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect each function result type, then inspect the averaging denominator. The first two are compile-time type errors; the third is a logical error.
+
+</Step>
+
+<Step title="3. Solution">
+
+For meanBad, the successful branch needs `Just (sum xs / fromIntegral (length xs))`. For networkBad, collect `t` using `Just t <- [meanReading xs]`. For networkWrong, return networkMean directly: it has already divided by the number of online sensors. No further division is required.
+
+</Step>
+
+<Step title="4. Check">
+
+Two sensors each at 20 should give Just 20.0; networkWrong returns Just 10.0. A one-sensor fixture would conceal the extra division.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** adding a default zero may silence a wrapper mismatch but changes missing-data policy. Changing a signature to `[Maybe Double]` without changing its consumer does not repair the arithmetic contract. GHC reports the type errors with `Couldn't match`; it emits no error for the extra legal division.
+
+**Practice:** A separate Main cannot find sensorLine after importing only MonitorCore. What is the repair?
+
+<details>
+<summary>Answer</summary>
+
+Import MonitorReport (sensorLine), the module that exports it. Do not add a reverse dependency from Core to Report.
+
+</details>
+
+## 8. Cost and explicit duration weighting
+
+**Cost template:** define input sizes and demanded output → count local traversals → sum over sensors → compare growth. Count arithmetic and identifier comparison as unit operations for this model; that assumption is not a claim about arbitrary-precision numbers or long Strings. Keep validation cost separate from aggregation.
+
+The repeated expression under discussion is this plain Haskell definition. It is valid code but violates the specified equal-sensor policy:
+
+```haskell
+repeatedMean :: [Sensor] -> Maybe Double
+repeatedMean sensors =
+  meanReading [t | Sensor _ xs <- sensors, _ <- xs, Just t <- [meanReading xs]]
+```
+
+The stated repeated-work cost assumes the invariant mean is recalculated for each candidate. A compiler may float or share that pure calculation; source syntax alone does not establish actual allocation or repeated execution. The following instrumented model makes the intended visit count explicit without pretending to measure GHC optimisation.
+
+### Variation: unequal groups
+
+<HaskellTryIt>
+
+```haskell
+visitCounts :: [Int] -> (Int,Int)
+visitCounts sizes =
+  (sum [2*n | n <- sizes],sum [2*n*n | n <- sizes])
+
+main :: IO ()
+main = print (visitCounts [1,3])
+```
+
+```text
+(8,20)
+```
+
+</HaskellTryIt>
+
+Cached: 2+6=8. Repeated: 2+18=20.
+
+### Variation: equal small groups
+
+<HaskellTryIt>
+
+```haskell
+visitCounts :: [Int] -> (Int,Int)
+visitCounts sizes =
+  (sum [2*n | n <- sizes],sum [2*n*n | n <- sizes])
+
+main :: IO ()
+main = print (visitCounts [2,2])
+```
+
+```text
+(8,16)
+```
+
+</HaskellTryIt>
+
+Two visits per mean element give 4+4; repeating each two-element mean doubles it.
+
+### Variation: all offline
+
+<HaskellTryIt>
+
+```haskell
+visitCounts :: [Int] -> (Int,Int)
+visitCounts sizes =
+  (sum [2*n | n <- sizes],sum [2*n*n | n <- sizes])
+
+main :: IO ()
+main = print (visitCounts [0,0])
+```
+
+```text
+(0,0)
+```
+
+</HaskellTryIt>
+
+No reading is visited, but inspecting the two sensor rows still costs work; the model counts only local reading visits.
+
+The list-based seen-identifier validator has worst-case O(s squared) equality comparisons, independently of the linear arithmetic. Actual String comparisons cost time proportional to the inspected characters. For the small mock, clarity is acceptable; a larger implementation could use a set of identifiers with an appropriate dependency and a stated cost model.
+
+Fully producing a line per sensor requires at least O(s) output work, plus the characters printed. The aggregate returns a constant-size optional result, but its straightforward list code may allocate intermediate lists and retain pending arithmetic. The result text itself needs space for its characters. Do not infer constant auxiliary space just from a tail-looking loop or from the final result type. [Lazy Evaluation](/docs/sem3/csi243/10-reasoning-revision/notes/lazy-evaluation) and [The Cost of a Definition](/docs/sem3/csi243/10-reasoning-revision/notes/complexity) discuss demand and pending work.
+
+### Exam question 11: compare algorithms and policies (10 marks)
+
+Derive the cost of calculating each sensor mean once versus recalculating it for every reading. Do the two forms implement the same policy?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Derive” needs operation counts and assumptions, not a timing result. “Do” requires a policy comparison as well as cost.
+
+</Step>
+
+<Step title="2. Plan">
+
+Let s be the sensor count, n_i the readings for sensor i, N their total and k the number online. Count each local sum and length as n_i visits. Then count the outer mean over k payloads.
+
+</Step>
+
+<Step title="3. Solution">
+
+Caching one local mean per sensor costs 2N visits to readings plus O(s+k) list work, so aggregation is O(s+N). In the explicit repeated-work model, sensor i performs its length-n_i mean n_i times, giving 2 times the sum of n_i squared reading visits, plus O(s+N) outer work. With one large sensor this is quadratic. The repeated collector emits each sensor mean n_i times, so it weights sensors by reading count; over exact real arithmetic that agrees with pooling, not the equal-sensor policy. With Doubles the summation order can also affect the final bits.
+
+</Step>
+
+<Step title="4. Check">
+
+For counts [1,3], cached local visits are 8 and repeated visits 20. North [40] and South [0,0,0] also give different means: 20.0 versus 10.0. With every n_i bounded by a fixed constant, both visit models are linear in s; the quadratic worst case depends on growing group size.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** saying “two calls means exponential” ignores subproblem sizes and local work. Claiming this complete application is O(s+N) ignores duplicate validation, which is quadratic in the worst case here and is performed twice by the simple app/report boundary. Benchmarks alone would not discharge the derivation.
+
+**Practice:** If every online sensor has two readings, are the two policies identical in all respects?
+
+<details>
+<summary>Answer</summary>
+
+They agree mathematically on the mean and both cost linear time in the number of sensors under this model. The repeated form still does more work; exact Double bit-for-bit equality is not a general algebraic guarantee.
+
+</details>
+
+A duration-weighted mean models unequal observation time. It is an explicit third policy, not an accidental side effect of duplicate readings.
+
+**Weighting template:** pairs of temperature and hours → validate bounded inputs → require positive total duration → divide summed temperature-hours by total hours. Zero-hour pairs are accepted but have no influence. Hours need not sum to 24; each pair individually lies in 0 through 24.
+
+### Variation: unequal durations
+
+<HaskellTryIt>
+
+```haskell
+durationMean :: [(Double,Double)] -> Maybe Double
+durationMean pairs
+  | null pairs = Nothing
+  | not (all valid pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [t*h | (t,h) <- pairs] / total)
+  where
+    total = sum [h | (_,h) <- pairs]
+    valid (t,h) = t >= -40 && t <= 60 && h >= 0 && h <= 24
+
+main :: IO ()
+main = print (durationMean [(0,1),(40,3)])
+```
+
+```text
+Just 30.0
+```
+
+</HaskellTryIt>
+
+Four total hours, with 120 temperature-hours, give 30.0. The 40-degree reading has three times the influence.
+
+### Variation: zero total duration
+
+<HaskellTryIt>
+
+```haskell
+durationMean :: [(Double,Double)] -> Maybe Double
+durationMean pairs
+  | null pairs = Nothing
+  | not (all valid pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [t*h | (t,h) <- pairs] / total)
+  where
+    total = sum [h | (_,h) <- pairs]
+    valid (t,h) = t >= -40 && t <= 60 && h >= 0 && h <= 24
+
+main :: IO ()
+main = print (durationMean [(-20,0),(40,0)])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Both temperatures are valid but no time is represented. Do not divide by zero.
+
+### Variation: invalid duration
+
+<HaskellTryIt>
+
+```haskell
+durationMean :: [(Double,Double)] -> Maybe Double
+durationMean pairs
+  | null pairs = Nothing
+  | not (all valid pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [t*h | (t,h) <- pairs] / total)
+  where
+    total = sum [h | (_,h) <- pairs]
+    valid (t,h) = t >= -40 && t <= 60 && h >= 0 && h <= 24
+
+main :: IO ()
+main = print (durationMean [(20,-1)])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+The bounded duration predicate fails before the weighted expression is selected.
+
+### Exam question 12: design explicit duration influence (8 marks)
+
+Implement durationMean with bounded temperature/hour pairs and positive total duration. Explain missing and invalid input.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Implement” needs both safe calculation and its input policy; “explain” asks what a pair means.
+
+</Step>
+
+<Step title="2. Plan">
+
+Each pair binds a temperature to its exposure time, preventing separate-list truncation. Check bounds before calculating the weighted total.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+durationMean :: [(Double,Double)] -> Maybe Double
+durationMean pairs
+  | null pairs = Nothing
+  | not (all valid pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [t*h | (t,h) <- pairs] / total)
+  where
+    total = sum [h | (_,h) <- pairs]
+    valid (t,h) = t >= -40 && t <= 60 && h >= 0 && h <= 24
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+[(0,1),(40,3)] gives Just 30.0 because (0+120)/4 = 30. Empty pairs, zero-total pairs and a negative duration give Nothing. A different API could use Either to distinguish invalid data from no positive duration.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** averaging products divides by the pair count, not the duration total. Negative hours cannot be accepted merely because their sum is positive. Using two lists with unchecked zip silently drops mismatched data. These logical errors can compile, so enforce the policy in tests.
+
+**Practice:** Compare [(0,1),(40,1)] and [(0,2),(40,2)].
+
+<details>
+<summary>Answer</summary>
+
+Both give Just 20.0. Positive common rescaling preserves the normalised mean. [] gives Nothing; [(0,1)] gives a present zero. Test those separately.
+
+</details>
+
+## 9. Review your attempt
+
+Re-run your own normal, boundary and invalid fixtures. Explain every denominator, constructor match and error priority aloud. Check which mutations your suite actually rejects: strict boundaries, pooled instead of equal-sensor averaging, zero defaults, dropped invalid values, and duplicate detection with a cleared seen list. A passing suite with weak oracles can miss all of them.
+
+Keep intentionally rejected fragments in separate diagnostic files excluded from the normal passing runner. The module snippets and System.Exit harness require local multi-file testing; the single-file runnable variations test the pure decisions and ordinary printing. Neither a playground match nor a finite suite is a universal proof.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Start from the unfamiliar specification: identity, absence, valid ranges, influence, thresholds and text. Preserve those decisions across model, core, report, application and tests. Use independent oracles and check process status. Cost depends on group sizes and actual work, while a policy change can alter the result even when all code compiles.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Is an offline sensor invalid?">
+
+No. Empty readings are accepted; absence remains visible in reports and is omitted from the network mean.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is the unequal-count fixture essential?">
+
+It distinguishes equal-sensor influence from equal-reading influence: 20.0 versus 10.0.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which error wins when a duplicate sensor also has an invalid reading?">
+
+The duplicate identifier error, because its rule precedes the readings rule within that row.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why might an eight-of-eight run still miss a defect?">
+
+The inputs and oracles cover only selected behaviours. Missing partitions or circular expectations can conceal faults.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can an optimiser change the repeated-work cost without repairing the policy?">
+
+Yes. Sharing a sensor mean may reduce calculation, but emitting it once per reading still gives that sensor reading-count influence.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with the [practice questions](/docs/sem3/csi243/10-reasoning-revision/questions).

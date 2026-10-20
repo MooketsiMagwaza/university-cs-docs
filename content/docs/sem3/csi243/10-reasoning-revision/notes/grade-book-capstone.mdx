@@ -1,0 +1,1972 @@
+---
+title: "Grade-book Capstone"
+description: "Integrate the Test1 grade-book model, safe calculations, reports, validation policies, modules and labelled tests under one specification."
+---
+
+A practical tests whether familiar pieces still fit when they share one specification. Build the exact Test1 16 grade book first, then change its policies deliberately. Runnable experiments are complete single-file programs; the module bundle is a set of separate files.
+
+<LearningObjectives items={["Trace Student, average, outcome, summary and classAverage together", "Choose missing-data, validation and weighting policies", "Separate pure calculations and reports from application IO", "Use independent exact, approximate and property test oracles", "Interpret labelled failures and suite exit status"]} />
+
+Read [Errors and Testing](/docs/sem3/csi243/10-reasoning-revision/notes/errors-and-testing), [Custom Data Types](/docs/sem3/csi243/08-modules-types/notes/custom-types), [List Comprehensions](/docs/sem3/csi243/06-lists-tuples/notes/list-comprehensions), [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth), [Either in Depth](/docs/sem3/csi243/09-polymorphism/notes/either-in-depth) and [Modules](/docs/sem3/csi243/08-modules-types/notes/modules) first. This page uses their forms to make integration decisions rather than repeating their syntax lessons.
+
+## 1. Model and individual report
+
+The Test1 model holds one name and a list of Double marks. A name is a display label, not automatically a unique identifier. The raw model permits empty and invalid data. A report consumes the optional mean and returns text; it performs no IO.
+
+**Template:** model → optional calculation → match result → report text. For `Student name values`, `name` labels the report and `values` supplies the calculation. A missing mean becomes “no marks”, not a failing mark.
+
+These are the exact Test1 core definitions:
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+```
+
+### Variation: ordinary student
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = putStrLn (summary (Student "Ari" [60,80]))
+```
+
+```text
+Ari: 70.0% - Pass
+```
+
+</HaskellTryIt>
+
+The sum is 140 and count 2, giving 70.0. It misses the 75 guard and satisfies 50. `putStrLn` displays the returned text without quotes.
+
+### Variation: present zero
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = print (summary (Student "Bo" [0]))
+```
+
+```text
+"Bo: 0.0% - Fail"
+```
+
+</HaskellTryIt>
+
+The singleton mean is 0.0, not absence. `print` adds quotes because its argument is a String.
+
+### Variation: missing marks in a record
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = putStrLn (summary (Student {studentName = "Cy", marks = []}))
+```
+
+```text
+Cy: no marks
+```
+
+</HaskellTryIt>
+
+Record syntax builds the same constructor as positional syntax. The mean is Nothing and classification is not needed.
+
+### Exam question 1: construct and report (5 marks)
+
+Write the Test1 student for Dana with marks 40 and 60. State the exact output of `putStrLn (summary student)`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” needs a value; “state” needs the printed line. The marks are present.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the model/report template. Classify the mean, not each mark separately.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+student :: Student
+student = Student "Dana" [40,60]
+```
+The mean is 50.0, so the line is `Dana: 50.0% - Pass`.
+
+</Step>
+
+<Step title="4. Check">
+
+Exactly 50 passes. Replacing the marks with [] must instead produce `Dana: no marks`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** `Student [40,60] "Dana"` reverses the field types; GHC reports `Couldn't match`. Repair the argument order. Reporting `show (average values)` displays the wrapper instead of the required percentage; consume it first. The record declaration enforces types, not mark ranges.
+
+**Practice:** What does `print (studentName (Student "Dana" []))` print?
+
+<details>
+<summary>Answer</summary>
+
+`"Dana"`. Accessing the label does not imply that marks exist.
+
+</details>
+
+## 2. Missing data and a safe mean
+
+A safe mean has no answer for an empty finite list. For a non-empty list, divide the sum by the count converted to Double. Safety here covers missing data; it does not promise validation, absence of overflow, or termination on infinite lists.
+
+**Template:** `average [] = Nothing`; `average xs = Just (total / count)`, with total and count taken over exactly the same values. Keep absence visible until the caller chooses a policy.
+
+### Variation: several marks
+
+<HaskellTryIt>
+
+```haskell
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+
+main :: IO ()
+main = print (average [40,60,80])
+```
+
+```text
+Just 60.0
+```
+
+</HaskellTryIt>
+
+Sum 180 divided by count 3 gives 60.0; wrap the payload once.
+
+### Variation: no marks
+
+<HaskellTryIt>
+
+```haskell
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+
+main :: IO ()
+main = print (average [])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+The empty equation matches before any division. No numerical answer is invented.
+
+### Variation: one mark
+
+<HaskellTryIt>
+
+```haskell
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+
+main :: IO ()
+main = print (average [75])
+```
+
+```text
+Just 75.0
+```
+
+</HaskellTryIt>
+
+One value divided by one stays unchanged: the smallest successful list shape.
+
+### Exam question 2: derive a safe mean (5 marks)
+
+Write `average :: [Double] -> Maybe Double` for finite lists. Explain the denominator conversion.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” requires missing and successful cases; “explain” requires their numeric types.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate [] first. The sum is Double but length is Int, so convert before using division.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+[] gives Nothing. [50,60,70] totals 180 and gives Just 60.0; [75] gives Just 75.0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** `sum xs / length xs` mixes Double and Int (GHC: `Couldn't match`); convert the count. Omitting the empty equation produces a non-finite Double from zero divided by zero, not a meaningful mean. A zero default confuses absence with a present zero.
+
+**Practice:** Should a new “missing work counts as zero” rule silently replace Nothing inside the existing average?
+
+<details>
+<summary>Answer</summary>
+
+No. Name the new policy and specify whether the zero represents a missing assessment or a missing student. The resulting denominators differ.
+
+</details>
+
+## 3. Classification after calculation
+
+Test1 uses inclusive lower boundaries 75 and 50, checks the higher band first, and does not round before classification. `outcome` assumes a meaningful percentage; it does not validate its input.
+
+**Template:** test highest lower bound first, then lower bounds, then the lowest band. Separate formatting from the decision.
+
+### Variation: pass boundary
+
+<HaskellTryIt>
+
+```haskell
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+
+main :: IO ()
+main = print (map outcome [49.5,50,50.5])
+```
+
+```text
+["Fail","Pass","Pass"]
+```
+
+</HaskellTryIt>
+
+49.5 fails both guards; 50 and 50.5 reach the second guard. Exactly 50 passes.
+
+### Variation: distinction boundary
+
+<HaskellTryIt>
+
+```haskell
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+
+main :: IO ()
+main = print (map outcome [74.5,75,75.5])
+```
+
+```text
+["Pass","Distinction","Distinction"]
+```
+
+</HaskellTryIt>
+
+74.5 reaches the pass guard. Exactly 75 satisfies the first guard.
+
+### Variation: endpoints and unrounded value
+
+<HaskellTryIt>
+
+```haskell
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+
+main :: IO ()
+main = print (map outcome [0,100,74.75])
+```
+
+```text
+["Fail","Distinction","Pass"]
+```
+
+</HaskellTryIt>
+
+Zero and 100 are valid endpoints. 74.75 stays below 75 even if a display rounds it to 75.
+
+### Exam question 3: repair boundary order (4 marks)
+
+A version tests 50 before 75. Explain its fault, repair it, and give a counterexample.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” asks which guard wins; a repair must retain both bands.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose 80, which satisfies both thresholds. Apply the highest-bound-first template.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+```
+The wrong first guard classifies 80 as Pass and never reaches distinction.
+
+</Step>
+
+<Step title="4. Check">
+
+Test 49.5, 50, 74.5 and 75. Testing only 60 would not expose this fault.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** `mark > 75` rejects the exact boundary; this logical fault has no GHC error. `outcome (round mark)` also changes the type and intended policy. Classify the original mean.
+
+**Practice:** Is `outcome 101` a validation failure in the original core?
+
+<details>
+<summary>Answer</summary>
+
+No: it returns `"Distinction"`. A validator must reject the mark before normal reporting.
+
+</details>
+
+## 4. Class denominator and complete datasets
+
+Test1 gives each student with marks one vote: calculate student means, skip absent ones, then average the successful payloads. Pooling instead gives each mark one vote. Neither is automatically correct; the specification must choose. Unequal student mark counts can separate the results.
+
+**Template:** equal-student policy is `average [mean | student <- students, Just mean <- [studentMean student]]`. Pooled policy is `average [mark | student <- students, mark <- studentMarks student]`.
+
+In the exact constructor-pattern comprehension, `Student _ values` extracts each marks list. `[average values]` is a singleton list containing a Maybe. `Just mark` keeps a successful payload or skips that candidate when it is Nothing. This derives the missing-data path from the comprehension rules already taught; it does not validate marks.
+
+An equivalent collector is `mapMaybe (average . marks) students` from Data.Maybe, followed by average. Explicit recursion can also skip Nothing and cons each Just payload. Neither rewrite should turn absence into zero.
+
+### Variation: equal counts
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+pooledAverage :: [Student] -> Maybe Double
+pooledAverage students = average [m | Student _ ms <- students, m <- ms]
+
+main :: IO ()
+main = do
+  let students = [Student "A" [40,60],Student "B" [60,80]]
+  print (classAverage students, pooledAverage students)
+```
+
+```text
+(Just 60.0,Just 60.0)
+```
+
+</HaskellTryIt>
+
+Means 50 and 70 average to 60; pooling 240 over four marks also gives 60.
+
+### Variation: unequal counts
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+pooledAverage :: [Student] -> Maybe Double
+pooledAverage students = average [m | Student _ ms <- students, m <- ms]
+
+main :: IO ()
+main = do
+  let students = [Student "A" [100],Student "B" [0,0,0]]
+  print (classAverage students, pooledAverage students)
+```
+
+```text
+(Just 50.0,Just 25.0)
+```
+
+</HaskellTryIt>
+
+Equal students gives (100+0)/2 = 50. Pooling gives 100/4 = 25. B has three times the influence when pooling.
+
+### Variation: missing student excluded
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+pooledAverage :: [Student] -> Maybe Double
+pooledAverage students = average [m | Student _ ms <- students, m <- ms]
+
+main :: IO ()
+main = do
+  let students = [Student "A" [80],Student "B" []]
+  print (classAverage students, pooledAverage students)
+```
+
+```text
+(Just 80.0,Just 80.0)
+```
+
+</HaskellTryIt>
+
+B contributes no mean and no marks. The only successful payload is 80.
+
+Four complete named fixtures support regression checks: an empty class, an all-missing class, an unequal-count class, and a mixed class with a present zero.
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+datasets :: [[Student]]
+datasets =
+  [ []
+  , [Student "A" [],Student "B" []]
+  , [Student "A" [100],Student "B" [0,0,0]]
+  , [Student "A" [80],Student "B" [],Student "C" [0]]
+  ]
+main :: IO ()
+main = mapM_ (print . classAverage) datasets
+```
+
+```text
+Nothing
+Nothing
+Just 50.0
+Just 40.0
+```
+
+</HaskellTryIt>
+
+The first two leave no means. The third leaves [100,0]; the fourth leaves [80,0]. A present zero participates; an absent result does not.
+
+### Exam question 4: derive the class comprehension (6 marks)
+
+Write Test1 classAverage. Explain why an empty marks list contributes no placeholder.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” fixes the equal-student policy; “explain” asks which candidates survive.
+
+</Step>
+
+<Step title="2. Plan">
+
+Collect one optional mean per student, then keep present payloads.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+For A with [100] and B with [], the candidates are [Just 100.0] and [Nothing]. Only 100.0 survives, giving Just 100.0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: choose a policy (6 marks)
+
+Compare equal-student and pooled means for A with [100] and B with [0,0,0]. Which implements “every assessment has equal influence”?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Compare” requires two denominators. The requirement names an assessment as the unit of influence.
+
+</Step>
+
+<Step title="2. Plan">
+
+Calculate each rule independently rather than trusting the function name.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+pooledAverage :: [Student] -> Maybe Double
+pooledAverage students = average [m | Student _ ms <- students, m <- ms]
+```
+Equal-student is 50.0; pooled is 25.0. The quoted requirement selects pooling.
+
+</Step>
+
+<Step title="4. Check">
+
+There are four assessments totalling 100. Empty lists contribute neither numerator nor denominator when pooling.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** `[average values | Student _ values <- students]` gives `[Maybe Double]`, not `[Double]`; passing it to average gives GHC `Couldn't match`. Dividing by `length students` wrongly counts absent students; that logical fault compiles.
+
+**Practice:** Give a non-empty class with no class mean.
+
+<details>
+<summary>Answer</summary>
+
+`[Student "A" [],Student "B" []]`. Enrolment does not imply recorded marks.
+
+</details>
+
+## 5. Explicit weighting
+
+This extension takes pairs of mark and weight. Marks lie in 0 through 100 and weights in 0 through 1; the bounded tests also reject non-finite inputs. Weights are relative shares and need not sum to one: divide by their positive total to normalise. Zero weights are allowed; an all-zero total has no mean. If marks and weights arrive as separate lists, check equal lengths before zip so nothing is silently discarded.
+
+**Template:** validate pairs → total weight → weighted sum divided by positive total. This policy differs from the unweighted mean.
+
+### Variation: equal weights
+
+<HaskellTryIt>
+
+```haskell
+weightedAverage :: [(Double,Double)] -> Maybe Double
+weightedAverage pairs
+  | null pairs = Nothing
+  | not (all (\(m,w) -> m >= 0 && m <= 100 && w >= 0 && w <= 1) pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [m*w | (m,w) <- pairs] / total)
+  where
+    total = sum [w | (_,w) <- pairs]
+
+main :: IO ()
+main = print (weightedAverage [(40,1),(80,1)])
+```
+
+```text
+Just 60.0
+```
+
+</HaskellTryIt>
+
+Weighted total 120 divided by weight total 2 gives 60.
+
+### Variation: unequal influence
+
+<HaskellTryIt>
+
+```haskell
+weightedAverage :: [(Double,Double)] -> Maybe Double
+weightedAverage pairs
+  | null pairs = Nothing
+  | not (all (\(m,w) -> m >= 0 && m <= 100 && w >= 0 && w <= 1) pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [m*w | (m,w) <- pairs] / total)
+  where
+    total = sum [w | (_,w) <- pairs]
+
+main :: IO ()
+main = print (weightedAverage [(40,0.25),(80,0.75)])
+```
+
+```text
+Just 70.0
+```
+
+</HaskellTryIt>
+
+Products 10 and 60 sum to 70. Weight total 1 leaves 70 unchanged.
+
+### Variation: zero total
+
+<HaskellTryIt>
+
+```haskell
+weightedAverage :: [(Double,Double)] -> Maybe Double
+weightedAverage pairs
+  | null pairs = Nothing
+  | not (all (\(m,w) -> m >= 0 && m <= 100 && w >= 0 && w <= 1) pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [m*w | (m,w) <- pairs] / total)
+  where
+    total = sum [w | (_,w) <- pairs]
+
+main :: IO ()
+main = print (weightedAverage [(40,0),(80,0)])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+The marks exist but no positive influence exists. The guard prevents division.
+
+### Exam question 6: implement explicit weights (6 marks)
+
+Write the safe weighted mean above. Check empty input, zero total and unequal weights.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” includes validation and the denominator, not just the numerator.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use pairs to prevent list mismatch. Reject invalid intervals and non-positive total before dividing.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+weightedAverage :: [(Double,Double)] -> Maybe Double
+weightedAverage pairs
+  | null pairs = Nothing
+  | not (all (\(m,w) -> m >= 0 && m <= 100 && w >= 0 && w <= 1) pairs) = Nothing
+  | total <= 0 = Nothing
+  | otherwise = Just (sum [m*w | (m,w) <- pairs] / total)
+  where
+    total = sum [w | (_,w) <- pairs]
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+[] and [(50,0)] return Nothing. [(40,0.25),(80,0.75)] returns Just 70.0. Negative weights are rejected.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** `average [m*w | (m,w) <- pairs]` divides by the number of pairs, not total weight; GHC accepts the wrong formula. Unchecked zip silently truncates. Requiring an exact weight sum of one is a different policy and a poor general floating input check.
+
+**Practice:** Marks 0 and 100 have weights 0.5 each. Replace both by 0.25: what changes?
+
+<details>
+<summary>Answer</summary>
+
+Both means are Just 50.0. The second numerator is 25 and denominator 0.5. Normalising preserves this common positive rescaling.
+
+</details>
+
+## 6. Validation and error reports
+
+The original core rejects neither invalid percentages nor duplicate labels. Add a boundary that rejects the whole class on its first invalid row. Within a row the priority is empty name, duplicate name, invalid mark. Empty marks are reportable absence, not invalid data. Names are compared exactly and case-sensitively; whitespace-only names are accepted by this minimal policy. A stronger identity policy would use separate student identifiers.
+
+**Template:** raw class → Either reason checked class → Left error text or Right normal report. Preserve accepted rows and their order. Filtering invalid marks changes the mean without authorisation. A sibling “collect every reason” policy needs a separate list-of-errors collector; this first-error chain does not accumulate errors.
+
+### Variation: inclusive endpoints
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+validMark :: Double -> Bool
+validMark m = m >= 0 && m <= 100
+
+validateClass :: [Student] -> Either String [Student]
+validateClass = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Student name values):rest)
+      | null name = Left "empty name"
+      | name `elem` seen = Left ("duplicate name: " ++ name)
+      | not (all validMark values) = Left ("invalid marks: " ++ name)
+      | otherwise = case go (name:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+
+reportClass :: [Student] -> String
+reportClass students = case validateClass students of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Class average: " ++ show (classAverage checked)
+
+main :: IO ()
+main = putStrLn (reportClass [Student "A" [0,100]])
+```
+
+```text
+Class average: Just 50.0
+```
+
+</HaskellTryIt>
+
+Both endpoints pass. The unchanged row has mean 50.
+
+### Variation: invalid mark
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+validMark :: Double -> Bool
+validMark m = m >= 0 && m <= 100
+
+validateClass :: [Student] -> Either String [Student]
+validateClass = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Student name values):rest)
+      | null name = Left "empty name"
+      | name `elem` seen = Left ("duplicate name: " ++ name)
+      | not (all validMark values) = Left ("invalid marks: " ++ name)
+      | otherwise = case go (name:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+
+reportClass :: [Student] -> String
+reportClass students = case validateClass students of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Class average: " ++ show (classAverage checked)
+
+main :: IO ()
+main = putStrLn (reportClass [Student "A" [101]])
+```
+
+```text
+ERROR: invalid marks: A
+```
+
+</HaskellTryIt>
+
+The name is present and new; the mark predicate fails, so no average is reported.
+
+### Variation: duplicate before range defect
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+validMark :: Double -> Bool
+validMark m = m >= 0 && m <= 100
+
+validateClass :: [Student] -> Either String [Student]
+validateClass = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Student name values):rest)
+      | null name = Left "empty name"
+      | name `elem` seen = Left ("duplicate name: " ++ name)
+      | not (all validMark values) = Left ("invalid marks: " ++ name)
+      | otherwise = case go (name:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+
+reportClass :: [Student] -> String
+reportClass students = case validateClass students of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Class average: " ++ show (classAverage checked)
+
+main :: IO ()
+main = putStrLn (reportClass [Student "A" [80],Student "A" [101]])
+```
+
+```text
+ERROR: duplicate name: A
+```
+
+</HaskellTryIt>
+
+The first A enters the seen names. The second fails the duplicate rule before the mark rule.
+
+### Exam question 7: validate without changing evidence (7 marks)
+
+Write the first-error validator. Explain why missing marks are accepted and filtering bad marks is not a repair.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” requires either a reason or the unchanged accepted data. The explanations concern policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Thread seen names through recursion. Propagate a failed suffix unchanged and cons accepted rows onto a successful suffix.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+validMark :: Double -> Bool
+validMark m = m >= 0 && m <= 100
+
+validateClass :: [Student] -> Either String [Student]
+validateClass = go []
+  where
+    go _ [] = Right []
+    go seen (s@(Student name values):rest)
+      | null name = Left "empty name"
+      | name `elem` seen = Left ("duplicate name: " ++ name)
+      | not (all validMark values) = Left ("invalid marks: " ++ name)
+      | otherwise = case go (name:seen) rest of
+          Left reason -> Left reason
+          Right checked -> Right (s:checked)
+
+reportClass :: [Student] -> String
+reportClass students = case validateClass students of
+  Left reason -> "ERROR: " ++ reason
+  Right checked -> "Class average: " ++ show (classAverage checked)
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+[Student "A" []] is accepted and reports Nothing. [Student "" [80]] returns Left "empty name". Removing 101 from [0,101] would fabricate a valid mean of zero from an invalid row.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** a predicate requiring `m < 0 && m > 100` cannot hold for an ordinary number; no GHC error exposes the logic. Returning a summary String where `[Student]` is required causes `Couldn't match`: validate here, render later. Exporting a raw constructor permits bypassing the invariant, so apply the boundary to every external dataset.
+
+**Practice:** What happens for missing marks, names "A" and "a", and an empty name with mark 101?
+
+<details>
+<summary>Answer</summary>
+
+Missing marks are accepted; A and a are distinct; the empty-name error wins before the range defect. NaN and infinities fail the bounded mark predicate.
+
+</details>
+
+## 7. Module boundaries and the application
+
+Test1 keeps model, core calculations and pure reporting in GradeBook.hs. GradeBookApp.hs supplies data and performs IO; GradeBookTest.hs exercises the exported core. `Student(..)` exports the constructor and record fields. Exporting only Student hides these names unless they are exported separately.
+
+**Template:** core exports domain operations; application imports core and chooses effects; tests import core and choose independent expectations. Pure report text can be tested without a terminal. Import and export lists control source-level type names too; the compiler knowing a hidden type does not make its name available to a client.
+
+These three runnable variations collapse the boundary into one file for the playground. They test the crossing values, not the compilation of multi-file imports.
+
+### Variation: model to calculation
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = print (average (marks (Student "A" [50,70])))
+```
+
+```text
+Just 60.0
+```
+
+</HaskellTryIt>
+
+The accessor supplies [50,70] to the calculation. No terminal action belongs inside average.
+
+### Variation: calculation to report
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = print (summary (Student "A" [75]))
+```
+
+```text
+"A: 75.0% - Distinction"
+```
+
+</HaskellTryIt>
+
+The report consumes Just 75.0 and combines name, mean and outcome into a testable String.
+
+### Variation: report to application
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = mapM_ (putStrLn . summary) [Student "A" [],Student "B" [50]]
+```
+
+```text
+A: no marks
+B: 50.0% - Pass
+```
+
+</HaskellTryIt>
+
+The application sequences two output actions in input order. Missing data does not prevent the second report.
+
+Save each file separately. The following bundle implements the exact Test1 core and application; do not paste several module headers into one file.
+
+**GradeBook.hs**
+
+```haskell
+module GradeBook
+  ( Student(..), average, outcome, summary, classAverage ) where
+
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+```
+
+**GradeBookApp.hs**
+
+```haskell
+module Main where
+import GradeBook
+
+students :: [Student]
+students =
+  [ Student "Neo" [72,81,77]
+  , Student "Kago" [48,55,63]
+  , Student "Lorato" []
+  ]
+
+main :: IO ()
+main = do
+  putStrLn "CSI243 grade book"
+  mapM_ (putStrLn . summary) students
+  putStrLn ("Class average: " ++ show (classAverage students))
+```
+
+Exact output, without input:
+
+```text
+CSI243 grade book
+Neo: 76.66666666666667% - Distinction
+Kago: 55.333333333333336% - Pass
+Lorato: no marks
+Class average: Just 66.0
+```
+
+The sums are 230 and 166, each divided by 3. The displayed student means sum to 132.0 at these Double values; division by two contributing students gives 66.0. The application deliberately retains the Maybe wrapper in the class line, while each individual summary consumes it.
+
+### Exam question 8: split responsibilities (5 marks)
+
+Locate Student, average, summary and main in Test1. Then describe a model/core/report refactor with no cycle.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Locate” asks for ownership; refactoring must preserve behaviour.
+
+</Step>
+
+<Step title="2. Plan">
+
+Start with the exact two-module split. Make a wider design depend towards the model.
+
+</Step>
+
+<Step title="3. Solution">
+
+Student, average and summary belong to GradeBook; main belongs to the application. A refactor puts Student in Model, calculations in Core importing Model, and summary in Report importing Model and Core. Application imports the modules it uses; Model imports neither Core nor Report.
+
+</Step>
+
+<Step title="4. Check">
+
+A change to report wording should not change arithmetic. Tests import the owner of each exported operation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** app and test both declare Main, so run them as separate entry points. A missing search path produces `Could not find module`; run from the exercise folder and include the parent for TestSupport. Repair a Core/Report cycle by moving shared data into Model. Do not expose hidden helpers merely to silence an import error: check the intended interface.
+
+**Practice:** Does replacing constructor matching by field access require different report text?
+
+<details>
+<summary>Answer</summary>
+
+No. The two definitions can satisfy the same contract. Keep an exact String expectation to check that boundary.
+
+</details>
+
+## 8. Test oracles
+
+An oracle is an independent rule for deciding whether an actual result is right. Use exact equality for constructors, discrete outcomes and report text. Use a stated tolerance for computed Doubles, checking presence separately. Use Boolean properties for relationships across selected inputs. Finite property checks are evidence; [Proofs of Programs I](/docs/sem3/csi243/10-reasoning-revision/notes/proofs-of-programs-i) explains universal arguments.
+
+**Template:** label + independently calculated expected + actual → IO Bool. An approximate oracle checks `abs (expected - actual) < epsilon`. Test1 fixes epsilon at 0.000001, strictly excluding the tolerance endpoint. This absolute tolerance fits small percentage calculations; it is not appropriate at every numerical scale. The helper rejects NaN and infinities and is intended for finite values.
+
+### Variation: exact constructor and text oracles
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = do
+  print (average [] == Nothing)
+  print (summary (Student "A" []) == "A: no marks")
+```
+
+```text
+True
+True
+```
+
+</HaskellTryIt>
+
+The independent requirements are no mean for an empty list and exactly one space after the report colon.
+
+### Variation: presence before approximate comparison
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = print (case average [1,2,2] of
+  Nothing -> False
+  Just actual -> abs (5 / 3 - actual) < 0.000001)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The hand numerator is 5 and denominator 3. Absence fails explicitly; only a present payload is compared.
+
+### Variation: property checks and a negative control
+
+<HaskellTryIt>
+
+```haskell
+data Student = Student
+  { studentName :: String
+  , marks :: [Double]
+  } deriving (Eq, Show)
+
+average :: [Double] -> Maybe Double
+average [] = Nothing
+average values = Just (sum values / fromIntegral (length values))
+
+outcome :: Double -> String
+outcome mark
+  | mark >= 75 = "Distinction"
+  | mark >= 50 = "Pass"
+  | otherwise = "Fail"
+
+summary :: Student -> String
+summary (Student name values) =
+  case average values of
+    Nothing -> name ++ ": no marks"
+    Just mark -> name ++ ": " ++ show mark ++ "% - " ++ outcome mark
+
+classAverage :: [Student] -> Maybe Double
+classAverage students =
+  average [mark | Student _ values <- students, Just mark <- [average values]]
+
+main :: IO ()
+main = do
+  print (all (\xs -> average xs == average (reverse xs)) [[0,100],[50],[]])
+  print (outcome 75 == "Pass")
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+These selected exact inputs have reversal-invariant means; floating summation is not exactly order-independent in general. The second check safely exposes a wrong expectation rather than crashing.
+
+### Exam question 9: choose discriminating assertions (6 marks)
+
+Choose oracles for empty average, the mean of [1,2,2], and an empty summary. Why is a zero fallback unsafe when expecting zero?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Choose” asks for comparison methods justified by each result type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate optional presence from numeric closeness, and keep exact text exact.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use exact equality with Nothing for the empty mean, an explicit case with False on Nothing and tolerance against 5/3 on Just, and exact text `"A: no marks"` for the summary. Defaulting Nothing to zero lets an absent result pass when zero is expected.
+
+</Step>
+
+<Step title="4. Check">
+
+A mutation returning Nothing for [0] must fail. Approximate comparison after a zero default would miss it.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** reversing expected and actual arguments makes failure diagnostics misleading even though equality is symmetric. A test deriving its expected result from the same buggy function is circular. Approximate comparison is not formatting. These logical faults compile without a GHC diagnostic.
+
+**Practice:** Does a “mean lies between minimum and maximum” property establish correctness?
+
+<details>
+<summary>Answer</summary>
+
+No. Returning the first mark also satisfies that property on valid non-empty inputs but is generally not the mean. Add independent examples and a proof for a universal claim.
+
+</details>
+
+## 9. The supplied harness and suite runner
+
+**Suite template:** construct labelled `IO Bool` assertions, execute them with `sequence`, count the returned results, then choose `pure ()` or `exitFailure`. The action list, its execution and the final process status are three different stages.
+
+Keep TestSupport.hs in the parent Test1 directory and the grade-book files in a child exercise folder. The following supplied-style implementation reports failures as values.
+
+Assertions have type IO Bool: constructing a list of them does not run them. The runner uses sequence to execute every listed action in order, then inspects the Boolean results. An ordinary False does not suppress later assertions; an uncaught exception may abort the run.
+
+**TestSupport.hs**
+
+```haskell
+module TestSupport (assertEqual, assertTrue, assertApprox, runTests) where
+import System.Exit (exitFailure)
+
+assertEqual :: (Eq a, Show a) => String -> a -> a -> IO Bool
+assertEqual label expected actual = do
+  let passed = expected == actual
+  putStrLn (status passed ++ " " ++ label)
+  if passed
+    then pure True
+    else do
+      putStrLn ("    expected: " ++ show expected)
+      putStrLn ("    actual:   " ++ show actual)
+      pure False
+  where
+    status True = "PASS"
+    status False = "FAIL"
+
+assertTrue :: String -> Bool -> IO Bool
+assertTrue label = assertEqual label True
+
+assertApprox :: String -> Double -> Double -> IO Bool
+assertApprox label expected actual =
+  assertTrue label (abs (expected - actual) < 0.000001)
+
+runTests :: [IO Bool] -> IO ()
+runTests tests = do
+  results <- sequence tests
+  let passed = length (filter id results)
+      total = length results
+  putStrLn (show passed ++ "/" ++ show total ++ " tests passed")
+  if and results then pure () else exitFailure
+```
+
+`pure ()` succeeds without a useful result; it is not an early exit command. `exitFailure` terminates with a failure exit status for an outer runner. An empty suite would print `0/0 tests passed` and succeed because `and []` is True; that offers no coverage evidence.
+
+**GradeBookTest.hs**
+
+```haskell
+module Main where
+import GradeBook
+import TestSupport (assertApprox, assertEqual, assertTrue, runTests)
+
+main :: IO ()
+main = runTests
+  [ assertEqual "empty average" Nothing (average [])
+  , assertEqual "simple average" (Just 60) (average [50,60,70])
+  , assertEqual "distinction boundary" "Distinction" (outcome 75)
+  , assertEqual "pass boundary" "Pass" (outcome 50)
+  , assertEqual "empty summary" "Lorato: no marks" (summary (Student "Lorato" []))
+  , assertTrue "class result present and close" classOK
+  , assertApprox "simple numeric payload" 60 (sum [50,60,70] / 3)
+  ]
+  where
+    classOK = case classAverage [Student "A" [50],Student "B" [75],Student "C" []] of
+      Nothing -> False
+      Just value -> abs (62.5 - value) < 0.000001
+```
+
+The first five reproduce Test1 checks. The supplied class test extracts a payload using a zero fallback; this version strengthens it by making absence fail explicitly. The final assertion demonstrates the numeric helper, while the mean assertions test the API.
+
+```text
+PASS empty average
+PASS simple average
+PASS distinction boundary
+PASS pass boundary
+PASS empty summary
+PASS class result present and close
+PASS simple numeric payload
+7/7 tests passed
+```
+
+If a broken boundary returns Pass at 75, its failure excerpt is:
+
+```text
+FAIL distinction boundary
+    expected: "Distinction"
+    actual:   "Pass"
+```
+
+The approximate helper delegates to assertTrue, so its failure diagnostic prints expected True and actual False rather than the numeric operands. The label identifies the calculation; a richer helper can include the operands in its label.
+
+Run locally from the exercise directory:
+
+```text
+runhaskell GradeBookApp.hs
+runhaskell -i.. GradeBookTest.hs
+```
+
+From the supplied Test1 root, `./RunAllTests.ps1` runs the suites. It finds `*Test.hs`, sorts paths, runs each in its own directory with `runhaskell -i..`, and checks `$LASTEXITCODE`. Non-zero stops the outer run with an error. Its final count is test files, not assertions. Understand that workflow; PowerShell is a supplied tool, not another language to learn for this exam.
+
+The runner does not explicitly exclude BrokenExamples folders: discovery uses the filename suffix. Keep intentionally rejected programs outside normal `*Test.hs` discovery and never import them from a passing test entry. Compile them separately for diagnosis. Intentional failure-exit demonstrations also belong outside the passing suite.
+
+
+### Variation: three passing assertion actions
+
+For the playground, keep the assertion functions local and inspect the returned Booleans directly. The full multi-file runner above adds process exit handling. This tests the exact, property and approximate oracles as actions rather than merely constructing a list of actions.
+
+<HaskellTryIt>
+
+```haskell
+assertEqual :: (Eq a, Show a) => String -> a -> a -> IO Bool
+assertEqual label expected actual = do
+  let passed = expected == actual
+  putStrLn (status passed ++ " " ++ label)
+  if passed
+    then pure True
+    else do
+      putStrLn ("    expected: " ++ show expected)
+      putStrLn ("    actual:   " ++ show actual)
+      pure False
+  where
+    status True = "PASS"
+    status False = "FAIL"
+
+assertTrue :: String -> Bool -> IO Bool
+assertTrue label = assertEqual label True
+
+assertApprox :: String -> Double -> Double -> IO Bool
+assertApprox label expected actual =
+  assertTrue label (abs (expected - actual) < 0.000001)
+
+
+main :: IO ()
+main = do
+  results <- sequence
+    [ assertEqual "missing result" (Nothing :: Maybe Double) Nothing
+    , assertTrue "range endpoints" (all (\m -> m >= 0 && m <= 100) [0,100 :: Double])
+    , assertApprox "fraction" (5/3) (1 + 2/3)
+    ]
+  print results
+```
+
+```text
+PASS missing result
+PASS range endpoints
+PASS fraction
+[True,True,True]
+```
+
+</HaskellTryIt>
+
+The equality oracle checks the Nothing constructor, the property checks both percentage endpoints, and the approximate oracle compares two independently written expressions for the same small fraction. sequence executes all three actions and gathers their results.
+
+### Variation: labelled failures preserve later checks
+
+The next experiment intentionally supplies wrong expectations but returns ordinary False values; it does not crash or call exitFailure.
+
+<HaskellTryIt>
+
+```haskell
+assertEqual :: (Eq a, Show a) => String -> a -> a -> IO Bool
+assertEqual label expected actual = do
+  let passed = expected == actual
+  putStrLn (status passed ++ " " ++ label)
+  if passed
+    then pure True
+    else do
+      putStrLn ("    expected: " ++ show expected)
+      putStrLn ("    actual:   " ++ show actual)
+      pure False
+  where
+    status True = "PASS"
+    status False = "FAIL"
+
+assertTrue :: String -> Bool -> IO Bool
+assertTrue label = assertEqual label True
+
+assertApprox :: String -> Double -> Double -> IO Bool
+assertApprox label expected actual =
+  assertTrue label (abs (expected - actual) < 0.000001)
+
+
+main :: IO ()
+main = do
+  results <- sequence
+    [ assertEqual "report wording" "A: no marks" "A: 0.0"
+    , assertTrue "incorrect boundary expectation" False
+    , assertApprox "wrong mean" 50 25
+    ]
+  print results
+```
+
+```text
+FAIL report wording
+    expected: "A: no marks"
+    actual:   "A: 0.0"
+FAIL incorrect boundary expectation
+    expected: True
+    actual:   False
+FAIL wrong mean
+    expected: True
+    actual:   False
+[False,False,False]
+```
+
+</HaskellTryIt>
+
+All three diagnostics appear because the assertions return False normally. The exact helper shows quoted Strings; assertTrue and assertApprox show Boolean diagnostics. The full runner would count zero successes and exit with failure after sequencing these actions.
+
+### Variation: list equality, a singleton property and close Doubles
+
+Different payload types and a small nonzero difference exercise the same helper contracts.
+
+<HaskellTryIt>
+
+```haskell
+assertEqual :: (Eq a, Show a) => String -> a -> a -> IO Bool
+assertEqual label expected actual = do
+  let passed = expected == actual
+  putStrLn (status passed ++ " " ++ label)
+  if passed
+    then pure True
+    else do
+      putStrLn ("    expected: " ++ show expected)
+      putStrLn ("    actual:   " ++ show actual)
+      pure False
+  where
+    status True = "PASS"
+    status False = "FAIL"
+
+assertTrue :: String -> Bool -> IO Bool
+assertTrue label = assertEqual label True
+
+assertApprox :: String -> Double -> Double -> IO Bool
+assertApprox label expected actual =
+  assertTrue label (abs (expected - actual) < 0.000001)
+
+
+main :: IO ()
+main = do
+  results <- sequence
+    [ assertEqual "ordered list" [1,2 :: Int] [1,2]
+    , assertTrue "singleton count" (length [75 :: Double] == 1)
+    , assertApprox "close payload" 50 50.0000001
+    ]
+  print results
+```
+
+```text
+PASS ordered list
+PASS singleton count
+PASS close payload
+[True,True,True]
+```
+
+</HaskellTryIt>
+
+List equality preserves order, the singleton property is exact, and the numeric difference is about one ten-millionth, comfortably below the fixed one-millionth tolerance. A passing tolerance comparison is not a request to round the report.
+
+
+### Exam question 10: interpret a failed suite (6 marks)
+
+A suite prints 6/7 tests passed and exits with failure. Explain the outer runner response, whether later assertions ran, and what a passing rerun establishes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” distinguishes action sequencing, per-file process status and confidence.
+
+</Step>
+
+<Step title="2. Plan">
+
+Trace sequence, count results, choose the exit action, then inspect the outer status.
+
+</Step>
+
+<Step title="3. Solution">
+
+For seven normally returning assertions, all seven ran before counting. One False makes and results False, so exitFailure returns non-zero. The PowerShell runner detects this and throws before proceeding to another test file. A repaired 7/7 run establishes these checks, not correctness for all datasets.
+
+</Step>
+
+<Step title="4. Check">
+
+An exception might prevent any count being printed. A list of actions never sequenced executes no assertions. Keep intentional rejection programs out of discovery.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors:** using `map` to construct a list of IO actions without executing it runs no assertions. `sequence_` executes the actions but discards their Bool results, so the suite cannot count failures from its result. A GHC `Couldn't match` message for `[Bool]` where `[IO Bool]` is required means the checks were supplied without assertion actions. Wrap the checks with the appropriate labelled helper. A plain False is not an exception and does not stop sequence.
+
+**Practice:** What should a passing runner do with an empty test list, and what does that establish?
+
+<details>
+<summary>Answer</summary>
+
+This supplied runner prints `0/0 tests passed` and succeeds: `and []` is True. It establishes no tested behaviour. Add actual assertions and check discovery if an expected suite turns out empty.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Test1 averages present student means, uses inclusive 50 and 75 boundaries, and reports missing marks explicitly. Pooling and weighting need separate contracts. Validate raw data before normal reporting and preserve accepted rows. Keep calculation, report and IO responsibilities clear. Independent oracles, labels and failure exit status make suites useful; passing finite cases is evidence rather than proof.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Can a non-empty class have no mean?">
+
+Yes: every student may have no marks.
+
+</CheckQuestion>
+
+<CheckQuestion question="When can pooled and equal-student means differ?">
+
+When students have unequal mark counts: [100] and [0,0,0] give 25.0 pooled and 50.0 equal-student.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does the constructor validate percentages?">
+
+No. A boundary validator must enforce the range and identity policies.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why test presence before comparing approximately?">
+
+A default can make absence look like a valid zero.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does an ordinary failed assertion stop sequence?">
+
+No. It returns False; the runner chooses an exit status after executing the listed assertions.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Integrated Mock Practical](/docs/sem3/csi243/10-reasoning-revision/notes/integrated-mock-practical).

@@ -1,0 +1,811 @@
+---
+title: "Proofs of Programs I"
+description: "Prove that a Haskell function is right for every input: structural induction on numbers, lists, binary trees and mutually recursive types, with the base case, the inductive hypotheses and the inductive step written out and justified."
+---
+
+Testing a function checks the inputs you thought of. A **proof** covers all of them, including the ones nobody tried. In Haskell the tool for this is **induction**, and it works because a recursive function is defined by cases: one equation for the smallest input, and equations that build on smaller inputs.
+
+The previous lesson, Equational Reasoning, showed two such proofs. This lesson turns them into a method you can apply to any recursive function and any recursive type: how to lay a proof out, how to decide what to induct on, what to do when you get stuck, and how the same method proves things about numbers, lists, binary trees, and types that are defined in terms of each other. The lab that follows is where you practise it, with every solution explained from the first thought to the last line.
+
+<LearningObjectives items={[
+  'Write a proof in the fixed order: claim, induct on, base case, inductive hypothesis, inductive step, conclusion',
+  'Choose the variable to induct on from the argument the function takes apart, and name the equation that justifies every line',
+  'Prove properties of numbers and lists, using a lemma, a case split, or a stronger claim when the first attempt sticks',
+  'Prove a property of a binary tree, using one inductive hypothesis for each recursive field',
+  'Prove two properties of mutually recursive types or functions together, each using the other as its hypothesis',
+  'Recognise the common faults: no base case, a circular hypothesis, a missing lemma, a claim that is simply false',
+]} />
+
+<Prerequisites items={[
+  'Equational Reasoning (the previous lesson): substituting equals for equals, and the first two list proofs',
+  'Chapters 5 and 6: base case and recursive step, and recursion on [] and (x:xs)',
+  'Chapter 8: recursive data types, for the tree and mutual-recursion sections',
+]} />
+
+## 1. What a proof adds to a test
+
+Run this and it looks as if reversing twice gives back the list:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let lists = [[], [1], [1,2], [3,1,2], [5,4,3,2,1]]
+  print (all (\xs -> reverse (reverse xs) == xs) lists)
+  print (all (\xs -> reverse xs == xs) lists)
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+The second line shows what a test does well: one failing list **refutes** a claim. The first line shows what it cannot do: five lists passing says nothing about the sixth. A completed induction says it for all of them at once.
+
+It can do that because every finite list is built by starting from `[]` and consing elements on, one at a time. So if a claim is true for `[]`, and true for `x:xs` whenever it is true for `xs`, it is true for every finite list.
+
+<KeyTerm title="Structural induction">A proof that a claim holds for every value of a type built from constructors. Prove it for each constructor that contains no smaller value (the **base cases**). Then, for each constructor that contains smaller values, prove it assuming the claim for those smaller values (the **inductive step**, using the **inductive hypotheses**).</KeyTerm>
+
+<Callout type="analogy" title="Dominoes">
+The base case knocks over the first domino. The inductive step shows that any domino that falls knocks over the next one. Together they topple every domino in the row, however long it is.
+</Callout>
+
+The recipe is the same for every type: **one case for each constructor, and one hypothesis for each recursive field**.
+
+| Type | Base case | Inductive step | Hypotheses you may use |
+|---|---|---|---|
+| Natural number `n` | `n = 0` | `n + 1` | the claim for `n` |
+| List | `[]` | `x : xs` | the claim for `xs` |
+| `data Tree a = Leaf \| Node (Tree a) a (Tree a)` | `Leaf` | `Node l x r` | the claim for `l` **and** for `r` |
+
+For the binary tree the principle reads: to prove `P(t)` for every tree `t`, prove `P(Leaf)`, then prove `P(Node l x r)` assuming `P(l)` and `P(r)`. That is two induction hypotheses, one per recursive field. Section 8 does it, and Section 9 shows what changes when two types are defined in terms of each other.
+
+## 2. The shape of every proof
+
+Every proof in this lesson has the same six parts, in the same order:
+
+```text
+Claim:       the statement, for all values of the variable
+Induct on:   the variable (the argument the function takes apart)
+
+Base case:   the variable is the smallest value
+             left side  = ...   -- reason
+             right side = ...   -- reason
+             both sides are the same, so the base case holds
+
+Hypothesis:  assume the claim for the smaller value (or values)
+
+Step:        show the claim for the next value
+             start from one side and rewrite it, one equation per line,
+             using the hypothesis where the smaller value appears,
+             until it equals the other side
+
+Conclusion:  true for the base case, and true for each step,
+             so true for every value of the type
+```
+
+Two habits make a proof easy to check and easy to mark:
+
+- **One equation per line, and a reason on every line.** The reason is the name of a defining equation such as `(A2)`, `IH` for the inductive hypothesis, `arithmetic`, or the name of a lemma you proved earlier. "Obviously" is not a reason.
+- **Rewrite one side until it equals the other.** Never start from the claim and work towards something true. That assumes what you are trying to show.
+
+### The questions to ask, in order
+
+Writing the proof is the last stage. Before it, you decide what to prove it by. These seven questions are the thought process, and the lab solutions follow them every time:
+
+| # | Ask | Why |
+|---|---|---|
+| 1 | What does the claim say in words? Try it on a small input. | A claim that fails on `[1,2]` is false, and you find out in a minute instead of after a page of algebra |
+| 2 | Which functions appear, and what are their defining equations? Write them out and label them. | The equations are the only rules you may use besides arithmetic and the hypothesis |
+| 3 | Which argument do those functions take apart? | That is the variable to induct on |
+| 4 | What are the cases? One per constructor. Which constructors contain a smaller value? | The first are base cases. The second give the hypotheses |
+| 5 | In the step, what is the goal? Unfold one equation: where does the smaller value appear? | That is where the hypothesis goes |
+| 6 | Stuck? Which expression blocks the next line? | It is a missing lemma, a claim that needs generalising, a case split, or a false claim |
+| 7 | Does every line have a reason and every constructor a case? | This is what a marker checks |
+
+In this lesson the functions are used with these defining equations. The Prelude's own definitions are written differently for speed, but they give the same results, so the proofs hold for them too.
+
+```haskell
+length []     = 0                  -- (L1)
+length (_:xs) = 1 + length xs      -- (L2)
+
+[]     ++ ys = ys                  -- (A1)
+(x:xs) ++ ys = x : (xs ++ ys)      -- (A2)
+
+reverse []     = []                -- (R1)
+reverse (x:xs) = reverse xs ++ [x] -- (R2)
+```
+
+## 3. Induction on numbers
+
+Start with the simplest type, the natural numbers. Here is a function that adds the numbers from `1` up to `n`:
+
+```haskell
+sumTo :: Int -> Int
+sumTo 0 = 0                   -- (N1)
+sumTo n = n + sumTo (n - 1)   -- (N2)
+```
+
+**Claim:** for every `n >= 0`, `2 * sumTo n = n * (n + 1)`.
+
+<Steps title="Induction on n">
+  <Step title="Base case: n = 0">
+    ```text
+    2 * sumTo 0
+    = 2 * 0                  -- (N1)
+    = 0                      -- arithmetic
+
+    0 * (0 + 1)
+    = 0                      -- arithmetic
+    ```
+    Both sides are `0`.
+  </Step>
+  <Step title="Inductive hypothesis">
+    Assume the claim for some `n >= 0`:
+
+    ```text
+    2 * sumTo n = n * (n + 1)
+    ```
+  </Step>
+  <Step title="Inductive step: show it for n + 1">
+    The number `n + 1` is not `0`, so equation (N2) applies to it.
+
+    ```text
+    2 * sumTo (n + 1)
+    = 2 * ((n + 1) + sumTo ((n + 1) - 1))   -- (N2)
+    = 2 * ((n + 1) + sumTo n)               -- arithmetic: (n + 1) - 1 = n
+    = 2 * (n + 1) + 2 * sumTo n             -- distributivity
+    = 2 * (n + 1) + n * (n + 1)             -- IH
+    = (n + 1) * (2 + n)                     -- factor out (n + 1)
+    = (n + 1) * ((n + 1) + 1)               -- arithmetic
+    ```
+    The last line is the right side of the claim with `n + 1` in place of `n`.
+  </Step>
+  <Step title="Conclusion">
+    The claim holds for `0`, and holds for `n + 1` whenever it holds for `n`, so it holds for every `n >= 0`.
+  </Step>
+</Steps>
+
+<HaskellTryIt>
+
+```haskell
+sumTo :: Int -> Int
+sumTo 0 = 0
+sumTo n = n + sumTo (n - 1)
+
+main :: IO ()
+main = do
+  print [sumTo n | n <- [0..6]]
+  print [n * (n + 1) `div` 2 | n <- [0..6]]
+  print (all (\n -> 2 * sumTo n == n * (n + 1)) [0..100])
+```
+
+```text
+[0,1,3,6,10,15,21]
+[0,1,3,6,10,15,21]
+True
+```
+
+</HaskellTryIt>
+
+The condition `n >= 0` matters. `sumTo (-1)` never reaches the base case, so nothing is claimed for it. This is the precondition from the Specification lesson: a proof covers the inputs the function is meant for.
+
+## 4. Induction on lists: the main pattern
+
+Most proofs in this course are about lists. Two small facts about `++` come up again and again, and each needs an induction of its own, because `++` takes apart only its **first** argument.
+
+### Lemma 1: `xs ++ [] = xs`
+
+It looks too obvious to prove, but equations (A1) and (A2) both start by looking at the left list. With `[]` on the right, no equation applies until you know something about `xs`.
+
+<Steps title="Induction on xs">
+  <Step title="Base case: xs = []">
+    ```text
+    [] ++ []
+    = []                     -- (A1)
+    ```
+  </Step>
+  <Step title="Inductive step: assume xs ++ [] = xs, show (x:xs) ++ [] = x:xs">
+    ```text
+    (x:xs) ++ []
+    = x : (xs ++ [])         -- (A2)
+    = x : xs                 -- IH
+    ```
+  </Step>
+</Steps>
+
+### Lemma 2: associativity, `(xs ++ ys) ++ zs = xs ++ (ys ++ zs)`
+
+There are three lists. Induct on `xs`, the first argument of the inner `++`, because that is the one the equations take apart. Inducting on `ys` or `zs` gives you nothing to unfold.
+
+<Steps title="Induction on xs">
+  <Step title="Base case: xs = []">
+    ```text
+    ([] ++ ys) ++ zs
+    = ys ++ zs               -- (A1), on the inner ++
+
+    [] ++ (ys ++ zs)
+    = ys ++ zs               -- (A1)
+    ```
+  </Step>
+  <Step title="Inductive step: assume (xs ++ ys) ++ zs = xs ++ (ys ++ zs)">
+    ```text
+    ((x:xs) ++ ys) ++ zs
+    = (x : (xs ++ ys)) ++ zs        -- (A2), on the inner ++
+    = x : ((xs ++ ys) ++ zs)        -- (A2)
+    = x : (xs ++ (ys ++ zs))        -- IH
+    = (x:xs) ++ (ys ++ zs)          -- (A2), backwards
+    ```
+  </Step>
+</Steps>
+
+<Callout type="tip" title="Which variable?">
+Look at the equations, not at the claim. Induct on the argument that the function pattern matches. For `++` that is the first list, so a claim about `xs ++ ys` is proved by induction on `xs`.
+</Callout>
+
+## 5. When you get stuck, prove a lemma
+
+**Claim:** `reverse (reverse xs) = xs`.
+
+Try the induction directly and watch where it stops. The base case is easy, because `reverse (reverse []) = reverse [] = []` by (R1) twice. In the step, the first rewrite gives:
+
+```text
+reverse (reverse (x:xs))
+= reverse (reverse xs ++ [x])     -- (R2)
+```
+
+and now nothing applies. The expression is `reverse` of an append, and the hypothesis is about `reverse (reverse xs)`, not about this. The missing piece is a fact about **`reverse` and `++` together**. Stating it as a lemma and proving it separately is exactly what a mathematician does here.
+
+### Lemma 3: `reverse (xs ++ ys) = reverse ys ++ reverse xs`
+
+Induct on `xs`.
+
+<Steps title="Induction on xs">
+  <Step title="Base case: xs = []">
+    ```text
+    reverse ([] ++ ys)
+    = reverse ys                     -- (A1)
+
+    reverse ys ++ reverse []
+    = reverse ys ++ []               -- (R1)
+    = reverse ys                     -- Lemma 1
+    ```
+  </Step>
+  <Step title="Inductive step: assume reverse (xs ++ ys) = reverse ys ++ reverse xs">
+    ```text
+    reverse ((x:xs) ++ ys)
+    = reverse (x : (xs ++ ys))              -- (A2)
+    = reverse (xs ++ ys) ++ [x]             -- (R2)
+    = (reverse ys ++ reverse xs) ++ [x]     -- IH
+    = reverse ys ++ (reverse xs ++ [x])     -- Lemma 2
+    = reverse ys ++ reverse (x:xs)          -- (R2), backwards
+    ```
+  </Step>
+</Steps>
+
+One more small fact, which needs no induction at all, only the definitions: `reverse [x] = [x]`.
+
+```text
+reverse [x]
+= reverse (x : [])        -- [x] is x : []
+= reverse [] ++ [x]       -- (R2)
+= [] ++ [x]               -- (R1)
+= [x]                     -- (A1)
+```
+
+### Theorem: `reverse (reverse xs) = xs`
+
+<Steps title="Induction on xs">
+  <Step title="Base case: xs = []">
+    ```text
+    reverse (reverse [])
+    = reverse []                        -- (R1)
+    = []                                -- (R1)
+    ```
+  </Step>
+  <Step title="Inductive step: assume reverse (reverse xs) = xs">
+    ```text
+    reverse (reverse (x:xs))
+    = reverse (reverse xs ++ [x])           -- (R2)
+    = reverse [x] ++ reverse (reverse xs)   -- Lemma 3
+    = reverse [x] ++ xs                     -- IH
+    = [x] ++ xs                             -- reverse [x] = [x]
+    = x : ([] ++ xs)                        -- (A2), since [x] is x : []
+    = x : xs                                -- (A1)
+    ```
+  </Step>
+</Steps>
+
+The finished proof stands on a small tower of results. Each one was proved by its own induction, and each one is used exactly where the previous step got stuck.
+
+<SiteDiagram chart={`flowchart TD
+  L1["Lemma 1\nxs ++ [] = xs"] --> L3
+  L2["Lemma 2\n(xs ++ ys) ++ zs = xs ++ (ys ++ zs)"] --> L3
+  L3["Lemma 3\nreverse (xs ++ ys) = reverse ys ++ reverse xs"] --> T["Theorem\nreverse (reverse xs) = xs"]
+`} caption="The proof that reversing twice does nothing rests on three lemmas, each proved by induction on a list." />
+
+<Callout type="tip" title="How to find the lemma">
+When a step stops, look at the expression you cannot simplify. Here it is `reverse (something ++ [x])`. Write down the general fact about that shape, `reverse (xs ++ ys)`, check it on a small example, and prove it by induction. A failed step is not a dead end: it tells you what is missing.
+</Callout>
+
+## 6. Cases inside the step
+
+Some functions choose between equations with a guard or an `if`. The proof then splits the step into the same cases the function does. Take `filter`:
+
+```haskell
+filter :: (a -> Bool) -> [a] -> [a]
+filter _ []     = []                  -- (F1)
+filter p (x:xs)
+  | p x         = x : filter p xs     -- (F2)
+  | otherwise   = filter p xs         -- (F3)
+```
+
+**Claim:** `length (filter p xs) <= length xs`. Filtering never makes a list longer. This claim is an inequality, not an equation, and the method is the same.
+
+Induct on `xs`, because `filter` takes apart its list.
+
+<Steps title="Induction on xs">
+  <Step title="Base case: xs = []">
+    ```text
+    length (filter p [])
+    = length []              -- (F1)
+    = 0                      -- (L1)
+    ```
+    and `length [] = 0`, so the claim `0 <= 0` holds.
+  </Step>
+  <Step title="Inductive hypothesis">
+    Assume `length (filter p xs) <= length xs`.
+  </Step>
+  <Step title="Inductive step, case p x = True">
+    ```text
+    length (filter p (x:xs))
+    = length (x : filter p xs)          -- (F2)
+    = 1 + length (filter p xs)          -- (L2)
+    <= 1 + length xs                    -- IH, adding 1 to both sides
+    = length (x:xs)                     -- (L2), backwards
+    ```
+  </Step>
+  <Step title="Inductive step, case p x = False">
+    ```text
+    length (filter p (x:xs))
+    = length (filter p xs)              -- (F3)
+    <= length xs                        -- IH
+    <= 1 + length xs                    -- arithmetic
+    = length (x:xs)                     -- (L2), backwards
+    ```
+  </Step>
+  <Step title="Conclusion">
+    Either `p x` is `True` or it is `False`, and both cases give the claim. The two cases cover every possibility, exactly as the two guards do.
+  </Step>
+</Steps>
+
+<Callout type="tip" title="Mirror the function">
+Give the step as many cases as the equation you unfold has guards or branches, and check that together they cover every possibility.
+</Callout>
+
+## 7. When the hypothesis is too weak: generalise
+
+Reversing with `reverse` is slow, because every `++` walks the whole left list. The usual fix carries the answer built so far in an extra argument, called an **accumulator**:
+
+```haskell
+reverseAcc :: [a] -> [a] -> [a]
+reverseAcc []     acc = acc                      -- (V1)
+reverseAcc (x:xs) acc = reverseAcc xs (x : acc)  -- (V2)
+
+fastReverse :: [a] -> [a]
+fastReverse xs = reverseAcc xs []                -- (V3)
+```
+
+**Goal:** `fastReverse xs = reverse xs`, which by (V3) is `reverseAcc xs [] = reverse xs`.
+
+Try induction on `xs` with exactly that claim. The step has to show `reverseAcc (x:xs) [] = reverse (x:xs)`. Equation (V2) turns the left side into `reverseAcc xs [x]`, and the hypothesis says nothing about it, because the hypothesis is about an accumulator of `[]`, and here the accumulator is `[x]`. The claim is too weak to use.
+
+The fix is to prove something stronger, **for every accumulator**:
+
+**Claim:** for every `xs` and every `acc`, `reverseAcc xs acc = reverse xs ++ acc`.
+
+Now the hypothesis holds for every accumulator, so it can be used with `x : acc`.
+
+<Steps title="Induction on xs, for every acc">
+  <Step title="Base case: xs = []">
+    ```text
+    reverseAcc [] acc
+    = acc                          -- (V1)
+
+    reverse [] ++ acc
+    = [] ++ acc                    -- (R1)
+    = acc                          -- (A1)
+    ```
+  </Step>
+  <Step title="Inductive hypothesis">
+    For this `xs`, and for every accumulator:
+
+    ```text
+    reverseAcc xs acc = reverse xs ++ acc
+    ```
+  </Step>
+  <Step title="Inductive step: show it for x:xs">
+    Left side:
+
+    ```text
+    reverseAcc (x:xs) acc
+    = reverseAcc xs (x : acc)             -- (V2)
+    = reverse xs ++ (x : acc)             -- IH, used with the accumulator x : acc
+    ```
+
+    Right side:
+
+    ```text
+    reverse (x:xs) ++ acc
+    = (reverse xs ++ [x]) ++ acc          -- (R2)
+    = reverse xs ++ ([x] ++ acc)          -- Lemma 2
+    = reverse xs ++ (x : ([] ++ acc))     -- (A2), since [x] is x : []
+    = reverse xs ++ (x : acc)             -- (A1)
+    ```
+
+    Both sides are `reverse xs ++ (x : acc)`.
+  </Step>
+  <Step title="Conclusion, and back to the goal">
+    The claim holds for every `xs` and `acc`. Taking `acc = []`:
+
+    ```text
+    fastReverse xs
+    = reverseAcc xs []         -- (V3)
+    = reverse xs ++ []         -- the claim, with acc = []
+    = reverse xs               -- Lemma 1
+    ```
+  </Step>
+</Steps>
+
+<HaskellTryIt>
+
+```haskell
+reverseAcc :: [a] -> [a] -> [a]
+reverseAcc []     acc = acc
+reverseAcc (x:xs) acc = reverseAcc xs (x : acc)
+
+main :: IO ()
+main = do
+  print (reverseAcc [1,2,3] [])
+  print (reverseAcc [1,2,3] [10,20])
+  print (reverse [1,2,3] ++ [10,20])
+```
+
+```text
+[3,2,1]
+[3,2,1,10,20]
+[3,2,1,10,20]
+```
+
+</HaskellTryIt>
+
+The last two lines are the stronger claim at work: with a starting accumulator of `[10,20]`, `reverseAcc` returns the reversed list followed by that accumulator.
+
+<Callout type="key" title="Generalise the other arguments">
+If a function has an accumulator or any other extra argument, prove the claim for **every** value of that argument, not just the one used at the top. The hypothesis can then be used at a different value, which is what the recursive call does.
+</Callout>
+
+## 8. Induction on binary trees
+
+The method is not special to lists. Take the binary tree from Chapter 8, with a value in every node:
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+```
+
+A tree has two constructors, so a proof has two cases. `Leaf` contains no smaller tree, so it is the base case. `Node l x r` contains **two**, the left subtree `l` and the right subtree `r`, so the step has **two inductive hypotheses**, one per recursive field. Here are two functions over it, one equation per constructor:
+
+```haskell
+size :: Tree a -> Int
+size Leaf         = 0                         -- (Z1)
+size (Node l _ r) = size l + 1 + size r       -- (Z2)
+
+mirror :: Tree a -> Tree a
+mirror Leaf         = Leaf                            -- (W1)
+mirror (Node l x r) = Node (mirror r) x (mirror l)    -- (W2)
+```
+
+**Claim:** `size (mirror t) = size t`. Mirroring swaps the two sides of every node, so it should not change how many nodes there are.
+
+<Steps title="Induction on t">
+  <Step title="Base case: t = Leaf">
+    ```text
+    size (mirror Leaf)
+    = size Leaf                                  -- (W1)
+    ```
+    This is the right side.
+  </Step>
+  <Step title="Inductive hypotheses">
+    For the two subtrees, both at once:
+
+    ```text
+    size (mirror l) = size l
+    size (mirror r) = size r
+    ```
+  </Step>
+  <Step title="Inductive step: t = Node l x r">
+    ```text
+    size (mirror (Node l x r))
+    = size (Node (mirror r) x (mirror l))               -- (W2)
+    = size (mirror r) + 1 + size (mirror l)             -- (Z2)
+    = size r + 1 + size l                               -- IH for r, and IH for l
+    = size l + 1 + size r                               -- commutativity and associativity of +
+    = size (Node l x r)                                 -- (Z2), backwards
+    ```
+    Both hypotheses were needed: the first rewrites `size (mirror r)`, the second rewrites `size (mirror l)`.
+  </Step>
+</Steps>
+
+**Claim:** `mirror (mirror t) = t`. Mirroring twice gives the original tree back.
+
+<Steps title="Induction on t">
+  <Step title="Base case: t = Leaf">
+    ```text
+    mirror (mirror Leaf)
+    = mirror Leaf                              -- (W1)
+    = Leaf                                     -- (W1)
+    ```
+  </Step>
+  <Step title="Inductive step: assume mirror (mirror l) = l and mirror (mirror r) = r">
+    ```text
+    mirror (mirror (Node l x r))
+    = mirror (Node (mirror r) x (mirror l))                -- (W2)
+    = Node (mirror (mirror l)) x (mirror (mirror r))       -- (W2), on the new Node
+    = Node l x r                                           -- IH for l, and IH for r
+    ```
+  </Step>
+</Steps>
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+  deriving (Show, Eq)
+
+size :: Tree a -> Int
+size Leaf         = 0
+size (Node l _ r) = size l + 1 + size r
+
+mirror :: Tree a -> Tree a
+mirror Leaf         = Leaf
+mirror (Node l x r) = Node (mirror r) x (mirror l)
+
+main :: IO ()
+main = do
+  let t = Node (Node Leaf 1 Leaf) 2 (Node Leaf 3 (Node Leaf 4 Leaf))
+  print (mirror t)
+  print (size t, size (mirror t))
+  print (mirror (mirror t) == t)
+```
+
+```text
+Node (Node (Node Leaf 4 Leaf) 3 Leaf) 2 (Node Leaf 1 Leaf)
+(4,4)
+True
+```
+
+</HaskellTryIt>
+
+A claim that connects a tree to a list needs lemmas about lists as well. That is the harder tree task in the lab: `inorder (mirror t) = reverse (inorder t)`.
+
+## 9. Mutual induction
+
+Sometimes two functions, or two types, are defined in terms of each other. A proof about one then needs a fact about the other. The method is to prove **both properties together**, each using the other's statement as its hypothesis.
+
+### 9.1 Two functions that call each other
+
+```haskell
+isEven :: Int -> Bool
+isEven 0 = True               -- (D1)
+isEven n = isOdd (n - 1)      -- (D2)
+
+isOdd :: Int -> Bool
+isOdd 0 = False               -- (D3)
+isOdd n = isEven (n - 1)      -- (D4)
+```
+
+**Claims, for every `n >= 0`:** `A(n)`: `isEven n = even n`, and `B(n)`: `isOdd n = odd n`.
+
+Try `A(n)` alone. In the step, `isEven (n + 1)` becomes `isOdd n` by (D2), and the hypothesis `A(n)` says nothing about `isOdd`. The proof of `A` needs `B`, and the proof of `B` needs `A`. So prove the **pair** by one induction on `n`:
+
+<Steps title="Induction on n, for the pair A(n) and B(n)">
+  <Step title="Base case: n = 0">
+    ```text
+    isEven 0 = True = even 0      -- (D1), and 0 is even
+    isOdd 0  = False = odd 0      -- (D3), and 0 is not odd
+    ```
+  </Step>
+  <Step title="Inductive hypothesis">
+    Assume both `A(n)` and `B(n)`.
+  </Step>
+  <Step title="Inductive step: show A(n + 1) and B(n + 1)">
+    ```text
+    isEven (n + 1)
+    = isOdd n               -- (D2)
+    = odd n                 -- B(n), the hypothesis for the other function
+    = even (n + 1)          -- n + 1 is even exactly when n is odd
+
+    isOdd (n + 1)
+    = isEven n              -- (D4)
+    = even n                -- A(n), the hypothesis for the other function
+    = odd (n + 1)           -- n + 1 is odd exactly when n is even
+    ```
+  </Step>
+</Steps>
+
+### 9.2 Two types that contain each other
+
+A list that alternates between two types needs two data declarations, each mentioning the other. An `EvenList` is empty or has an element followed by an `OddList`. An `OddList` is an element followed by an `EvenList`:
+
+```haskell
+data EvenList a = ENil | ECons a (OddList a)
+data OddList a  = OCons a (EvenList a)
+```
+
+So `ENil`, `ECons 1 (OCons 2 ENil)` and so on are even lists, and `OCons 2 ENil` is an odd list. Their lengths come from two functions that call each other:
+
+```haskell
+lengthE :: EvenList a -> Int
+lengthE ENil         = 0                  -- (LE1)
+lengthE (ECons _ os) = 1 + lengthO os     -- (LE2)
+
+lengthO :: OddList a -> Int
+lengthO (OCons _ es) = 1 + lengthE es     -- (LO1)
+```
+
+**Claims:** (a) for every `EvenList` `es`, `even (lengthE es)`; (b) for every `OddList` `os`, `odd (lengthO os)`.
+
+Follow the questions from Section 2. Which argument do the functions take apart? `lengthE` takes apart an `EvenList` and `lengthO` an `OddList`, so there are three constructors to cover: `ENil`, `ECons` and `OCons`. Which contain a smaller value? `ENil` contains none. `ECons x os` contains an **odd** list `os`. `OCons x es` contains an **even** list `es`. The smaller value in each case has the **other** type, so the hypothesis for it is the **other** claim.
+
+That is why two separate inductions fail. Try (a) alone by induction on `es`: in the case `ECons x os` you need `odd (lengthO os)`, a fact about an `OddList`, and the hypothesis for `EvenList`s does not cover it. The same happens to (b). The two claims have to be proved together:
+
+<KeyTerm title="Mutual induction">To prove a property of every value of each type in a family of mutually recursive types, give one case for every constructor of every type. In each case, the hypothesis for a recursive field is the property of the type of that field. The properties are proved simultaneously, and each proof may use the other's statement as its hypothesis.</KeyTerm>
+
+<Steps title="Mutual induction on EvenList and OddList">
+  <Step title="Case ENil (claim a)">
+    ```text
+    lengthE ENil
+    = 0                          -- (LE1)
+    ```
+    and `0` is even. There is no smaller value, so no hypothesis is needed.
+  </Step>
+  <Step title="Case ECons x os (claim a), assuming claim b for os">
+    The hypothesis is the statement about the odd list: `odd (lengthO os)`.
+
+    ```text
+    lengthE (ECons x os)
+    = 1 + lengthO os             -- (LE2)
+    ```
+    `lengthO os` is odd by the hypothesis, and one more than an odd number is even. So `lengthE (ECons x os)` is even.
+  </Step>
+  <Step title="Case OCons x es (claim b), assuming claim a for es">
+    The hypothesis is the statement about the even list: `even (lengthE es)`.
+
+    ```text
+    lengthO (OCons x es)
+    = 1 + lengthE es             -- (LO1)
+    ```
+    `lengthE es` is even by the hypothesis, and one more than an even number is odd. So `lengthO (OCons x es)` is odd.
+  </Step>
+  <Step title="Conclusion">
+    Every value of either type is a finite chain that alternates between the two constructors and ends at `ENil`, for example `ECons 1 (OCons 2 (ECons 3 (OCons 4 ENil)))`. The three cases above justify each link of such a chain, starting from the end at `ENil`. So both claims hold for every value of both types.
+  </Step>
+</Steps>
+
+<HaskellTryIt>
+
+```haskell
+data EvenList a = ENil | ECons a (OddList a)
+  deriving Show
+data OddList a = OCons a (EvenList a)
+  deriving Show
+
+lengthE :: EvenList a -> Int
+lengthE ENil         = 0
+lengthE (ECons _ os) = 1 + lengthO os
+
+lengthO :: OddList a -> Int
+lengthO (OCons _ es) = 1 + lengthE es
+
+main :: IO ()
+main = do
+  let es = ECons 'a' (OCons 'b' (ECons 'c' (OCons 'd' ENil)))
+      os = OCons 'a' (ECons 'b' (OCons 'c' ENil))
+  print (lengthE es, even (lengthE es))
+  print (lengthO os, odd (lengthO os))
+```
+
+```text
+(4,True)
+(3,True)
+```
+
+</HaskellTryIt>
+
+<Callout type="key" title="One hypothesis per recursive field, whatever its type">
+For a list, one hypothesis. For a binary tree, two, both about the same type. For mutually recursive types, one hypothesis per recursive field again, but about the type of that field, which may be a different type with its own claim.
+</Callout>
+
+## 10. Choosing a strategy
+
+| Situation | What to do |
+|---|---|
+| The claim is about a function that recurses on one argument | Induct on that argument |
+| Several lists appear in the claim | Induct on the one the functions take apart, usually the first argument of `++` |
+| A step stops at an expression you cannot simplify | State the missing fact as a lemma and prove it by induction |
+| The function has an accumulator or extra argument | Prove the claim for **every** value of that argument |
+| The function chooses with guards or `if` | Split the step into the same cases, and check that they cover everything |
+| A constructor has two recursive fields | Assume the claim for both, and use whichever you need |
+| Two types or functions refer to each other | Prove the claims about both together, each case using the other claim as its hypothesis |
+| The claim is about numbers `n >= 0` | Base case `0`, step from `n` to `n + 1` |
+| The base case or the step will not work out | Test the claim on a small example. It may be false |
+
+## 11. Common mistakes
+
+<Callout type="mistake" title="No base case, or only the base case">
+Both parts are needed. The step alone proves nothing, because there is no first domino. The base case alone proves the claim for one value. Check that each constructor has its case.
+</Callout>
+
+<Callout type="mistake" title="A circular hypothesis">
+The hypothesis is the claim for the **smaller** value, never for the one you are proving. Assuming the claim for `x:xs` and using it to prove the claim for `x:xs` proves nothing. The only places the hypothesis may be used are the smaller parts: the tail of a list, or the left and right subtrees of a node.
+</Callout>
+
+<Callout type="mistake" title="Forgetting a hypothesis">
+A node has two subtrees and the step has two hypotheses. A proof that uses only the one for `l` and quietly ignores `r` usually has a gap exactly where `r` appears. In a mutual proof, forgetting that each case uses the **other** claim is the same mistake.
+</Callout>
+
+<Callout type="mistake" title="Starting from the claim">
+Do not write the claim down and rewrite both sides until you reach something true. Start from one side, and rewrite it one equation at a time until it is the other side. If you work from both ends, say which equations you reverse.
+</Callout>
+
+<Callout type="mistake" title="Skipping the reason">
+"By simplification" is not a reason. Name the equation, the hypothesis, the lemma, or the arithmetic law on every line. A line you cannot justify is where a proof is hiding a gap.
+</Callout>
+
+<Callout type="mistake" title="Inducting on the wrong variable">
+For `(xs ++ ys) ++ zs`, induction on `ys` leaves every `++` stuck, because `++` looks only at its left list. If no equation applies in the step, you chose a variable the functions do not take apart.
+</Callout>
+
+<Callout type="caution" title="What induction does not cover">
+These proofs cover **finite** values and functions that **terminate**. An infinite list, or a list ending in `undefined`, is not built from `[]` by finitely many conses, so the argument says nothing about it. Number claims also assume ideal arithmetic: with `Int`, a result can wrap around, and the formula for `sumTo` holds only while nothing overflows. Use `Integer` when the proof must be exact.
+</Callout>
+
+## Summary
+
+<Callout type="key" title="Remember">
+- A proof by induction has one case per constructor: a base case for each constructor with no smaller value, and an inductive step for each that has smaller values.
+- Write it in order: claim, induct on, base case, hypothesis, step, conclusion. Name the reason on every line.
+- Induct on the argument the function takes apart. For `++` that is the first list.
+- To prove `P(t)` for every tree, prove `P(Leaf)`, then `P(Node l x r)` assuming `P(l)` and `P(r)`: two hypotheses, one per recursive field.
+- For mutually recursive types or functions, prove all the claims together, each case using the other claim as its hypothesis.
+- When a step sticks, look at the expression it stuck on. It needs a lemma, a case split, a stronger claim, or the claim is false.
+- The proofs cover finite values and terminating functions.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+  <CheckQuestion question="Why is a base case needed as well as an inductive step?">
+    The step only says that if the claim holds for a smaller value then it holds for the next. Without a first value where the claim is known to hold, nothing ever starts: it is a row of dominoes with none knocked over.
+  </CheckQuestion>
+  <CheckQuestion question="To prove P(t) for every tree t with data Tree a = Leaf | Node (Tree a) a (Tree a), what must you prove?">
+    `P(Leaf)`, and `P(Node l x r)` assuming `P(l)` and `P(r)`. The step has two inductive hypotheses, one per recursive field.
+  </CheckQuestion>
+  <CheckQuestion question="To prove (xs ++ ys) ++ zs = xs ++ (ys ++ zs), why induct on xs and not on ys?">
+    The equations for `++` take apart only the first list. With `xs` known to be `[]` or `x:xs`, an equation applies and the step can move forward. With `ys` unknown, every `++` stays stuck.
+  </CheckQuestion>
+  <CheckQuestion question="Why does reverseAcc xs [] = reverse xs need to be generalised before you can prove it?">
+    The recursive call changes the accumulator from `[]` to `x : []`, so a hypothesis that only covers the accumulator `[]` cannot be used on it. Proving `reverseAcc xs acc = reverse xs ++ acc` for every `acc` makes the hypothesis strong enough.
+  </CheckQuestion>
+  <CheckQuestion question="Why can't you prove 'lengthE es is even' by induction on es alone?">
+    In the case `ECons x os`, the recursive field `os` is an `OddList`, so the hypothesis you get is about odd lists, not even ones. You need the claim `odd (lengthO os)` for that field. The two claims must be proved together, each using the other as its hypothesis.
+  </CheckQuestion>
+  <CheckQuestion question="Does an induction on lists prove a claim for an infinite list?">
+    No. Every list the induction covers is built from `[]` by a finite number of conses. An infinite list is never finished, so the argument says nothing about it.
+  </CheckQuestion>
+</CheckQuestions>
+
+Continue with the [Proofs of Programs I Lab](/docs/sem3/csi243/10-reasoning-revision/notes/lab-proofs-of-programs-i), where each solution shows the whole thought process.

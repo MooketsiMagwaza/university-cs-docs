@@ -1,0 +1,1261 @@
+---
+title: "Proof Patterns Lab"
+description: "Practise fourteen proof and disproof tasks with equations, domains and a seven-step narrated solution for each."
+---
+
+Try each claim on paper before opening its solution. The worked answers explain how to choose the induction, which smaller values are available and where each equation is used. All claims use the finite, total domains from Proof Patterns; they do not promise behaviour on undefined values.
+
+<LearningObjectives items={[
+  'Write a complete reason on every line of a proof',
+  'Choose and justify ordinary, strong, structural or mutual induction',
+  'Generalise a fold claim and preserve the full search-tree invariant',
+  'Check partial-function domains and give valid counterexamples',
+]} />
+
+<Prerequisites items={[
+  'Proofs of Programs I Lab: the seven-step narrated format',
+  'Proof Patterns: the definitions, contracts and new lemmas',
+]} />
+
+## 1. Definitions and the seven steps
+
+Every solution follows exactly this order: read the claim and test it; collect the equations; choose the induction variable; prove the base; state the hypothesis; prove the step; check and conclude. In a disproof the same stages explain why no induction or hypothesis is appropriate.
+
+Use `Integer` for exact numeric arguments and tree sizes. The given expression language uses `Int`; only identities and equality substitution are used there. Prelude list lengths and counts must fit `Int`. In an `Int` count induction, only take successor steps whose counts remain representable. All functions supplied as arguments are total on the values involved, with lawful equality and order. Negative indices of the custom number recurrences are excluded.
+
+This definitions block is reference code with no printed output. The commented Prelude equations are rules to quote, not replacement declarations.
+
+```haskell
+-- Domain: finite, total inputs; natural-number arguments are non-negative.
+fact :: Integer -> Integer
+fact 0 = 1                              -- (FA0)
+fact n = n * fact (n-1)                  -- (FA1), n > 0
+oddSum :: Integer -> Integer
+oddSum 0 = 0                            -- (OS0)
+oddSum n = oddSum (n-1) + (2*n-1)        -- (OS1), n > 0
+fib :: Integer -> Integer
+fib 0 = 0                               -- (FI0)
+fib 1 = 1                               -- (FI1)
+fib n = fib (n-1) + fib (n-2)            -- (FI2), n >= 2
+
+-- Prelude equations used in proofs; these comments specify the rules.
+-- (A0) [] ++ ys = ys; (A1) (x:xs) ++ ys = x : (xs ++ ys)
+-- (L0) length [] = 0; (L1) length (x:xs) = 1 + length xs
+-- (M0) map f [] = []; (M1) map f (x:xs) = f x : map f xs
+-- (T0) take n xs = [] when n <= 0
+-- (T1) take n [] = []; (T2) take n (x:xs) = x : take (n-1) xs when n > 0
+-- (D0) drop n xs = xs when n <= 0
+-- (D1) drop n [] = []; (D2) drop n (x:xs) = drop (n-1) xs when n > 0
+-- (RP0) replicate n x = [] when n <= 0
+-- (RP1) replicate n x = x : replicate (n-1) x when n > 0
+-- (C0) concat [] = []; (C1) concat (xs:xss) = xs ++ concat xss
+-- (E0) elem a [] = False; (E1) elem a (x:xs) = (a == x) || elem a xs
+-- (LA0) last [x] = x; (LA1) last (x:y:ys) = last (y:ys)
+-- (IN0) init [x] = []; (IN1) init (x:y:ys) = x : init (y:ys)
+-- (AN0) and [] = True; (AN1) and (b:bs) = b && and bs
+-- (OR0) or [] = False; (OR1) or (b:bs) = b || or bs
+-- (MX0) maximum [x] = x; (MX1) maximum (x:y:ys) = max x (maximum (y:ys))
+-- (Z0) zip [] ys = []; (Z1) zip (x:xs) [] = []
+-- (Z2) zip (x:xs) (y:ys) = (x,y) : zip xs ys
+-- (UZ0) unzip [] = ([],[])
+-- (UZ1) unzip ((x,y):ps) = (x:xs,y:ys), where (xs,ys) = unzip ps
+-- (FR0) foldr f z [] = z; (FR1) foldr f z (x:xs) = f x (foldr f z xs)
+-- (FL0) foldl f a [] = a; (FL1) foldl f a (x:xs) = foldl f (f a x) xs
+
+lenR :: [a] -> Int
+lenR [] = 0                             -- (LR0)
+lenR (_:xs) = 1 + lenR xs               -- (LR1)
+lenF :: [a] -> Int
+lenF xs = foldr (\_ n -> 1+n) 0 xs      -- (LF)
+revR :: [a] -> [a]
+revR [] = []                            -- (RR0)
+revR (x:xs) = revR xs ++ [x]            -- (RR1)
+revF :: [a] -> [a]
+revF xs = foldr (\x r -> r ++ [x]) [] xs -- (RF)
+sumR :: [Integer] -> Integer
+sumR [] = 0                             -- (SR0)
+sumR (x:xs) = x + sumR xs               -- (SR1)
+memberR :: Eq a => a -> [a] -> Bool
+memberR _ [] = False                    -- (MR0)
+memberR a (x:xs) = if a == x then True else memberR a xs -- (MR1)
+memberF :: Eq a => a -> [a] -> Bool
+memberF a xs = foldr (\x r -> a == x || r) False xs -- (MF)
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing                   -- (SH0)
+safeHead (x:_) = Just x                 -- (SH1)
+mapMaybe :: (a -> b) -> Maybe a -> Maybe b
+mapMaybe _ Nothing = Nothing            -- (MM0)
+mapMaybe f (Just x) = Just (f x)         -- (MM1)
+
+-- Binary trees: sizes and heights use unbounded arithmetic.
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Eq, Show)
+size :: Tree a -> Integer
+size Leaf = 0                           -- (SZ0)
+size (Node l _ r) = size l + 1 + size r  -- (SZ1)
+height :: Tree a -> Integer
+height Leaf = 0                         -- (H0)
+height (Node l _ r) = 1 + max (height l) (height r) -- (H1)
+mapTree :: (a -> b) -> Tree a -> Tree b
+mapTree _ Leaf = Leaf                   -- (MT0)
+mapTree f (Node l x r) = Node (mapTree f l) (f x) (mapTree f r) -- (MT1)
+preorder :: Tree a -> [a]
+preorder Leaf = []                      -- (PR0)
+preorder (Node l x r) = x : (preorder l ++ preorder r) -- (PR1)
+inorder :: Tree a -> [a]
+inorder Leaf = []                       -- (IO0)
+inorder (Node l x r) = inorder l ++ (x : inorder r) -- (IO1)
+-- A length with Integer result avoids the bounded Int result of Prelude.length.
+count :: [a] -> Integer
+count [] = 0                            -- (CO0)
+count (_:xs) = 1 + count xs             -- (CO1)
+allTree :: (a -> Bool) -> Tree a -> Bool
+allTree _ Leaf = True                   -- (AT0)
+allTree p (Node l x r) = p x && allTree p l && allTree p r -- (AT1)
+ordered :: Tree Integer -> Bool
+ordered Leaf = True                     -- (B0)
+ordered (Node l x r) = ordered l && ordered r
+  && allTree (< x) l && allTree (> x) r   -- (B1), strict ordering: no duplicates
+insert :: Integer -> Tree Integer -> Tree Integer
+insert a Leaf = Node Leaf a Leaf         -- (I0)
+insert a (Node l x r)
+  | a < x = Node (insert a l) x r        -- (I1)
+  | a > x = Node l x (insert a r)        -- (I2)
+  | otherwise = Node l x r              -- (I3)
+member :: Integer -> Tree Integer -> Bool
+member _ Leaf = False                   -- (B2)
+member a (Node l x r)
+  | a < x = member a l                  -- (B3)
+  | a > x = member a r                  -- (B4)
+  | otherwise = True                    -- (B5)
+
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a) deriving (Eq, Show)
+leaves :: LTree a -> Integer
+leaves (LLeaf _) = 1                     -- (LE0)
+leaves (LBranch l r) = leaves l + leaves r -- (LE1)
+nodes :: LTree a -> Integer
+nodes (LLeaf _) = 0                      -- (NO0), internal branches only
+nodes (LBranch l r) = 1 + nodes l + nodes r -- (NO1)
+flatten :: LTree a -> [a]
+flatten (LLeaf x) = [x]                 -- (FT0)
+flatten (LBranch l r) = flatten l ++ flatten r -- (FT1)
+
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr deriving (Eq, Show)
+eval :: Expr -> Int
+eval (Num n) = n                         -- (EV0)
+eval (Add l r) = eval l + eval r         -- (EV1)
+eval (Mul l r) = eval l * eval r         -- (EV2)
+simp :: Expr -> Expr
+simp (Num n) = Num n                     -- (SI0)
+simp (Add (Num 0) r) = simp r           -- (SI1), first matching Add rule
+simp (Add l r) = Add (simp l) (simp r)   -- (SI2), remaining Add cases
+simp (Mul (Num 1) r) = simp r           -- (SI3), first matching Mul rule
+simp (Mul l r) = Mul (simp l) (simp r)   -- (SI4), remaining Mul cases
+
+data Rose a = Rose a (Forest a) deriving (Eq, Show)
+data Forest a = FNil | FCons (Rose a) (Forest a) deriving (Eq, Show)
+roseCount :: Rose a -> Integer
+roseCount (Rose _ fs) = 1 + forestCount fs -- (RC)
+forestCount :: Forest a -> Integer
+forestCount FNil = 0                      -- (FC0)
+forestCount (FCons t ts) = roseCount t + forestCount ts -- (FC1)
+roseList :: Rose a -> [a]
+roseList (Rose x fs) = x : forestList fs  -- (RL)
+forestList :: Forest a -> [a]
+forestList FNil = []                      -- (FF0)
+forestList (FCons t ts) = roseList t ++ forestList ts -- (FF1)
+isEven :: Integer -> Bool
+isEven 0 = True                          -- (IE0)
+isEven n = isOdd (n-1)                   -- (IE1), n > 0
+isOdd :: Integer -> Bool
+isOdd 0 = False                          -- (ID0)
+isOdd n = isEven (n-1)                   -- (ID1), n > 0
+```
+
+## 2. Results you may quote
+
+| Name | Result | Source |
+|---|---|---|
+| Append laws | Right identity and associativity | Proofs of Programs I |
+| Append length | `length (xs ++ ys) = length xs + length ys` | Equational Reasoning |
+| Count append | `count (xs ++ ys) = count xs + count ys` | Proof Patterns, contract section |
+| Map append | `map f (xs ++ ys) = map f xs ++ map f ys` | Proof Patterns |
+| Map singleton | `map f [x] = [f x]` | (M1), (M0) |
+| Bound preservation | If `allTree p t` and `p a`, then `allTree p (insert a t)` | Proof Patterns |
+| Inorder size | `count (inorder t) = size t` | Earlier inorder-size proof with unbounded counts |
+| Integer order | Multiplication by a positive number preserves order; powers of two increase with their exponent | Arithmetic |
+
+A result listed here may be cited where it applies; the task's own conclusion may not be cited to prove itself. Do not use a theorem on inputs outside its precondition. A property comment is a Boolean test on the task's stated domain.
+
+## 3. Task: Factorial grows from a base of one
+
+Prove `fact n >= n` for `n >= 1`.
+
+**Claim.** For `n >= 1`, `fact n >= n`.
+
+`-- Property: n < 1 || fact n >= n`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+A lower bound starts at one. The smallest allowed input is `1`, with factorial one. At `3`, `6 >= 3` also checks.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (FA0), (FA1), positivity of `n+1` and order preservation under positive multiplication.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `n` starting at one. Starting at zero would not supply `n >= 1` for the last inequality.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+fact 1 = 1 * fact 0 = 1 -- (FA1), (FA0), arithmetic
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+`fact n >= n`, with `n >= 1`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+fact (n+1)
+= (n+1) * fact n -- (FA1)
+>= (n+1) * n     -- IH, multiplying by positive n+1
+>= n+1           -- n >= 1
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The base really is one. At `n = 2`, `fact 2 = 2`; a zero-based IH would not justify the last inequality. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 4. Task: Produce a divisibility witness
+
+Prove that `3` divides `4^n - 1` for every natural `n`.
+
+**Claim.** For natural `n`, `3` divides `4^n - 1`.
+
+`-- Property: n < 0 || ((4 :: Integer)^n - 1) `mod` 3 == 0`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+?Divides? asks for an integer multiple. At `n = 2`, the value is fifteen, equal to `3*5`. Write the IH as a witness equation.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use `4^0 = 1`, `4^(n+1) = 4*4^n` and distributivity.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `n`, because the successor power can be expressed using the previous one.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+4^0 - 1 = 0 = 3*0 -- exponent zero, arithmetic
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+`4^n - 1 = 3*k` for some integer `k`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+4^(n+1) - 1
+= 4*(4^n-1) + 3 -- exponent law, distributivity
+= 4*(3*k) + 3   -- IH
+= 3*(4*k+1)     -- arithmetic: integer witness 4*k+1
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+A new integer witness proves the step. At `n = 2`, `15 = 3*5`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 5. Task: Two smaller Fibonacci calls
+
+Prove `0 <= fib n && fib n <= 2^n` by strong induction.
+
+**Claim.** For natural `n`, `0 <= fib n` and `fib n <= 2^n`.
+
+`-- Property: n < 0 || (0 <= fib n && fib n <= (2 :: Integer)^n)`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The recurrence adds two earlier values. At zero, one and four the Fibonacci values are zero, one and three; each is non-negative and below its power bound.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (FI0), (FI1), (FI2), monotonicity of powers and the exponent successor law.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct strongly on the index, with bases zero and one. Both predecessors must lie inside the hypothesis range.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+fib 0 = 0 <= 1 = 2^0 -- (FI0), exponent zero
+fib 1 = 1 <= 2 = 2^1 -- (FI1), arithmetic
+Both values are non-negative -- arithmetic
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+For every `k` with `0 <= k < m`, both `fib k >= 0` and `fib k <= 2^k`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+fib m
+= fib (m-1) + fib (m-2)     -- (FI2), m >= 2
+>= 0                        -- IH at m-1 and m-2
+fib m
+<= 2^(m-1) + 2^(m-2)       -- (FI2), both upper-bound IHs
+<= 2^(m-1) + 2^(m-1)       -- exponent monotonicity, m >= 2
+= 2^m                       -- exponent law
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The proof genuinely uses two smaller indices. At `n = 4`, `fib 4 = 3 <= 16`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 6. Task: Counts below zero and above the list length
+
+Prove `take n xs ++ drop n xs = xs` for every `Int n`.
+
+**Claim.** For every `Int n` and list `xs`, `take n xs ++ drop n xs = xs`.
+
+`-- Property: take n xs ++ drop n xs == xs`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The command is ?prove?. Test `n = -1`, `xs = [7]`: empty prefix plus the unchanged list gives `[7]`. Counts beyond the length also reconstruct it.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (T0)?(T2), (D0)?(D2), (A0), (A1).
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Handle all non-positive counts directly, then induct on a non-negative count with the list arbitrary. In the successor step split on that list.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+take n xs ++ drop n xs
+= [] ++ xs -- (T0), (D0), n <= 0
+= xs       -- (A0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+For every `xs`, `take n xs ++ drop n xs = xs`, with `n >= 0`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Case xs = []:
+take (n+1) [] ++ drop (n+1) [] = [] ++ [] = [] -- (T1), (D1), (A0)
+Case xs = x:ys:
+take (n+1) (x:ys) ++ drop (n+1) (x:ys)
+= (x : take n ys) ++ drop n ys -- (T2), (D2)
+= x : (take n ys ++ drop n ys) -- (A1)
+= x : ys                       -- IH at ys
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+Both list cases hold; counts beyond the length simply give the whole list and an empty suffix. Negative counts were handled without recursion. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 7. Task: A safe use of init
+
+Prove `init (xs ++ [x]) = xs`.
+
+**Claim.** For every `xs` and `x`, `init (xs ++ [x]) = xs`.
+
+`-- Property: init (xs ++ [x]) == xs`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+Appending a final element guarantees non-emptiness. At `xs = []` the input to `init` is the singleton `[x]`, so its result is empty.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (A0), (A1), (IN0), (IN1). Keep the singleton suffix visible when using the non-empty rule.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on the prefix `xs`, since append inspects that argument.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+init ([] ++ [x]) = init [x] = [] -- (A0), (IN0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+`init (xs ++ [x]) = xs`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+init ((y:ys) ++ [x])
+= init (y : (ys ++ [x])) -- (A1)
+= y : init (ys ++ [x])   -- (IN1), ys ++ [x] non-empty
+= y : ys                 -- IH
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The call is always safe, including `xs = []`, because appending `[x]` makes a non-empty list. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 8. Task: Maximum and integer translation
+
+For non-empty `[Integer] xs`, prove `maximum (map (+k) xs) = maximum xs + k`.
+
+**Claim.** For non-empty `Integer` list `xs`, `maximum (map (+k) xs) = maximum xs + k`.
+
+`-- Property: null xs || maximum (map (+k) xs) == maximum xs + k`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+Translation adds the same amount to every value and preserves integer order. With `xs = [-5,-2]`, `k = 3`, both sides are one.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (MX0), (MX1), (M0), (M1), and `max (a+k) (b+k) = max a b + k`.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on a non-empty list: singleton base, then a head followed by a non-empty tail. Do not evaluate maximum on an empty list.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+maximum (map (+k) [x]) = x+k = maximum [x]+k -- (M1), (M0), (MX0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+The claim for non-empty `ys`, every `Integer k`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+maximum (map (+k) (x:y:ys))
+= max (x+k) (maximum (map (+k) (y:ys))) -- (M1), (MX1)
+= max (x+k) (maximum (y:ys)+k)          -- IH
+= max x (maximum (y:ys)) + k            -- translation preserves integer order
+= maximum (x:y:ys) + k                  -- (MX1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+Use `Integer`: bounded overflow would break order preservation. With `[-5,-2]` and `k = 3`, both sides are `1`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 9. Task: What unzip can recover
+
+State and prove the precise result of `unzip (zip xs ys)` for unequal as well as equal lengths.
+
+**Claim.** Let `k = min (length xs) (length ys)`. Then `unzip (zip xs ys) = (take k xs, take k ys)`.
+
+`-- Property: let k = min (length xs) (length ys) in unzip (zip xs ys) == (take k xs, take k ys)`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The result must mention truncation. With `[1,2]` and `[True]`, unzipping gives `([1],[True])`. The common prefix length is the smaller length.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (Z0)?(Z2), (UZ0)?(UZ1), (T0), (T2), (L0), (L1), and the successor law for min.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on the first list, keeping the second arbitrary; the step must also consider an empty second list.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+unzip (zip [] ys) = ([],[]) -- (Z0), (UZ0)
+(take 0 [], take 0 ys) = ([],[]) -- (T0), k = 0
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+The claim for tail `xs` and every second list.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Case ys = []: both sides are ([],[]) -- (Z1), (UZ0), (T0)
+Case ys = y:yt, let j = min (length xs) (length yt):
+unzip (zip (x:xs) (y:yt))
+= unzip ((x,y) : zip xs yt)             -- (Z2)
+= (x : take j xs, y : take j yt)        -- (UZ1), IH
+= (take (j+1) (x:xs), take (j+1) (y:yt)) -- (T2), backwards
+Here k = j+1 -- (L1), min (a+1) (b+1) = 1 + min a b
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+This handles unequal lengths correctly: `[1,2]` and `[True]` yield `([1],[True])`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 10. Task: Strengthen a fold claim
+
+Prove `foldl (+) 0 xs = foldr (+) 0 xs` for `[Integer] xs`. Explain why the initial claim is too weak.
+
+**Claim.** For `[Integer] xs` and every `Integer a`, `foldl (+) a xs = a + foldr (+) 0 xs`. Hence the two sums agree at `a = 0`.
+
+`-- Property: foldl (+) a xs == a + foldr (+) 0 xs`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+After unfolding the left fold at `x:xs`, the accumulator is `x`, not zero. So prove `foldl (+) a xs = a + foldr (+) 0 xs` for all `a`. At accumulator ten and list `[1,-2]`, both sides give nine.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (FL0), (FL1), (FR0), (FR1), associativity and zero identity for integer addition.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `xs` after universally quantifying the accumulator. The IH can then be specialised at `a+x`.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+foldl (+) a [] = a -- (FL0)
+a + foldr (+) 0 [] = a+0 = a -- (FR0), additive identity
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+For every `a`, `foldl (+) a xs = a + foldr (+) 0 xs`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+foldl (+) a (x:xs)
+= foldl (+) (a+x) xs       -- (FL1)
+= (a+x) + foldr (+) 0 xs   -- IH at the CHANGED accumulator a+x
+= a + (x + foldr (+) 0 xs) -- associativity of integer addition
+= a + foldr (+) 0 (x:xs)   -- (FR1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+At accumulator `10` and list `[1,-2]`, both sides are `9`. At zero this proves equality of the two fold sums. Floating-point addition is not associative, so it is outside this claim. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 11. Task: A claim that needs two lemmas
+
+Prove `map f (revR xs) = revR (map f xs)`. Name both list lemmas used.
+
+**Claim.** `map f (revR xs) = revR (map f xs)`. Use Lemma A: map over append, and Lemma B: `map f [x] = [f x]`, from (M1) then (M0).
+
+`-- Property: map f (revR xs) == revR (map f xs)`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+Mapping changes each value, reversing changes order. With `f = (+1)` and `[1,2]`, both sides are `[3,2]`. The obstructing expression is map applied to an append.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (RR0), (RR1), (M0), (M1), map over append and map of a singleton.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `xs`, because both map and recursive reverse inspect it. The two lemmas move map through the append and then through `[x]`.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+map f (revR []) = [] -- (RR0), (M0)
+revR (map f []) = [] -- (M0), (RR0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+The claim for `xs`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+map f (revR (x:xs))
+= map f (revR xs ++ [x])             -- (RR1)
+= map f (revR xs) ++ map f [x]       -- Lemma A
+= revR (map f xs) ++ map f [x]       -- IH
+= revR (map f xs) ++ [f x]           -- Lemma B
+= revR (f x : map f xs)              -- (RR1), backwards
+= revR (map f (x:xs))                -- (M1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+Both named lemmas were needed at different lines. With `f = (+1)` and `[1,2]`, each side is `[3,2]`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 12. Task: A strict bound on tree size
+
+Prove `size t < 2^height t`, using unbounded arithmetic.
+
+**Claim.** For every tree `t`, `size t < 2 ^ height t`, with base `2 :: Integer`.
+
+`-- Property: size t < (2 :: Integer) ^ height t`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+A full binary tree gives the tightest bound: at height two, three nodes are below four. Prove the equivalent `size t <= 2^height t - 1`.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (SZ0), (SZ1), (H0), (H1), monotonicity and the exponent successor law.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `t`; two children supply two bounds, both compared with the maximum child height.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+size Leaf = 0 = 2^0 - 1 -- (SZ0), (H0), arithmetic
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+`size l <= 2^height l - 1` and similarly for `r`.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Let h = max (height l) (height r). -- definition of h
+size (Node l x r)
+= size l + 1 + size r        -- (SZ1)
+<= (2^height l-1) + 1 + (2^height r-1) -- both IHs
+<= (2^h-1) + 1 + (2^h-1)    -- h bounds each height; powers monotone
+= 2^(h+1)-1                  -- arithmetic, exponent law
+= 2^height (Node l x r)-1    -- (H1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+For integers, being at most `v-1` means being strictly below `v`. At `Leaf`, `0 < 1`; a singleton has `1 < 2`. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 13. Task: Preserve the full search-tree invariant
+
+Assuming `ordered t`, prove `ordered (insert a t)`.
+
+**Claim.** If `ordered t`, then `ordered (insert a t)`.
+
+`-- Property: not (ordered t) || ordered (insert a t)`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+An ordered subtree must also stay within its ancestor bound. Inserting one into a tree rooted at two changes the left side; inserting two leaves the tree unchanged.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (I0)?(I3), (B0), (B1), (AT0), and the quotable bound-preservation lemma.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on `t`, key arbitrary, and split the Node step using exactly the insertion guards. The IH establishes recursive orderedness; the bound lemma establishes the ancestor constraint.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+ordered (insert a Leaf) = ordered (Node Leaf a Leaf) = True -- (I0), (B1), (B0), (AT0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+Ordered insertion for both subtrees and every key.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Case a < x:
+ordered (insert a (Node l x r))
+= ordered (insert a l) && ordered r
+  && allTree (< x) (insert a l) && allTree (> x) r -- (I1), (B1)
+= True -- IH for l; bound lemma with p = (< x); original invariant; a < x
+Case a > x: ordered result = True -- (I2), IH for r, bound lemma p = (> x), original invariant
+Case a == x: ordered result = True -- (I3), original invariant
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The step uses the recursive ordered-insertion hypothesis and the separately proved bound lemma. The latter checks all descendants, not just the new child. At duplicate key `2`, a tree rooted at `2` is unchanged. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 14. Task: Simplification with special patterns
+
+Prove `eval (simp e) = eval e` for total `Expr e`.
+
+**Claim.** For every total `Expr e`, `eval (simp e) = eval e`.
+
+`-- Property: eval (simp e) == eval e`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The simplifier removes zero on the left of Add and one on the left of Mul. `Add (Num 0) (Mul (Num 1) (Num 7))` evaluates to seven before and after.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (EV0)?(EV2), (SI0)?(SI4), zero addition and one multiplication. No assumption of overflow-free Int arithmetic is needed for these identities.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on the expression. For Add and Mul, separate the first matching special pattern from the remaining patterns.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+eval (simp (Num n)) = eval (Num n) -- (SI0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+The evaluation equality for both expression subtrees.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Case Add (Num 0) r:
+eval (simp (Add (Num 0) r))
+= eval (simp r)       -- (SI1)
+= eval r              -- IH for r
+= 0 + eval r          -- additive identity, backwards
+= eval (Add (Num 0) r) -- (EV0), (EV1), backwards
+Other Add l r:
+eval (simp (Add l r))
+= eval (simp l) + eval (simp r) -- (SI2), (EV1)
+= eval l + eval r               -- both IHs
+= eval (Add l r)                -- (EV1), backwards
+Case Mul (Num 1) r:
+eval (simp (Mul (Num 1) r)) = eval (simp r) = eval r -- (SI3), IH for r
+= 1 * eval r = eval (Mul (Num 1) r) -- multiplicative identity, (EV0), (EV2)
+Other Mul l r:
+eval (simp (Mul l r)) = eval (simp l) * eval (simp r) -- (SI4), (EV2)
+= eval l * eval r = eval (Mul l r) -- both IHs, (EV2), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+Every constructor and special pattern is covered. At `Add (Num 0) (Mul (Num 1) (Num 7))`, both evaluations are seven. No claim about evaluation on bottom is made. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 15. Task: A mutually recursive type family
+
+Prove traversal-count correctness for both Rose and Forest.
+
+**Claim.** Together: `count (roseList t) = roseCount t` and `count (forestList fs) = forestCount fs`.
+
+`-- Property: count (roseList t) == roseCount t && count (forestList fs) == forestCount fs`
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+A root contributes one value and a forest concatenates child traversals. A root with two leaf children emits three values. Both type claims must be stated together.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Use (RC), (FC0), (FC1), (RL), (FF0), (FF1), (CO0), (CO1) and count of append.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Induct on the two types simultaneously. Include Rose, FNil and FCons; the latter has two recursive fields of different types.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+
+```text
+count (forestList FNil) = 0 = forestCount FNil -- (FF0), (CO0), (FC0)
+```
+
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+For each recursive field, assume the claim for its own type.
+
+  </Step>
+
+  <Step title="6. Step">
+
+The goal is the stated claim at the next value or constructor. Unfold first; the `IH` lines identify exactly where smaller values are used.
+
+```text
+Rose x fs:
+count (roseList (Rose x fs))
+= 1 + count (forestList fs) -- (RL), (CO1)
+= 1 + forestCount fs       -- forest IH
+= roseCount (Rose x fs)    -- (RC), backwards
+FCons t ts:
+count (forestList (FCons t ts))
+= count (roseList t ++ forestList ts) -- (FF1)
+= count (roseList t) + count (forestList ts) -- count-append lemma
+= roseCount t + forestCount ts       -- rose IH and forest IH
+= forestCount (FCons t ts)           -- (FC1), backwards
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The Rose step uses a forest fact; the FCons step uses both kinds. A rose root with two leaf children counts three. Every displayed equality or inequality names its justification.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## 16. Task: disprove and find the first wrong line
+
+A student claims that the two subtraction folds agree and offers this proof:
+
+```text
+foldr (-) 0 [1,2,3]
+= 1 - (2 - (3 - 0)) -- definition
+= (1 - 2) - (3 - 0) -- claimed associativity
+= -4                 -- arithmetic
+```
+
+Identify the first invalid equality. Compute both actual folds to refute the claim. Finally explain why `length (replicate n x) = n` also needs a precondition.
+
+<details>
+<summary>Solution, with the thinking</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the claim">
+
+The commands are ?identify?, ?compute? and ?refute?. We need the exact faulty line and concrete unequal outputs; trying to prove the claim would waste effort.
+
+  </Step>
+
+  <Step title="2. Collect the equations">
+
+Collect (FR0), (FR1), (FL0), (FL1), (RP0) and (L0). Integer subtraction has no associative law.
+
+  </Step>
+
+  <Step title="3. Choose what to induct on">
+
+Do not induct: a single permitted counterexample defeats the universal fold claim. Use the offered list so the faulty proof can be checked line by line.
+
+  </Step>
+
+  <Step title="4. Base case">
+
+No inductive base case is required. The empty subtraction folds do happen to agree at zero, but that does not establish the universal claim.
+
+  </Step>
+
+  <Step title="5. Hypothesis">
+
+No IH is available or needed. In particular, do not assume subtraction is associative to justify the disputed equality.
+
+  </Step>
+
+  <Step title="6. Step">
+
+
+```text
+1 - (2 - (3 - 0)) = 1 - (2 - 3) = 2 -- arithmetic
+(1 - 2) - (3 - 0) = (-1) - 3 = -4  -- arithmetic: first wrong equality exposed
+foldl (-) 0 [1,2,3]
+= foldl (-) (-1) [2,3] -- (FL1)
+= foldl (-) (-3) [3]   -- (FL1)
+= foldl (-) (-6) []    -- (FL1)
+= -6                   -- (FL0)
+length (replicate (-1) 7) = length [] = 0 -- (RP0), (L0)
+```
+
+
+  </Step>
+
+  <Step title="7. Check and conclude">
+
+The right fold gives two and the left fold gives minus six. The first invalid line reassociates subtraction; the offered minus four is neither fold result. The replicate claim fails at `n = -1`: zero differs from minus one. Repair it by requiring `n >= 0` or by using `max 0 n`. These counterexamples use only finite, total inputs.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+- Read and test the domain before choosing a proof method.
+- Collect labelled equations, name the induction variable and cover every constructor or guard.
+- State the full hypothesis, including arbitrary accumulators and both recursive children.
+- Strong and mutual induction change the hypotheses available; they do not permit circular reasoning.
+- Check every partial call and every algebraic law. End with the quantified result or a valid counterexample.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+  <CheckQuestion question="Why can the init task start with an empty prefix?">
+    The actual argument to `init` still contains the appended final element, so it is a singleton rather than empty.
+  </CheckQuestion>
+  <CheckQuestion question="Which two smaller indices does the Fibonacci step use?">
+    At `m >= 2`, it uses `m-1` and `m-2`, both inside the strong hypothesis range.
+  </CheckQuestion>
+  <CheckQuestion question="Which insertion fact preserves an ancestor bound?">
+    The predicate-preservation lemma, instantiated with `(< x)` for a left subtree or `(> x)` for a right subtree.
+  </CheckQuestion>
+  <CheckQuestion question="What proves a proposed subtraction identity false?">
+    One allowed input where the two sides differ. Associativity must not be assumed for subtraction.
+  </CheckQuestion>
+</CheckQuestions>
+
+Continue with [Errors and Testing](/docs/sem3/csi243/10-reasoning-revision/notes/errors-and-testing).

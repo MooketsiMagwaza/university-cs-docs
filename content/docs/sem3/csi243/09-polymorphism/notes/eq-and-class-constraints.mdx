@@ -1,0 +1,1831 @@
+---
+title: "Eq and Class Constraints"
+description: "Trace equality-based operations, derive class constraints from bodies, and design lawful Eq instances."
+---
+
+Equality becomes interesting when a search compares only keys, duplicate removal must preserve order, or records describe the same entity despite different fields. This workshop extends [Type Classes and Constraints](/docs/sem3/csi243/09-polymorphism/notes/type-classes) with these cases, full derivations and exam answers. Ask exactly which values the body compares.
+
+<LearningObjectives items={[
+  'Read Eq constraints and derive them from a function body',
+  'Trace membership, lookup, duplicate removal, deletion, grouping and prefixes',
+  'Explain how composite and derived instances depend on component equality',
+  'Write custom equality and test its laws',
+  'Combine class constraints without adding unnecessary requirements',
+  'Diagnose missing instances and unavailable function equality',
+]} />
+
+## 1. The equality contract and the class
+
+`x == y` asks whether two values of the same type count as equal according to their instance. `/=` asks the opposite. The compiler checks availability of operations; it does not prove equality laws. There is no universal comparison for every possible type.
+
+**Template**
+
+```text
+class Eq a where
+  (==), (/=) :: a -> a -> Bool
+  x /= y = not (x == y)
+  x == y = not (x /= y)
+```
+
+This is the essential class shape, shown as a reading template rather than a replacement for Prelude. The **minimal definition** is either `(==)` or `(/=)`. Each default uses the other operation, so defining neither can leave them calling each other indefinitely. Normally define `(==)`.
+
+### Worked variation: same boolean
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (False == False)
+  print (False /= False)
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+Both operands are `Bool`. Equality succeeds; inequality negates it.
+
+### Worked variation: different characters
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ('a' == 'b')
+  print ('a' /= 'b')
+```
+
+```text
+False
+True
+```
+
+</HaskellTryIt>
+
+Both operands are `Char` but have different values. Equality is not a conversion between types.
+
+### Worked variation: one minimal method
+
+<HaskellTryIt>
+
+```haskell
+data Token = Token Int
+instance Eq Token where
+  Token x == Token y = x == y
+
+main :: IO ()
+main = do
+  print (Token 4 == Token 4)
+  print (Token 4 /= Token 5)
+```
+
+```text
+True
+True
+```
+
+</HaskellTryIt>
+
+The instance compares `Int` fields. It defines only `(==)`; the second call uses the default `/=`, negating the false comparison of 4 with 5.
+
+**Common error and repair.** An empty instance has no independent answer behind the mutually dependent defaults. Define a method, or derive structural equality.
+
+## 2. Reading `Eq a =>` completely
+
+`=>` separates a requirement on types from a function type. It is not an extra ordinary argument. Read `Eq a =>` as "for every type `a` that has equality", then read the value arrows to its right.
+
+**Template**
+
+```text
+name :: Eq a => InputUsingA -> Output
+```
+
+`InputUsingA` is an input containing values of the constrained type; `Output` is the result. `Eq a` permits equality and inequality, but supplies no addition, ordering or display of `a`.
+
+### Worked variation: two ordinary arguments
+
+<HaskellTryIt>
+
+```haskell
+same :: Eq a => a -> a -> Bool
+same x y = x == y
+
+main :: IO ()
+main = do
+  print (same True False)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+There are two values supplied, both of type `Bool`; the constraint is a type-level requirement, not a third value argument.
+
+### Worked variation: a list of constrained elements
+
+<HaskellTryIt>
+
+```haskell
+contains :: Eq a => a -> [a] -> Bool
+contains x xs = elem x xs
+
+main :: IO ()
+main = do
+  print (contains 'x' "ax")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`a := Char`. The second candidate equals the target. The type requiring equality is the character element type.
+
+### Worked variation: only one of two variables constrained
+
+<HaskellTryIt>
+
+```haskell
+keyMatches :: Eq k => k -> (k,v) -> Bool
+keyMatches target (key,_) = target == key
+
+main :: IO ()
+main = do
+  print (keyMatches 'a' ('a',not))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`k := Char`, `v := Bool -> Bool`. Only keys are compared; the function-valued payload needs neither equality nor display.
+
+**Common error and repair.** `Eq a -> ...` uses the wrong arrow: a constraint is not an ordinary argument type. Write `Eq a => ...`. Section 14 gives diagnostic excerpts for missing requirements.
+
+## 3. Membership: elem and notElem
+
+`elem` compares a target with candidates until one matches. `notElem` negates that answer. Duplicates cannot change a successful boolean result. The empty list has no match.
+
+**Template**
+
+```text
+elem, notElem :: Eq a => a -> [a] -> Bool
+elem x [] = False
+elem x (y:ys) = x == y || elem x ys
+notElem x xs = not (elem x xs)
+```
+
+This template specialises modern Prelude's foldable-container operations to lists. Trace equality tests from left to right. The element type, not list length, determines the requirement.
+
+### Worked variation: a later match
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (elem (3 :: Int) [1,3,3])
+  print (notElem (3 :: Int) [1,3,3])
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+3 == 1 fails; 3 == 3 succeeds and stops the search. Negating membership gives `False`.
+
+### Worked variation: no character matches
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (elem 'z' "exam")
+  print (notElem 'z' "exam")
+```
+
+```text
+False
+True
+```
+
+</HaskellTryIt>
+
+All four comparisons fail, then the empty suffix returns `False`. Absence is therefore true.
+
+### Worked variation: the empty boundary
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (elem True [])
+  print (notElem True [])
+```
+
+```text
+False
+True
+```
+
+</HaskellTryIt>
+
+There are no comparisons to perform. The general function still requires `Eq`; the target fixes this call to `Bool`.
+
+**Common error and repair.** The target comes first: `elem x xs`, not `elem xs x`. An empty input is a valid boundary case, not a run-time error.
+
+## 4. Lookup: equality on keys only
+
+An association list holds key-value pairs. `lookup` compares keys from the left and returns the first matching value in `Just`. It returns `Nothing` if none match. Values themselves need not have equality.
+
+**Template**
+
+```text
+lookup :: Eq k => k -> [(k,v)] -> Maybe v
+lookup wanted [] = Nothing
+lookup wanted ((key,value):rest)
+  | wanted == key = Just value
+  | otherwise = lookup wanted rest
+```
+
+The first field of each pair must share the target's type. The second field supplies the result payload and introduces no `Eq v`.
+
+### Worked variation: repeated key
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (lookup "pen" [("pen",2 :: Int),("pen",9)])
+```
+
+```text
+Just 2
+```
+
+</HaskellTryIt>
+
+The first key matches immediately. Lookup neither overwrites it with the later value nor returns all matches.
+
+### Worked variation: missing key
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (lookup 'z' [('a',True),('b',False)])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Both comparisons fail, then the empty suffix returns `Nothing :: Maybe Bool`.
+
+### Worked variation: function-valued payload
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (case lookup 'n' [('n',not),('i',id)] of
+    Nothing -> False
+    Just f -> f False)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Only characters are compared. The returned function is applied to `False`, producing `True`; the function is neither compared nor printed.
+
+**Common error and repair.** Adding `Eq v` because values occur in pairs is too strong. Whole-pair equality needs both fields; this search compares only keys.
+
+## 5. nub and delete: distinct jobs
+
+`nub` keeps the first occurrence of each distinct value in its original order. `delete x` removes only the first occurrence equal to `x`. The first makes a list distinct; the second removes one selected occurrence.
+
+**Template**
+
+```text
+nub :: Eq a => [a] -> [a]
+delete :: Eq a => a -> [a] -> [a]
+import Data.List (nub, delete)
+```
+
+For nub, keep a candidate unless it equals something already kept. For delete, copy the prefix before the first match, drop that match, then retain the remaining suffix unchanged.
+
+### Worked variation: separated duplicates
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (nub, delete)
+
+main :: IO ()
+main = do
+  print (nub [2,1,2,1,3 :: Int])
+  print (delete (2 :: Int) [2,1,2,1,3])
+```
+
+```text
+[2,1,3]
+[1,2,1,3]
+```
+
+</HaskellTryIt>
+
+Nub keeps 2, 1 and 3 at their first appearances. Delete removes only the leading 2; the later 2 remains.
+
+### Worked variation: characters and an absent target
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (nub, delete)
+
+main :: IO ()
+main = do
+  print (nub "banana")
+  print (delete 'z' "banana")
+```
+
+```text
+"ban"
+"banana"
+```
+
+</HaskellTryIt>
+
+First occurrences are b, a and n, in that order. No z matches, so deletion preserves the whole input.
+
+### Worked variation: empty lists
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (nub, delete)
+
+main :: IO ()
+main = do
+  print (nub ([] :: [Bool]))
+  print (delete True [])
+```
+
+```text
+[]
+[]
+```
+
+</HaskellTryIt>
+
+Nub has no candidates; delete finds no match. Annotation or target fixes the empty result element type to `Bool`.
+
+**Common error and repair.** `delete x` is not `filter (/= x)`: filtering removes all equal occurrences. Nub does not sort; sorting normally requires `Ord`.
+
+## 6. group and isPrefixOf: position matters
+
+`group` splits maximal adjacent equal runs. It does not gather separated equal elements. `isPrefixOf prefix whole` tests aligned elements at the start, not a match appearing somewhere later.
+
+**Template**
+
+```text
+group :: Eq a => [a] -> [[a]]
+isPrefixOf :: Eq a => [a] -> [a] -> Bool
+import Data.List (group, isPrefixOf)
+```
+
+Start a new run when the next element differs from the run's value. A prefix test succeeds when the prefix ends, fails on a mismatch, and fails if the whole list ends before the prefix.
+
+### Worked variation: runs and a valid prefix
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (group, isPrefixOf)
+
+main :: IO ()
+main = do
+  print (group [1,1,2,1 :: Int])
+  print (isPrefixOf [1,1 :: Int] [1,1,2,1])
+```
+
+```text
+[[1,1],[2],[1]]
+True
+```
+
+</HaskellTryIt>
+
+Two initial ones form a run; 2 and the last 1 start new runs. Both aligned prefix comparisons succeed.
+
+### Worked variation: strings and a start mismatch
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (group, isPrefixOf)
+
+main :: IO ()
+main = do
+  print (group "aabba")
+  print (isPrefixOf "bb" "aabba")
+```
+
+```text
+["aa","bb","a"]
+False
+```
+
+</HaskellTryIt>
+
+Grouping yields three character lists, displayed as strings. Prefix checking fails on the initial b versus a, even though bb occurs later.
+
+### Worked variation: empty boundaries
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (group, isPrefixOf)
+
+main :: IO ()
+main = do
+  print (group ([] :: [Bool]))
+  print (isPrefixOf ([] :: [Bool]) [True])
+  print (isPrefixOf [True] [])
+```
+
+```text
+[]
+True
+False
+```
+
+</HaskellTryIt>
+
+There are no runs in an empty input. An empty prefix succeeds without comparisons; a nonempty prefix cannot fit an empty whole list.
+
+**Common error and repair.** `group [1,2,1]` has three runs, whereas `nub` keeps two values. `isPrefixOf` is not a substring test. Choose the positional requirement stated by the question.
+
+## 7. Equality of lists, tuples and Maybe
+
+Composite equality delegates to component equality. Lists require the same elements in the same order and the same length. Tuples compare corresponding fields. Maybe first compares constructors; two Just values then compare payloads.
+
+**Template**
+
+```text
+Eq a => Eq [a]
+(Eq a, Eq b) => Eq (a,b)
+Eq a => Eq (Maybe a)
+```
+
+These are instance requirements rather than ordinary function signatures. A wrapper does not manufacture payload equality. Even an empty or absent value can require a payload type annotation.
+
+### Worked variation: matching values throughout
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([True,False] == [True,False])
+  print (('a',True) == ('a',True))
+  print (Just True == Just True)
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+List positions and endings match; both tuple fields match; two Just constructors expose matching booleans.
+
+### Worked variation: different positions, fields and constructors
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([True,False] == [False,True])
+  print (('a',True) == ('a',False))
+  print (Nothing == Just True)
+```
+
+```text
+False
+False
+False
+```
+
+</HaskellTryIt>
+
+The list heads differ; the tuple second fields differ; Nothing and Just differ before payload comparison.
+
+### Worked variation: empty and absent with fixed types
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (([] :: [Int]) == [])
+  print (([],True) == ([] :: [Char],True))
+  print ((Nothing :: Maybe Bool) == Nothing)
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+Both lists end at once. The tuple fields agree. Both optional values are absent. Annotations remove ambiguity while retaining instance requirements.
+
+**Common error and repair.** List equality is not set equality: order and multiplicity matter. Putting a function inside a list, tuple or Maybe does not give it an Eq instance.
+
+## 8. Deriving structural equality
+
+Deriving Eq asks GHC to compare constructor identity, then corresponding fields recursively. Different constructors are unequal even when their fields look similar. Records are not special: every field participates. Recursive types compare shape and payloads, not just a count of nodes.
+
+**Template**
+
+```text
+data T a = Constructor FieldsUsingA deriving (Eq)
+resulting requirement, when fields need it: Eq a => Eq (T a)
+```
+
+The placeholders denote a data type, constructors and fields. Each field type must supply the equality needed to compare it. Derived equality inherits the behaviour of field instances: it cannot fix an unlawful field instance or floating-point NaN behaviour. For finite defined values with lawful fields, structural equality obeys the laws.
+
+### Worked variation: an enumeration and positional fields
+
+<HaskellTryIt>
+
+```haskell
+data Door = Open | Closed deriving (Eq)
+data Item = Page Int | Bookmark Int deriving (Eq)
+
+main :: IO ()
+main = do
+  print (Open == Open)
+  print (Open == Closed)
+  print (Page 2 == Page 3)
+  print (Page 2 == Bookmark 2)
+```
+
+```text
+True
+False
+False
+False
+```
+
+</HaskellTryIt>
+
+Nullary constructors compare by identity. Page 2 and Page 3 share a constructor but differ in fields. Page 2 and Bookmark 2 have different constructors despite equal numbers.
+
+### Worked variation: records compare every field
+
+<HaskellTryIt>
+
+```haskell
+data Book = Book { bookId :: Int, title :: String } deriving (Eq)
+
+main :: IO ()
+main = do
+  print (Book 7 "A" == Book 7 "A")
+  print (Book 7 "A" == Book 7 "B")
+  print (Book 7 "A" == Book 8 "A")
+```
+
+```text
+True
+False
+False
+```
+
+</HaskellTryIt>
+
+Both fields must agree. Keeping the identifier while changing the title is unequal under derived Eq; keeping the title while changing the identifier is also unequal.
+
+### Worked variation: recursive shape and payload
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Eq)
+
+main :: IO ()
+main = do
+  print ((Leaf :: Tree Bool) == Leaf)
+  print (Node Leaf True Leaf == Node Leaf True Leaf)
+  print (Node Leaf True Leaf == Node (Node Leaf True Leaf) True Leaf)
+```
+
+```text
+True
+True
+False
+```
+
+</HaskellTryIt>
+
+Leaf matches Leaf. The identical one-node trees agree in children and payload. The last pair differs in the left subtree constructor, so equal root labels do not make the whole trees equal.
+
+**Common error and repair.** Deriving Eq does not mean compare an identifier only. If the domain requires identity by one field, write a custom instance. If a field has no equality, deriving cannot invent one.
+
+## 9. Writing equality by a chosen key
+
+A custom instance can define equality by a stable identifier rather than all stored fields. Another useful choice is equality after normalisation, such as ignoring letter case. In both cases compare a canonical key with lawful equality.
+
+**Template**
+
+```text
+instance Eq T where
+  x == y = key x == key y
+```
+
+`T` is the custom type and `key` maps each value to the information that defines sameness. Do not also derive Eq for the same type. The chapter already compared shapes by area; these examples use exact identifiers and text, avoiding floating-point issues.
+
+### Worked variation: record identity ignores a descriptive field
+
+<HaskellTryIt>
+
+```haskell
+data Member = Member { memberId :: Int, memberName :: String }
+instance Eq Member where
+  x == y = memberId x == memberId y
+
+main :: IO ()
+main = do
+  print (Member 10 "Ana" == Member 10 "Anne")
+  print (Member 10 "Ana" == Member 11 "Ana")
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+The first comparison reduces to 10 == 10; the names are irrelevant. The second reduces to 10 == 11. Neither Eq nor Show is derived implicitly.
+
+### Worked variation: case-insensitive ASCII examples
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toLower)
+
+newtype CI = CI String
+instance Eq CI where
+  CI x == CI y = map toLower x == map toLower y
+
+main :: IO ()
+main = do
+  print (CI "Exam" == CI "EXAM")
+  print (CI "exam" /= CI "test")
+```
+
+```text
+True
+True
+```
+
+</HaskellTryIt>
+
+Lowercasing both first strings yields exam. The second pair normalises to exam and test, so equality is false and default inequality is true. This illustrates character lowercasing, not a complete international text-normalisation policy.
+
+### Worked variation: library behaviour uses the chosen equality
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (nub)
+
+data Member = Member Int String
+instance Eq Member where
+  Member i _ == Member j _ = i == j
+
+main :: IO ()
+main = do
+  print (length (nub [Member 10 "Ana",Member 10 "Anne",Member 11 "Ana"]))
+  print (elem (Member 10 "Other") [Member 10 "Ana"])
+```
+
+```text
+2
+True
+```
+
+</HaskellTryIt>
+
+Nub keeps the first member with key 10 and the one with key 11, so length is 2. Membership compares only the identifier and succeeds despite different names.
+
+**Common error and repair.** Custom equality affects every caller of Eq, including nub and lookup on such keys. Document the chosen key. If ordering is later added, use a compatible key there too.
+
+## 10. Equality laws and counterexamples
+
+Expected equality is reflexive, symmetric and transitive on the values under discussion. GHC checks none of these laws. A useful design technique is equality through a deterministic key, since lawful equality of keys transfers these three properties.
+
+**Template**
+
+```text
+reflexive:  x == x is True
+symmetric:  x == y equals y == x
+transitive: if x == y and y == z, then x == z
+complement: x /= y equals not (x == y)
+```
+
+The laws apply to defined values with terminating comparisons. A finite test can refute a law but cannot establish it for all values. The following bad instances deliberately compile: they are behavioural mistakes, not type errors.
+
+### Worked variation: strict comparison breaks reflexivity and symmetry
+
+<HaskellTryIt>
+
+```haskell
+newtype Bad = Bad Int
+instance Eq Bad where
+  Bad x == Bad y = x < y
+
+main :: IO ()
+main = do
+  print (Bad 1 == Bad 1)
+  print (Bad 1 == Bad 2)
+  print (Bad 2 == Bad 1)
+```
+
+```text
+False
+True
+False
+```
+
+</HaskellTryIt>
+
+The first line violates reflexivity. The next two answers differ when operands are reversed, violating symmetry. Repair with x == y on the underlying Int values.
+
+### Worked variation: nearby values break transitivity
+
+<HaskellTryIt>
+
+```haskell
+newtype Near = Near Int
+instance Eq Near where
+  Near x == Near y = abs (toInteger x - toInteger y) <= 1
+
+main :: IO ()
+main = do
+  print (Near 0 == Near 1)
+  print (Near 1 == Near 2)
+  print (Near 0 == Near 2)
+```
+
+```text
+True
+True
+False
+```
+
+</HaskellTryIt>
+
+Distances are 1, 1 and 2. The first two true premises and false conclusion refute transitivity. Converting before subtraction avoids Int overflow distracting from the counterexample.
+
+### Worked variation: a canonical key restores an equivalence relation
+
+<HaskellTryIt>
+
+```haskell
+newtype Bucket = Bucket Int
+instance Eq Bucket where
+  Bucket x == Bucket y = x `mod` 10 == y `mod` 10
+
+main :: IO ()
+main = do
+  print (Bucket 1 == Bucket 11)
+  print (Bucket 11 == Bucket 21)
+  print (Bucket 1 == Bucket 21)
+```
+
+```text
+True
+True
+True
+```
+
+</HaskellTryIt>
+
+All keys are 1. More generally, equality of remainders is reflexive and symmetric, and two equal-key premises imply the third equal-key conclusion. This is a deliberate equivalence by last digit, not ordinary integer identity.
+
+**Common error and repair.** "Close enough" is not generally transitive. Do not install an approximate comparison as Eq merely because it looks sensible on two values. Keep a separately named predicate if that is the real requirement.
+
+## 11. Several constraints and superclass simplification
+
+A function earns one requirement for each class operation it applies to an arbitrary type. Several constraints are written together before one fat arrow. Different variables may have different requirements. Ord already requires Eq, so writing both for one variable is redundant.
+
+**Template**
+
+```text
+(Eq a, Show a) => a -> [a] -> String
+(Eq k, Show v) => k -> [(k,v)] -> String
+(Eq a, Ord a) => ... simplifies to Ord a => ...
+```
+
+The first shape compares and displays elements of the same type. The second compares keys but displays values. The third adds no power beyond Ord a. Constraint order in these written signatures is not a claimed GHCi transcript.
+
+### Worked variation: same variable, two independent operations
+
+<HaskellTryIt>
+
+```haskell
+report :: (Eq a, Show a) => a -> [a] -> String
+report x xs = if elem x xs then show x else "absent"
+
+main :: IO ()
+main = do
+  putStrLn (report True [False,True])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Membership needs Eq a; showing the found x needs Show a. At Bool, the target is present and show produces the characters True, printed without quotation marks by putStrLn.
+
+### Worked variation: different variables, different constraints
+
+<HaskellTryIt>
+
+```haskell
+findText :: (Eq k, Show v) => k -> [(k,v)] -> String
+findText k pairs = case lookup k pairs of
+  Nothing -> "missing"
+  Just v -> show v
+
+main :: IO ()
+main = do
+  putStrLn (findText 'b' [('a',1 :: Int),('b',2)])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The character keys require Eq; Int values require Show. There is no need for Show k or Eq v. Lookup returns Just 2 and show converts only that payload.
+
+### Worked variation: Ord includes equality
+
+<HaskellTryIt>
+
+```haskell
+orderedSame :: Ord a => a -> a -> Bool
+orderedSame x y = x <= y && x == y
+
+main :: IO ()
+main = do
+  print (orderedSame (3 :: Int) 3)
+  print (orderedSame (3 :: Int) 4)
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+The first call passes both tests. The second passes ordering but fails equality. The `<=` operation requires `Ord a`; its `Eq` superclass also supplies `==`.
+
+**Common error and repair.** Parenthesise multiple constraints: `(Eq a, Show a) => ...`. Adding Show because main prints a Bool result is unnecessary: Show Bool is concrete and places no display requirement on the input type.
+
+## 12. Deriving constraints from the body
+
+A constraint records the operations used by the body. Derive ordinary input and result shapes, then locate exactly which unknown types receive class operations. Structural recursion alone introduces no Eq.
+
+**Template**
+
+```text
+1. Name inputs with provisional types.
+2. List called operations with their types and requirements.
+3. Unify each operation's inputs with the supplied values.
+4. Substitute into requirements: Eq t at t := a gives Eq a.
+5. Combine requirements from ALL branches and recursive calls.
+6. Expand composite instances; remove repeats and superclass redundancy.
+7. Attach the remaining context to the input/result type.
+8. Check a concrete call; look for unnecessarily constrained components.
+```
+
+Both branches must type-check even if one particular call takes only one. Arithmetic on an Int count needs no Num a for unrelated input elements.
+
+### Worked variation: count adjacent equal pairs
+
+```text
+adjacent xs = length (filter (uncurry (==)) (zip xs (drop 1 xs)))
+xs :: [a]; drop 1 xs :: [a]; zip gives [(a,a)]
+(==) :: Eq t => t -> t -> Bool
+uncurry (==) consumes (t,t)
+match (t,t) ~ (a,a): t ~ a, requirement Eq a
+filter retains [(a,a)]; length returns Int
+zip, drop, filter and length add no equality requirement
+adjacent :: Eq a => [a] -> Int
+```
+
+<HaskellTryIt>
+
+```haskell
+adjacent :: Eq a => [a] -> Int
+adjacent xs = length (filter (uncurry (==)) (zip xs (drop 1 xs)))
+
+main :: IO ()
+main = do
+  print (adjacent "aabbba")
+  print (adjacent ([] :: [Char]))
+```
+
+```text
+3
+0
+```
+
+</HaskellTryIt>
+
+The aligned pairs are aa, ab, bb, bb and ba: three pass. The empty input produces no pairs. Computing an Int count needs no Show a or Num a.
+
+### Worked variation: compare keys, display values
+
+```text
+foundText key pairs = case lookup key pairs of
+  Nothing -> "missing"
+  Just value -> show value
+key :: k; pairs :: [(k,v)]
+lookup :: Eq x => x -> [(x,y)] -> Maybe y
+match x ~ k, y ~ v: requirement Eq k, result Maybe v
+show :: Show z => z -> String
+value :: v, so z ~ v: requirement Show v
+both branches :: String
+foundText :: (Eq k, Show v) => k -> [(k,v)] -> String
+```
+
+<HaskellTryIt>
+
+```haskell
+foundText :: (Eq k, Show v) => k -> [(k,v)] -> String
+foundText key pairs = case lookup key pairs of
+  Nothing -> "missing"
+  Just value -> show value
+
+main :: IO ()
+main = do
+  putStrLn (foundText 'a' [('a',True)])
+  putStrLn (foundText 'z' [('a',True)])
+```
+
+```text
+True
+missing
+```
+
+</HaskellTryIt>
+
+The first lookup returns Just True, whose payload is converted to text. The second selects the fixed absent message. Show v remains a requirement on missing-key calls because the whole body must type-check.
+
+### Worked variation: compare a composite result
+
+```text
+sameValue k pairs wanted = lookup k pairs == Just wanted
+k :: a; pairs :: [(a,b)]; wanted :: b
+lookup gives Eq a and result Maybe b
+Just wanted :: Maybe b
+(==) :: Eq t => t -> t -> Bool; t ~ Maybe b
+Eq (Maybe b) is supplied by the instance requiring Eq b
+combine: Eq a, Eq b
+sameValue :: (Eq a, Eq b) => a -> [(a,b)] -> b -> Bool
+```
+
+<HaskellTryIt>
+
+```haskell
+sameValue :: (Eq a, Eq b) => a -> [(a,b)] -> b -> Bool
+sameValue key pairs wanted = lookup key pairs == Just wanted
+
+main :: IO ()
+main = do
+  print (sameValue 'a' [('a',True)] True)
+  print (sameValue 'a' [('a',True)] False)
+  print (sameValue 'z' [('a',True)] True)
+```
+
+```text
+True
+False
+False
+```
+
+</HaskellTryIt>
+
+The comparisons are Just True == Just True, Just True == Just False, and Nothing == Just True. Comparing the result introduces value equality that lookup alone does not require.
+
+**Common error and repair.** Do not derive constraints by scanning input types for letters. Trace the operations. Comparing association lists directly needs key and value equality; searching one by key does not.
+
+## 13. Functions have no general equality instance
+
+Standard Prelude provides no general `Eq (a -> b)` instance. Functions may agree on some inputs but differ later; domains may be infinite and programs may fail to terminate. No terminating algorithm decides equality of all such behaviour. Testing a finite sample is a different operation.
+
+**Template**
+
+```text
+agreeOn :: Eq b => [a] -> (a -> b) -> (a -> b) -> Bool
+agreeOn samples f g = all (\x -> f x == g x) samples
+```
+
+The comparison is between outputs, so only Eq b is required. Neither Eq a nor equality on functions is used. Here is the rejected direct comparison, kept outside the editor:
+
+```haskell
+-- Rejected: no standard function equality instance exists.
+main :: IO ()
+main = print ((id :: Int -> Int) == id)
+```
+
+Key GHC excerpt: "No instance for". The missing instance is equality of functions. Fixing the domain with an annotation cannot create it.
+
+### Worked variation: compare results at one input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print (id True == not True)
+  print (id False == not False)
+```
+
+```text
+False
+False
+```
+
+</HaskellTryIt>
+
+Each comparison is on Bool results. Identity and negation disagree at each of the tested inputs.
+
+### Worked variation: cover a small finite domain
+
+<HaskellTryIt>
+
+```haskell
+agreeOn :: Eq b => [a] -> (a -> b) -> (a -> b) -> Bool
+agreeOn samples f g = all (\x -> f x == g x) samples
+
+main :: IO ()
+main = do
+  print (agreeOn [False,True] not (not . id))
+  print (agreeOn [False,True] id not)
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+The sample covers both defined Bool constructors. Negation agrees with negation after identity but differs from identity. This does not compare behaviour on undefined inputs or establish a general instance.
+
+### Worked variation: an incomplete sample misleads
+
+<HaskellTryIt>
+
+```haskell
+agreeOn :: Eq b => [a] -> (a -> b) -> (a -> b) -> Bool
+agreeOn samples f g = all (\x -> f x == g x) samples
+
+main :: IO ()
+main = do
+  print (agreeOn [0,1 :: Int] id (\x -> x * x))
+  print (agreeOn [0,1,2 :: Int] id (\x -> x * x))
+  print (agreeOn ([] :: [Int]) id (\x -> x * x))
+```
+
+```text
+True
+False
+True
+```
+
+</HaskellTryIt>
+
+The functions agree at 0 and 1, but at 2 their results are 2 and 4. An empty sample passes vacuously, since no comparison fails. Sample agreement is not general function equality.
+
+**Common error and repair.** `id == id` is rejected despite naming the same function twice: type checking still requires the instance. Compare outputs at specified inputs, or represent a restricted class of functions as data with deliberately chosen equality.
+
+## 14. Three missing-equality causes and repairs
+
+Read the missing type, then trace why it reached equality. Adding a requirement to a signature differs from supplying an instance for a concrete type. Composite equality can expose an unsupported field.
+
+**Template**
+
+```text
+Find ==, including calls hidden inside elem, lookup or nub.
+Find the compared type.
+Variable lacks a requirement? Add the minimal context.
+Concrete type lacks an instance? Derive or define its intended equality.
+Unsupported field? Change the comparison specification or the data.
+```
+
+Quotations below are only key diagnostic excerpts. A rigid signature missing a context commonly produces "Could not deduce"; a concrete missing instance produces "No instance for". Do not memorise one full transcript for every case.
+
+### Worked variation: a variable lacks a context
+
+```haskell
+-- Rejected: the signature omits the requirement of the body.
+sameFirst :: a -> a -> Bool
+sameFirst x y = x == y
+```
+
+Key excerpt: "Could not deduce". The missing requirement is `Eq a`. The signature promises every a, but the body needs equality. Repair that promise:
+
+<HaskellTryIt>
+
+```haskell
+sameFirst :: Eq a => a -> a -> Bool
+sameFirst x y = x == y
+
+main :: IO ()
+main = print (sameFirst 'a' 'b')
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Both arguments become Char, whose instance exists. Their different values compare unequal.
+
+### Worked variation: a concrete type lacks an instance
+
+```haskell
+-- Rejected: no Eq Ticket instance has been supplied.
+data Ticket = Ticket Int
+main :: IO ()
+main = print (Ticket 1 == Ticket 1)
+```
+
+Key excerpt: "No instance for" on the `==` line; the missing instance is `Eq Ticket`. Adding Eq a elsewhere cannot supply this fixed instance. Derive the intended field equality:
+
+<HaskellTryIt>
+
+```haskell
+data Ticket = Ticket Int deriving (Eq)
+
+main :: IO ()
+main = do
+  print (Ticket 1 == Ticket 1)
+  print (Ticket 1 == Ticket 2)
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+The generated instance compares Int payloads: equal numbers match; different numbers do not.
+
+### Worked variation: an unsupported composite field
+
+```haskell
+-- Rejected: tuple equality also needs equality of the function field.
+main :: IO ()
+main = print ((1 :: Int, not) == (1, not))
+```
+
+Key excerpt: "No instance for". The missing instance concerns Bool-to-Bool functions. If the specification is identity by identifier, compare that field explicitly:
+
+<HaskellTryIt>
+
+```haskell
+sameIdentifier :: Eq k => (k,v) -> (k,w) -> Bool
+sameIdentifier (k,_) (j,_) = k == j
+
+main :: IO ()
+main = print (sameIdentifier (1 :: Int,not) (1,id))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Only 1 == 1 is evaluated. Even the payload types may differ. This repair intentionally changes the comparison specification; full general function equality has no such repair.
+
+**Common error and repair.** Adding Eq to unrelated variables does not fix a missing field instance. Deriving cannot manufacture function equality either. Follow the compared type through each component requirement.
+
+## 15. Where Ord takes over
+
+Eq answers sameness. Ord adds ordering and has Eq as a superclass. Use Eq for membership or duplicate detection; use Ord when the body orders values. See [The Standard Type Classes](/docs/sem3/csi243/09-polymorphism/notes/standard-classes) for the ordering operations. Hand-written instances should make `compare x y == EQ` agree with `x == y`; using the same canonical key for both is a useful way to achieve this.
+
+## 16. Exam questions
+
+Read the command, derive the requirements, then check a small case. Types below are written answers, not GHCi transcripts.
+
+### Exam question 1: read the constraint
+
+Read `member :: Eq a => a -> [a] -> Bool` and count its ordinary inputs. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The commands ask for an English reading and an argument count.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate the context at => from arrows on its right.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+For every type a with equality, member takes one a and a list of a and returns Bool. There are two ordinary inputs. Eq supplies a requirement, not a third input.
+
+  </Step>
+
+  <Step title="4. Check">
+
+At a := Char, a call such as `member 'a' "cat"` compares characters and returns a Bool.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: minimal implementation
+
+What must an Eq instance define minimally, and why is defining neither method a mistake? (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The question asks for the minimal operation and the consequence of omitting it.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Expand the two default method equations.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Define either `(==)` or `(/=)`, normally `(==)`. Default inequality negates equality; default equality negates inequality. If neither has an independent implementation, the defaults can call each other indefinitely.
+
+  </Step>
+
+  <Step title="4. Check">
+
+An instance comparing Token Int fields with `(==)` automatically obtains `/=`; Token 1 /= Token 2 is True.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: membership boundaries
+
+Evaluate `elem 'a' "cat"`, `notElem 'z' "cat"`, and `elem True []`. State the requirement on elements. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Evaluate" asks for results, with the type requirement separately stated.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use left-to-right membership and the empty-list base case.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The results are True, True and False. The first finds a after rejecting c. The second finds no z, so negated membership is True. The empty input has no match. The generic list operations require Eq a.
+
+  </Step>
+
+  <Step title="4. Check">
+
+All three outputs are Bool; displaying them requires Show Bool, not Show a for arbitrary input elements.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: lookup does not compare values
+
+State the type of `\k pairs -> lookup k pairs` and explain why values may be functions. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"State" asks for a general signature; "explain" asks which component receives equality.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Match the target with first tuple fields and inventory operations on second fields.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The type is `Eq k => k -> [(k,v)] -> Maybe v`. Only k is compared; v is returned without comparison or display. No Eq v requirement is earned.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Looking up a character key in a list of character/function pairs may return Just not. Apply the function to obtain a printable result.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: nub versus delete
+
+Evaluate `nub [3,1,3,2,1 :: Int]` and `delete 3 [3,1,3,2,1 :: Int]`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Both command operands are complete applications; produce lists and explain preserved order.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+For nub track kept values; for delete stop removing after the first match.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Nub keeps 3, then 1, rejects 3, keeps 2, rejects 1: `[3,1,2]`. Delete drops the leading 3 and preserves the remaining suffix: `[1,3,2,1]`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The later 3 remains after deletion, and nub has not sorted its output. Both operations require Eq rather than Ord.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: adjacency and starting position
+
+Evaluate `group "abbaa"`, `isPrefixOf "bb" "abbaa"`, and `isPrefixOf "" "abbaa"`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The question varies two positional operations, so use their separate templates.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Split adjacent runs; compare prefix positions from the beginning.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Grouping gives `["a","bb","aa"]`. The bb prefix test is False because its first b differs from the initial a. The empty prefix test is True because there are no required positions.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The later bb run does not repair a failed prefix. Group does not merge the separated a runs.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: derive composite equality
+
+State the minimal constraint for `sameOptional x y = Just x == Just y` and trace it. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"State" and "trace" require a signature plus the source of its context.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Infer the payload type, then expand the Eq Maybe instance requirement.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Both payloads have type a. The compared type is Maybe a. Equality requires Eq (Maybe a), supplied by the standard instance when Eq a holds. Thus `sameOptional :: Eq a => a -> a -> Bool`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+At Bool, True and False become Just True and Just False, yielding False. No Show or Ord is used.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: derived records and recursive types
+
+Explain derived Eq for `data R = R Int Bool deriving (Eq)` and `data T a = L | N a (T a) deriving (Eq)`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Explain" asks how comparison proceeds and what requirements are introduced.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Compare constructors, then corresponding fields.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Two R values must agree in both Int and Bool fields. For T, L equals L; L differs from N; two N values require equal payloads and recursively equal tails. The generated T instance requires Eq a.
+
+  </Step>
+
+  <Step title="4. Check">
+
+R 1 True differs from R 1 False. N True L differs from N True (N True L), despite equal first labels, because the tails have different constructors.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: implement equality by key
+
+Given `data User = User Int String`, write Eq comparing identifiers only. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Write" asks for an instance; the specification deliberately excludes names.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Pattern match both values, retain Int fields, ignore String fields.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+data User = User Int String
+instance Eq User where
+  User i _ == User j _ = i == j
+```
+The minimal method is supplied, so default inequality follows.
+
+  </Step>
+
+  <Step title="4. Check">
+
+User 7 "A" equals User 7 "B"; User 7 "A" differs from User 8 "A". Lawful equality of the identifier transfers reflexivity, symmetry and transitivity.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: refute a law
+
+An instance declares two Int wrappers equal when their distance is at most 1. Give a transitivity counterexample. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Give a counterexample" requires true premises and a false conclusion.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Choose three consecutive small values.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Take wrapped values 0, 1 and 2. Distances 0 to 1 and 1 to 2 are both 1, so both equalities hold. Distance 0 to 2 is 2, so that equality fails. This directly contradicts transitivity.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The values are small, so overflow is irrelevant. Pairwise approximate agreement is not an equivalence relation; retain it as a named predicate instead of Eq.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: infer requirements from a body
+
+Derive the type of `describe x y = if x == y then show x else "different"`. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Derive" requires an ordinary type and the origin of every class.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Unify equality operands, then collect requirements across both branches.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Let x :: a. Equality forces y :: a and requires Eq a. Showing x requires Show a and gives String. The other branch is also String. Thus `describe :: (Eq a, Show a) => a -> a -> String`. Neither ordering nor arithmetic occurs.
+
+  </Step>
+
+  <Step title="4. Check">
+
+On True and True, the output string is "True"; on True and False, it is "different". Show a is still required even for unequal inputs.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: separate key and value constraints
+
+Derive `matches k pairs v = lookup k pairs == Just v`. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command requests the whole function type, not merely the lookup type.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Trace lookup first, then equality on its result.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Assign k :: a, pairs :: [(a,b)], v :: b. Lookup requires Eq a and returns Maybe b. Just v also has type Maybe b. Comparing these requires Eq b through the Eq Maybe instance. Result: `matches :: (Eq a, Eq b) => a -> [(a,b)] -> b -> Bool`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+For key a mapped to True, wanted True gives True and wanted False gives False. A missing key gives Nothing, unequal to any Just v.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: function comparison
+
+Why is `(id :: Int -> Int) == id` rejected? Give a valid finite test and its limit. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Why" asks for the missing instance, while the finite test must compare outputs.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Replace equality of functions by equality of results at named inputs.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+There is no standard Eq instance for function types. `all (\x -> id x == x*x) [0,1 :: Int]` is a valid output test and gives True. Its constraint is equality of output Int values.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Adding 2 to the sample gives False, since 2 differs from 4. Agreement on [0,1] is not equality over all Int inputs.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 14: diagnose and simplify
+
+A type Ticket lacks Eq. Why does adding `Eq a =>` elsewhere not fix `Ticket 1 == Ticket 1`? Is `(Eq a, Ord a)` minimal for ordering and equality? (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+There are two tasks: repair a fixed missing instance and simplify a context.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Distinguish concrete instance evidence from a requirement on an unrelated variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Ticket is concrete, so derive or define `Eq Ticket`; an assumption about a does not provide it. For the second task, Ord a already implies Eq a, so use only `Ord a =>`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+With `data Ticket = Ticket Int deriving (Eq)`, Ticket 1 equals Ticket 1. A function using both `<=` and `==` type-checks under Ord alone.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+Read Eq a as a requirement on a type, not an extra value argument. Derive requirements from the exact values compared: lookup needs key equality, but comparing its result can add value equality. Composite and derived instances depend on their fields. Custom Eq should be reflexive, symmetric and transitive, with /= the complement of ==. GHC does not prove these laws. General functions have no standard Eq instance. Ord supplies equality as well as ordering.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="Why can lookup return a function without needing function equality?">
+
+It compares only keys. It can return a function payload without comparing or displaying it.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Does delete remove every occurrence?">
+
+No. It removes the first equal occurrence only; filtering with an inequality predicate removes all such occurrences.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Does derived Eq automatically repair an unlawful field instance?">
+
+No. It delegates to the field's equality, inheriting its behaviour. Laws require lawful component instances on the values under discussion.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Why is Eq a unnecessary alongside Ord a?">
+
+Ord has Eq as a superclass, so the ordering constraint already provides equality.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Does agreement on an empty function sample establish anything about their outputs?">
+
+No. The test succeeds because it contains no counterexample; no input was examined.
+
+  </CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [The Standard Type Classes](/docs/sem3/csi243/09-polymorphism/notes/standard-classes).

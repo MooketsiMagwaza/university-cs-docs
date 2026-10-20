@@ -1,0 +1,2351 @@
+---
+title: "Contracts and Predicate Logic"
+description: "Turn requirements into precise contracts, translate quantified logic, and check correctness and composition against explicit domains."
+---
+
+A contract makes an examiner's words checkable. This lesson extends [Specification and Correctness](/docs/sem3/csi243/10-reasoning-revision/notes/specification) and the design process in [Defining Functions](/docs/sem3/csi243/03-defining-functions/notes/defining-functions): it concentrates on relations, logical translations, termination obligations and composition rather than repeating their introductory examples.
+
+<LearningObjectives items={[
+  'Express purpose, precondition and relational postcondition independently of the implementation',
+  'Separate types, valid inputs, permitted results and correctness for a particular input',
+  'Translate implications, equivalence, exclusive choice, negation and quantifiers into Boolean predicates',
+  'Explain empty domains and why changing quantifier order changes a requirement',
+  'Distinguish partial correctness from termination and prove a decreasing measure',
+  'Check that one function produces inputs accepted by the next'
+]} />
+
+<Prerequisites items={[
+  'Specification and Correctness, and Defining Functions',
+  'Guards, Boolean operators, finite lists, all and any',
+  'Proofs of Programs I for the existing induction layout'
+]} />
+
+All mathematical claims below concern finite, fully defined inputs. A typed Haskell value may also contain an unevaluated failure or infinite structure; the finite-domain assumptions matter. An `Integer` calculation avoids bounded-integer overflow. A predicate is a function returning `Bool`; a relation can be represented by a predicate with several arguments.
+
+## 1. Purpose, precondition and relational postcondition
+
+A purpose names the task, a precondition restricts when its promise applies, and a postcondition relates the original arguments to the returned result. Write the relation before the implementation. Merely saying that the result is positive usually leaves many wrong answers possible.
+
+### Template
+
+```text
+f :: A -> B
+Purpose: intended task
+P x: valid-input predicate
+Q x r: result r has the required relationship to x
+Obligation: if P x holds and f x returns r, then Q x r
+```
+
+A and B are the input and result types. P is not code that must run first: it states the assumption. Q mentions both input x and candidate result r. A total-correctness contract also requires termination on P.
+
+### Worked variation: cube, with an exact result
+
+Change from recognising an input to checking a proposed output.
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube n = n * n * n
+post :: Integer -> Integer -> Bool
+post n r = r == n * n * n
+main :: IO ()
+main = print (cube (-2), post (-2) (cube (-2)), post (-2) 8)
+```
+
+```text
+(-8,True,False)
+```
+
+</HaskellTryIt>
+
+Purpose: compute the cube; P: every defined Integer; Q: r equals n cubed. Substituting n = -2 gives -8. Positivity would reject the correct answer and accept the wrong 8.
+
+### Worked variation: maximum of two arguments
+
+Now Q uses inequalities and membership, rather than restating a formula.
+
+<HaskellTryIt>
+
+```haskell
+larger :: Integer -> Integer -> Integer
+larger x y = if x >= y then x else y
+post :: Integer -> Integer -> Integer -> Bool
+post x y r = r >= x && r >= y && (r == x || r == y)
+main :: IO ()
+main = print (larger 4 4, post 2 5 5, post 2 5 6)
+```
+
+```text
+(4,True,False)
+```
+
+</HaskellTryIt>
+
+Both arguments are allowed, including ties. The bound alone accepts 6 for inputs 2 and 5; the last clause requires a supplied value. Q describes the answer without copying the algorithm.
+
+### Worked variation: a paired result
+
+Now one result has two related components.
+
+<HaskellTryIt>
+
+```haskell
+addAndDifference :: Integer -> Integer -> (Integer, Integer)
+addAndDifference x y = (x + y, abs (x - y))
+post :: Integer -> Integer -> (Integer, Integer) -> Bool
+post x y (s,d) = s == x + y && d == abs (x - y)
+main :: IO ()
+main = print (addAndDifference (-3) 5, post (-3) 5 (2,8), post (-3) 5 (8,2))
+```
+
+```text
+((2,8),True,False)
+```
+
+</HaskellTryIt>
+
+The sum is 2 and the absolute difference is 8. Both constraints must hold in their named positions. Swapping the fields type checks but fails the contract.
+
+### Worked variation: a restricted discount
+
+Now both inputs carry restrictions; use whole cents to avoid floating approximation.
+
+<HaskellTryIt>
+
+```haskell
+finalPrice :: Integer -> Integer -> Integer
+finalPrice cents percent = cents * (100 - percent) `div` 100
+pre :: Integer -> Integer -> Bool
+pre cents percent = cents >= 0 && percent >= 0 && percent <= 100
+main :: IO ()
+main = print (pre 2500 20, finalPrice 2500 20, pre 2500 101)
+```
+
+```text
+(True,2000,False)
+```
+
+</HaskellTryIt>
+
+Purpose: discounted whole cents, rounding down through integer division. P: non-negative price and percent from 0 to 100 inclusive. Q: the displayed formula. The invalid percentage is classified, not evaluated as though it met P.
+
+### Exam question: specify an absolute difference (4 marks)
+
+Specify a function returning the absolute difference of two integers. Explain why a non-negative result alone is insufficient.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is specify: give a relation, not just a type or implementation.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use both original inputs in Q, then identify an answer satisfying the weaker claim.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Purpose: return the distance between x and y; P: defined integers; Q: `r == abs (x - y)`. The result 100 is non-negative but wrong for 3 and 5.
+
+  </Step>
+
+  <Step title="4. Check">
+
+For 3 and 5 Q forces 2; for equal inputs it forces 0.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Writing `post r = r >= 0` for a distance loses the inputs. GHC gives no error because this is a valid Boolean expression. Repair Q to relate r to both inputs. A type checks shapes, not intended arithmetic.
+
+### Practice with answers
+
+Specify a function returning ten times an integer. **Answer:** purpose: multiply by ten; P: all defined integers; Q: `r == 10 * n`. For -2 the answer is -20, so an unconditional positive-result clause is wrong.
+
+## 2. Types, domains, codomains and valid subsets
+
+The input type describes representable inputs; the mathematical domain of a restricted contract is the subset on which its promise applies. The codomain is the declared set of possible result values; the image is the set actually produced. Output validity usually relates a result to its input, rather than to one global set.
+
+### Template
+
+```text
+I = input type's defined values
+Iv = { x in I : P x }; Ie = I minus Iv
+O = result type's defined values
+Allowed(x) = { r in O : Q x r }
+Image(f) = { f x : x in Iv and evaluation returns }
+```
+
+Set braces here mean collections satisfying a condition. Iv and Ie are disjoint and cover I. Nothing can be a correct result of a total validator; it is not automatically an erroneous output.
+
+### Worked variation: non-zero denominator subset
+
+The type permits zero but a quotient contract excludes it.
+
+<HaskellTryIt>
+
+```haskell
+validDivisor :: Integer -> Bool
+validDivisor d = d /= 0
+main :: IO ()
+main = print (map validDivisor [-2,0,2])
+```
+
+```text
+[True,False,True]
+```
+
+</HaskellTryIt>
+
+I is Integer; Iv excludes zero; Ie contains zero. Negative divisors are valid for integer division. Non-zero and positive are different preconditions.
+
+### Worked variation: output depends on input
+
+Two results have the same type, but only one is correct for this input.
+
+<HaskellTryIt>
+
+```haskell
+post :: Integer -> Integer -> Bool
+post n r = r == n + 1
+main :: IO ()
+main = print (post 2 3, post 2 4, post 3 4)
+```
+
+```text
+(True,False,True)
+```
+
+</HaskellTryIt>
+
+Four is wrong for n = 2 and right for n = 3. A single set of good Integer outputs cannot express this distinction.
+
+### Worked variation: failure as a specified result
+
+Extend a numeric task to all integers by reporting absence.
+
+<HaskellTryIt>
+
+```haskell
+nonNegative :: Integer -> Maybe Integer
+nonNegative n = if n < 0 then Nothing else Just n
+main :: IO ()
+main = print (map nonNegative [-1,0,2])
+```
+
+```text
+[Nothing,Just 0,Just 2]
+```
+
+</HaskellTryIt>
+
+The new domain is every defined Integer; the codomain is Maybe Integer. Q requires Nothing exactly for negative inputs, otherwise Just the original number. Ie is empty for this reporting contract.
+
+### Worked variation: image narrower than codomain
+
+Now the function always returns one of two numbers.
+
+<HaskellTryIt>
+
+```haskell
+parityCode :: Integer -> Integer
+parityCode n = if even n then 0 else 1
+main :: IO ()
+main = print (map parityCode [-3,-2,0,5])
+```
+
+```text
+[1,0,0,1]
+```
+
+</HaskellTryIt>
+
+The codomain Integer includes 20, but the image is 0 and 1. No Int or Integer has an invalid parity. Restricting an application to non-negative inputs would be an extra policy.
+
+### Exam question: partition the domain (5 marks)
+
+A contract for `q :: Integer -> Integer -> Integer` requires a positive second argument. State I, Iv and Ie. Is a negative divisor invalid for every division function?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+State this contract's subset rather than a rule copied from another function.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Treat the two inputs as a pair for domain analysis.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+I is pairs of defined integers. Iv has `d > 0`; Ie has `d <= 0`. Another division contract can allow negative d and require only `d /= 0`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+(8,-2) fails this contract, but `8 div (-2)` returns -4.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Confusing codomain with image, or calling every Nothing an error, changes the contract. GHC cannot reject these prose mistakes. Name the result type, then state Q for each partition. An `Eq a` constraint is a static type requirement, separate from a Boolean condition on an input value.
+
+### Practice with answers
+
+For `positive :: Integer -> Bool`, True exactly when the input exceeds zero, what is Ie? **Answer:** empty if every integer is accepted. False for -2 is a correct result.
+
+## 3. Partial correctness and total correctness
+
+Partial correctness says: whenever a valid call terminates normally, its result satisfies Q. Total correctness additionally requires every valid call to terminate normally. Partial here does not mean that only some tests pass; it differs from a partial function lacking a result for some typed inputs.
+
+### Template
+
+```text
+Partial correctness: P x and f x returns r imply Q x r
+Termination: P x implies f x returns normally in finite time
+Total correctness: partial correctness plus termination
+```
+
+A loop cannot violate a returned-value clause because it returns nothing. An exception is not a normal numeric result. Termination is a separate obligation.
+
+### Worked variation: terminating countdown
+
+Begin with both obligations satisfied on non-negative inputs.
+
+<HaskellTryIt>
+
+```haskell
+down :: Integer -> Integer
+down n = if n == 0 then 0 else down (n - 1)
+main :: IO ()
+main = print (map down [0,1,4])
+```
+
+```text
+[0,0,0]
+```
+
+</HaskellTryIt>
+
+P: n >= 0; Q: r = 0. Each call decreases n towards zero and zero returns 0. No claim is made for negative inputs.
+
+### Worked variation: a terminating wrong answer
+
+Now termination holds but Q fails.
+
+<HaskellTryIt>
+
+```haskell
+badCube :: Integer -> Integer
+badCube n = n * n
+main :: IO ()
+main = print (badCube 3, badCube 3 == 3 * 3 * 3)
+```
+
+```text
+(9,False)
+```
+
+</HaskellTryIt>
+
+The call returns immediately but Q for a cube requires 27. Termination alone does not establish partial correctness.
+
+### Worked variation: failure reported normally
+
+Now failure is a specified constructor.
+
+<HaskellTryIt>
+
+```haskell
+safePred :: Integer -> Maybe Integer
+safePred n = if n <= 0 then Nothing else Just (n - 1)
+main :: IO ()
+main = print (map safePred [-1,0,1,4])
+```
+
+```text
+[Nothing,Nothing,Just 0,Just 3]
+```
+
+</HaskellTryIt>
+
+Every defined integer terminates. Q requires Nothing for `n <= 0` and Just (n-1) otherwise. Absence can be totally correct.
+
+### Worked variation: finite lists as an assumption
+
+The input structure supplies termination.
+
+<HaskellTryIt>
+
+```haskell
+count :: [a] -> Integer
+count [] = 0
+count (_:xs) = 1 + count xs
+main :: IO ()
+main = print (count ([] :: [Int]), count [7], count [2,3,4])
+```
+
+```text
+(0,1,3)
+```
+
+</HaskellTryIt>
+
+A finite list's spine decreases by one per call. Q is its mathematical number of elements. This does not claim a finite result for an infinite list; see Lazy Evaluation.
+
+### Exam question: a vacuous correctness argument (5 marks)
+
+A student calls a function that loops on every valid input totally correct because it never returns a wrong result. Diagnose the argument.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Separate the returned-result obligation from termination.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Accept the observation about results, then check what it does not prove.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Partial correctness can hold vacuously: no returned value violates Q. Total correctness fails whenever there is a valid input because no such call returns normally.
+
+  </Step>
+
+  <Step title="4. Check">
+
+If P admits 0, looping on 0 defeats termination. If P admits no inputs, even total correctness is vacuous, but the contract is useless for a task needing results.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+GHC accepts `spin n = spin n`; no type error diagnoses non-termination. Do not run it. Missing cases can also type check. Repair the cases and prove valid branches reach a base. See [Proof Patterns](/docs/sem3/csi243/10-reasoning-revision/notes/proof-patterns) for refuting claims.
+
+### Practice with answers
+
+Do the three down tests prove total correctness for all non-negative integers? **Answer:** no. A decreasing-n argument proves termination; induction on the equations establishes the returned result.
+
+## 4. Decreasing termination measures
+
+A termination measure assigns every valid recursive call a natural number. It must strictly decrease on every recursive edge. A smaller integer alone is insufficient: integers continue downwards forever. A multi-argument algorithm may need a combined measure.
+
+### Template
+
+```text
+Choose mu(input) in {0,1,2,...}
+Show: base branch returns
+Show: recursive calls preserve validity
+Show: mu(next input) < mu(current input)
+Conclude: no infinite descending chain of natural numbers
+```
+
+mu is a mathematical function of the arguments. The returned value need not decrease. Check every recursive call, even when there are several.
+
+### Worked variation: subtracting two
+
+Change from unit countdown to two base values.
+
+<HaskellTryIt>
+
+```haskell
+steps :: Integer -> Integer
+steps n = if n <= 1 then 0 else 1 + steps (n - 2)
+main :: IO ()
+main = print (map steps [0,1,2,5])
+```
+
+```text
+[0,0,1,2]
+```
+
+</HaskellTryIt>
+
+For n >= 0 use n. The recursive branch has n >= 2, so n-2 remains non-negative and smaller. Both 0 and 1 stop.
+
+### Worked variation: remaining range width
+
+Now the first argument increases while the measure decreases.
+
+<HaskellTryIt>
+
+```haskell
+rangeSum :: Integer -> Integer -> Integer
+rangeSum lo hi = if lo > hi then 0 else lo + rangeSum (lo + 1) hi
+main :: IO ()
+main = print (rangeSum (-2) 1, rangeSum 4 3, rangeSum 3 3)
+```
+
+```text
+(-2,0,3)
+```
+
+</HaskellTryIt>
+
+Use max 0 (hi-lo+1). For [-2..1] it follows 4,3,2,1,0. Increasing lo is harmless. Reversed bounds are explicitly empty.
+
+### Worked variation: consuming a list
+
+Now use a structural measure.
+
+<HaskellTryIt>
+
+```haskell
+removeZeros :: [Integer] -> [Integer]
+removeZeros [] = []
+removeZeros (x:xs) = if x == 0 then removeZeros xs else x : removeZeros xs
+main :: IO ()
+main = print (removeZeros [0,2,0,3], removeZeros [])
+```
+
+```text
+([2,3],[])
+```
+
+</HaskellTryIt>
+
+Both recursive branches use the shorter xs. Number of zeros is a bad measure: keeping 2 does not reduce it, although recursion progresses.
+
+### Worked variation: division by two
+
+Now the decrease can exceed one.
+
+<HaskellTryIt>
+
+```haskell
+halvings :: Integer -> Integer
+halvings n = if n <= 1 then 0 else 1 + halvings (n `div` 2)
+main :: IO ()
+main = print (map halvings [0,1,2,8])
+```
+
+```text
+[0,0,1,3]
+```
+
+</HaskellTryIt>
+
+For n >= 0 use n. When n > 1, n div 2 is non-negative and smaller. Eight follows 8,4,2,1: three recursive steps.
+
+### Exam question: choose a measure (4 marks)
+
+An inclusive range recurses on (lo+1,hi) while `lo <= hi`. Give a measure working even when lo is negative.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Give a natural-number expression and justify its transition.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Count remaining positions rather than using lo or abs lo.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Use `max 0 (hi - lo + 1)`. Under `lo <= hi` it is positive. The next call decreases it by one; at lo > hi the base returns.
+
+  </Step>
+
+  <Step title="4. Check">
+
+From (-2,1) the widths are 4,3,2,1,0. From (4,3) width is already 0.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+'n gets smaller, so it stops' omits a lower bound. GHC cannot diagnose that proof gap. Negative countdown n-1 never reaches zero. Restrict P or implement a signed policy moving towards zero. Int overflow may invalidate an arithmetic measure; these examples use Integer.
+
+### Practice with answers
+
+For recursion consuming two lists until either is empty, suggest a measure. **Answer:** min of their finite lengths decreases by one in the two-cons branch. Their sum also decreases, by two; show the base branch separately.
+
+## 5. Conjunction, inclusive choice and negation
+
+Conjunction `p && q` requires both conditions. Inclusive disjunction `p || q` requires at least one, and permits both. Negation `not p` reverses a Boolean answer. Write parentheses to show which complete predicate is negated. These operations join assertions; they do not join arbitrary numbers.
+
+### Template
+
+```text
+both p q = p && q
+atLeastOne p q = p || q
+opposite p = not p
+```
+
+p and q stand for Bool expressions. A range uses conjunction: both endpoints must be respected. Alternatives use disjunction. Saying neither means negating the whole alternative.
+
+### Worked variation: all four truth pairs
+
+Start with the complete truth table for all three operations.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print [(p,q,p && q,p || q,not p) | p <- [False,True], q <- [False,True]]
+```
+
+```text
+[(False,False,False,False,True),(False,True,False,True,True),(True,False,False,True,False),(True,True,True,True,False)]
+```
+
+</HaskellTryIt>
+
+The last row has both True: both && and inclusive || return True. not p depends only on the first column.
+
+### Worked variation: an inclusive interval
+
+Now the Booleans come from numeric comparisons.
+
+<HaskellTryIt>
+
+```haskell
+inside :: Integer -> Bool
+inside x = x >= 0 && x <= 100
+outside :: Integer -> Bool
+outside x = not (inside x)
+main :: IO ()
+main = print [(x,inside x,outside x) | x <- [-1,0,100,101]]
+```
+
+```text
+[(-1,False,True),(0,True,False),(100,True,False),(101,False,True)]
+```
+
+</HaskellTryIt>
+
+Zero and 100 satisfy both bounds. Outside is the complement. Replacing && with || would admit every integer: one bound or the other always holds.
+
+### Worked variation: alternative permissions
+
+Now either permission suffices, including possession of both.
+
+<HaskellTryIt>
+
+```haskell
+access :: Bool -> Bool -> Bool
+access card guest = card || guest
+main :: IO ()
+main = print (access True False, access False True, access True True, not (access False False))
+```
+
+```text
+(True,True,True,True)
+```
+
+</HaskellTryIt>
+
+A card or a guest pass permits entry. Both are allowed. With neither, access is False and its negation is True. This requirement is inclusive, unlike XOR.
+
+### Worked variation: neither of two faults
+
+Now a single not covers a compound condition.
+
+<HaskellTryIt>
+
+```haskell
+healthy :: Bool -> Bool -> Bool
+healthy overheating leaking = not (overheating || leaking)
+main :: IO ()
+main = print [healthy a b | (a,b) <- [(False,False),(False,True),(True,False),(True,True)]]
+```
+
+```text
+[True,False,False,False]
+```
+
+</HaskellTryIt>
+
+Only the first pair has no fault. not overheating || leaking would accept any leaking machine, which reverses the requirement.
+
+### Exam question: admission rule (4 marks)
+
+Write a predicate for an age from 18 through 65 inclusive with a valid permit.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Write means produce a Boolean function; inclusive fixes both boundary comparisons.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Combine three required facts using &&.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+admit :: Integer -> Bool -> Bool
+admit age permit = age >= 18 && age <= 65 && permit
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+At 18 with a permit it is True; at 65 with no permit it is False; at 66 it is False regardless of permit.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`x >= 0 || x <= 100` is a logical error, so GHC gives no error. `1 && True` instead is ill-typed; the key diagnostic is `Couldn't match`. Repair by comparing a number to obtain a Bool, then combine it. Keep faulty programs in plain fences when experimenting.
+
+### Practice with answers
+
+Write neither enrolled nor employed. **Answer:** `not (enrolled || employed)`, equivalently `not enrolled && not employed`.
+
+## 6. Implication: if, sufficient conditions and unless
+
+`p` implies `q` says that whenever p holds, q must hold. It fails only when p is True and q is False. It does not assert that p actually happens. In 'if p then q', p is sufficient for q; q is necessary for p. A rule 'q unless p' is normally formalised as 'if not p then q'; record that interpretation when wording is unclear.
+
+### Template
+
+```text
+implies p q = not p || q
+if p then q: implies p q
+q unless p: implies (not p) q
+```
+
+This is a Boolean encoding of logical implication, not the Haskell conditional expression, which needs an else branch. A false antecedent makes the implication true without asserting the consequent.
+
+### Worked variation: complete implication table
+
+Begin with both possible values for each assertion.
+
+<HaskellTryIt>
+
+```haskell
+implies :: Bool -> Bool -> Bool
+implies p q = not p || q
+main :: IO ()
+main = print [(p,q,implies p q) | p <- [False,True], q <- [False,True]]
+```
+
+```text
+[(False,False,True),(False,True,True),(True,False,False),(True,True,True)]
+```
+
+</HaskellTryIt>
+
+Rows with p False have no obligation to check. The only prohibited row has p True and q False.
+
+### Worked variation: passing requires a threshold
+
+Now p is a claim made by a report and q is a numeric fact.
+
+<HaskellTryIt>
+
+```haskell
+consistent :: Integer -> Bool -> Bool
+consistent mark passed = not passed || mark >= 50
+main :: IO ()
+main = print (consistent 49 True, consistent 50 True, consistent 70 False)
+```
+
+```text
+(False,True,True)
+```
+
+</HaskellTryIt>
+
+Saying passed at 49 breaks the implication. At 70, saying not passed does not break this one-way rule; an iff rule would be needed to force that classification.
+
+### Worked variation: restricting a universal statement
+
+Now implication selects which members owe a property.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\n -> not (n > 0) || n >= 1) [-2,0,1,4 :: Integer])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Every positive listed integer is at least 1. The -2 and 0 cases are outside the antecedent, so they do not refute the statement. Do not use && here: that would demand all numbers be positive.
+
+### Worked variation: unless as an exception
+
+Now an exception cancels an obligation.
+
+<HaskellTryIt>
+
+```haskell
+rule :: Bool -> Bool -> Bool
+rule emergency wearsBadge = emergency || wearsBadge
+main :: IO ()
+main = print [rule e b | (e,b) <- [(False,False),(False,True),(True,False),(True,True)]]
+```
+
+```text
+[False,True,True,True]
+```
+
+</HaskellTryIt>
+
+Read the policy as 'wear a badge unless there is an emergency': not emergency implies wearsBadge. The emergency rows impose no badge requirement, so this rule does not prohibit wearing one during an emergency.
+
+### Exam question: translate a conditional requirement (4 marks)
+
+Every registered student must have a mark. Given pairs (registered,hasMark), write the predicate for a list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Every sets the outer quantifier; if registered is an implication inside it.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Encode the forbidden case registered and missing mark, then negate it.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+validRecords :: [(Bool,Bool)] -> Bool
+validRecords = all (\(registered,hasMark) -> not registered || hasMark)
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+[(True,True),(False,False)] passes. [(True,False)] fails. [] passes because there is no violating record.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`p && q` requires p, so it is not implication. `q implies p` is the converse, not an equivalent rewrite. GHC cannot spot either semantic mistake. The contrapositive, `not q` implies `not p`, is equivalent; the inverse is not in general.
+
+### Practice with answers
+
+Is False implies False true? **Answer:** yes. Is True implies False true? **Answer:** no. Rewrite 'if not cancelled then attend': `cancelled || attend`.
+
+## 7. Only if: necessary conditions and direction
+
+'p only if q' means p is permitted only when q holds: p implies q. The words only if introduce the necessary condition. 'p if q' reverses the arrow: q implies p. Neither one-way assertion automatically gives equivalence.
+
+### Template
+
+```text
+p only if q = not p || q
+p if q      = not q || p
+contrapositive of p only if q = q || not p
+```
+
+The final line encodes 'not q implies not p'. It is the same Boolean formula with the alternatives reordered. Name p and q before translating prose.
+
+### Worked variation: entry only if ticketed
+
+Now translate a permission rule.
+
+<HaskellTryIt>
+
+```haskell
+rule :: Bool -> Bool -> Bool
+rule entered ticket = not entered || ticket
+main :: IO ()
+main = print [rule e t | (e,t) <- [(False,False),(False,True),(True,False),(True,True)]]
+```
+
+```text
+[True,True,False,True]
+```
+
+</HaskellTryIt>
+
+Entering without a ticket fails. Owning a ticket without entering is allowed. The rule does not force ticket-holders to enter.
+
+### Worked variation: a reversed arrow exposed
+
+Now compare only if with if on an asymmetric row.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let passed = False
+  let submitted = True
+  print (not passed || submitted, not submitted || passed)
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+'Passed only if submitted' holds: nobody passed without submitting. 'Passed if submitted' fails here because submission did not produce a pass.
+
+### Worked variation: contrapositive check
+
+Now test an equivalent rewrite on every truth pair.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\(p,q) -> (not p || q) == (q || not p)) [(False,False),(False,True),(True,False),(True,True)])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The two formulas agree in all four cases. In words, p only if q is equivalent to no q implies no p. A finite truth table is exhaustive for these two Boolean variables.
+
+### Worked variation: a numeric necessary condition
+
+Now only if constrains a label's relationship to a value.
+
+<HaskellTryIt>
+
+```haskell
+sound :: Integer -> Bool -> Bool
+sound n labelledPositive = not labelledPositive || n > 0
+main :: IO ()
+main = print (sound 0 True, sound 4 False, sound (-1) False)
+```
+
+```text
+(False,True,True)
+```
+
+</HaskellTryIt>
+
+Labelled positive only if n > 0 forbids the first case. Omitting a positive label at 4 is still permitted by this one-way rule; completeness is a separate direction.
+
+### Exam question: necessary versus sufficient (5 marks)
+
+'A result is approved only if it is checked.' Translate it and say whether checking guarantees approval.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command translate fixes implication direction; the second part asks for the converse.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Let p = approved and q = checked.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The predicate is `not approved || checked`. Checked is necessary for approved. It is not stated to be sufficient: checked True and approved False is allowed.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Approved True and checked False is the unique forbidden row.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Reading only if as if is a common arrow reversal; the program still type checks. Repair by writing the forbidden row in words before coding. Do not infer a biconditional from a one-way policy.
+
+### Practice with answers
+
+Translate 'a number is printed only if it is non-negative'. **Answer:** `not printed || n >= 0`. It does not require printing every non-negative number.
+
+## 8. If and only if: soundness and completeness
+
+A biconditional requires both directions. 'p if and only if q' says p and q have the same truth value. For a classifier, one direction prevents false positives and the other prevents false negatives. For defined Booleans it can be written as equality.
+
+### Template
+
+```text
+iff p q = p == q
+iff p q = (not p || q) && (not q || p)
+```
+
+The first implication says p only if q. The second says p if q. The mathematical equivalence sign is not Haskell syntax; use == on Bool expressions.
+
+### Worked variation: equivalence table
+
+Begin with both directions visible in the truth values.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print [(p,q,p == q) | p <- [False,True], q <- [False,True]]
+```
+
+```text
+[(False,False,True),(False,True,False),(True,False,False),(True,True,True)]
+```
+
+</HaskellTryIt>
+
+False and False agree just as True and True do. Equivalence requires equal truth values, not two true assertions.
+
+### Worked variation: an exact pass classifier
+
+Now a label must match a threshold completely.
+
+<HaskellTryIt>
+
+```haskell
+correct :: Integer -> Bool -> Bool
+correct mark passed = passed == (mark >= 50)
+main :: IO ()
+main = print (correct 49 False, correct 50 True, correct 70 False)
+```
+
+```text
+(True,True,False)
+```
+
+</HaskellTryIt>
+
+Unlike the one-way implication, the final case fails: a qualifying mark must receive the positive label.
+
+### Worked variation: two equivalent parity tests
+
+Now compare formulas instead of a supplied label.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\n -> even n == (n `mod` 2 == 0)) [-3,-2,0,1,4 :: Integer])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+All selected negative, zero and positive integers agree. This is a sample check of the numeric property, not a proof for every integer.
+
+### Worked variation: both directions as code
+
+Now check the logical identity exhaustively.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\(p,q) -> (p == q) == ((not p || q) && (not q || p))) [(False,False),(False,True),(True,False),(True,True)])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Each truth pair is covered. The conjunction of the forward and reverse implications agrees with Boolean equality in all cases.
+
+### Exam question: repair an incomplete contract (4 marks)
+
+A pass predicate promises only 'if result is True, mark >= 50'. Repair it so every qualifying mark must pass.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command repair asks for the missing obligation.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Add the reverse implication, or replace the pair with equivalence.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+For marks admitted by the domain policy, require `result == (mark >= 50)`. This rules out both false positives and false negatives.
+
+  </Step>
+
+  <Step title="4. Check">
+
+An always-False function satisfied the old implication but fails the new contract at 50.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using `p && q` for iff loses the False/False case. Using `=` instead of `==` in an expression causes a `parse error`; repair to Boolean equality. GHC cannot detect the logically wrong conjunction.
+
+### Practice with answers
+
+Is (False iff False) true? **Answer:** yes. Give a classifier satisfying soundness but not completeness. **Answer:** always False when at least one input should be accepted.
+
+## 9. Exclusive or and exactly one
+
+Exclusive or (XOR) means exactly one assertion holds. Inclusive or permits both; XOR forbids both. For two defined Booleans, inequality expresses XOR. For more than two values, repeated XOR means an odd number of truths, not exactly one overall.
+
+### Template
+
+```text
+xor p q = p /= q
+xor p q = (p || q) && not (p && q)
+exactlyOne flags = length (filter id flags) == 1
+```
+
+The inequality is on Bool values. The last formula counts truths in a finite list; do not replace it with a fold of XOR for a list of arbitrary length.
+
+### Worked variation: XOR truth table
+
+Now both-True must be excluded.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print [(p,q,p /= q) | p <- [False,True], q <- [False,True]]
+```
+
+```text
+[(False,False,False),(False,True,True),(True,False,True),(True,True,False)]
+```
+
+</HaskellTryIt>
+
+Only the middle two rows have one True. This is exactly the pair of cases where inclusive or differs from equality.
+
+### Worked variation: exactly one even input
+
+Now the assertions are parity tests.
+
+<HaskellTryIt>
+
+```haskell
+oneEven :: Integer -> Integer -> Bool
+oneEven x y = even x /= even y
+main :: IO ()
+main = print (oneEven 2 3, oneEven 3 2, oneEven 2 4, oneEven 3 5)
+```
+
+```text
+(True,True,False,False)
+```
+
+</HaskellTryIt>
+
+The first two pairs contain one even value; the last two contain two and zero. This also explains the middle outcome in Lab 02's bothEven task.
+
+### Worked variation: exclusive choices versus inclusive choices
+
+Now compare alternative tickets under two different policies.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print [(a || b,a /= b) | (a,b) <- [(False,False),(False,True),(True,False),(True,True)]]
+```
+
+```text
+[(False,False),(True,True),(True,True),(True,False)]
+```
+
+</HaskellTryIt>
+
+The policies differ only when both choices are selected. State whether the user may hold both before implementing the requirement.
+
+### Worked variation: three truths expose the fold trap
+
+Now there are more than two options.
+
+<HaskellTryIt>
+
+```haskell
+exactlyOne :: [Bool] -> Bool
+exactlyOne flags = length (filter id flags) == 1
+main :: IO ()
+main = print (exactlyOne [True,True,True], foldr (/=) False [True,True,True], exactlyOne [])
+```
+
+```text
+(False,True,False)
+```
+
+</HaskellTryIt>
+
+Three selections are not exactly one, but their parity is odd, so the XOR fold is True. With no selections, exactlyOne is False.
+
+### Exam question: exactly one valid credential (4 marks)
+
+Write a predicate requiring exactly one of a password check and a token check to succeed. Explain why || is insufficient.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Exactly one is the command phrase selecting XOR.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use inequality of the two Boolean results.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+credentialRule :: Bool -> Bool -> Bool
+credentialRule passwordOK tokenOK = passwordOK /= tokenOK
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+True/False succeeds; True/True fails. Inclusive || incorrectly accepts the latter.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`xor` is not a Prelude function to assume is already imported; define it or use `/=` on Bool. A missing name leads to `Variable not in scope`. Repeated XOR is also not a general exactly-one counter; GHC accepts that logical error.
+
+### Practice with answers
+
+Count the True flags to implement at-most-one. **Answer:** `length (filter id flags) <= 1`; unlike exactly one it accepts [].
+
+## 10. De Morgan laws and negated requirements
+
+Negating a compound requirement changes both its connective and its components. Not both means at least one fails; it does not mean both fail. Not either means neither. This is useful for turning a requirement into a search for a violating input.
+
+### Template
+
+```text
+not (p && q) = not p || not q
+not (p || q) = not p && not q
+not (x < bound) = x >= bound
+```
+
+These are equalities of truth values for defined operands. The last line includes equality at the boundary; negating a strict comparison yields a non-strict one for ordinary integers.
+
+### Worked variation: exhaustive Boolean laws
+
+Start with both identities checked at every truth pair.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print [(not (p && q) == (not p || not q), not (p || q) == (not p && not q)) | p <- [False,True], q <- [False,True]]
+```
+
+```text
+[(True,True),(True,True),(True,True),(True,True)]
+```
+
+</HaskellTryIt>
+
+Each pair of True results says the two sides of each law agree. This is exhaustive for two Booleans.
+
+### Worked variation: outside an interval
+
+Now negation switches comparisons as well as the connective.
+
+<HaskellTryIt>
+
+```haskell
+outside :: Integer -> Bool
+outside x = not (x >= 0 && x <= 100)
+main :: IO ()
+main = print [(outside x, x < 0 || x > 100) | x <- [-1,0,100,101]]
+```
+
+```text
+[(True,True),(False,False),(False,False),(True,True)]
+```
+
+</HaskellTryIt>
+
+Outside is below zero or above 100. The endpoints remain inside. The negation of `>=` is `<`, not `<=`.
+
+### Worked variation: not both versus neither
+
+Now contrast two English phrases directly.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let paid = True
+  let signed = False
+  print (not (paid && signed), not paid && not signed)
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+The customer has not both paid and signed, because the signature is missing. It is false that neither action happened: payment did happen.
+
+### Worked variation: find a bad member
+
+Now push negation through a quantifier too.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (not (all (\n -> n >= 0 && n <= 100) [20,101 :: Integer]), any (\n -> n < 0 || n > 100) [20,101 :: Integer])
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+The mark 101 violates the upper bound. Not all marks are valid is equivalent to some mark being outside the interval; it does not say all marks are invalid.
+
+### Exam question: negate a specification (5 marks)
+
+Negate 'every mark lies between 0 and 100 inclusive', preserving the boundary meaning.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Negate asks for exactly the complement, not a stronger failure condition.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Push not through all to any, then through && to ||.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`any (\m -> m < 0 || m > 100) marks`
+
+  </Step>
+
+  <Step title="4. Check">
+
+[] has no invalid member, so the negation is False. [0,100] also gives False; [101] gives True.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Changing not (p && q) to not p && not q is wrong when exactly one component is False. GHC gives no diagnostic. Repair using the opposite connective and negate each complete component. Restrict numeric complement claims to the stated integer domain; floating NaN requires separate care.
+
+### Practice with answers
+
+Negate `x < 5 || x > 10` for Integer. **Answer:** `x >= 5 && x <= 10`. For x = 5 it is True.
+
+## 11. Every: universal quantification
+
+'Every member satisfies P' is a universal statement. On a finite list use all. One counterexample makes it False. If the requirement applies only to members satisfying R, either filter by R first or use implication inside all.
+
+### Template
+
+```text
+every P over xs = all P xs = and (map P xs)
+every R-member satisfies P = all (\x -> not (R x) || P x) xs
+                         = all P (filter R xs)
+```
+
+xs is the finite domain and P is a Bool-valued function. Restricted quantification does not require every x to satisfy R; R selects which x owe P.
+
+### Worked variation: all marks valid
+
+Now a universal predicate has two endpoint conditions.
+
+<HaskellTryIt>
+
+```haskell
+valid :: Integer -> Bool
+valid m = m >= 0 && m <= 100
+main :: IO ()
+main = print (all valid [0,50,100], all valid [0,101])
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+All of 0,50,100 satisfy both comparisons. One 101 refutes the second list.
+
+### Worked variation: all characters from an allowed set
+
+Now the domain holds characters rather than numbers.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\c -> c == 'a' || c == 'b') "abba", all (\c -> c == 'a' || c == 'b') "abc")
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+Every character in abba is a or b. The final c in abc is a violating member. Quantification concerns characters, not whole strings at once.
+
+### Worked variation: restricted to even members
+
+Now a condition selects the members being constrained.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\n -> not (even n) || n >= 0) [-3,0,2 :: Integer], all (>= 0) (filter even [-3,0,2 :: Integer]))
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+The odd -3 is irrelevant to 'every even member is non-negative'. Both equivalent encodings keep 0 and 2.
+
+### Worked variation: a universal relation on records
+
+Now each member contains two components.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\(lo,hi) -> lo <= hi) [(0,0),(-2,3 :: Integer)], all (\(lo,hi) -> lo <= hi) [(4,2 :: Integer)])
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+Equal endpoints are allowed; a range from -2 to 3 is ordered. The pair (4,2) violates the relation. The tuple pattern extracts both facts for one domain member.
+
+### Exam question: universal with a restriction (5 marks)
+
+Write 'every positive element of xs is even' without requiring negative elements to be even.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Every sets all; positive introduces the restriction.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use positive implies even, or filter positives.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+rule :: [Integer] -> Bool
+rule xs = all (\x -> not (x > 0) || even x) xs
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+[-3,0,2] passes; [-3,1] fails at 1. The alternative `all even (filter (> 0) xs)` agrees.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`all (\x -> x > 0 && even x) xs` incorrectly requires every member to be positive. GHC accepts it. `all (map p xs)` also supplies a list where a predicate is expected: the diagnostic includes `Couldn't match`. Use `and (map p xs)` or `all p xs`.
+
+### Practice with answers
+
+Translate 'all ranges have distinct endpoints'. **Answer:** `all (\(lo,hi) -> lo /= hi) ranges`. A singleton equal-endpoint pair refutes it.
+
+## 12. Some: existential quantification and witnesses
+
+'Some member satisfies P' requires at least one witness. Use any on a finite list. For 'some member satisfies both R and P', combine them with && inside the same predicate so the same member witnesses both facts.
+
+### Template
+
+```text
+some P over xs = any P xs = or (map P xs)
+some R-member satisfies P = any (\x -> R x && P x) xs
+```
+
+A witness is one concrete member making the predicate True. Two different witnesses cannot establish two properties that are required of the same member.
+
+### Worked variation: find one passing mark
+
+Now one witness is enough despite other failures.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (any (>= 50) [20,50,30 :: Integer], any (>= 50) [20,49 :: Integer])
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+50 witnesses the first claim. The second domain has no qualifying element.
+
+### Worked variation: find a matching character
+
+Now the witness is a character in text.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (any (== 'x') "exam", any (== 'x') "term")
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+The second character of exam is x. No character in term is x. Existential truth does not depend on all other characters.
+
+### Worked variation: same member satisfies two facts
+
+Now a witness must be both positive and even.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (any (\n -> n > 0 && even n) [-2,1 :: Integer], any (> 0) [-2,1 :: Integer] && any even [-2,1 :: Integer])
+```
+
+```text
+(False,True)
+```
+
+</HaskellTryIt>
+
+There is a positive member 1 and an even member -2, but neither is both. Splitting the existential changes the requirement.
+
+### Worked variation: a witness among paired fields
+
+Now one record must satisfy a relationship.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (any (\(stock,wanted) -> stock < wanted) [(3,2),(0,1 :: Integer)], any (\(stock,wanted) -> stock < wanted) [(2,2 :: Integer)])
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+(0,1) witnesses a shortage. Equal stock and demand is not a shortage, so the second list has no witness.
+
+### Exam question: one witness, two conditions (4 marks)
+
+Write a predicate saying some mark is at least 50 and less than 75.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Some means any, while and joins tests on that same mark.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Place both comparisons inside one lambda.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+middlePass :: [Integer] -> Bool
+middlePass = any (\m -> m >= 50 && m < 75)
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+[40,80] fails even though one mark is below 75 and another is at least 50. [50] succeeds; [75] fails.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`any p xs && any q xs` may use different witnesses. GHC cannot diagnose that logical error. Repair to `any (\x -> p x && q x) xs` when the same x is required. Do not confuse any with all on a mixed domain.
+
+### Practice with answers
+
+Translate 'some pair has equal fields'. **Answer:** `any (\(x,y) -> x == y) pairs`. On [(1,2),(3,3)] the witness is (3,3).
+
+## 13. None, not every and quantified negation
+
+'None satisfies P' is the absence of any witness: not (any P xs). 'Not every member satisfies P' is instead a witness to failure: any (not . P) xs. These differ on mixed and empty domains. Quantifier negation switches universal and existential and negates the inner predicate.
+
+### Template
+
+```text
+none P xs = not (any P xs) = all (\x -> not (P x)) xs
+not every P xs = not (all P xs) = any (\x -> not (P x)) xs
+```
+
+None and not every are different English requirements. The equalities describe finite, defined predicates; an infinite search may not finish.
+
+### Worked variation: none even
+
+Now exclude every possible witness.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (not (any even [1,3,5 :: Integer]), all (\n -> not (even n)) [1,3,5 :: Integer])
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+There is no even member, so both versions of none even are True.
+
+### Worked variation: mixed members separate phrases
+
+Now the domain has one match and one non-match.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (not (any even [1,2 :: Integer]), not (all even [1,2 :: Integer]))
+```
+
+```text
+(False,True)
+```
+
+</HaskellTryIt>
+
+None even is False because of 2. Not every member even is True because of 1. One list refutes the proposed synonym.
+
+### Worked variation: no invalid marks
+
+Now apply absence to the complement of a validity predicate.
+
+<HaskellTryIt>
+
+```haskell
+valid :: Integer -> Bool
+valid n = n >= 0 && n <= 100
+main :: IO ()
+main = print (not (any (\m -> not (valid m)) [0,100]), all valid [0,100])
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+No invalid marks is equivalent to all marks valid. Both endpoints pass. Negation has been applied to the inner predicate too.
+
+### Worked variation: quantified dualities on an empty domain
+
+Now there are no members at all.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (not (any even ([] :: [Integer])), all odd ([] :: [Integer]), not (all even ([] :: [Integer])), any odd ([] :: [Integer]))
+```
+
+```text
+(True,True,False,False)
+```
+
+</HaskellTryIt>
+
+None even and all odd are True on []. Not every even and some odd are False. Negating all without changing to any would give the wrong answer.
+
+### Exam question: none versus not all (4 marks)
+
+Translate 'no mark fails' and 'not every mark passes' using pass m = m >= 50. Are they equivalent?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Translate each phrase independently before comparing.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+No failures means no witness to not pass; not every pass means a witness to not pass.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`not (any (\m -> m < 50) marks)` and `any (\m -> m < 50) marks`. These are complements, not equivalent.
+
+  </Step>
+
+  <Step title="4. Check">
+
+For [40,60], the first is False and the second True. For [] the first True and second False.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Writing none as `not (all p xs)` is a semantic error. No GHC error is expected. Repair by negating any. Negating `all p xs` gives `any (not . p) xs`, not `any p xs`.
+
+### Practice with answers
+
+Negate 'some member is positive'. **Answer:** `all (<= 0) xs` for Integer. Negate 'none is positive'. **Answer:** `any (> 0) xs`.
+
+## 14. Empty domains and vacuous truth
+
+A universal requirement is true when there is no counterexample. On an empty domain there is no counterexample, so all returns True. An existential requirement is false because there is no witness. A requirement needing attendance or data must assert non-emptiness separately.
+
+### Template
+
+```text
+all P [] = True
+any P [] = False
+none P [] = True
+at least one, and every P: not (null xs) && all P xs
+```
+
+These base cases agree with and [] = True and or [] = False. Vacuous truth is a logical result, not evidence that an element exists.
+
+### Worked variation: empty universal and existential
+
+Start with the same predicate on no elements.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (> 0) ([] :: [Integer]), any (> 0) ([] :: [Integer]))
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+Every listed number is positive because none violates it. Some listed number is positive is False because no number is listed.
+
+### Worked variation: non-empty class required
+
+Now the policy additionally requires a class member.
+
+<HaskellTryIt>
+
+```haskell
+allPassed :: [Integer] -> Bool
+allPassed marks = not (null marks) && all (>= 50) marks
+main :: IO ()
+main = print (allPassed [], allPassed [50], allPassed [49])
+```
+
+```text
+(False,True,False)
+```
+
+</HaskellTryIt>
+
+The first conjunct rejects []. A singleton at the threshold passes; a singleton below it fails. This is a new policy, not a correction to all.
+
+### Worked variation: empty restricted domain
+
+Now the original domain exists but the selected subset is empty.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all even (filter (> 0) [-3,0 :: Integer]), any even (filter (> 0) [-3,0 :: Integer]))
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+Filtering positive members leaves []. Therefore every positive member is even is True, but there is a positive even member is False.
+
+### Worked variation: contradictory membership restriction
+
+Now a restriction can never select any integer.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all odd [n | n <- [-2..2 :: Integer], n > 0, n < 0], any odd [n | n <- [-2..2 :: Integer], n > 0, n < 0])
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+No integer is simultaneously positive and negative. The all result does not validate the contradictory requirements; it exposes a contract that admits no cases.
+
+### Exam question: empty successful class? (5 marks)
+
+A report prints 'all passed' when all (>=50) marks. Explain its answer on [] and revise the requirement to exclude no-data cases.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Explain requires the base-case reasoning; revise requires an extra condition.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate logical universal truth from the reporting policy.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+On [] it is True because no mark fails. Use `not (null marks) && all (>= 50) marks` if an 'all passed' report requires at least one mark.
+
+  </Step>
+
+  <Step title="4. Check">
+
+[] now fails; [50] passes; [50,49] fails. Every partition has a representative.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Treating all [] as False breaks universal dualities. GHC will not object to your own wrongly defined replacement. Keep the base case True; add an explicit existence requirement to the application. Also avoid inventing a numeric default for missing data without a policy.
+
+### Practice with answers
+
+Is 'every unicorn in this empty list is blue' evidence for a blue unicorn? **Answer:** no. The universal is True and the corresponding existential is False.
+
+## 15. Quantifier order and dependent domains
+
+Nested quantifiers have an order. Every student has some permitted slot allows each student a different witness. Some slot works for every student demands one shared witness. Reordering a comprehension changes enumeration; reordering all and any can change truth.
+
+### Template
+
+```text
+for every x in xs, some y in ys: all (\x -> any (R x) ys) xs
+some y in ys, for every x in xs: any (\y -> all (\x -> R x y) xs) ys
+for every x, some y in choices x: all (\x -> any (R x) (choices x)) xs
+```
+
+R x y is the relation being checked. The first existential witness can depend on x; in the second it is chosen before examining x. Dependent choices must be computed for the current x.
+
+### Worked variation: individual witnesses versus one shared witness
+
+Now different members need different matching values.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\x -> any (== x) [1,2 :: Integer]) [1,2], any (\y -> all (== y) [1,2 :: Integer]) [1,2])
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+For x=1 choose 1; for x=2 choose 2. No single y equals both 1 and 2. The witness dependency explains the changed answer.
+
+### Worked variation: a shared witness really exists
+
+Now one upper bound works for every member.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\x -> any (\y -> x <= y) [2,3 :: Integer]) [1,2], any (\y -> all (\x -> x <= y) [1,2 :: Integer]) [2,3])
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+The second predicate can choose y=2 for both x values. Agreement in this example does not make the forms generally equivalent.
+
+### Worked variation: empty outer versus empty witness domain
+
+Now emptiness interacts with order.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\x -> any (== x) ([] :: [Integer])) [], any (\y -> all (== y) ([] :: [Integer])) [])
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+The first all has no x to oblige, so True. The second any has no y to choose, so False, even though its inner all would be True.
+
+### Worked variation: dependent choices
+
+Now each input has its own candidate list.
+
+<HaskellTryIt>
+
+```haskell
+choices :: Integer -> [Integer]
+choices x = [x,x+1]
+main :: IO ()
+main = print (all (\x -> any (\y -> y > x) (choices x)) [-1,0,2])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Each input x chooses x+1, which is strictly larger. The candidate lists are [ -1,0 ], [0,1] and [2,3]. The witness is explicitly allowed to depend on x.
+
+### Exam question: one examiner or one per student? (6 marks)
+
+Translate 'every student has an available examiner' and 'there is an examiner available for every student', using available student examiner.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Both contain every and some, but the witness is chosen at a different level.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Put the first English quantifier on the outside.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`all (\s -> any (available s) examiners) students` and `any (\e -> all (\s -> available s e) students) examiners`. A shared examiner implies individual availability, but the converse need not hold.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Two students with disjoint singleton examiner choices satisfy the first and fail the second. Check empty lists separately before assuming the shared-to-individual implication; with an empty examiner domain the antecedent is False.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Swapping all and any can strengthen a requirement. GHC sees both as Bool and gives no error. Repair by naming when a witness is chosen and whether it may depend on the outer variable. Do not accidentally shadow the outer variable in a nested lambda.
+
+### Practice with answers
+
+Does every x having some larger y mean one y is larger than every x in an unbounded integer domain? **Answer:** no. Each x has x+1, but there is no greatest integer. Our runnable examples use finite lists, not an attempted enumeration of all integers.
+
+## 16. Composing contracts and strengthening a precondition
+
+For `f . g`, compatible types are necessary, but g must also return values admitted by f. Under the composite's precondition P, prove that g terminates and that every result permitted by g's postcondition satisfies f's precondition. If this fails, strengthen P, change g's guarantee, or use an explicit safe result.
+
+### Template
+
+```text
+g :: A -> B with Pg and Qg
+f :: B -> C with Pf and Qf
+For P x: establish Pg x
+For every b: P x and Qg x b imply Pf b
+Composite Q: there exists b with Qg x b and Qf b r
+Also establish termination of both calls on these domains
+```
+
+Quantifying over every intermediate result matters if a specification permits more than one. Checking one observed output is weaker than proving the postcondition implies the next precondition.
+
+### Worked variation: non-zero denominator produced by construction
+
+Now the earlier result guarantees a later numeric precondition.
+
+<HaskellTryIt>
+
+```haskell
+positiveDenominator :: Integer -> Integer
+positiveDenominator n = abs n + 1
+quotient :: Integer -> Integer
+quotient d = 12 `div` d
+main :: IO ()
+main = print (map (quotient . positiveDenominator) [-2,0,3])
+```
+
+```text
+[4,12,3]
+```
+
+</HaskellTryIt>
+
+abs n + 1 is at least 1, so it satisfies quotient's d /= 0 precondition. For the chosen inputs the denominators are 3,1,4. Integer avoids overflow of abs n + 1.
+
+### Worked variation: filtering does not preserve existence
+
+Now the earlier function can destroy a needed property.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (filter (> 0) [-2,0 :: Integer], not (null (filter (> 0) [-2,0 :: Integer])), not (null (filter (> 0) [-2,3 :: Integer])))
+```
+
+```text
+([],False,True)
+```
+
+</HaskellTryIt>
+
+A non-empty input is insufficient before taking the head of positive results. The correct strengthened precondition is any (>0) xs. The example tests the gate without calling head on [].
+
+### Worked variation: safe composition reports absence
+
+Now the combined contract covers missing intermediates explicitly.
+
+<HaskellTryIt>
+
+```haskell
+firstPositive :: [Integer] -> Maybe Integer
+firstPositive xs = case filter (> 0) xs of
+  [] -> Nothing
+  (x:_) -> Just x
+main :: IO ()
+main = print (firstPositive [-2,0], firstPositive [-2,3,4], firstPositive [])
+```
+
+```text
+(Nothing,Just 3,Nothing)
+```
+
+</HaskellTryIt>
+
+Every finite list is allowed. Q requires the earliest positive member wrapped in Just, or Nothing when none exists. This changes the result type instead of fabricating a first element.
+
+### Worked variation: a weak postcondition cannot establish a strong precondition
+
+Now observed outputs pass but the advertised guarantee is too weak.
+
+<HaskellTryIt>
+
+```haskell
+weakGuarantee :: Integer -> Bool
+weakGuarantee r = r >= 0
+nextPre :: Integer -> Bool
+nextPre r = r > 0
+main :: IO ()
+main = print [(r,weakGuarantee r,nextPre r) | r <- [0,1,2]]
+```
+
+```text
+[(0,True,False),(1,True,True),(2,True,True)]
+```
+
+</HaskellTryIt>
+
+A first contract promising merely r >= 0 permits 0, which violates r > 0. A stronger implementation might never produce 0, but the composition cannot be justified from that weak contract alone.
+
+### Exam question: derive a composite precondition (6 marks)
+
+Given g xs = filter even xs and f = head, derive the weakest precondition for f . g on finite defined integer lists.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+Derive means express exactly when the intermediate value exists.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+head requires a non-empty result; filter even retains exactly the even members.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The precondition is `any even xs`. It is sufficient because an even member survives filtering, and necessary because with no even member the result is []. The result is the first even element of xs.
+
+  </Step>
+
+  <Step title="4. Check">
+
+[] and [1,3] fail P; [1,2,4] satisfies P and produces 2. A safe alternative returns Maybe rather than inheriting head's restricted domain.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Type compatibility does not establish value compatibility. The composition can compile and fail later, so there is no compile-time message to quote for the contract error. Repair by proving the intermediate precondition, strengthening the input assumption, or reporting absence. See [Specification Exam Practice](/docs/sem3/csi243/10-reasoning-revision/notes/specification-exam-practice) for ambiguous requirements.
+
+### Practice with answers
+
+g promises its output is even; f requires positive. Is composition justified? **Answer:** no. Zero and negative even outputs satisfy g's promise but violate f's. Require a stronger guarantee or add an explicit validation step.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A contract relates an input to an allowed result. Types alone do not enforce numeric domains or intent. Total correctness needs both the right result and termination. Implication forbids only True-to-False; only if gives a necessary condition; iff adds both directions; XOR means exactly one of two. Every uses all, some uses any, and none negates any. Empty universals are True, empty existentials False. Witness order matters. Compose contracts by establishing the next precondition from the preceding guarantee.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Can a well-typed result still violate a postcondition?">
+
+Yes. A square implementation has the right Integer result type but violates a cube contract at 3.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is missing from a partial-correctness argument?">
+
+Termination on every valid input. Give a natural-number measure decreasing on every recursive call.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does p only if q forbid?">
+
+p True with q False. It does not force p whenever q is True.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does all p [] return True?">
+
+There is no counterexample. It does not assert that a witness exists.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can all x some y be replaced by some y all x?">
+
+No. Individual witnesses may differ; the second form needs one shared witness.
+
+</CheckQuestion>
+
+<CheckQuestion question="What must be checked beyond types in f . g?">
+
+Under the composite input precondition, every result permitted by g's guarantee must satisfy f's precondition; both calls must terminate for total correctness.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Specification Exam Practice](/docs/sem3/csi243/10-reasoning-revision/notes/specification-exam-practice).

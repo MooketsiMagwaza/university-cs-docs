@@ -1,0 +1,2007 @@
+---
+title: "Comprehension Templates"
+description: "Trace twelve comprehension shapes and translate them into map, filter and concatMap."
+---
+
+This extends [List Comprehensions](/docs/sem3/csi243/06-lists-tuples/notes/list-comprehensions) into tools for harder exam questions. Choose the shape before calculating. Each worked program prints the comprehension, then its higher-order equivalent: the two lines should agree. Tables track the candidates, tests and emitted values.
+
+<LearningObjectives items={[
+  'Select a template for twelve comprehension shapes',
+  'Trace output order, failed patterns and empty branches',
+  'Translate comprehensions into map, filter and concatMap',
+  'Build matrices, strings and aligned or independent tuples',
+  'Explain common errors and choose a suitable alternative',
+]} />
+
+## 1. General template and translation rules
+
+```text
+[ output | generator, generator, test, let binding ]
+[ result x y z | x <- xs, y <- source x, test x y, let z = value x y ]
+```
+
+`output` is one element. Each generator draws from a list; a test must be Boolean; a let names a value. Qualifiers run left to right. Names become available to later qualifiers and to the output, despite the output being written first. Pieces may repeat or be omitted: you do not need two generators or a let every time.
+
+Translate the qualifiers one at a time. `rest` below means the remaining qualifiers; these are schematic rules rather than runnable Haskell.
+
+```text
+No qualifiers:                   [output]
+[output | x <- xs, rest]       = concatMap (\x -> [output | rest]) xs
+[output | test, rest]          = if test then [output | rest] else []
+[output | let y = value, rest] = let y = value in [output | rest]
+```
+
+A refutable pattern needs a helper: matching candidates run the rest, nonmatching candidates return `[]`. Do not replace that with a partial lambda which crashes on a failed match. Simplify `concatMap (\x -> [f x]) xs` to `map f xs`; simplify identity output plus a test to `filter`. Use the functions needed by the shape rather than forcing all three into every answer.
+
+For `[x+y | x <- [1,2], y <- [0,3], y > x]`, x = 1 gives `[4]` and x = 2 gives `[5]`. Flattening gives `[4,5]`. The translation is `concatMap (\x -> map (\y -> x+y) (filter (\y -> y > x) [0,3])) [1,2]`. It preserves each branch's position.
+
+Tables sometimes group consecutive candidates with the same behaviour. No test means all candidates pass; none means no element is appended.
+
+## 2. One generator and an output expression
+
+A transformation produces one result per input. The output can have a different type from the source; duplicates survive.
+
+### Template
+
+```text
+[f x | x <- xs]
+map f xs
+```
+
+`xs` supplies inputs, x names one input and f builds one output. Every generated value passes.
+
+### Worked variation: numbers become strings
+
+Change the result type to String. Add one before showing the value; print includes quotation marks.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([show (x+1) | x <- [-2,0,2]])
+  print (map (\x -> show (x+1)) [-2,0,2])
+```
+
+```text
+["-1","1","3"]
+["-1","1","3"]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = -2` | pass | `"-1"` |
+| `x = 0` | pass | `"1"` |
+| `x = 2` | pass | `"3"` |
+
+Collect the contributions in the table from top to bottom to get `["-1","1","3"]`. The second print uses the equivalent implementation.
+
+### Worked variation: Booleans become pairs
+
+Change both source and result structure. Each pair is one element, so there are two outputs.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(b,not b) | b <- [True,False]])
+  print (map (\b -> (b,not b)) [True,False])
+```
+
+```text
+[(True,False),(False,True)]
+[(True,False),(False,True)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `b = True` | pass | `(True,False)` |
+| `b = False` | pass | `(False,True)` |
+
+Collect the contributions in the table from top to bottom to get `[(True,False),(False,True)]`. The second print uses the equivalent implementation.
+
+### Worked variation: Double results and repeated inputs
+
+Change to division with an explicit Double type. Equal input occurrences remain separate.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x/2 | x <- ([1,1,3] :: [Double])])
+  print (map (/2) ([1,1,3] :: [Double]))
+```
+
+```text
+[0.5,0.5,1.5]
+[0.5,0.5,1.5]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| first `x = 1.0` | pass | `0.5` |
+| second `x = 1.0` | pass | `0.5` |
+| `x = 3.0` | pass | `1.5` |
+
+Collect the contributions in the table from top to bottom to get `[0.5,0.5,1.5]`. The second print uses the equivalent implementation.
+
+### Exam question 1: labels (4 marks)
+
+Write `labels :: [Int] -> [String]` showing one less than each input.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is write: give a function definition. The input is Int values; the output elements are strings.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one generator, subtract one, then call show. No test is requested.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+labels :: [Int] -> [String]
+labels xs = [show (x-1) | x <- xs]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`labels [0,2]` is `["-1","1"]`. The small check `labels []` gives `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Predicting `[0.5,1.5]` removes a duplicate. GHC accepts the code; the prediction is wrong. Retain every occurrence. A comprehension produces an ordered list, not a set.
+
+### Practice with an answer
+
+What is `labels [1,1]`?
+
+<details>
+
+<summary>Answer</summary>
+
+`["0","0"]`: both occurrences are retained.
+
+</details>
+
+
+
+## 3. One test: select before transforming
+
+A Boolean qualifier filters the original candidate. Failed candidates emit nothing, not a placeholder.
+
+### Template
+
+```text
+[f x | x <- xs, p x]
+map f (filter p xs)
+```
+
+p must return Bool. Test the original x before evaluating the output.
+
+### Worked variation: magnitude test then negation
+
+Use a magnitude test, so a negative candidate can pass. Negation changes only the survivors.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([-x | x <- [-3,0,2], abs x > 1])
+  print (map negate (filter (\x -> abs x > 1) [-3,0,2]))
+```
+
+```text
+[3,-2]
+[3,-2]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = -3` | magnitude 3: True | `3` |
+| `x = 0` | False | none |
+| `x = 2` | True | `-2` |
+
+Collect the contributions in the table from top to bottom to get `[3,-2]`. The second print uses the equivalent implementation.
+
+### Worked variation: word length
+
+Change the source to words and output their lengths. Equality at the threshold passes.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([length w | w <- ["a","bee","to"], length w >= 2])
+  print (map length (filter (\w -> length w >= 2) ["a","bee","to"]))
+```
+
+```text
+[3,2]
+[3,2]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `w = "a"` | length 1: False | none |
+| `w = "bee"` | length 3: True | `3` |
+| `w = "to"` | length 2: True | `2` |
+
+Collect the contributions in the table from top to bottom to get `[3,2]`. The second print uses the equivalent implementation.
+
+### Worked variation: False inputs produce True
+
+Use the same function as predicate and output. Filtering False values with not retains them, then mapping not changes them.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([not b | b <- [False,True,False], not b])
+  print (map not (filter not [False,True,False]))
+```
+
+```text
+[True,True]
+[True,True]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| first `b = False` | True | `True` |
+| `b = True` | False | none |
+| last `b = False` | True | `True` |
+
+Collect the contributions in the table from top to bottom to get `[True,True]`. The second print uses the equivalent implementation.
+
+### Exam question 2: long words (4 marks)
+
+Write `longWords :: [String] -> [String]` keeping words longer than three characters.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a definition. Keep words themselves, not their lengths; longer than means strict inequality.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the guarded single-generator template. The test is length w > 3.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+longWords :: [String] -> [String]
+longWords ws = [w | w <- ws, length w > 3]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`longWords ["cat","lion"]` is `["lion"]`; length 3 fails, length 4 passes. Empty input gives `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+A numeric guard such as `x+1` for an Int input causes a type error mentioning expected `Bool` and actual `Int`. Repair it with a comparison, for example `x+1 > 0`.
+
+### Practice with an answer
+
+What is `longWords ["four",""]`?
+
+<details>
+
+<summary>Answer</summary>
+
+`["four"]`; the empty word fails.
+
+</details>
+
+
+
+## 4. Several tests: every requirement must pass
+
+Tests separated by commas mean all conditions must hold. Later tests are reached only after earlier ones pass; this can protect partial operations.
+
+### Template
+
+```text
+[f x | x <- xs, p x, q x]
+map f (filter (\x -> p x && q x) xs)
+```
+
+p and q are Boolean functions. Their conjunction is &&, not ||.
+
+### Worked variation: sign and parity
+
+Combine positivity and evenness. Only 2 passes both; test before adding ten.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x+10 | x <- [-2,0,2,3], x > 0, even x])
+  print (map (+10) (filter (\x -> x > 0 && even x) [-2,0,2,3]))
+```
+
+```text
+[12]
+[12]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = -2` | first False; stop | none |
+| `x = 0` | first False; stop | none |
+| `x = 2` | True, True | `12` |
+| `x = 3` | True, False | none |
+
+Collect the contributions in the table from top to bottom to get `[12]`. The second print uses the equivalent implementation.
+
+### Worked variation: membership and exclusion
+
+Change to characters. A String result prints with double quotes.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([c | c <- "abca", c `elem` "ab", c /= 'a'])
+  print (filter (\c -> c `elem` "ab" && c /= 'a') "abca")
+```
+
+```text
+"b"
+"b"
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| first `c = a` | True, False | none |
+| `c = b` | True, True | `b` |
+| `c = c` | first False; stop | none |
+| last `c = a` | True, False | none |
+
+Collect the contributions in the table from top to bottom to get `"b"`. The second print uses the equivalent implementation.
+
+### Worked variation: guard against zero before mod
+
+Add a safety requirement. Zero never reaches mod; successful exact divisors produce quotients.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([12 `div` d | d <- [0,2,5,6], d /= 0, 12 `mod` d == 0])
+  print (map (\d -> 12 `div` d) (filter (\d -> d /= 0 && 12 `mod` d == 0) [0,2,5,6]))
+```
+
+```text
+[6,2]
+[6,2]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `d = 0` | nonzero False; stop | none |
+| `d = 2` | True, True | `6` |
+| `d = 5` | True, False | none |
+| `d = 6` | True, True | `2` |
+
+Collect the contributions in the table from top to bottom to get `[6,2]`. The second print uses the equivalent implementation.
+
+### Exam question 3: safe division (4 marks)
+
+Write `quotients :: [Int] -> [Int]` returning 20 divided by each nonzero exact divisor from the input.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write requires a function. Exact divisor means zero remainder. A zero candidate must be rejected safely.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use two ordered tests: nonzero first, exact division second; emit the quotient.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+quotients :: [Int] -> [Int]
+quotients ds = [20 `div` d | d <- ds, d /= 0, 20 `mod` d == 0]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+For `[0,4,3,-5]`, 0 stops before mod, 4 emits 5, 3 fails and -5 emits -4: `[5,-4]`. Empty input is safe.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Putting `12 mod d == 0` before the nonzero test can cause the runtime diagnostic `divide by zero`. Keep the safety test first. Using || would admit candidates that fail one requirement.
+
+### Practice with an answer
+
+What does `quotients [1,20]` give?
+
+<details>
+
+<summary>Answer</summary>
+
+`[20,1]`, in source order.
+
+</details>
+
+
+
+## 5. Two independent generators: order matters
+
+Two sources produce every combination, a Cartesian product. Finish the inner run for one outer value before advancing the outer generator.
+
+### Template
+
+```text
+[f x y | x <- xs, y <- ys, p x y]
+concatMap (\x -> map (f x) (filter (p x) ys)) xs
+```
+
+x is fixed while y runs through its source. The last generator varies fastest.
+
+### Worked variation: subtraction shows order
+
+Use subtraction so both order and negative results are visible. Equal results at different positions are kept.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x-y | x <- [0,2], y <- [1,3]])
+  print (concatMap (\x -> map (\y -> x-y) [1,3]) [0,2])
+```
+
+```text
+[-1,-3,1,-1]
+[-1,-3,1,-1]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `(x,y) = (0,1)` | pass | `-1` |
+| `(0,3)` | pass | `-3` |
+| `(2,1)` | pass | `1` |
+| `(2,3)` | pass | `-1` |
+
+Collect the contributions in the table from top to bottom to get `[-1,-3,1,-1]`. The second print uses the equivalent implementation.
+
+### Worked variation: swap the generators
+
+Keep the output expression but swap which variable is outermost. Now x changes fastest.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x-y | y <- [1,3], x <- [0,2]])
+  print (concatMap (\y -> map (\x -> x-y) [0,2]) [1,3])
+```
+
+```text
+[-1,1,-3,-1]
+[-1,1,-3,-1]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `(y,x) = (1,0)` | pass | `-1` |
+| `(1,2)` | pass | `1` |
+| `(3,0)` | pass | `-3` |
+| `(3,2)` | pass | `-1` |
+
+Collect the contributions in the table from top to bottom to get `[-1,1,-3,-1]`. The second print uses the equivalent implementation.
+
+### Worked variation: compare both fields
+
+Add a test involving both generators. Four candidates become three outputs without sorting.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(x,y) | x <- [1,3], y <- [2,4], x < y])
+  print (concatMap (\x -> map (\y -> (x,y)) (filter (\y -> x < y) [2,4])) [1,3])
+```
+
+```text
+[(1,2),(1,4),(3,4)]
+[(1,2),(1,4),(3,4)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `(1,2)` | True | `(1,2)` |
+| `(1,4)` | True | `(1,4)` |
+| `(3,2)` | False | none |
+| `(3,4)` | True | `(3,4)` |
+
+Collect the contributions in the table from top to bottom to get `[(1,2),(1,4),(3,4)]`. The second print uses the equivalent implementation.
+
+### Exam question 4: product order (4 marks)
+
+Evaluate `[x*y | x <- [2,4], y <- [1,3]]` and state its length.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Evaluate asks for the resulting list. State its length asks for a second, scalar answer.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use two independent generators. Finish both y values for x = 2, then repeat for x = 4.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = print [x*y | x <- [2,4], y <- [1,3]]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The rows are `[2,6]` and `[4,12]`. The result is `[2,6,4,12]`; two times two gives length 4. One value in each source would give one result.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Predicting zipped pairs instead of every combination is a reasoning error; GHC accepts the code. Repair the trace by writing one complete inner run per outer value.
+
+### Practice with an answer
+
+What changes if the y source is empty?
+
+<details>
+
+<summary>Answer</summary>
+
+There are no pairs, so the result is `[]` and its length is 0.
+
+</details>
+
+
+
+## 6. Dependent generators: a source for each outer value
+
+A later source can depend on an earlier variable. Each outer value may therefore own a different number of inner candidates.
+
+### Template
+
+```text
+[f x y | x <- xs, y <- source x, p x y]
+concatMap (\x -> map (f x) (filter (p x) (source x))) xs
+```
+
+source x builds the inner list for this x. Its names must already be in scope.
+
+### Worked variation: inclusive bounds
+
+Use a shrinking source. Inclusive ranges give row lengths 3, 2 and 1, including equality.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(x,y) | x <- [3..5], y <- [x..5]])
+  print (concatMap (\x -> map (\y -> (x,y)) [x..5]) [3..5])
+```
+
+```text
+[(3,3),(3,4),(3,5),(4,4),(4,5),(5,5)]
+[(3,3),(3,4),(3,5),(4,4),(4,5),(5,5)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = 3; y = 3,4,5` | all pass | `(3,3),(3,4),(3,5)` |
+| `x = 4; y = 4,5` | all pass | `(4,4),(4,5)` |
+| `x = 5; y = 5` | pass | `(5,5)` |
+
+Collect the contributions in table order to get `[(3,3),(3,4),(3,5),(4,4),(4,5),(5,5)]`. The second print checks the equivalent implementation.
+
+### Worked variation: one empty branch
+
+Allow the first inner range to be empty. Later branches still run and duplicate sums remain.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x+y | x <- [0,2,3], y <- [1..x]])
+  print (concatMap (\x -> map (\y -> x+y) [1..x]) [0,2,3])
+```
+
+```text
+[3,4,4,5,6]
+[3,4,4,5,6]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = 0; y` absent | no candidates | none |
+| `x = 2; y = 1,2` | pass | `3,4` |
+| `x = 3; y = 1,2,3` | pass | `4,5,6` |
+
+Collect the contributions in table order to get `[3,4,4,5,6]`. The second print checks the equivalent implementation.
+
+### Worked variation: the source is a word
+
+Change the dependent source from a numeric range to the characters of the current word. Filter before flattening.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([c | word <- ["12","3",""], c <- word, c `elem` "13579"])
+  print (concatMap (filter (\c -> c `elem` "13579")) ["12","3",""])
+```
+
+```text
+"13"
+"13"
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `word = "12"; c = 1,2` | True, False | `1` |
+| `word = "3"; c = 3` | True | `3` |
+| `word = ""` | no candidates | none |
+
+Collect the contributions in table order to get `"13"`. The second print checks the equivalent implementation.
+
+### Exam question 5: count dependent rows (4 marks)
+
+Count `[(x,y) | x <- [1..4], y <- [1..x]]` without listing its tuples.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Count asks for an Int count, not the tuples. The inner length depends on x.
+
+</Step>
+
+<Step title="2. Plan">
+
+Row lengths are 1, 2, 3 and 4. Add rather than multiplying a fixed inner length.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = print (sum [1..4])
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The total is 10. With only x = 1 there is one pair; with an empty outer range the count is zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Using x inside a source before introducing it gives the diagnostic fragment `Variable not in scope: x`. Move the x generator before the dependent source. Reordering dependent generators is not generally valid.
+
+### Practice with an answer
+
+What is the count with x from 1 to 5?
+
+<details>
+
+<summary>Answer</summary>
+
+15: add the fifth row of length 5 to 10.
+
+</details>
+
+
+
+## 7. Patterns in generators: unpack or skip
+
+A tuple pattern binds fields. A refutable pattern is one that can fail to match a candidate. In a list comprehension, failure skips that candidate; it does not crash the whole comprehension.
+
+### Template
+
+```text
+[f a b | (a,b) <- pairs, p a b]
+[f x | Just x <- values]
+-- translation: concatMap helper values
+-- helper (Just x) = [f x]; helper Nothing = []
+```
+
+Pairs match every member of a well-typed pair source. Just does not match Nothing. A nonempty-list pattern does not match an empty list.
+
+### Worked variation: tuple fields with a guard
+
+Unpack every pair, then select by its numeric field. No pair fails the pattern itself.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([name | (name,n) <- [("Ada",2),("Bo",0),("Cy",3)], n > 1])
+  print (map fst (filter (\pair -> snd pair > 1) [("Ada",2),("Bo",0),("Cy",3)]))
+```
+
+```text
+["Ada","Cy"]
+["Ada","Cy"]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `("Ada",2)` | pattern matches; True | `"Ada"` |
+| `("Bo",0)` | pattern matches; False | none |
+| `("Cy",3)` | pattern matches; True | `"Cy"` |
+
+Collect the contributions in table order to get `["Ada","Cy"]`. The second print checks the equivalent implementation.
+
+### Worked variation: constructor failure
+
+Change to a pattern that can fail. Nothing contributes an empty list in the translation.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x*2 | Just x <- [Just 2,Nothing,Just (-1)]])
+  print (concatMap (\v -> case v of { Just x -> [x*2]; Nothing -> [] }) [Just 2,Nothing,Just (-1)])
+```
+
+```text
+[4,-2]
+[4,-2]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `Just 2` | matches: x = 2 | `4` |
+| `Nothing` | pattern fails | none |
+| `Just (-1)` | matches: x = -1 | `-2` |
+
+Collect the contributions in table order to get `[4,-2]`. The second print checks the equivalent implementation.
+
+### Worked variation: skip empty rows
+
+Change the pattern to a nonempty list. The wildcard ignores the tail; each matched row contributes only its head.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x | (x:_) <- [[],[4,5],[6]]])
+  print (concatMap (\xs -> case xs of { [] -> []; (x:_) -> [x] }) [[],[4,5],[6]])
+```
+
+```text
+[4,6]
+[4,6]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `[]` | pattern fails | none |
+| `[4,5]` | matches: x = 4 | `4` |
+| `[6]` | matches: x = 6 | `6` |
+
+Collect the contributions in table order to get `[4,6]`. The second print checks the equivalent implementation.
+
+### Exam question 6: present positive values (4 marks)
+
+Write `present :: [Maybe Int] -> [Int]` extracting positive numbers from Just values only.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a definition. Nothing supplies no number; nonpositive Just numbers must also disappear.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a Just generator pattern followed by a positive test. Pattern failure and test failure both skip.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+present :: [Maybe Int] -> [Int]
+present vs = [x | Just x <- vs, x > 0]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`present [Nothing,Just (-2),Just 3]` is `[3]`: skip, reject, emit. On `[Nothing]` the result is `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Replacing the last example by `map head [[],[4,5],[6]]` can fail with `Prelude.head: empty list`. Retain the skip, or filter empty rows before mapping head. A generator pattern is not an assertion that every element matches.
+
+### Practice with an answer
+
+What does `present [Just 0,Just 1]` return?
+
+<details>
+
+<summary>Answer</summary>
+
+`[1]`; positive excludes zero.
+
+</details>
+
+
+
+## 8. Let inside a comprehension
+
+A local let names an intermediate result without adding candidates or filtering. The binding is available to later qualifiers and the output. Unlike a let expression, this qualifier has no in.
+
+### Template
+
+```text
+[f x y | x <- xs, let y = g x, p y]
+map (\x -> let y = g x in f x y) (filter (\x -> p (g x)) xs)
+```
+
+x comes from the source; y names g x for that candidate. A let pattern is a binding, not the failed-pattern skipping rule of a generator.
+
+### Worked variation: name a square
+
+Bind a number and use it in both the output and test. Three candidates do not become nine combinations.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(x,s) | x <- [-2,0,3], let s = x*x, s > 1])
+  print (map (\x -> (x,x*x)) (filter (\x -> x*x > 1) [-2,0,3]))
+```
+
+```text
+[(-2,4),(3,9)]
+[(-2,4),(3,9)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = -2; s = 4` | True | `(-2,4)` |
+| `x = 0; s = 0` | False | none |
+| `x = 3; s = 9` | True | `(3,9)` |
+
+Collect the contributions in table order to get `[(-2,4),(3,9)]`. The second print checks the equivalent implementation.
+
+### Worked variation: bind two fields at once
+
+Use a tuple binding for tens and units. Only 23 has a nonzero units digit.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(q,r) | n <- [10,23,40], let (q,r) = n `divMod` 10, r /= 0])
+  print (map (\n -> n `divMod` 10) (filter (\n -> n `mod` 10 /= 0) [10,23,40]))
+```
+
+```text
+[(2,3)]
+[(2,3)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `n = 10; (q,r) = (1,0)` | False | none |
+| `n = 23; (q,r) = (2,3)` | True | `(2,3)` |
+| `n = 40; (q,r) = (4,0)` | False | none |
+
+Collect the contributions in table order to get `[(2,3)]`. The second print checks the equivalent implementation.
+
+### Worked variation: no test after the binding
+
+Change to a length binding and retain every candidate. The empty word is still one input element.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(n,n+1) | w <- ["","hi","sun"], let n = length w])
+  print (map (\w -> let n = length w in (n,n+1)) ["","hi","sun"])
+```
+
+```text
+[(0,1),(2,3),(3,4)]
+[(0,1),(2,3),(3,4)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `w = ""; n = 0` | pass | `(0,1)` |
+| `w = "hi"; n = 2` | pass | `(2,3)` |
+| `w = "sun"; n = 3` | pass | `(3,4)` |
+
+Collect the contributions in table order to get `[(0,1),(2,3),(3,4)]`. The second print checks the equivalent implementation.
+
+### Exam question 7: local offsets (4 marks)
+
+Write `offsets :: [Int] -> [(Int,Int)]` pairing x with `abs x + 1`, using a local let.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a definition and fixes the method for naming the second field. Every input must contribute.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one generator, let d name abs x + 1, and return (x,d). No filtering is requested.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+offsets :: [Int] -> [(Int,Int)]
+offsets xs = [(x,d) | x <- xs, let d = abs x+1]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`offsets [-2,0]` is `[(-2,3),(0,1)]`. There are two inputs and two outputs; no extra combinations arise.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+A qualifier `let s = x*x in` gives a parse error. Remove in in the qualifier list. Keep in in the map lambda, because that let is an expression. Using a partial let pattern on an empty list can fail when its bound value is demanded; it does not silently skip.
+
+### Practice with an answer
+
+What is `offsets [1]`?
+
+<details>
+
+<summary>Answer</summary>
+
+`[(1,2)]`; the local d is 2.
+
+</details>
+
+
+
+## 9. Nested comprehensions: rows, matrices and transpose
+
+Putting a comprehension in the output builds a list of lists. The outer generator selects a row; the inner one builds its contents. A transpose builds one new row per original column.
+
+### Template
+
+```text
+[[f x y | y <- ys, p x y] | x <- xs]
+map (\x -> map (f x) (filter (p x) ys)) xs
+[[row !! j | row <- rows] | j <- [0..width-1]]
+```
+
+The outer map preserves row boundaries. The indexed transpose requires rectangular rows and valid zero-based indices.
+
+### Worked variation: rectangular matrix
+
+Build two rows of three products. Six scalar entries are grouped into two outer elements.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([[r*c | c <- [1..3]] | r <- [2,4]])
+  print (map (\r -> map (\c -> r*c) [1..3]) [2,4])
+```
+
+```text
+[[2,4,6],[4,8,12]]
+[[2,4,6],[4,8,12]]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `r = 2; c = 1,2,3` | all pass | row `[2,4,6]` |
+| `r = 4; c = 1,2,3` | all pass | row `[4,8,12]` |
+
+Collect the contributions in table order to get `[[2,4,6],[4,8,12]]`. The second print checks the equivalent implementation.
+
+### Worked variation: retain empty rows
+
+Filter inside each row. A row with no survivors still contributes one empty list to the outer answer.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([[x | x <- row, x > 0] | row <- [[-1,2],[],[-3]]])
+  print (map (filter (>0)) [[-1,2],[],[-3]])
+```
+
+```text
+[[2],[],[]]
+[[2],[],[]]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `row = [-1,2]; x = -1,2` | False, True | row `[2]` |
+| `row = []` | no inner candidates | row `[]` |
+| `row = [-3]; x = -3` | False | row `[]` |
+
+Collect the contributions in table order to get `[[2],[],[]]`. The second print checks the equivalent implementation.
+
+### Worked variation: transpose two columns
+
+Use a known width of two. Finish column zero before column one. All three rows are long enough for both indices.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([[row !! j | row <- [[1,2],[3,4],[5,6]]] | j <- [0,1]])
+  print (map (\j -> map (\row -> row !! j) [[1,2],[3,4],[5,6]]) [0,1])
+```
+
+```text
+[[1,3,5],[2,4,6]]
+[[1,3,5],[2,4,6]]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `j = 0; rows = [1,2],[3,4],[5,6]` | all indices valid | `[1,3,5]` |
+| `j = 1; same rows` | all indices valid | `[2,4,6]` |
+
+Collect the contributions in table order to get `[[1,3,5],[2,4,6]]`. The second print checks the equivalent implementation.
+
+### Exam question 8: keep row boundaries (4 marks)
+
+Write `rows :: [Int] -> [[Int]]` giving the numbers from 1 to n for each input n.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a nested list definition. Each input needs one row, even if that row is empty.
+
+</Step>
+
+<Step title="2. Plan">
+
+Place an inner comprehension in the outer output. Do not flatten its result.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+rows :: [Int] -> [[Int]]
+rows ns = [[k | k <- [1..n]] | n <- ns]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`rows [0,2]` is `[[],[1,2]]`. `rows []` is `[]`, different from a single empty row.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Using concatMap for the outer construction flattens the matrix. GHC may accept it, but its result type is a flat list. Invalid indexing instead causes a runtime failure; do not use this transpose template on ragged rows without changing the specification.
+
+### Practice with an answer
+
+What is `rows [1,1]`?
+
+<details>
+
+<summary>Answer</summary>
+
+`[[1],[1]]`; repeated rows are retained.
+
+</details>
+
+
+
+## 10. Comprehensions over strings
+
+A String is a list of Char. You can filter its characters, produce a word per character, or repeat characters with another generator. Those output shapes have different types.
+
+### Template
+
+```text
+[f c | c <- text, p c]
+map f (filter p text)
+[c | word <- words, c <- word]
+concatMap id words
+```
+
+c is one character; word is a whole String. String prints with double quotes, while a list of strings prints brackets containing quoted words.
+
+### Worked variation: remove spaces
+
+Keep punctuation but remove spaces. This is a character selection, not a word split.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([c | c <- "a b!", c /= ' '])
+  print (filter (/= ' ') "a b!")
+```
+
+```text
+"ab!"
+"ab!"
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `c = a` | True | `a` |
+| `c = space` | False | none |
+| `c = b` | True | `b` |
+| `c = !` | True | `!` |
+
+Collect the table contributions in order to obtain `"ab!"`. The second print checks the translation.
+
+### Worked variation: produce words
+
+Change the output to a list of two characters per input. Each such list is a String; the whole answer is `[String]`.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([[c,c] | c <- "ab"])
+  print (map (\c -> [c,c]) "ab")
+```
+
+```text
+["aa","bb"]
+["aa","bb"]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `c = a` | pass | `"aa"` |
+| `c = b` | pass | `"bb"` |
+
+Collect the table contributions in order to obtain `["aa","bb"]`. The second print checks the translation.
+
+### Worked variation: repeat with a generator
+
+Change the output back to a Char. The ignored n still doubles the number of generated combinations, so this is aabb rather than abab.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([c | c <- "ab", n <- [1..2]])
+  print (concatMap (\c -> map (\n -> c) [1..2]) "ab")
+```
+
+```text
+"aabb"
+"aabb"
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `c = a; n = 1,2` | both pass | `aa` |
+| `c = b; n = 1,2` | both pass | `bb` |
+
+Collect the table contributions in order to obtain `"aabb"`. The second print checks the translation.
+
+### Exam question 9: mask digits (4 marks)
+
+Write `mask :: String -> String` replacing decimal digits with `*` and preserving all other characters.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a character transformation. Replacing means preserve length, rather than delete matching characters.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use if in the output. Membership in the digit string chooses the star branch.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+mask :: String -> String
+mask s = [if c `elem` "0123456789" then '*' else c | c <- s]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`mask "A2!"` is `"A*!"`. Three input characters give three outputs; `mask ""` is `""`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Mixing a Char and a String, for example conditional branches `'x'` and `"y"`, causes a type mismatch. Use characters in both branches for a String output; use strings in both for a list of strings.
+
+### Practice with an answer
+
+What is `mask "12a"`?
+
+<details>
+
+<summary>Answer</summary>
+
+`"**a"`; both digits are replaced separately.
+
+</details>
+
+
+
+## 11. Empty results and why they occur
+
+An empty source, an impossible test and an empty later source can all give an empty list. None is an exception. Count candidates before counting survivors.
+
+### Template
+
+```text
+[f x | x <- ([] :: [Int])]
+[x | x <- xs, False]
+[(x,y) | x <- xs, y <- []]
+```
+
+An absent candidate never reaches the output. An empty inner source ends only that branch, not the whole traversal.
+
+### Worked variation: empty first source
+
+Use an explicitly typed empty numeric source. No value of x exists, so addition never runs.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x+1 | x <- ([] :: [Int])])
+  print (map (+1) ([] :: [Int]))
+```
+
+```text
+[]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| x absent | test not reached | none |
+
+Collect the table contributions in order to obtain `[]`. The second print checks the translation.
+
+### Worked variation: all tests fail
+
+Keep the source nonempty, but require a threshold none meets. Three candidates still yield zero outputs.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([x | x <- [1,2,3], x > 5])
+  print (filter (>5) [1,2,3])
+```
+
+```text
+[]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = 1` | False | none |
+| `x = 2` | False | none |
+| `x = 3` | False | none |
+
+Collect the table contributions in order to obtain `[]`. The second print checks the translation.
+
+### Worked variation: empty second source
+
+Change to two outer candidates, each with no inner candidates. Their empty contributions flatten to [], not a list of empty rows.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(x,y) | x <- [1,2], y <- ([] :: [Int])])
+  print (concatMap (\x -> map (\y -> (x,y)) ([] :: [Int])) [1,2])
+```
+
+```text
+[]
+[]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = 1; y` absent | no pair to test | none |
+| `x = 2; y` absent | no pair to test | none |
+
+Collect the table contributions in order to obtain `[]`. The second print checks the translation.
+
+### Exam question 10: contradictory tests (4 marks)
+
+Explain why `[x | x <- [1..3], x > 2, x < 2]` is empty.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain asks for a reason, not just the list. Both tests refer to the same generated x.
+
+</Step>
+
+<Step title="2. Plan">
+
+Trace failures: x = 1 and 2 fail the first; x = 3 fails the second. No candidate passes both.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = print [x | x <- [1..3], x > 2, x < 2]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The result is `[]`. Checking x = 2 confirms that neither strict inequality admits the boundary.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+An empty result is valid and produces no GHC error. A bare `print []` can leave the element type ambiguous; use `print ([] :: [Int])` when a concrete example needs a type. Do not invent an element just to avoid emptiness.
+
+### Practice with an answer
+
+Would changing the source to `[1..100]` help?
+
+<details>
+
+<summary>Answer</summary>
+
+No. No number can be both greater than and less than 2.
+
+</details>
+
+
+
+## 12. Tuple builders: pairs, triples, triangles and aligned positions
+
+Each output tuple is one list element. Independent generators build combinations. For matching positions, use zip or a shared valid index. Ordered side-length ranges avoid permutations of a triangle.
+
+### Template
+
+```text
+[(x,y) | x <- xs, y <- ys]
+[(x,y,z) | x <- xs, y <- ys, z <- zs]
+[(a,b,c) | c <- [1..n], b <- [1..c], a <- [1..b], a*a+b*b == c*c]
+[(x,y) | (x,y) <- zip xs ys]
+```
+
+In the triangle search a is at most b and b is at most c. Positive bounds exclude zero-length sides. In a triple product the third generator varies fastest.
+
+### Worked variation: mixed-type pairs
+
+Use two fields with different types. Char fields retain single quotes when a tuple is printed.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(n,c) | n <- [0,1], c <- "xy"])
+  print (concatMap (\n -> map (\c -> (n,c)) "xy") [0,1])
+```
+
+```text
+[(0,'x'),(0,'y'),(1,'x'),(1,'y')]
+[(0,'x'),(0,'y'),(1,'x'),(1,'y')]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `n = 0; c = x,y` | pass | `(0,'x'),(0,'y')` |
+| `n = 1; c = x,y` | pass | `(1,'x'),(1,'y')` |
+
+Collect the table contributions in order to obtain `[(0,'x'),(0,'y'),(1,'x'),(1,'y')]`. The second print checks the translation.
+
+### Worked variation: three fields
+
+Add a Boolean field. It changes fastest; there are one times two times two outputs.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(n,c,b) | n <- [1], c <- "ab", b <- [False,True]])
+  print (concatMap (\n -> concatMap (\c -> map (\b -> (n,c,b)) [False,True]) "ab") [1])
+```
+
+```text
+[(1,'a',False),(1,'a',True),(1,'b',False),(1,'b',True)]
+[(1,'a',False),(1,'a',True),(1,'b',False),(1,'b',True)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `n = 1; c = a; b = False,True` | pass | `(1,'a',False),(1,'a',True)` |
+| `n = 1; c = b; b = False,True` | pass | `(1,'b',False),(1,'b',True)` |
+
+Collect the table contributions in order to obtain `[(1,'a',False),(1,'a',True),(1,'b',False),(1,'b',True)]`. The second print checks the translation.
+
+### Worked variation: Pythagorean search
+
+Change from arbitrary triples to integer right triangles. The one successful test is 9 + 16 = 25. The table groups failed candidates by range; it includes every candidate.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(a,b,c) | c <- [1..5], b <- [1..c], a <- [1..b], a*a+b*b == c*c])
+  print (concatMap (\c -> concatMap (\b -> map (\a -> (a,b,c)) (filter (\a -> a*a+b*b == c*c) [1..b])) [1..c]) [1..5])
+```
+
+```text
+[(3,4,5)]
+[(3,4,5)]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `c = 1..4; b = 1..c; a = 1..b` | all 20 candidates fail | none |
+| `c = 5; b = 1..3; a = 1..b` | all 6 fail | none |
+| `c = 5; b = 4; a = 1,2,3,4` | False, False, True, False | `(3,4,5)` |
+| `c = 5; b = 5; a = 1..5` | all fail | none |
+
+Collect the table contributions in order to obtain `[(3,4,5)]`. The second print checks the translation.
+
+### Worked variation: aligned positions
+
+Change the source to zipped pairs. There are two candidates because zip stops with the shorter input.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([(n,c) | (n,c) <- zip [10,20,30] "ab"])
+  print (map (\pair -> (fst pair,snd pair)) (zip [10,20,30] "ab"))
+```
+
+```text
+[(10,'a'),(20,'b')]
+[(10,'a'),(20,'b')]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `(10,'a')` | matches; pass | `(10,'a')` |
+| `(20,'b')` | matches; pass | `(20,'b')` |
+| 30 unpaired | zip stops; no candidate | none |
+
+Collect the table contributions in order to obtain `[(10,'a'),(20,'b')]`. The second print checks the translation.
+
+### Exam question 11: aligned pairs (4 marks)
+
+Write `aligned :: [a] -> [b] -> [(a,b)]` pairing matching positions and stopping at the shorter input, using a comprehension.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a polymorphic function. Matching positions rules out a Cartesian product.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use zip as the source, unpack its pairs, and emit the same two fields.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+aligned :: [a] -> [b] -> [(a,b)]
+aligned xs ys = [(x,y) | (x,y) <- zip xs ys]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`aligned [1,2] "a"` is `[(1,'a')]`. zip ends before the unpaired 2; either empty input gives `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+Two generators do not mean matching positions. GHC accepts the Cartesian product but its result is wrong for an alignment specification. Generate from zip instead. Mixing pairs and triples in one list gives incompatible tuple types.
+
+### Practice with an answer
+
+What is the output length for source lengths 3 and 5?
+
+<details>
+
+<summary>Answer</summary>
+
+3, the smaller length.
+
+</details>
+
+
+
+## 13. Function calls and if in the output
+
+An output expression can call functions or choose between two values. An if does not remove candidates; it selects which value to emit. Both branches need the same type.
+
+### Template
+
+```text
+[h x | x <- xs, p x]
+map h (filter p xs)
+[if p x then f x else g x | x <- xs]
+map (\x -> if p x then f x else g x) xs
+```
+
+A Boolean qualifier filters. A Boolean in an output if chooses a branch. The distinction changes the number of outputs.
+
+### Worked variation: call after selection
+
+Call abs only in the output for nonzero survivors. Negative input can give positive output.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([abs x | x <- [-4,0,3], x /= 0])
+  print (map abs (filter (/=0) [-4,0,3]))
+```
+
+```text
+[4,3]
+[4,3]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = -4` | True | `abs (-4) = 4` |
+| `x = 0` | False | none |
+| `x = 3` | True | `abs 3 = 3` |
+
+Collect the table contributions in order to obtain `[4,3]`. The second print checks the translation.
+
+### Worked variation: if selects labels
+
+Use if rather than a guard. The odd candidate remains and receives an odd label.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([if even n then "even" else "odd" | n <- [0,1,2]])
+  print (map (\n -> if even n then "even" else "odd") [0,1,2])
+```
+
+```text
+["even","odd","even"]
+["even","odd","even"]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `n = 0` | no guard; condition True | `"even"` |
+| `n = 1` | no guard; condition False | `"odd"` |
+| `n = 2` | no guard; condition True | `"even"` |
+
+Collect the table contributions in order to obtain `["even","odd","even"]`. The second print checks the translation.
+
+### Worked variation: combine a call with a conditional
+
+Change the branches to arithmetic and a nested function call. Exactly one branch supplies each output.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print ([if x < 0 then negate (abs x) else x+1 | x <- [-2,0,3]])
+  print (map (\x -> if x < 0 then negate (abs x) else x+1) [-2,0,3])
+```
+
+```text
+[-2,1,4]
+[-2,1,4]
+```
+
+</HaskellTryIt>
+
+| Generator values in order | Test or pattern | Contribution |
+|---|---|---|
+| `x = -2` | no guard; condition True | `negate 2 = -2` |
+| `x = 0` | no guard; condition False | `1` |
+| `x = 3` | no guard; condition False | `4` |
+
+Collect the table contributions in order to obtain `[-2,1,4]`. The second print checks the translation.
+
+### Exam question 12: conditional labels (4 marks)
+
+Write `signLabels :: [Int] -> [String]` returning "negative" for negative values and "other" for all remaining values.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write requires a definition with one label per input. Zero belongs to the remaining values.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use an output if; a guard would remove values instead of labelling all of them.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+signLabels :: [Int] -> [String]
+signLabels xs = [if x < 0 then "negative" else "other" | x <- xs]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`signLabels [-1,0,2]` is `["negative","other","other"]`. All three inputs contribute; on `[0]` the label is `"other"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common error and repair
+
+An if without else causes a parse error. Branches such as `then 0 else "odd"` cannot have the required common type. Supply both branches and decide whether the output should be numbers or text.
+
+
+
+### Practice with an answer
+
+What is `signLabels []`?
+
+<details>
+
+<summary>Answer</summary>
+
+`[]`; there are no inputs to label.
+
+</details>
+
+## 14. Comparing methods and knowing when to stop
+
+| Requirement | Comprehension | Higher-order functions | Recursion |
+|---|---|---|---|
+| Transform every element | one generator | `map f` | cons transformed head, recurse on tail |
+| Select elements | Boolean qualifier | `filter p` | guard chooses cons or skip |
+| Transform survivors | output plus test | `map f (filter p xs)` | test head, transform if kept |
+| Flatten branches | extra generator | `concatMap` | append each inner result |
+| Preserve rows | inner comprehension as output | outer map, inner map/filter | cons completed row |
+| Align positions | source is zip or valid indices | zip or zipWith | consume both lists together |
+| Return one total | wrap in sum or length | sum, length or a fold | combine head with recursive total |
+
+Use a comprehension when each output comes from generated candidates. Prefer direct recursion when a process carries changing state, stops according to earlier results, or consumes two lists in a special way. Prefer `zipWith (+)` for pointwise sums and `map abs` for a bare transformation. An outer function can sum a comprehension, but the comprehension itself always returns a list. Avoid indexed transpose on ragged rows: indexing is partial, meaning some inputs make it fail. With infinite sources, an infinite inner run may prevent later outer branches being reached; finite examples do not justify reordering an infinite search.
+
+### GHC diagnostic fragments
+
+GHC includes locations, inferred types and suggestions. These are recognisable fragments, not complete transcripts; invalid attempts stay inline, outside runnable blocks.
+
+| Wrong attempt | Diagnostic or reasoning failure | Repair |
+|---|---|---|
+| `[x \| x <- [1..3]; even x]` | parse error on input `;` | Use commas between qualifiers |
+| `[x \| x <- [1..3], y > 0]` with no y binding | `Variable not in scope: y` | Bind y before testing it |
+| guard `x+1` with an Int x | expected Bool, got Int | Use a comparison |
+| generator `x <- (3 :: Int)` | a list is expected | Supply `[3]` |
+| output if without else | parse error | Supply both branches |
+| predicting zip order for two generators | valid program, wrong result | Finish each inner run |
+
+## Summary
+
+<Callout type="key" title="Remember">
+Choose source, pattern, tests and output separately. Trace qualifiers left to right; the final generator varies fastest. Failed tests and generator patterns contribute nothing. Let binds without adding candidates. Nested output preserves rows; extra generators flatten branches. Translate using concatMap for generators, filter for selection and map for output. Preserve duplicates and distinguish candidate counts from survivor counts.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What happens when a Just generator pattern meets Nothing?">
+That candidate is skipped; the next candidate is tried. Nothing emits no placeholder.
+</CheckQuestion>
+
+<CheckQuestion question="Why does swapping two independent generators change output order?">
+The later generator varies fastest, so swapping them changes which inner run is completed first.
+</CheckQuestion>
+
+<CheckQuestion question="Why can an empty row remain in a nested result?">
+The inner comprehension returns an empty list which is still one outer output element.
+</CheckQuestion>
+
+<CheckQuestion question="Does a comprehension let add combinations or need in?">
+Neither. It binds a value for the current branch; later qualifiers and the output can use it.
+</CheckQuestion>
+
+<CheckQuestion question="How does translation begin for an ordinary generator?">
+Wrap the remaining translated comprehension in a lambda and use concatMap over the generator source.
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Comprehension Exam Practice](/docs/sem3/csi243/06-lists-tuples/notes/comprehension-exam-practice).

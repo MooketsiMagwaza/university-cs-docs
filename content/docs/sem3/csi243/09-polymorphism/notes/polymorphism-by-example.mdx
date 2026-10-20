@@ -1,0 +1,1680 @@
+---
+title: "Polymorphism by Example"
+description: "Read compound polymorphic types, build functions from specifications, and derive most general types by unification."
+---
+
+A type is a connected set of promises: brackets describe containers, arrows describe inputs and results, and repeated letters connect their types. This workshop extends [Parametric Polymorphism](/docs/sem3/csi243/09-polymorphism/notes/parametric-polymorphism) with compound shapes, contrasting implementations and exam derivations. Predict each output before running the program.
+
+<LearningObjectives items={[
+  'Read single, nested, paired, optional and alternative polymorphic types',
+  'Explain what a signature permits without assuming it uniquely determines an algorithm',
+  'Instantiate a variable with a whole compound type',
+  'Derive a most general type using fresh variables and unification',
+  'Construct a total function from a polymorphic specification',
+  'Distinguish parametric polymorphism from class overloading',
+]} />
+
+<Callout type="caution" title="Results and termination are different promises">
+Claims below about possible results assume ordinary pure parametric code and defined, terminating results. Haskell also admits `undefined`, exceptions, non-termination and strictness differences through `seq`. A type does not promise termination. For example, `head :: [a] -> a` cannot return a defined result on `[]`.
+</Callout>
+
+## 1. A bare `a`: one whole type
+
+`a` stands for a type, not an element, number or particular value. It can stand for `Bool`, `[Int]`, or `Int -> Int`. A bare result `a` supplies no constructor from which to manufacture a value; a useful total function must obtain one from an input or a supplied function.
+
+**Template**
+
+```text
+f :: a -> ... -> a
+choose a := T; replace EVERY a with the same whole T
+```
+
+`T` is the type chosen at one use. Three functions obtaining such an `a` are `id :: a -> a`, `const :: a -> b -> a`, and `snd :: (b,a) -> a`. None needs arithmetic, equality or display on that value.
+
+### Worked variation: a scalar
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (id False)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Set `a := Bool`. `id` returns its argument, so the result is `False`.
+
+### Worked variation: a whole list occupies one slot
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (const [True,False] 'q')
+```
+
+```text
+[True,False]
+```
+
+</HaskellTryIt>
+
+For `const`, `a := [Bool]` and `b := Char`. The whole list is returned; `a` does not stand for an individual boolean here.
+
+### Worked variation: a function occupies one slot
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (snd ('x', not) True)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+For `snd`, `b := Char` and `a := Bool -> Bool`. Extracting `not` gives a function; applying it to `True` gives `False`. We print its result rather than the function itself.
+
+**Common error and repair.** Treating `a` as necessarily a scalar loses container layers. Substitute a whole type first. The diagnostic examples in section 15 show what happens when a body tries to force a general variable to one concrete type.
+
+## 2. `[a]`: one homogeneous list
+
+The brackets mean a list whose elements all have one type. The list can be empty without knowing any element value. Its structure can be counted, rearranged or shortened without comparing elements.
+
+**Template**
+
+```text
+rearrange :: [a] -> [a]
+select    :: [a] -> a
+count     :: [a] -> Int
+```
+
+Three functions of the first shape are `tail`, `reverse` and `take 2`. `head` has the second shape; list-specialised `length` has the third. `head` and `tail` are partial on `[]`. A general `[a] -> Int` need not be `length`: `const 0` and `length . take 2` also fit.
+
+### Worked variation: return a suffix
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (tail [True,False,True])
+```
+
+```text
+[False,True]
+```
+
+</HaskellTryIt>
+
+`a := Bool`. Removing one cons cell leaves a list of the same element type, not a single element.
+
+### Worked variation: rearrange characters
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (reverse "type")
+```
+
+```text
+"epyt"
+```
+
+</HaskellTryIt>
+
+`a := Char`. Reversal changes positions but preserves `[Char]`, which `print` displays as a string.
+
+### Worked variation: the empty edge case
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 2 ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The annotation fixes `a := Int`. There are no cells to retain, so the result is an empty `[Int]`. Unlike `tail`, `take 2` is defined here.
+
+**Common error and repair.** A signature says what may be returned, not which algorithm is intended. Do not infer that `[a] -> [a]` means reversal or even preservation of length. State the behaviour as well as the type.
+
+## 3. `[[a]]`: lists as elements
+
+Each outer element is itself a list. Rows may have different lengths, including zero, but must share the inner element type. Counting rows, flattening rows and transforming each row are distinct operations.
+
+**Template**
+
+```text
+outerCount    :: [[a]] -> Int
+flatten       :: [[a]] -> [a]
+eachBackwards :: [[a]] -> [[a]]
+```
+
+`length`, `concat` and `map reverse` fit these respective signatures. These are three functions involving the nested shape; no `Eq a` is needed. `a` may itself be compound, giving further nesting.
+
+### Worked variation: count outer cells
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length [[True],[],[False,True]])
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+Match `length :: [t] -> Int` with `[[Bool]]`: `t := [Bool]`. The empty middle row still occupies one of the three outer positions.
+
+### Worked variation: remove one list layer
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (concat ["ab","","c"])
+```
+
+```text
+"abc"
+```
+
+</HaskellTryIt>
+
+`a := Char`. Appending the three inner strings removes the outer layer: `"ab" ++ "" ++ "c" = "abc"`.
+
+### Worked variation: preserve the outer layer
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map reverse [[1,2],[],[3 :: Int]])
+```
+
+```text
+[[2,1],[],[3]]
+```
+
+</HaskellTryIt>
+
+Each call to `reverse` consumes one `[Int]`. `map` preserves the three outer positions; the middle list remains empty.
+
+**Common error and repair.** `concat` removes exactly one layer. `map concat` removes a layer inside each outer element, so it expects three list layers as input.
+
+## 4. `(a, b)`: independent positions
+
+A pair has exactly two components. Their types may differ or coincide. Parentheses with a comma construct a pair; list brackets construct a variable-length homogeneous sequence.
+
+**Template**
+
+```text
+first  :: (a,b) -> a
+second :: (a,b) -> b
+swap   :: (a,b) -> (b,a)
+```
+
+`fst`, `snd` and `swap` below exemplify these shapes. They may unpack and rearrange components, but cannot compare arbitrary components or assume both are numbers.
+
+### Worked variation: the first component is a list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fst ([True,False], 'k'))
+```
+
+```text
+[True,False]
+```
+
+</HaskellTryIt>
+
+`a := [Bool]`, `b := Char`. `fst` returns the whole first component.
+
+### Worked variation: the second component is another pair
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (snd (False, ('a','b')))
+```
+
+```text
+('a','b')
+```
+
+</HaskellTryIt>
+
+`b := (Char,Char)`. Removing the outer pair leaves the inner pair intact.
+
+### Worked variation: reverse the component types
+
+<HaskellTryIt>
+
+```haskell
+swap :: (a,b) -> (b,a)
+swap (x,y) = (y,x)
+
+main :: IO ()
+main = print (swap ("ok", True))
+```
+
+```text
+(True,"ok")
+```
+
+</HaskellTryIt>
+
+The input is `(String,Bool)`; the result is `(Bool,String)`. Moving values does not convert them.
+
+**Common error and repair.** `(a,a)` requires agreement; `(a,b)` permits agreement. Different letters do not require different types. Unpacking a tuple introduces no equality constraint.
+
+## 5. `a -> b`: a supplied conversion
+
+An arrow describes a function accepting one `a` and returning one `b`. It does not supply a conversion automatically. Without extra inputs, an ordinary total definition universally typed `a -> b` cannot manufacture a value of arbitrary `b`.
+
+**Template**
+
+```text
+use :: (a -> b) -> a -> b
+use rule input = rule input
+```
+
+Three functions with this shape are `($)`, `use` below and `\f x -> id (f x)`. Parentheses around `a -> b` make the rule itself one argument. Arrows associate to the right: `a -> b -> c` means `a -> (b -> c)`.
+
+### Worked variation: different endpoints
+
+<HaskellTryIt>
+
+```haskell
+use :: (a -> b) -> a -> b
+use f x = f x
+
+main :: IO ()
+main = print (use length "abcd")
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+`a := String`, `b := Int`. Substitute `length` for `f` and `"abcd"` for `x`: the result is `length "abcd" = 4`.
+
+### Worked variation: the endpoints coincide
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (not $ False)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+`($)` passes `False` to `not`. Both `a` and `b` become `Bool`; the two letters impose no inequality between types.
+
+### Worked variation: a wrapper is the result
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\f x -> id (f x)) Just 'q')
+```
+
+```text
+Just 'q'
+```
+
+</HaskellTryIt>
+
+`a := Char`, `b := Maybe Char`. `Just` wraps the argument and `id` preserves the wrapped result.
+
+**Common error and repair.** `bad :: a -> b; bad x = x` cannot force the independent caller-chosen types to agree. Supply a converter or change the signature to `a -> a`; section 15 shows the rejection pattern.
+
+## 6. `a -> a`: preserving a whole type
+
+For a defined terminating result in ordinary pure parametric code, a function of this type can only return its supplied value. There is no fixed constant that can replace an arbitrary `a`. This is a statement about results, not a promise that every implementation terminates or has identical strictness.
+
+**Template**
+
+```text
+keep :: a -> a
+keep x = x
+```
+
+`id`, `\x -> x` and `id . id` all fit. With two inputs, `a -> a -> a` permits selection of either; with list structure, `[a] -> [a]` permits many rearrangements.
+
+### Worked variation: preserve a pair
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (id ('m',False))
+```
+
+```text
+('m',False)
+```
+
+</HaskellTryIt>
+
+`a := (Char,Bool)`: preservation applies to the whole pair.
+
+### Worked variation: preserve a list through a lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x -> x) [False])
+```
+
+```text
+[False]
+```
+
+</HaskellTryIt>
+
+`a := [Bool]`. Substituting the argument for `x` leaves the same singleton list.
+
+### Worked variation: compose two identities
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((id . id) (Just True))
+```
+
+```text
+Just True
+```
+
+</HaskellTryIt>
+
+The inner `id` returns `Just True`; the outer one returns it again. `a := Maybe Bool`.
+
+**Common error and repair.** `keep x = not x` has type `Bool -> Bool`, not fully general `a -> a`. Either state the concrete signature or preserve `x` without specialising it.
+
+## 7. `(a -> b) -> [a] -> [b]`: lifting a rule
+
+This shape takes a rule, then a list of inputs fitting that rule, and returns a list of its output type. The type does not promise to visit each input exactly once. That promise belongs to the definition of `map`.
+
+**Template**
+
+```text
+liftRule :: (a -> b) -> [a] -> [b]
+liftRule rule inputs = ...
+```
+
+Three functions fitting the shape are `map`, `\f xs -> map f (reverse xs)`, and `\_ _ -> []` at this signature. Contrast `filter :: (a -> Bool) -> [a] -> [a]`: its rule chooses which original elements survive.
+
+### Worked variation: convert every element
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map length ["a","long",""])
+```
+
+```text
+[1,4,0]
+```
+
+</HaskellTryIt>
+
+`a := String`, `b := Int`. The lengths 1, 4 and 0 occupy the corresponding result positions.
+
+### Worked variation: same type, different order
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\f xs -> map f (reverse xs)) not [True,False,False])
+```
+
+```text
+[True,True,False]
+```
+
+</HaskellTryIt>
+
+Reversal gives `[False,False,True]`. Applying `not` gives the shown result. Both element variables become `Bool`.
+
+### Worked variation: same type, no visits
+
+<HaskellTryIt>
+
+```haskell
+emptyMap :: (a -> b) -> [a] -> [b]
+emptyMap _ _ = []
+
+main :: IO ()
+main = print (emptyMap not [True,False])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+`not` fixes the output element type to `Bool`. Returning an empty `[Bool]` satisfies the signature without implementing `map`'s behaviour.
+
+**Common error and repair.** `map null [[],[True]]` gives `[True,False]`; `filter null [[],[True]]` gives `[[]]`. The former keeps predicate results, the latter keeps original inputs. Do not swap their templates.
+
+### More arrows: `flip` changes argument order
+
+`flip` takes a two-argument rule and returns a rule expecting its arguments in the opposite order. It does not reverse either argument internally. This is another higher-order type: an input and the result are themselves functions.
+
+**Template**
+
+```text
+flip :: (a -> b -> c) -> b -> a -> c
+flip rule second first = rule first second
+```
+
+The three distinct variables track the original first input, original second input and result. `flip`, `\f y x -> f x y`, and `\f y -> \x -> f x y` are three equivalent functions of this shape. Application groups left: `flip f y x` means `((flip f) y) x`.
+
+### Worked variation: change a numeric argument order
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (flip (-) (3 :: Int) 10)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+All three variables become `Int` after the numeric rule is specialised. Substitution gives `(-) 10 3`, hence 7. The rule's numeric requirement does not come from `flip` itself.
+
+### Worked variation: independent argument types
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (flip const 'z' True)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Here `a := Bool`, `b := Char`, `c := Bool`. Rewriting gives `const True 'z'`, which returns `True`; `flip` has not changed either value's type.
+
+### Worked variation: a list-valued result
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (flip zip "ab" [True,False,True])
+```
+
+```text
+[(True,'a'),(False,'b')]
+```
+
+</HaskellTryIt>
+
+For this rule, `a := [Bool]`, `b := String`, `c := [(Bool,Char)]`. Rewriting gives `zip [True,False,True] "ab"`; it ends when the two-character list ends. The result pairs retain `Bool` first, despite supplying the character list first to the flipped function.
+
+**Common error and repair.** `flip zip xs ys` means `zip ys xs`; it does not mean `reverse (zip xs ys)`. Track the original rule's input slots before substituting argument values.
+
+## 8. `Maybe a`: presence and payload
+
+Track the wrapper separately from its payload. Matching `Just x` exposes `x :: a`; it does not make an entire `Maybe a` interchangeable with `a`. `Nothing` needs no value of `a`.
+
+**Template**
+
+```text
+wrap   :: a -> Maybe a
+choose :: a -> Maybe a -> a
+change :: (a -> b) -> Maybe a -> Maybe b
+```
+
+Three functions are `Just`, `maybeDefault` and `changeMaybe` below: introduce, eliminate with a fallback, or transform inside the wrapper.
+
+### Worked variation: introduce a wrapped list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (Just [False,True])
+```
+
+```text
+Just [False,True]
+```
+
+</HaskellTryIt>
+
+`a := [Bool]`, so the result is `Maybe [Bool]`, one optional whole list.
+
+### Worked variation: eliminate absence
+
+<HaskellTryIt>
+
+```haskell
+maybeDefault :: a -> Maybe a -> a
+maybeDefault d Nothing = d
+maybeDefault _ (Just x) = x
+
+main :: IO ()
+main = print (maybeDefault 'z' Nothing)
+```
+
+```text
+'z'
+```
+
+</HaskellTryIt>
+
+The fallback fixes `a := Char`. The first equation returns it; the second would return the supplied payload of that same type.
+
+### Worked variation: change a present payload's type
+
+<HaskellTryIt>
+
+```haskell
+changeMaybe :: (a -> b) -> Maybe a -> Maybe b
+changeMaybe _ Nothing = Nothing
+changeMaybe f (Just x) = Just (f x)
+
+main :: IO ()
+main = print (changeMaybe length (Just "type"))
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+`a := String`, `b := Int`. Expose `"type"`, compute its length, then restore `Just`. The absent branch would stay absent without calling the rule.
+
+**Common error and repair.** `Maybe [a]` differs from `[Maybe a]`. The former can be `Nothing` or `Just []`; the latter is always a list and can hold several missing positions.
+
+## 9. `Either a b`: alternative payload types
+
+`Left` holds an `a`; `Right` holds a `b`. A value uses one constructor, not both. A consumer must still handle both possibilities. Its result type cannot change according to the constructor chosen at run time.
+
+**Template**
+
+```text
+Left   :: a -> Either a b
+Right  :: b -> Either a b
+either :: (a -> c) -> (b -> c) -> Either a b -> c
+```
+
+These are three functions involving the form. Both handlers in `either` must return the same `c`. An unused side may need an annotation when printing so that its `Show` instance is known.
+
+### Worked variation: a left payload
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (Left "missing" :: Either String Int)
+```
+
+```text
+Left "missing"
+```
+
+</HaskellTryIt>
+
+`a := String`, `b := Int`. Only the left payload is present; the annotation fixes the absent right side's type.
+
+### Worked variation: a right payload
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (Right True :: Either Char Bool)
+```
+
+```text
+Right True
+```
+
+</HaskellTryIt>
+
+`a := Char`, `b := Bool`. There is no hidden `Char` value: `Right` carries only the boolean.
+
+### Worked variation: two input types, one output type
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (either length id (Left "bad" :: Either String Int))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The left handler is `String -> Int`; the right handler is `Int -> Int`. Therefore `c := Int`. `Left` selects `length`, giving 3.
+
+**Common error and repair.** `either length not` has incompatible handler results, `Int` and `Bool`. Use handlers with a shared output type; different input types are allowed.
+
+## 10. `[(a,b)]`: lists of pairs
+
+Every outer position holds a pair with the same component types. The two components within one pair may differ. A list of pairs differs from a pair of lists in both shape and length information.
+
+**Template**
+
+```text
+zip   :: [a] -> [b] -> [(a,b)]
+unzip :: [(a,b)] -> ([a],[b])
+map fst :: [(a,b)] -> [a]
+```
+
+These three functions build, split or project the shape. `zip` stops at the shorter list; `unzip` creates equal-length output lists. None compares components, so none needs `Eq`.
+
+### Worked variation: build from unequal lengths
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip [True,False] "xyz")
+```
+
+```text
+[(True,'x'),(False,'y')]
+```
+
+</HaskellTryIt>
+
+`a := Bool`, `b := Char`. Only two pairs can be made; the final character has no partner.
+
+### Worked variation: split into a pair of lists
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (unzip [('a',True),('b',False)])
+```
+
+```text
+("ab",[True,False])
+```
+
+</HaskellTryIt>
+
+First components give `['a','b']`, displayed as `"ab"`; second components give the booleans. The outer result is one pair.
+
+### Worked variation: project a compound component
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map fst [("ab",True),("",False)])
+```
+
+```text
+["ab",""]
+```
+
+</HaskellTryIt>
+
+`a := String`. The result `[a]` is `[String]`, or `[[Char]]`, not one flattened string.
+
+**Common error and repair.** A row of type `(Int,Bool)` and a row of type `(Char,Bool)` cannot share this homogeneous list. Use a sum type if the first column genuinely holds alternatives.
+
+## 11. Instantiation with compound types
+
+Instantiation chooses types at one use of a general signature. Different uses of the same top-level function can make independent choices. Keep all brackets when substituting.
+
+**Template**
+
+```text
+general:  length :: [t] -> Int
+choose:   t := T
+instance: length :: [T] -> Int
+```
+
+`T` may be `Char`, `[Int]` or `Bool -> Bool`. These are list-specialised views: modern Prelude `length` also supports other foldable containers. Instantiation makes a type more specific; inference determines how general it can remain.
+
+### Worked variation: characters
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length "xy")
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+`t := Char` gives `[Char] -> Int`; there are two characters.
+
+### Worked variation: rows
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length [[1,2],[],[3 :: Int]])
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+`t := [Int]` gives `[[Int]] -> Int`. The middle empty row counts as one outer element.
+
+### Worked variation: functions
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length [not,id])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+`t := Bool -> Bool`. `length` counts two cells without comparing or displaying either function. Only the `Int` result is printed.
+
+**Common error and repair.** In the row example, setting `t := Int` drops a layer. First equate `[t]` with the actual `[[Int]]`, then strip matching outer brackets.
+
+## 12. Deriving the most general type by unification
+
+**Unification** solves type equations through consistent substitutions. A most general type keeps every variable that the expression does not force to something more specific. Renaming remaining letters changes no meaning. Never introduce `Int` merely because you imagine testing with numbers.
+
+**Template**
+
+```text
+1. Parenthesise applications: f x y means (f x) y; arrows group right.
+2. Give EACH occurrence of a polymorphic function fresh type variables.
+3. For application F X, write F :: P -> R and X :: Q.
+4. Equate P ~ Q. Match arrows, list layers and tuple positions.
+5. Solve substitutions; propagate each through ALL remaining equations.
+6. Retain R and still-unapplied inputs. Collect required classes.
+7. Generalise remaining free variables; check a concrete instance.
+```
+
+`~` here is an equation on paper, not executable Haskell. Distinct constructors such as `Int` and `Bool` do not unify. A variable cannot equal a type containing itself, such as `t ~ [t]`, which would require an infinite type.
+
+### Worked variation: `map fst`
+
+```text
+map :: (p -> q) -> [p] -> [q]
+fst :: (u,v) -> u
+required rule: p -> q
+supplied rule: (u,v) -> u
+match inputs: p ~ (u,v)
+match outputs: q ~ u
+remaining type: [p] -> [q]
+substitute: [(u,v)] -> [u]
+rename: map fst :: [(a,b)] -> [a]
+```
+
+No comparison occurs, so no class constraint is earned.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map fst [(True,'a'),(False,'b')])
+```
+
+```text
+[True,False]
+```
+
+</HaskellTryIt>
+
+Check `a := Bool`, `b := Char`: projecting each first component gives the booleans.
+
+### Worked variation: `zip . map f`
+
+Treat `f` as a parameter and derive `\f -> zip . map f`, so its type appears in the complete answer.
+
+```text
+f :: r -> s
+map :: (p -> q) -> [p] -> [q]
+matching f gives p ~ r, q ~ s
+therefore map f :: [r] -> [s]
+zip :: [u] -> ([v] -> [(u,v)])
+(.) :: (j -> k) -> (i -> j) -> i -> k
+
+first composition argument is zip:
+  j ~ [u]
+  k ~ [v] -> [(u,v)]
+second composition argument is map f:
+  i ~ [r]
+  j ~ [s]
+therefore [u] ~ [s], hence u ~ s
+remaining composition type: [r] -> [v] -> [(s,v)]
+restore parameter f: (r -> s) -> [r] -> [v] -> [(s,v)]
+```
+
+The arrow inside `zip`'s result matters: the composition still waits for its second list.
+
+<HaskellTryIt>
+
+```haskell
+pairAfter :: (a -> b) -> [a] -> [c] -> [(b,c)]
+pairAfter f = zip . map f
+
+main :: IO ()
+main = print (pairAfter length ["hi","x"] [True,False])
+```
+
+```text
+[(2,True),(1,False)]
+```
+
+</HaskellTryIt>
+
+`map length` produces `[2,1]`; `zip` pairs these with the booleans. The substitution is `r := String`, `s := Int`, `v := Bool`.
+
+### Worked variation: `foldr (:) []`
+
+First use the course's list-specialised signature.
+
+```text
+foldr :: (p -> q -> q) -> q -> [p] -> q
+(:)   :: t -> [t] -> [t]
+[]    :: [u]
+match the step inputs: p ~ t, q ~ [t]
+match the step result: q ~ [t] again
+match the seed: q ~ [u]
+therefore [t] ~ [u], hence t ~ u
+remaining type: [p] -> q
+substitute: [t] -> [t]
+rename: [a] -> [a]
+```
+
+Modern Prelude has `foldr :: Foldable f => (p -> q -> q) -> q -> f p -> q`. With that signature, the same equations leave the input container free: the unrestricted most general type is `Foldable f => f a -> [a]`. If the exam supplies a list signature, state the list result; otherwise retain the container and constraint.
+
+<HaskellTryIt>
+
+```haskell
+rebuild :: [a] -> [a]
+rebuild = foldr (:) []
+
+main :: IO ()
+main = print (rebuild [False,True])
+```
+
+```text
+[False,True]
+```
+
+</HaskellTryIt>
+
+Reduction is `False : (True : [])`. The explicit signature makes this demonstration list-specialised.
+
+**Common error and repair.** Reusing letters for unrelated polymorphic occurrences invents constraints. Start fresh and substitute consistently. A concrete test checks one instance; it cannot prove that a claimed type is most general.
+
+## 13. Writing code from a polymorphic specification
+
+Start with the result shape, then inventory inputs that can supply its components. Pattern match to expose those values. Cover every constructor if a total function is required.
+
+**Template**
+
+```text
+Read the behavioural requirement and the result type.
+Name each available value and supplied rule with its type.
+Build each result component from those available sources.
+Check ordinary, empty and alternative-constructor cases.
+```
+
+The behavioural requirement selects an implementation from the many that may fit a type.
+
+### Worked variation: duplicate one value
+
+<HaskellTryIt>
+
+```haskell
+duplicate :: a -> (a,a)
+duplicate x = (x,x)
+
+main :: IO ()
+main = print (duplicate 'r')
+```
+
+```text
+('r','r')
+```
+
+</HaskellTryIt>
+
+The requirement is two copies. `x :: a` supplies both result slots; no operation on `a` is needed.
+
+### Worked variation: convert one component
+
+<HaskellTryIt>
+
+```haskell
+firstMap :: (a -> b) -> (a,c) -> (b,c)
+firstMap f (x,y) = (f x,y)
+
+main :: IO ()
+main = print (firstMap length ("cat",False))
+```
+
+```text
+(3,False)
+```
+
+</HaskellTryIt>
+
+The result needs a `b` and a `c`. `f x` provides the `b`; `y` provides the `c`. No conversion of `c` is available or required.
+
+### Worked variation: return a second element safely
+
+<HaskellTryIt>
+
+```haskell
+secondMaybe :: [a] -> Maybe a
+secondMaybe (_:y:_) = Just y
+secondMaybe _ = Nothing
+
+main :: IO ()
+main = do
+  print (secondMaybe [True,False])
+  print (secondMaybe ([] :: [Bool]))
+  print (secondMaybe [True])
+```
+
+```text
+Just False
+Nothing
+Nothing
+```
+
+</HaskellTryIt>
+
+Two cons cells expose the second `a`. Zero and one cells reach the fallback. `Nothing` represents absence without inventing an arbitrary element.
+
+**Common error and repair.** `Just (head (tail xs))` has the right type but fails on short lists. Replace it with exhaustive patterns when the question requires totality.
+
+## 14. Parametric work versus overloading
+
+Parametric code uses one definition uniformly over arbitrary types. Overloaded code asks for operations whose implementations depend on the chosen type. A parametric container function may be supplied an overloaded rule.
+
+**Template**
+
+```text
+structural: rearrange :: [a] -> [a]
+equality:   same :: Eq a => a -> a -> Bool
+display:    describe :: Show a => [a] -> [String]
+```
+
+`reverse` needs no operation on elements. `(==)` needs `Eq`, `(+)` needs `Num`, and `show` needs `Show`. Propagate a rule's constraint only when the function actually uses that rule at the arbitrary element type.
+
+### Worked variation: no element operation
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length [id,not])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The elements share `Bool -> Bool`. Counting them needs no `Eq` or `Show` for functions; only the resulting `Int` is displayed.
+
+### Worked variation: addition introduces `Num`
+
+<HaskellTryIt>
+
+```haskell
+twice :: Num a => a -> a
+twice x = x + x
+
+main :: IO ()
+main = print (twice (7 :: Int))
+```
+
+```text
+14
+```
+
+</HaskellTryIt>
+
+Both operands of `(+)` have type `a`; its signature requires `Num a`. At `Int`, adding 7 to itself gives 14.
+
+### Worked variation: map an overloaded conversion
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map show [True,False])
+```
+
+```text
+["True","False"]
+```
+
+</HaskellTryIt>
+
+Match `show :: Show a => a -> String` to the rule slot of `map`. The function `map show` has type `Show a => [a] -> [String]`; here `a := Bool`.
+
+**Common error and repair.** An unconstrained variable does not permit comparing, adding or displaying its values. Add exactly the class required by the body; a surrounding `print` of a concrete result does not automatically constrain the original input.
+
+## 15. Rejected definitions and diagnostic excerpts
+
+These deliberately plain fences must be rejected. Quotations give only short decisive GHC diagnostic phrases; source locations and longer messages vary.
+
+```haskell
+-- Rejected: the declared a must remain arbitrary.
+wrong :: a -> a
+wrong x = True
+```
+
+Key excerpt: “Couldn't match expected type”. GHC describes `a` as a “rigid type variable”: the body cannot decide that the caller's arbitrary type is `Bool`. Repair with `wrong x = x`, or use `wrong :: a -> Bool` if always returning `True` is intended.
+
+```haskell
+-- Rejected: independent input types cannot be identified by the body.
+wrongSecond :: a -> b -> a
+wrongSecond x y = y
+```
+
+Key excerpt: “Couldn't match expected type”. The body supplies `b` where the signature requires `a`. Return `x`, or use `a -> b -> b` if the second argument is intended.
+
+```haskell
+-- Rejected: a list was promised but a scalar was supplied.
+wrongList :: [Bool] -> [Bool]
+wrongList xs = True
+```
+
+Key excerpt: “Couldn't match expected type”. Return `[True]` for a constant singleton result; return `xs` to preserve the input. These repairs express different behaviours.
+
+```haskell
+-- Rejected: self-application requires an infinite type.
+self x = x x
+```
+
+Key excerpt: “Occurs check”. Assign `x :: t`. Its use as a function requires `t ~ t -> r`, which no finite type solves. Separate function and argument parameters: `apply f x = f x`.
+
+## 16. Exam questions
+
+Try each before expanding the answer. The type answers below are mathematical derivations, not claimed GHCi transcripts. Equivalent variable names are acceptable.
+
+### Exam question 1: project second components
+
+State the most general type of `map snd`. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state": give a type, with no arbitrary concrete specialisation.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use application unification with fresh variables.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`map :: (p -> q) -> [p] -> [q]`; `snd :: (u,v) -> v`. Match the rule slot: `p ~ (u,v)`, `q ~ v`. Substitution gives `[(u,v)] -> [v]`. No class operation occurs.
+
+  </Step>
+
+  <Step title="4. Check">
+
+`map snd [(True,'x')]` gives `"x"`, confirming `[Char]` as one instance of the result.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: count rows
+
+In `length [[1,2],[],[3 :: Int]]`, what replaces the element variable and what is returned? (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The question asks separately for a type substitution and a result.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Match list-specialised `length :: [t] -> Int` to the whole argument.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The input has type `[[Int]]`. `[t] ~ [[Int]]` gives `t ~ [Int]`; counting the three outer cells returns `3 :: Int`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The empty row is still one row. Counting all numbers would answer a different question.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: optional structures
+
+Distinguish `Maybe [a]` and `[Maybe a]` using values at `a := Bool`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Distinguish" requires a structural explanation and examples.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Substitute `Bool`, then use each outer type's constructors.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`Just [True,False] :: Maybe [Bool]` is one optional whole list. `[Just True,Nothing] :: [Maybe Bool]` is a list of optional individual booleans. The first may be absent as a whole; the second may contain several absent entries.
+
+  </Step>
+
+  <Step title="4. Check">
+
+`Just [] :: Maybe [Bool]` and `Nothing` differ: a present empty list is not absence.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: type versus algorithm
+
+Must every total function `[a] -> Int` be `length`? Give a counterexample. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Must" asks about a universal claim. A valid counterexample disproves it.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Construct an `Int` independently of element values.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+No. `zeroCount :: [a] -> Int; zeroCount _ = 0` is total and needs no operation on `a`. It has the specified type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+On `[True,False]`, `zeroCount` returns 0 while `length` returns 2. Types restrict behaviour without always fixing the algorithm.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: preserving a value
+
+Explain the defined terminating result of an ordinary pure parametric function `a -> a`. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Explain" requires a reason, including the stated assumption about results.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Inventory available values of the arbitrary type.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The input is the only available value of arbitrary type `a`. No fixed constant inhabits every possible caller choice, so the result must be that supplied value. `id x = x` witnesses it. This does not promise termination or identical strictness for all definitions.
+
+  </Step>
+
+  <Step title="4. Check">
+
+At `a := (Bool,Char)`, the whole supplied pair is returned, not a pair fabricated from unrelated constants.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: construct a paired result
+
+Write `applyBoth :: (a -> b) -> (a,a) -> (b,b)` applying the rule to both components. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Write" asks for a definition matching the specified behaviour.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Expose two `a` values, then use the supplied conversion to obtain both `b` values.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+applyBoth :: (a -> b) -> (a,a) -> (b,b)
+applyBoth f (x,y) = (f x,f y)
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+`applyBoth length ("a","abc")` gives `(1,3)`. No equality or arithmetic on the arbitrary payload is needed.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: alternative handlers
+
+State the type of `either null not`, first assuming list-only `null`, then using modern Prelude. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The question explicitly varies the assumed library signature.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Match both handler inputs and their common result.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+For `either :: (a -> c) -> (b -> c) -> Either a b -> c`, list `null :: [u] -> Bool` gives `a ~ [u]`, `c ~ Bool`; `not` gives `b ~ Bool`. Result: `Either [u] Bool -> Bool`. Modern Prelude `null :: Foldable t => t u -> Bool` instead gives `Foldable t => Either (t u) Bool -> Bool`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+`either null not (Left ([] :: [Int]))` returns `True`; `Right False` also selects a handler returning `Bool`.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: composition with a remaining input
+
+Given `f :: a -> b`, derive the type of `zip . map f`. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Derive" requires equations, not only the final type.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Remember that `zip` returns a function still waiting for its second list.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`map f :: [a] -> [b]`. Fresh `zip :: [u] -> [v] -> [(u,v)]`. Composition equates the inner output `[b]` with the outer input `[u]`, giving `u ~ b`. The result is `[a] -> [v] -> [(b,v)]`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+With `f = length`, supplying `["ok"]` and `[False]` gives `[(2,False)]`.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: independent variables
+
+Why is `bad :: a -> b; bad x = x` rejected? Give two repairs. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Why" asks for the conflict; "repair" asks for workable alternatives.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Compare the body type with the declared result.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The body has type `a`, but the result promises arbitrary `b`. The body cannot force independent rigid variables to agree. One repair is `bad :: a -> a; bad x = x`. Another is `bad :: (a -> b) -> a -> b; bad f x = f x`, supplying the missing converter.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The first returns `True` on `True`. The second returns `False` on `not` and `True`; neither invents an arbitrary result.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: fold assumptions
+
+Derive the list type of `foldr (:) []`. What changes for unrestricted modern Prelude? (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Derive" asks for substitutions; the final sentence asks about library generality.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Match step, then seed, then read the remaining function type.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+For list `foldr :: (p -> q -> q) -> q -> [p] -> q`, matching `(:) :: u -> [u] -> [u]` gives `p ~ u`, `q ~ [u]`. Seed `[] :: [v]` gives `u ~ v`. Result: `[u] -> [u]`. Modern Prelude leaves the input container free, giving `Foldable t => t u -> [u]`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+On `[True,False]`, both views rebuild the list. A successful list test alone does not justify dropping a more general container variable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: propagate a constraint
+
+State the type of `\xs -> map show xs` and explain its constraint. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The commands ask for a type and the source of its requirement.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Match the type of `show` to the rule slot of list `map`.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`show :: Show a => a -> String`, so the function has type `Show a => [a] -> [String]`. The `Show a` comes from applying `show` to each element; `map` introduces no class itself.
+
+  </Step>
+
+  <Step title="4. Check">
+
+For `[False]`, the result is `["False"]`, a list of strings rather than one string.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: map and filter
+
+Give types and outputs of `map null [[],[True]]` and `filter null [[],[True]]`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The question asks about complete applications, not functions still awaiting input.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the same predicate results in the two distinct templates.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`null []` is `True`; `null [True]` is `False`. `map` keeps these results: `[True,False] :: [Bool]`. `filter` keeps original inputs passing the test: `[[]] :: [[Bool]]`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The boolean in the second input fixes the inner element type. Only the first original sublist is empty, so only it survives filtering.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: flip a polymorphic rule
+
+Derive the type of `flip const` and evaluate `flip const 'z' True`. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+“Derive” asks for substitutions; “evaluate” asks for the result of the complete call. Keep those two tasks separate.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Match the two-argument rule slot of `flip` with a fresh copy of `const`, then swap the supplied value arguments when reducing.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`flip :: (p -> q -> r) -> q -> p -> r` and `const :: u -> v -> u`. Equating rule inputs and result gives `p ~ u`, `q ~ v`, `r ~ u`. Substituting into the remaining type yields `flip const :: v -> u -> u`, equivalently `a -> b -> b`. Reduction gives `flip const 'z' True = const True 'z' = True`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The character is the first input of the flipped function, so `v := Char`; the second input and result are `Bool`. Reversing application order has not reversed a string or changed a value's type.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+Substitute whole types for letters and keep every bracket. Repeated letters link positions; different letters permit different types. A signature often permits several algorithms. Unification matches required and supplied shapes with fresh variables and consistent substitutions. State library assumptions before claiming a most general type. Parametric code rearranges unknown values; overloaded operations need their classes.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="Can a stand for a function type?">
+
+Yes. In `length [not,id]`, the element type is `Bool -> Bool`; only the count is printed.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Why does map fst need no Eq?">
+
+It unpacks pairs and keeps their first components without comparing them.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Must a and b in a function type be different?">
+
+No. They can coincide, as with `not :: Bool -> Bool`.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="What is the decisive equation in composition?">
+
+The inner function's output type must unify with the outer function's input type.
+
+  </CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Type Classes and Constraints](/docs/sem3/csi243/09-polymorphism/notes/type-classes).

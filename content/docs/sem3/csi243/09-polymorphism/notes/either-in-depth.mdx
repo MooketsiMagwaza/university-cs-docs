@@ -1,0 +1,3988 @@
+---
+title: "Either in Depth"
+description: "Explain failures with typed reasons, define the standard Either tools and trace validation chains that stop at the first error."
+---
+
+`Maybe` tells a caller that a result is absent. A rejected password, a missing account and an invalid amount need different repairs. `Either` can return the explanation as data so the caller can respond to the actual problem.
+
+<LearningObjectives items={["Read both type parameters and both constructors", "Write validators with distinct failure reasons", "Define and trace Either consumers and collectors", "Chain dependent validations and identify the first failure", "Convert deliberately between Maybe and Either"]} />
+
+## 1. Why absence alone is insufficient
+
+Imagine a login form that returns `Nothing`. Is the name missing, the password too short or the account locked? The caller cannot recover a reason that the result never stored. Give failure its own payload:
+
+```haskell
+data Either a b = Left a | Right b
+```
+
+This is the Prelude declaration, shown for reading. `Either` takes two type arguments. `Left :: a -> Either a b` carries an `a`; `Right :: b -> Either a b` carries a `b`. Each value contains one side, never both. The other type parameter still belongs to its type even though that value carries no payload of that type.
+
+The common validation convention is `Left reason` for failure and `Right value` for success. It is a convention, not a restriction built into the declaration. `Either String Int` can mean an error message or a valid integer.
+
+**Template:** `Left reason :: Either ErrorType ResultType` or `Right result :: Either ErrorType ResultType`. Fix both types when a printed value leaves one side unknown.
+
+### Variation: a reason
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Left "bad" :: Either String Int.
+main :: IO ()
+main = print (Left "bad" :: Either String Int)
+```
+
+```text
+Left "bad"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left payload is `"bad"`. The `Int` type fixes the unseen success side.
+
+### Variation: a floating success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Right 4.0 :: Either String Double.
+main :: IO ()
+main = print (Right 4.0 :: Either String Double)
+```
+
+```text
+Right 4.0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The right payload is a `Double`, so its integral-looking value displays with `.0`.
+
+### Variation: a negative left payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Left (-3) :: Either Int String.
+main :: IO ()
+main = print (Left (-3) :: Either Int String)
+```
+
+```text
+Left (-3)
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left type can be numeric. Here `Left` is a plain choice, rather than a text error.
+
+## 2. A plain choice between two types
+
+A list may contain different constructors while every element has the same overall type. This can describe imported identifiers which are either numeric codes or text names, without treating either side as failure.
+
+**Template:** `[Left code, Right name] :: [Either Int String]`: map a two-branch consumer over a uniformly typed list.
+
+**Defining equations:**
+
+```haskell
+describeChoice :: Either Int String -> String
+describeChoice (Left n) = "code " ++ show n
+describeChoice (Right s) = "name " ++ s
+```
+
+### Variation: mixed choices
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map describeChoice [Left 7,Right "Ada"].
+describeChoice :: Either Int String -> String
+describeChoice (Left n) = "code " ++ show n
+describeChoice (Right s) = "name " ++ s
+
+main :: IO ()
+main = print (map describeChoice [Left 7,Right "Ada"])
+```
+
+```text
+["code 7","name Ada"]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first call matches `Left n` with `n = 7`; the second matches `Right s` with `s = "Ada"`. `map` preserves order.
+
+### Variation: only text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map describeChoice [Right "Bo"].
+describeChoice :: Either Int String -> String
+describeChoice (Left n) = "code " ++ show n
+describeChoice (Right s) = "name " ++ s
+
+main :: IO ()
+main = print (map describeChoice [Right "Bo"])
+```
+
+```text
+["name Bo"]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Match the right equation and append `"Bo"` to `"name "`.
+
+### Variation: empty collection
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map describeChoice [].
+describeChoice :: Either Int String -> String
+describeChoice (Left n) = "code " ++ show n
+describeChoice (Right s) = "name " ++ s
+
+main :: IO ()
+main = print (map describeChoice [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `map` on `[]` returns `[]`; no choice is consumed.
+
+**Common error and repair:** A list such as `[7,"Ada"]` has incompatible element types; wrap each alternative with its constructor.
+
+**Practice with an answer:** Predict `map describeChoice [Left 7,Right "Ada"]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`["code 7","name Ada"]`. The first call matches `Left n` with `n = 7`; the second matches `Right s` with `s = "Ada"`. `map` preserves order.
+
+</details>
+
+**Validation template:**
+
+```haskell
+validate badReason invalid calculate input
+  | invalid input = Left badReason
+  | otherwise = Right (calculate input)
+```
+
+`badReason` is the failure payload, `invalid` the test, `calculate` the success computation, and `input` the checked data. With several rules, use guards in priority order. The first true guard determines the reported reason. Both branches must have the same full `Either ErrorType ResultType` type.
+
+The age and mark validators below share this deliberately small parser for **non-empty ASCII decimal digits only**, with no sign or spaces. It avoids partial `read` and uses unbounded `Integer` arithmetic. It is not a general parser for Haskell numeric syntax.
+
+## 3. `parseNatural`: a total decimal parser
+
+Reject empty or non-digit input, otherwise accumulate the value. Each digit shifts the previous accumulator one decimal place.
+
+**Template:** `digits accumulator remaining`: update with `10 * accumulator + digit`, and return the accumulator when no characters remain.
+
+**Defining equations:**
+
+```haskell
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+```
+
+### Variation: several digits
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseNatural "120".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+
+main :: IO ()
+main = print (parseNatural "120")
+```
+
+```text
+Just 120
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `digits 0 "120" -> digits 1 "20" -> digits 12 "0" -> digits 120 [] -> Just 120`. Each step uses the digit guard.
+
+### Variation: empty input
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseNatural "".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+
+main :: IO ()
+main = print (parseNatural "")
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The outer empty-input equation returns `Nothing`, rather than incorrectly treating an empty string as zero.
+
+### Variation: bad character
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseNatural "1x".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+
+main :: IO ()
+main = print (parseNatural "1x")
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first digit sets the accumulator to 1; `'x'` fails the range test and returns absence.
+
+**Common error and repair:** Do not let an invalid suffix disappear: `"12x"` must fail, rather than parse as 12.
+
+**Practice with an answer:** Predict `parseNatural "120"` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 120`. `digits 0 "120" -> digits 1 "20" -> digits 12 "0" -> digits 120 [] -> Just 120`. Each step uses the digit guard.
+
+</details>
+
+## 4. `safeDivE`: a reason for no quotient
+
+The `Maybe` quotient lost the explanation. This version returns a text reason on zero division and an unbounded integer quotient otherwise.
+
+**Template:** `safeDivE numerator divisor`: return a reason before attempting an invalid operation.
+
+**Defining equations:**
+
+```haskell
+safeDivE :: Integer -> Integer -> Either String Integer
+safeDivE _ 0 = Left "zero divisor"
+safeDivE x y = Right (x `div` y)
+```
+
+### Variation: success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeDivE 19 4.
+safeDivE :: Integer -> Integer -> Either String Integer
+safeDivE _ 0 = Left "zero divisor"
+safeDivE x y = Right (x `div` y)
+
+main :: IO ()
+main = print (safeDivE 19 4)
+```
+
+```text
+Right 4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The divisor is non-zero; `Right (div 19 4) = Right 4`.
+
+### Variation: zero divisor
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeDivE 9 0.
+safeDivE :: Integer -> Integer -> Either String Integer
+safeDivE _ 0 = Left "zero divisor"
+safeDivE x y = Right (x `div` y)
+
+main :: IO ()
+main = print (safeDivE 9 0)
+```
+
+```text
+Left "zero divisor"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first equation returns the reason without computing division.
+
+### Variation: negative quotient
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeDivE (-7) 2.
+safeDivE :: Integer -> Integer -> Either String Integer
+safeDivE _ 0 = Left "zero divisor"
+safeDivE x y = Right (x `div` y)
+
+main :: IO ()
+main = print (safeDivE (-7) 2)
+```
+
+```text
+Right (-4)
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The non-zero equation uses floor division, giving `Right (-4)`.
+
+**Common error and repair:** Testing only the numerator does not protect against a zero divisor.
+
+**Practice with an answer:** Predict `safeDivE 19 4` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 4`. The divisor is non-zero; `Right (div 19 4) = Right 4`.
+
+</details>
+
+## 5. `parseAge`: distinct text failures
+
+An age parser must distinguish missing input, invalid characters and a value outside the permitted range. Here valid ages are whole years from 0 through 130.
+
+**Template:** `parseAge text`: check missing first, parse digits, then validate the numerical range.
+
+**Defining equations:**
+
+```haskell
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+parseAge :: String -> Either String Integer
+parseAge "" = Left "age missing"
+parseAge s = case parseNatural s of
+  Nothing -> Left "age must contain digits only"
+  Just n | n > 130 -> Left "age out of range"
+         | otherwise -> Right n
+```
+
+### Variation: valid age
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseAge "21".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+parseAge :: String -> Either String Integer
+parseAge "" = Left "age missing"
+parseAge s = case parseNatural s of
+  Nothing -> Left "age must contain digits only"
+  Just n | n > 130 -> Left "age out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (parseAge "21")
+```
+
+```text
+Right 21
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The input is non-empty. Accumulation gives `Just 21`; `21 > 130` is `False`, so return `Right 21`.
+
+### Variation: missing age
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseAge "".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+parseAge :: String -> Either String Integer
+parseAge "" = Left "age missing"
+parseAge s = case parseNatural s of
+  Nothing -> Left "age must contain digits only"
+  Just n | n > 130 -> Left "age out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (parseAge "")
+```
+
+```text
+Left "age missing"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The explicit empty-string equation wins before parsing.
+
+### Variation: bad syntax
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseAge "2x".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+parseAge :: String -> Either String Integer
+parseAge "" = Left "age missing"
+parseAge s = case parseNatural s of
+  Nothing -> Left "age must contain digits only"
+  Just n | n > 130 -> Left "age out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (parseAge "2x")
+```
+
+```text
+Left "age must contain digits only"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The parser consumes `2`, rejects `x`, and yields `Nothing`; the absent alternative supplies the syntax reason.
+
+### Variation: out-of-range value
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseAge "131".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+parseAge :: String -> Either String Integer
+parseAge "" = Left "age missing"
+parseAge s = case parseNatural s of
+  Nothing -> Left "age must contain digits only"
+  Just n | n > 130 -> Left "age out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (parseAge "131")
+```
+
+```text
+Left "age out of range"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Parsing gives `Just 131`; the range guard succeeds, so return the range reason.
+
+**Common error and repair:** Conflating syntax and range failures gives the caller the wrong repair advice.
+
+**Practice with an answer:** Predict `parseAge "21"` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 21`. The input is non-empty. Accumulation gives `Just 21`; `21 > 130` is `False`, so return `Right 21`.
+
+</details>
+
+## 6. `validatePassword`: ordered rules
+
+This teaching policy requires at least six characters, no spaces and at least one ASCII digit. Rule order defines which failure is reported when several rules fail; it is not a security recommendation.
+
+**Template:** `validatePassword text`: test each rejection rule in its stated priority, then return the original value.
+
+**Defining equations:**
+
+```haskell
+validatePassword :: String -> Either String String
+validatePassword s
+  | length s < 6 = Left "too short"
+  | ' ' `elem` s = Left "contains space"
+  | not (any (\c -> c >= '0' && c <= '9') s) = Left "digit required"
+  | otherwise = Right s
+```
+
+### Variation: valid password
+
+<HaskellTryIt>
+
+```haskell
+-- Predict validatePassword "abc123".
+validatePassword :: String -> Either String String
+validatePassword s
+  | length s < 6 = Left "too short"
+  | ' ' `elem` s = Left "contains space"
+  | not (any (\c -> c >= '0' && c <= '9') s) = Left "digit required"
+  | otherwise = Right s
+
+main :: IO ()
+main = print (validatePassword "abc123")
+```
+
+```text
+Right "abc123"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Length 6 passes, no space occurs, and a digit exists. The final guard returns the original string.
+
+### Variation: first rule fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict validatePassword "a 1".
+validatePassword :: String -> Either String String
+validatePassword s
+  | length s < 6 = Left "too short"
+  | ' ' `elem` s = Left "contains space"
+  | not (any (\c -> c >= '0' && c <= '9') s) = Left "digit required"
+  | otherwise = Right s
+
+main :: IO ()
+main = print (validatePassword "a 1")
+```
+
+```text
+Left "too short"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Length 3 fails the first rule. Although a space also occurs, that later rule is not reached.
+
+### Variation: space rule fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict validatePassword "abc 12".
+validatePassword :: String -> Either String String
+validatePassword s
+  | length s < 6 = Left "too short"
+  | ' ' `elem` s = Left "contains space"
+  | not (any (\c -> c >= '0' && c <= '9') s) = Left "digit required"
+  | otherwise = Right s
+
+main :: IO ()
+main = print (validatePassword "abc 12")
+```
+
+```text
+Left "contains space"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Length 6 passes; the next guard finds a space and returns its reason.
+
+### Variation: digit rule fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict validatePassword "abcdef".
+validatePassword :: String -> Either String String
+validatePassword s
+  | length s < 6 = Left "too short"
+  | ' ' `elem` s = Left "contains space"
+  | not (any (\c -> c >= '0' && c <= '9') s) = Left "digit required"
+  | otherwise = Right s
+
+main :: IO ()
+main = print (validatePassword "abcdef")
+```
+
+```text
+Left "digit required"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Length and spacing pass; `any` finds no digit, so `not False = True` selects the third reason.
+
+**Common error and repair:** Combining every rejection into one Boolean loses distinct reasons.
+
+**Practice with an answer:** Predict `validatePassword "abc123"` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right "abc123"`. Length 6 passes, no space occurs, and a digit exists. The final guard returns the original string.
+
+</details>
+
+## 7. `withdraw`: two independent failures
+
+A non-positive amount is invalid; a positive amount exceeding the balance has insufficient funds. Assume a non-negative starting balance; amounts and balances are integer units.
+
+**Template:** `withdraw balance amount`: validate amount, then available funds, then return the new balance.
+
+**Defining equations:**
+
+```haskell
+withdraw :: Integer -> Integer -> Either String Integer
+withdraw balance amount
+  | amount <= 0 = Left "amount must be positive"
+  | amount > balance = Left "insufficient funds"
+  | otherwise = Right (balance - amount)
+```
+
+### Variation: ordinary success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict withdraw 100 30.
+withdraw :: Integer -> Integer -> Either String Integer
+withdraw balance amount
+  | amount <= 0 = Left "amount must be positive"
+  | amount > balance = Left "insufficient funds"
+  | otherwise = Right (balance - amount)
+
+main :: IO ()
+main = print (withdraw 100 30)
+```
+
+```text
+Right 70
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `30 <= 0` and `30 > 100` are `False`; return `Right (100 - 30) = Right 70`.
+
+### Variation: invalid amount
+
+<HaskellTryIt>
+
+```haskell
+-- Predict withdraw 100 0.
+withdraw :: Integer -> Integer -> Either String Integer
+withdraw balance amount
+  | amount <= 0 = Left "amount must be positive"
+  | amount > balance = Left "insufficient funds"
+  | otherwise = Right (balance - amount)
+
+main :: IO ()
+main = print (withdraw 100 0)
+```
+
+```text
+Left "amount must be positive"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first guard is `True`; do not treat zero as a valid withdrawal.
+
+### Variation: insufficient funds
+
+<HaskellTryIt>
+
+```haskell
+-- Predict withdraw 100 101.
+withdraw :: Integer -> Integer -> Either String Integer
+withdraw balance amount
+  | amount <= 0 = Left "amount must be positive"
+  | amount > balance = Left "insufficient funds"
+  | otherwise = Right (balance - amount)
+
+main :: IO ()
+main = print (withdraw 100 101)
+```
+
+```text
+Left "insufficient funds"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The amount is positive but exceeds 100, so the second guard chooses the funds reason.
+
+**Common error and repair:** Subtracting before checking the amount can turn a negative withdrawal into a deposit.
+
+**Practice with an answer:** Predict `withdraw 100 30` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 70`. `30 <= 0` and `30 > 100` are `False`; return `Right (100 - 30) = Right 70`.
+
+</details>
+
+## 8. `lookupE`: name the missing key
+
+A failed lookup can include the requested key so a caller knows which item was absent. Text keys keep this example's type simple.
+
+**Template:** `lookupE requested table`: first matching key succeeds; exhaustion constructs a key-specific message.
+
+**Defining equations:**
+
+```haskell
+lookupE :: String -> [(String,v)] -> Either String v
+lookupE key [] = Left ("missing key: " ++ key)
+lookupE key ((k,v):rest)
+  | key == k = Right v
+  | otherwise = lookupE key rest
+```
+
+### Variation: found later
+
+<HaskellTryIt>
+
+```haskell
+-- Predict lookupE "b" [("a",3),("b",7 :: Int)].
+lookupE :: String -> [(String,v)] -> Either String v
+lookupE key [] = Left ("missing key: " ++ key)
+lookupE key ((k,v):rest)
+  | key == k = Right v
+  | otherwise = lookupE key rest
+
+main :: IO ()
+main = print (lookupE "b" [("a",3),("b",7 :: Int)])
+```
+
+```text
+Right 7
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Skip `"a"`; match `"b"` and return `Right 7`.
+
+### Variation: missing key
+
+<HaskellTryIt>
+
+```haskell
+-- Predict lookupE "z" [("a",3 :: Int)].
+lookupE :: String -> [(String,v)] -> Either String v
+lookupE key [] = Left ("missing key: " ++ key)
+lookupE key ((k,v):rest)
+  | key == k = Right v
+  | otherwise = lookupE key rest
+
+main :: IO ()
+main = print (lookupE "z" [("a",3 :: Int)])
+```
+
+```text
+Left "missing key: z"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The only key differs; exhaustion gives `Left ("missing key: " ++ "z")`.
+
+### Variation: duplicate keys
+
+<HaskellTryIt>
+
+```haskell
+-- Predict lookupE "a" [("a","first"),("a","later")].
+lookupE :: String -> [(String,v)] -> Either String v
+lookupE key [] = Left ("missing key: " ++ key)
+lookupE key ((k,v):rest)
+  | key == k = Right v
+  | otherwise = lookupE key rest
+
+main :: IO ()
+main = print (lookupE "a" [("a","first"),("a","later")])
+```
+
+```text
+Right "first"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first equality succeeds, so later matches are not consulted.
+
+**Common error and repair:** Returning just `Left` omits its required reason argument.
+
+**Practice with an answer:** Predict `lookupE "b" [("a",3),("b",7 :: Int)]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 7`. Skip `"a"`; match `"b"` and return `Right 7`.
+
+</details>
+
+## 9. `rootE`: reject negative real inputs
+
+Within finite real inputs, preserve the root on success and explain negative arguments on failure. NaN and infinities are outside this example's domain.
+
+**Template:** `rootE number`: validate the real domain before calling `sqrt`.
+
+**Defining equations:**
+
+```haskell
+rootE :: Double -> Either String Double
+rootE x
+  | x < 0 = Left "negative radicand"
+  | otherwise = Right (sqrt x)
+```
+
+### Variation: positive square
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rootE 16.
+rootE :: Double -> Either String Double
+rootE x
+  | x < 0 = Left "negative radicand"
+  | otherwise = Right (sqrt x)
+
+main :: IO ()
+main = print (rootE 16)
+```
+
+```text
+Right 4.0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The guard is `False`; `Right (sqrt 16) = Right 4.0`.
+
+### Variation: zero boundary
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rootE 0.
+rootE :: Double -> Either String Double
+rootE x
+  | x < 0 = Left "negative radicand"
+  | otherwise = Right (sqrt x)
+
+main :: IO ()
+main = print (rootE 0)
+```
+
+```text
+Right 0.0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Zero is accepted and its root is the `Double` value `0.0`.
+
+### Variation: negative argument
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rootE (-1).
+rootE :: Double -> Either String Double
+rootE x
+  | x < 0 = Left "negative radicand"
+  | otherwise = Right (sqrt x)
+
+main :: IO ()
+main = print (rootE (-1))
+```
+
+```text
+Left "negative radicand"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first guard returns the reason before `sqrt` is demanded.
+
+**Common error and repair:** Losing the `Double` result annotation can change displayed integral-looking outputs.
+
+**Practice with an answer:** Predict `rootE 16` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 4.0`. The guard is `False`; `Right (sqrt 16) = Right 4.0`.
+
+</details>
+
+## 10. `checkSorted`: report the first inversion
+
+Check non-decreasing order, allowing equal neighbours. On failure report the **zero-based index of the right element** of the first descending adjacent pair. Empty and singleton lists are sorted.
+
+**Template:** `go rightIndex remaining`: compare neighbours; move one place only after a successful comparison. A success returns the original list.
+
+**Defining equations:**
+
+```haskell
+checkSorted :: Ord a => [a] -> Either Int [a]
+checkSorted xs = go 1 xs
+  where
+    go _ [] = Right xs
+    go _ [_] = Right xs
+    go i (x:y:rest)
+      | x > y = Left i
+      | otherwise = go (i + 1) (y:rest)
+```
+
+### Variation: equal neighbours accepted
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkSorted [1,2,2,4 :: Int].
+checkSorted :: Ord a => [a] -> Either Int [a]
+checkSorted xs = go 1 xs
+  where
+    go _ [] = Right xs
+    go _ [_] = Right xs
+    go i (x:y:rest)
+      | x > y = Left i
+      | otherwise = go (i + 1) (y:rest)
+
+main :: IO ()
+main = print (checkSorted [1,2,2,4 :: Int])
+```
+
+```text
+Right [1,2,2,4]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Compare `(1,2)` at index 1, `(2,2)` at 2 and `(2,4)` at 3. None descends; the singleton base case returns the original list.
+
+### Variation: first bad position
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkSorted [1,4,3,0 :: Int].
+checkSorted :: Ord a => [a] -> Either Int [a]
+checkSorted xs = go 1 xs
+  where
+    go _ [] = Right xs
+    go _ [_] = Right xs
+    go i (x:y:rest)
+      | x > y = Left i
+      | otherwise = go (i + 1) (y:rest)
+
+main :: IO ()
+main = print (checkSorted [1,4,3,0 :: Int])
+```
+
+```text
+Left 2
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `1 > 4` is `False`; increment to 2. `4 > 3` is `True`, so stop at `Left 2` without reporting the later inversion.
+
+### Variation: empty input
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkSorted ([] :: [Int]).
+checkSorted :: Ord a => [a] -> Either Int [a]
+checkSorted xs = go 1 xs
+  where
+    go _ [] = Right xs
+    go _ [_] = Right xs
+    go i (x:y:rest)
+      | x > y = Left i
+      | otherwise = go (i + 1) (y:rest)
+
+main :: IO ()
+main = print (checkSorted ([] :: [Int]))
+```
+
+```text
+Right []
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `go 1 [] = Right xs`, with original `xs = []`.
+
+**Common error and repair:** Reporting the left index is off by one under this specification.
+
+**Practice with an answer:** Predict `checkSorted [1,2,2,4 :: Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right [1,2,2,4]`. Compare `(1,2)` at index 1, `(2,2)` at 2 and `(2,4)` at 3. None descends; the singleton base case returns the original list.
+
+</details>
+
+## 11. `readMark`: syntax and bounds
+
+Read a mark containing ASCII decimal digits only, then check the inclusive range 0 through 100. A sign or spaces is a syntax failure in this defined input language.
+
+**Template:** `readMark text`: distinguish empty input, invalid syntax and a parsed but out-of-range number.
+
+**Defining equations:**
+
+```haskell
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+readMark :: String -> Either String Integer
+readMark "" = Left "mark missing"
+readMark s = case parseNatural s of
+  Nothing -> Left "mark must contain digits only"
+  Just n | n > 100 -> Left "mark out of range"
+         | otherwise -> Right n
+```
+
+### Variation: upper boundary
+
+<HaskellTryIt>
+
+```haskell
+-- Predict readMark "100".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+readMark :: String -> Either String Integer
+readMark "" = Left "mark missing"
+readMark s = case parseNatural s of
+  Nothing -> Left "mark must contain digits only"
+  Just n | n > 100 -> Left "mark out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (readMark "100")
+```
+
+```text
+Right 100
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Accumulate `1`, `10`, `100`; the range guard is `False`, so accept 100.
+
+### Variation: out of range
+
+<HaskellTryIt>
+
+```haskell
+-- Predict readMark "101".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+readMark :: String -> Either String Integer
+readMark "" = Left "mark missing"
+readMark s = case parseNatural s of
+  Nothing -> Left "mark must contain digits only"
+  Just n | n > 100 -> Left "mark out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (readMark "101")
+```
+
+```text
+Left "mark out of range"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Parsing succeeds with 101, but the upper-bound test is `True`.
+
+### Variation: invalid syntax
+
+<HaskellTryIt>
+
+```haskell
+-- Predict readMark "-1".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+readMark :: String -> Either String Integer
+readMark "" = Left "mark missing"
+readMark s = case parseNatural s of
+  Nothing -> Left "mark must contain digits only"
+  Just n | n > 100 -> Left "mark out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (readMark "-1")
+```
+
+```text
+Left "mark must contain digits only"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first character is not a digit; parsing fails before a range check can occur.
+
+### Variation: missing mark
+
+<HaskellTryIt>
+
+```haskell
+-- Predict readMark "".
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+readMark :: String -> Either String Integer
+readMark "" = Left "mark missing"
+readMark s = case parseNatural s of
+  Nothing -> Left "mark must contain digits only"
+  Just n | n > 100 -> Left "mark out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (readMark "")
+```
+
+```text
+Left "mark missing"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The missing-input equation applies directly.
+
+**Common error and repair:** Partial `read` does not turn malformed text into `Left`; validate syntax first.
+
+**Practice with an answer:** Predict `readMark "100"` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 100`. Accumulate `1`, `10`, `100`; the range guard is `False`, so accept 100.
+
+</details>
+
+## 12. `either`: eliminate the choice
+
+Supply one function for each side. Both functions must return the same result type, although their input types may differ.
+
+**Template:** `either handleLeft handleRight choice`: handlers are `a -> c` and `b -> c`; the wrapper disappears.
+
+**Defining equations:**
+
+```haskell
+either :: (a -> c) -> (b -> c) -> Either a b -> c
+either f _ (Left x) = f x
+either _ g (Right y) = g y
+```
+
+### Variation: left numeric result
+
+<HaskellTryIt>
+
+```haskell
+-- Predict either length negate (Left "bad" :: Either String Int).
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (either length negate (Left "bad" :: Either String Int))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `either length negate (Left "bad") = length "bad" = 3`. The right handler is ignored.
+
+### Variation: right numeric result
+
+<HaskellTryIt>
+
+```haskell
+-- Predict either length negate (Right 4 :: Either String Int).
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (either length negate (Right 4 :: Either String Int))
+```
+
+```text
+-4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `either length negate (Right 4) = negate 4 = -4`; the left handler is ignored.
+
+### Variation: left text result
+
+<HaskellTryIt>
+
+```haskell
+-- Predict either show (map toUpper) (Left 12 :: Either Int String).
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (either show (map toUpper) (Left 12 :: Either Int String))
+```
+
+```text
+"12"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Match `Left 12`, then `show 12 = "12"`. Both handlers here produce `String`.
+
+### Variation: right text result
+
+<HaskellTryIt>
+
+```haskell
+-- Predict either show (map toUpper) (Right "cat" :: Either Int String).
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (either show (map toUpper) (Right "cat" :: Either Int String))
+```
+
+```text
+"CAT"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Match `Right "cat"` and apply `map toUpper`: `c`, `a`, `t` become `C`, `A`, `T`.
+
+**Common error and repair:** A handler returning `Int` and another returning `String` cannot form one result type.
+
+**Practice with an answer:** Predict `either length negate (Left "bad" :: Either String Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`3`. `either length negate (Left "bad") = length "bad" = 3`. The right handler is ignored.
+
+</details>
+
+## 13. `lefts`: collect the left payloads
+
+Discard every right entry and unwrap left entries in their original order. The name says which constructor to keep, not which domain values are errors.
+
+**Template:** `lefts choices`: keep payloads only from `Left`.
+
+**Defining equations:**
+
+```haskell
+lefts :: [Either a b] -> [a]
+lefts [] = []
+lefts (Left x:es) = x : lefts es
+lefts (Right _:es) = lefts es
+```
+
+### Variation: mixed entries
+
+<HaskellTryIt>
+
+```haskell
+-- Predict lefts [Left "a",Right 2,Left "b" :: Either String Int].
+import Data.Either (lefts)
+
+main :: IO ()
+main = print (lefts [Left "a",Right 2,Left "b" :: Either String Int])
+```
+
+```text
+["a","b"]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Emit `"a"`, skip `Right 2`, emit `"b"`, then stop: `["a","b"]`.
+
+### Variation: no left entries
+
+<HaskellTryIt>
+
+```haskell
+-- Predict lefts [Right 2,Right 3 :: Either String Int].
+import Data.Either (lefts)
+
+main :: IO ()
+main = print (lefts [Right 2,Right 3 :: Either String Int])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Skip both right entries; the empty equation gives `[]`.
+
+### Variation: empty input
+
+<HaskellTryIt>
+
+```haskell
+-- Predict lefts ([] :: [Either Int String]).
+import Data.Either (lefts)
+
+main :: IO ()
+main = print (lefts ([] :: [Either Int String]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The base equation returns an empty list of left payloads.
+
+**Common error and repair:** `lefts` returns `[a]`, not `[Either a b]`; the constructors are removed.
+
+**Practice with an answer:** Predict `lefts [Left "a",Right 2,Left "b" :: Either String Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`["a","b"]`. Emit `"a"`, skip `Right 2`, emit `"b"`, then stop: `["a","b"]`.
+
+</details>
+
+## 14. `rights`: collect the right payloads
+
+Discard left entries and collect successful payloads in the validation convention. This discards the reasons, so keep them separately when a report needs both.
+
+**Template:** `rights choices`: keep payloads only from `Right`.
+
+**Defining equations:**
+
+```haskell
+rights :: [Either a b] -> [b]
+rights [] = []
+rights (Left _:es) = rights es
+rights (Right y:es) = y : rights es
+```
+
+### Variation: mixed entries
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rights [Right 4,Left "bad",Right 9 :: Either String Int].
+import Data.Either (rights)
+
+main :: IO ()
+main = print (rights [Right 4,Left "bad",Right 9 :: Either String Int])
+```
+
+```text
+[4,9]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Emit 4, skip the reason, emit 9, then use the base equation.
+
+### Variation: all failures
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rights [Left "a",Left "b" :: Either String Int].
+import Data.Either (rights)
+
+main :: IO ()
+main = print (rights [Left "a",Left "b" :: Either String Int])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both left entries are skipped; there are no successful payloads.
+
+### Variation: character payloads
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rights [Right 'a',Left 1,Right 'b' :: Either Int Char].
+import Data.Either (rights)
+
+main :: IO ()
+main = print (rights [Right 'a',Left 1,Right 'b' :: Either Int Char])
+```
+
+```text
+"ab"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Keep the two characters. Their list has type `String`, so it prints as `"ab"`.
+
+**Common error and repair:** Discarding reasons with `rights` does not prove that all input items succeeded.
+
+**Practice with an answer:** Predict `rights [Right 4,Left "bad",Right 9 :: Either String Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`[4,9]`. Emit 4, skip the reason, emit 9, then use the base equation.
+
+</details>
+
+## 15. `partitionEithers`: retain both sides
+
+Separate a batch into a pair of lists: left payloads first, right payloads second. Each list preserves its own encounter order. Relative interleaving between sides is lost.
+
+**Template:** `partitionEithers choices`: return `(leftPayloads,rightPayloads)`.
+
+**Defining equations:**
+
+```haskell
+partitionEithers :: [Either a b] -> ([a],[b])
+partitionEithers [] = ([],[])
+partitionEithers (e:es) =
+  let (ls,rs) = partitionEithers es
+  in case e of
+    Left x -> (x:ls,rs)
+    Right y -> (ls,y:rs)
+```
+
+### Variation: mixed batch
+
+<HaskellTryIt>
+
+```haskell
+-- Predict partitionEithers [Left "bad",Right 4,Left "late",Right 2 :: Either String Int].
+import Data.Either (partitionEithers)
+
+main :: IO ()
+main = print (partitionEithers [Left "bad",Right 4,Left "late",Right 2 :: Either String Int])
+```
+
+```text
+(["bad","late"],[4,2])
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The empty tail gives `([],[])`; prepend 2 to rights, `"late"` to lefts, 4 to rights and `"bad"` to lefts, giving `(["bad","late"],[4,2])`.
+
+### Variation: all success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict partitionEithers [Right 1,Right 2 :: Either String Int].
+import Data.Either (partitionEithers)
+
+main :: IO ()
+main = print (partitionEithers [Right 1,Right 2 :: Either String Int])
+```
+
+```text
+([],[1,2])
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both entries prepend to the right list; the left list remains empty.
+
+### Variation: empty batch
+
+<HaskellTryIt>
+
+```haskell
+-- Predict partitionEithers ([] :: [Either String Int]).
+import Data.Either (partitionEithers)
+
+main :: IO ()
+main = print (partitionEithers ([] :: [Either String Int]))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The base equation returns a pair of empty lists, rather than one empty list.
+
+**Common error and repair:** Swapping the two lists reverses the documented result type and meaning.
+
+**Practice with an answer:** Predict `partitionEithers [Left "bad",Right 4,Left "late",Right 2 :: Either String Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`(["bad","late"],[4,2])`. The empty tail gives `([],[])`; prepend 2 to rights, `"late"` to lefts, 4 to rights and `"bad"` to lefts, giving `(["bad","late"],[4,2])`.
+
+</details>
+
+## 16. `isLeft`: inspect the constructor
+
+Report whether the outer constructor is `Left`, without returning or interpreting its payload.
+
+**Template:** `isLeft choice`: only the constructor matters.
+
+**Defining equations:**
+
+```haskell
+isLeft :: Either a b -> Bool
+isLeft (Left _) = True
+isLeft (Right _) = False
+```
+
+### Variation: left text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isLeft (Left "bad" :: Either String Int).
+import Data.Either (isLeft)
+
+main :: IO ()
+main = print (isLeft (Left "bad" :: Either String Int))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left equation returns `True`.
+
+### Variation: right zero
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isLeft (Right 0 :: Either String Int).
+import Data.Either (isLeft)
+
+main :: IO ()
+main = print (isLeft (Right 0 :: Either String Int))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** A zero payload remains a right value; select `False`.
+
+### Variation: empty left text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isLeft (Left "" :: Either String Int).
+import Data.Either (isLeft)
+
+main :: IO ()
+main = print (isLeft (Left "" :: Either String Int))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The empty reason is still carried by `Left`.
+
+**Common error and repair:** `isLeft` is a constructor test, not a check that a reason string is non-empty.
+
+**Practice with an answer:** Predict `isLeft (Left "bad" :: Either String Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`True`. The left equation returns `True`.
+
+</details>
+
+## 17. `isRight`: inspect success conventionally
+
+Test whether a right payload exists. Success is the meaning assigned by the validation convention, rather than by the declaration itself.
+
+**Template:** `isRight choice`: return `True` for `Right` regardless of payload.
+
+**Defining equations:**
+
+```haskell
+isRight :: Either a b -> Bool
+isRight (Left _) = False
+isRight (Right _) = True
+```
+
+### Variation: left reason
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isRight (Left "bad" :: Either String Int).
+import Data.Either (isRight)
+
+main :: IO ()
+main = print (isRight (Left "bad" :: Either String Int))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left equation returns `False`.
+
+### Variation: right zero
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isRight (Right 0 :: Either String Int).
+import Data.Either (isRight)
+
+main :: IO ()
+main = print (isRight (Right 0 :: Either String Int))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The right equation returns `True`, even for zero.
+
+### Variation: right empty list
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isRight (Right [] :: Either String [Int]).
+import Data.Either (isRight)
+
+main :: IO ()
+main = print (isRight (Right [] :: Either String [Int]))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The right constructor is present despite its empty list payload.
+
+**Common error and repair:** Do not equate an empty successful result with a failed computation.
+
+**Practice with an answer:** Predict `isRight (Left "bad" :: Either String Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`False`. The left equation returns `False`.
+
+</details>
+
+## 18. `fromLeft`: extract one side or default
+
+Return the left payload if present, otherwise a default of the left payload type. A right payload is deliberately discarded.
+
+**Template:** `fromLeft defaultLeft choice`: default and result both have type `a`.
+
+**Defining equations:**
+
+```haskell
+fromLeft :: a -> Either a b -> a
+fromLeft _ (Left x) = x
+fromLeft d (Right _) = d
+```
+
+### Variation: left present
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromLeft "none" (Left "bad" :: Either String Int).
+import Data.Either (fromLeft)
+
+main :: IO ()
+main = print (fromLeft "none" (Left "bad" :: Either String Int))
+```
+
+```text
+"bad"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left equation returns `"bad"` and ignores `"none"`.
+
+### Variation: right present
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromLeft "none" (Right 4 :: Either String Int).
+import Data.Either (fromLeft)
+
+main :: IO ()
+main = print (fromLeft "none" (Right 4 :: Either String Int))
+```
+
+```text
+"none"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The right equation ignores 4 and returns the left-side default.
+
+### Variation: numeric left
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromLeft 99 (Left 0 :: Either Int String).
+import Data.Either (fromLeft)
+
+main :: IO ()
+main = print (fromLeft 99 (Left 0 :: Either Int String))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left payload is zero, so return 0 rather than the default 99.
+
+**Common error and repair:** The default is not a value of the other side's type.
+
+**Practice with an answer:** Predict `fromLeft "none" (Left "bad" :: Either String Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`"bad"`. The left equation returns `"bad"` and ignores `"none"`.
+
+</details>
+
+## 19. `fromRight`: extract one side or default
+
+Return a right payload or a default of the right payload type. This is safe from constructor failure but loses the left reason.
+
+**Template:** `fromRight defaultRight choice`: default and result both have type `b`.
+
+**Defining equations:**
+
+```haskell
+fromRight :: b -> Either a b -> b
+fromRight d (Left _) = d
+fromRight _ (Right y) = y
+```
+
+### Variation: success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromRight 99 (Right 4 :: Either String Int).
+import Data.Either (fromRight)
+
+main :: IO ()
+main = print (fromRight 99 (Right 4 :: Either String Int))
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The right equation returns 4 and ignores 99.
+
+### Variation: failure default
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromRight 99 (Left "bad" :: Either String Int).
+import Data.Either (fromRight)
+
+main :: IO ()
+main = print (fromRight 99 (Left "bad" :: Either String Int))
+```
+
+```text
+99
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left equation discards the reason and returns 99.
+
+### Variation: empty successful text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromRight "fallback" (Right "" :: Either Int String).
+import Data.Either (fromRight)
+
+main :: IO ()
+main = print (fromRight "fallback" (Right "" :: Either Int String))
+```
+
+```text
+""
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The present right payload is an empty string; it wins over the default.
+
+**Common error and repair:** Calling this before reporting the left reason can erase the information `Either` was chosen to preserve.
+
+**Practice with an answer:** Predict `fromRight 99 (Right 4 :: Either String Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`4`. The right equation returns 4 and ignores 99.
+
+</details>
+
+## 20. Nested `case`: preserve the first error
+
+A dependent second step runs only after the first succeeds. Copy a failure payload unchanged so the caller can identify the failed stage.
+
+**Template:** `case first input of Left reason -> Left reason; Right x -> next x`: each dependency adds a match.
+
+**Defining equations:**
+
+```haskell
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+checkedHalfE :: Int -> Either String Int
+checkedHalfE n = case checkPositive n of
+  Left reason -> Left reason
+  Right x -> case halfE x of
+    Left reason -> Left reason
+    Right y -> Right y
+```
+
+### Variation: all stages succeed
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkedHalfE 8.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+checkedHalfE :: Int -> Either String Int
+checkedHalfE n = case checkPositive n of
+  Left reason -> Left reason
+  Right x -> case halfE x of
+    Left reason -> Left reason
+    Right y -> Right y
+
+main :: IO ()
+main = print (checkedHalfE 8)
+```
+
+```text
+Right 4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `checkPositive 8 = Right 8`; pass 8 to `halfE`, which returns `Right 4`.
+
+### Variation: first stage fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkedHalfE 0.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+checkedHalfE :: Int -> Either String Int
+checkedHalfE n = case checkPositive n of
+  Left reason -> Left reason
+  Right x -> case halfE x of
+    Left reason -> Left reason
+    Right y -> Right y
+
+main :: IO ()
+main = print (checkedHalfE 0)
+```
+
+```text
+Left "not positive"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first call returns its left reason. `halfE` is not evaluated, even though zero is even.
+
+### Variation: later stage fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkedHalfE 3.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+checkedHalfE :: Int -> Either String Int
+checkedHalfE n = case checkPositive n of
+  Left reason -> Left reason
+  Right x -> case halfE x of
+    Left reason -> Left reason
+    Right y -> Right y
+
+main :: IO ()
+main = print (checkedHalfE 3)
+```
+
+```text
+Left "not even"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first call returns `Right 3`. The second rejects odd 3; propagate its reason.
+
+**Common error and repair:** Replacing every reason with a generic message destroys the distinction between failure stages.
+
+**Practice with an answer:** Predict `checkedHalfE 8` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 4`. `checkPositive 8 = Right 8`; pass 8 to `halfE`, which returns `Right 4`.
+
+</details>
+
+## 21. `andThenE`: stop at the first failure
+
+The same error type `e` must be usable at every stage. On success, the next function already returns an `Either`, so return its result directly.
+
+**Template:** `andThenE firstResult nextStep`: the continuation has type `a -> Either e b`, sharing error type `e`.
+
+**Defining equations:**
+
+```haskell
+andThenE :: Either e a -> (a -> Either e b) -> Either e b
+andThenE (Left reason) _ = Left reason
+andThenE (Right x) f = f x
+```
+
+### Variation: success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict andThenE (Right 8) halfE.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+
+andThenE :: Either e a -> (a -> Either e b) -> Either e b
+andThenE (Left reason) _ = Left reason
+andThenE (Right x) f = f x
+
+main :: IO ()
+main = print (andThenE (Right 8) halfE)
+```
+
+```text
+Right 4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `andThenE (Right 8) halfE = halfE 8 = Right 4`.
+
+### Variation: existing error
+
+<HaskellTryIt>
+
+```haskell
+-- Predict andThenE (Left "earlier" :: Either String Int) halfE.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+
+andThenE :: Either e a -> (a -> Either e b) -> Either e b
+andThenE (Left reason) _ = Left reason
+andThenE (Right x) f = f x
+
+main :: IO ()
+main = print (andThenE (Left "earlier" :: Either String Int) halfE)
+```
+
+```text
+Left "earlier"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left equation returns the existing reason; `halfE` is ignored.
+
+### Variation: new error
+
+<HaskellTryIt>
+
+```haskell
+-- Predict andThenE (Right 3) halfE.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+
+andThenE :: Either e a -> (a -> Either e b) -> Either e b
+andThenE (Left reason) _ = Left reason
+andThenE (Right x) f = f x
+
+main :: IO ()
+main = print (andThenE (Right 3) halfE)
+```
+
+```text
+Left "not even"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The right equation calls `halfE 3`, which fails; return that left result unchanged.
+
+**Common error and repair:** Wrapping `f x` with `Right` produces `Either e (Either e b)` and breaks the intended type.
+
+**Practice with an answer:** Predict `andThenE (Right 8) halfE` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 4`. `andThenE (Right 8) halfE = halfE 8 = Right 4`.
+
+</details>
+
+## 22. `>>=` for `Either`: the same chain
+
+Prelude bind supplies the behaviour of `andThenE`. It stops at the first error, rather than accumulating every failed validation.
+
+**Template:** `firstResult >>= nextStep`: the specialised type is `Either e a -> (a -> Either e b) -> Either e b`.
+
+**Defining equations:**
+
+```haskell
+bindEither :: Either e a -> (a -> Either e b) -> Either e b
+bindEither (Left e) _ = Left e
+bindEither (Right x) f = f x
+```
+
+### Variation: three successful stages
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkPositive 8 >>= halfE >>= halfE.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+
+main :: IO ()
+main = print (checkPositive 8 >>= halfE >>= halfE)
+```
+
+```text
+Right 2
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Bind is left-associative: `Right 8 >>= halfE = Right 4`, then `Right 4 >>= halfE = Right 2`.
+
+### Variation: third stage fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkPositive 6 >>= halfE >>= halfE.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+
+main :: IO ()
+main = print (checkPositive 6 >>= halfE >>= halfE)
+```
+
+```text
+Left "not even"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Positive 6 succeeds, the first half returns `Right 3`, then the second half returns the odd-input reason.
+
+### Variation: first failure wins
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkPositive (-3) >>= halfE >>= halfE.
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+
+main :: IO ()
+main = print (checkPositive (-3) >>= halfE >>= halfE)
+```
+
+```text
+Left "not positive"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first call returns `Left "not positive"`; each bind returns that same left value without calling either continuation.
+
+**Common error and repair:** To collect independent errors, validate each item separately and partition the resulting list; bind does not accumulate them.
+
+**Practice with an answer:** Predict `checkPositive 8 >>= halfE >>= halfE` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 2`. Bind is left-associative: `Right 8 >>= halfE = Right 4`, then `Right 4 >>= halfE = Right 2`.
+
+</details>
+
+## 23. `maybeToRight`: supply a missing reason
+
+Converting an absent result to `Either` requires new information: the caller must supply the error payload. A present payload becomes a right value.
+
+**Template:** `maybeToRight absentReason optional`: the reason has type `e` and the optional payload type remains `a`.
+
+**Defining equations:**
+
+```haskell
+maybeToRight :: e -> Maybe a -> Either e a
+maybeToRight reason Nothing = Left reason
+maybeToRight _ (Just x) = Right x
+```
+
+### Variation: success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybeToRight "missing" (Just 4 :: Maybe Int).
+maybeToRight :: e -> Maybe a -> Either e a
+maybeToRight reason Nothing = Left reason
+maybeToRight _ (Just x) = Right x
+
+main :: IO ()
+main = print (maybeToRight "missing" (Just 4 :: Maybe Int))
+```
+
+```text
+Right 4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `maybeToRight "missing" (Just 4) = Right 4`; ignore the supplied reason.
+
+### Variation: absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybeToRight "missing" (Nothing :: Maybe Int).
+maybeToRight :: e -> Maybe a -> Either e a
+maybeToRight reason Nothing = Left reason
+maybeToRight _ (Just x) = Right x
+
+main :: IO ()
+main = print (maybeToRight "missing" (Nothing :: Maybe Int))
+```
+
+```text
+Left "missing"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The absent equation packages the supplied error as a left value.
+
+### Variation: different error type
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybeToRight 404 (Nothing :: Maybe String) :: Either Int String.
+maybeToRight :: e -> Maybe a -> Either e a
+maybeToRight reason Nothing = Left reason
+maybeToRight _ (Just x) = Right x
+
+main :: IO ()
+main = print (maybeToRight 404 (Nothing :: Maybe String) :: Either Int String)
+```
+
+```text
+Left 404
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The reason need not be text. Instantiate `e = Int`, and return the numeric error.
+
+**Common error and repair:** There is no general way to invent a meaningful error of arbitrary type `e` from `Nothing`; accept it as an argument.
+
+**Practice with an answer:** Predict `maybeToRight "missing" (Just 4 :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Right 4`. `maybeToRight "missing" (Just 4) = Right 4`; ignore the supplied reason.
+
+</details>
+
+## 24. `rightToMaybe`: deliberately discard a reason
+
+Keep right payloads and collapse every left value to absence. This conversion cannot preserve the explanation.
+
+**Template:** `rightToMaybe choice`: result is optional and contains no error channel.
+
+**Defining equations:**
+
+```haskell
+rightToMaybe :: Either e a -> Maybe a
+rightToMaybe (Left _) = Nothing
+rightToMaybe (Right x) = Just x
+```
+
+### Variation: successful zero
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rightToMaybe (Right 0 :: Either String Int).
+rightToMaybe :: Either e a -> Maybe a
+rightToMaybe (Left _) = Nothing
+rightToMaybe (Right x) = Just x
+
+main :: IO ()
+main = print (rightToMaybe (Right 0 :: Either String Int))
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The right equation wraps 0 with `Just`; zero is a valid payload.
+
+### Variation: left text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rightToMaybe (Left "bad" :: Either String Int).
+rightToMaybe :: Either e a -> Maybe a
+rightToMaybe (Left _) = Nothing
+rightToMaybe (Right x) = Just x
+
+main :: IO ()
+main = print (rightToMaybe (Left "bad" :: Either String Int))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left equation ignores `"bad"` and returns absence.
+
+### Variation: left numeric code
+
+<HaskellTryIt>
+
+```haskell
+-- Predict rightToMaybe (Left 404 :: Either Int String).
+rightToMaybe :: Either e a -> Maybe a
+rightToMaybe (Left _) = Nothing
+rightToMaybe (Right x) = Just x
+
+main :: IO ()
+main = print (rightToMaybe (Left 404 :: Either Int String))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left equation discards 404 too. Both failures now look identical.
+
+**Common error and repair:** Converting back with a new generic reason cannot recover the original left payload.
+
+**Practice with an answer:** Predict `rightToMaybe (Right 0 :: Either String Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 0`. The right equation wraps 0 with `Just`; zero is a valid payload.
+
+</details>
+
+## 25. `Eq` for `Either`
+
+Equality compares matching constructors and their payloads; unlike constructors differ. Its standard instance needs equality for both type parameters, even if a particular value uses only one side.
+
+**Template:** `choice1 == choice2`: first compare constructors, then payloads on the matching side.
+
+**Defining equations:**
+
+```haskell
+equalChoice :: (Eq a, Eq b) => Either a b -> Either a b -> Bool
+equalChoice (Left x) (Left y) = x == y
+equalChoice (Right x) (Right y) = x == y
+equalChoice _ _ = False
+```
+
+### Variation: equal left payloads
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Left "bad" :: Either String Int) == Left "bad".
+import Prelude
+
+main :: IO ()
+main = print ((Left "bad" :: Either String Int) == Left "bad")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both are left values; `"bad" == "bad" = True`.
+
+### Variation: unlike constructors
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Left 1 :: Either Int Int) == Right 1.
+import Prelude
+
+main :: IO ()
+main = print ((Left 1 :: Either Int Int) == Right 1)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The constructors differ even though the two payload numbers coincide.
+
+### Variation: different right payloads
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Right 3 :: Either String Int) == Right 4.
+import Prelude
+
+main :: IO ()
+main = print ((Right 3 :: Either String Int) == Right 4)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both are right values; `3 == 4 = False`.
+
+**Common error and repair:** A shared-looking payload does not make `Left 1` equal to `Right 1`.
+
+**Practice with an answer:** Predict `(Left "bad" :: Either String Int) == Left "bad"` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`True`. Both are left values; `"bad" == "bad" = True`.
+
+</details>
+
+## 26. `Ord` for `Either`
+
+All left values precede all right values. Within one constructor, compare payloads. The standard instance requires `Ord` for both payload types.
+
+**Template:** `compare choice1 choice2`: constructor order first, payload order second.
+
+**Defining equations:**
+
+```haskell
+compareChoice :: (Ord a, Ord b) => Either a b -> Either a b -> Ordering
+compareChoice (Left x) (Left y) = compare x y
+compareChoice (Left _) (Right _) = LT
+compareChoice (Right _) (Left _) = GT
+compareChoice (Right x) (Right y) = compare x y
+```
+
+### Variation: different constructors
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Left 1 :: Either Int Int) < Right 0.
+import Prelude
+
+main :: IO ()
+main = print ((Left 1 :: Either Int Int) < Right 0)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left-before-right equation wins; `1 < 0` is never asked.
+
+### Variation: left payload order
+
+<HaskellTryIt>
+
+```haskell
+-- Predict compare (Left 8 :: Either Int String) (Left 2).
+import Prelude
+
+main :: IO ()
+main = print (compare (Left 8 :: Either Int String) (Left 2))
+```
+
+```text
+GT
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Matching left constructors compare 8 to 2, giving `GT`.
+
+### Variation: right payload order
+
+<HaskellTryIt>
+
+```haskell
+-- Predict compare (Right "a" :: Either Int String) (Right "b").
+import Prelude
+
+main :: IO ()
+main = print (compare (Right "a" :: Either Int String) (Right "b"))
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Matching right constructors compare text lexicographically; `"a"` precedes `"b"`.
+
+**Common error and repair:** This is the standard structural order, not a numerical ordering across different sides.
+
+**Practice with an answer:** Predict `(Left 1 :: Either Int Int) < Right 0` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`True`. The left-before-right equation wins; `1 < 0` is never asked.
+
+</details>
+
+## 27. `Show` for `Either`
+
+Display includes the constructor and the payload representation. A complete type annotation is still needed when the other side has no context. The following equations describe display for the deliberately small type `Either Int Int`; the library's general instance handles arbitrary `Show` payloads with precedence.
+
+**Template:** `show choice` returns a string; `print choice` displays its representation without an extra outer pair of string quotes.
+
+**Defining equations:**
+
+```haskell
+showIntArg :: Int -> String
+showIntArg n
+  | n < 0 = "(" ++ show n ++ ")"
+  | otherwise = show n
+showNumericChoice :: Either Int Int -> String
+showNumericChoice (Left n) = "Left " ++ showIntArg n
+showNumericChoice (Right n) = "Right " ++ showIntArg n
+```
+
+### Variation: quoted reason
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Left "bad" :: Either String Int.
+import Prelude
+
+main :: IO ()
+main = print (Left "bad" :: Either String Int)
+```
+
+```text
+Left "bad"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The left payload is a string, so its representation retains quotes.
+
+### Variation: floating success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Right 4.0 :: Either String Double.
+import Prelude
+
+main :: IO ()
+main = print (Right 4.0 :: Either String Double)
+```
+
+```text
+Right 4.0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The annotated right payload is a `Double`; display includes `.0`.
+
+### Variation: show returns text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict show (Left (-3) :: Either Int String).
+import Prelude
+
+main :: IO ()
+main = print (show (Left (-3) :: Either Int String))
+```
+
+```text
+"Left (-3)"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The constructor argument needs parentheses for the negative number. `show` returns this as text; `print` quotes that string.
+
+**Common error and repair:** A bare `print (Left 3)` leaves the right type unresolved and its `Show` constraint ambiguous.
+
+**Practice with an answer:** Predict `Left "bad" :: Either String Int` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Left "bad"`. The left payload is a string, so its representation retains quotes.
+
+</details>
+
+## 28. Choose the error channel deliberately
+
+| Requirement | Choice | Reason |
+|---|---|---|
+| A lookup is optional; its absence needs no explanation | `Maybe a` | The single absence case is enough |
+| Several expected failures require different responses | `Either e a` | Error values retain their reasons |
+| A tuple must store two pieces at once | `(a,b)` | A product holds both; `Either` holds one |
+| An effectful operation encounters an exceptional condition | An exception, handled at a suitable boundary | Runtime failure is outside the ordinary return channel |
+
+An `IO (Either e a)` can combine effects and an ordinary validation result; returning `Left` is not throwing an exception. A pure `Either` value is data the caller can pattern-match. An exception is not a substitute for specifying expected input failures.
+
+| Mistake | Key GHC diagnostic or consequence | Repair |
+|---|---|---|
+| Return `Right "bad"` in a function returning `Either String Int` | `Couldn't match type` | Return `Left "bad"` |
+| Return bare `"bad"` where an `Either` is required | `Couldn't match type` | Apply `Left` |
+| Return just `Left` | A function is supplied where an `Either` value is expected | Supply the reason argument |
+| Print `Left 3` with no right-side context | Unresolved `Show` constraint on the unseen right type | Annotate `Left 3 :: Either Int String` |
+| Match only `Right` | `-Wincomplete-patterns`: `Pattern match(es) are non-exhaustive` | Handle the left case too |
+| Use `lefts` without importing it | `Variable not in scope` | Add `import Data.Either (lefts)` inside the program |
+
+This is deliberately rejected and remains a plain code block:
+
+```haskell
+-- Incorrect: the success side must contain an Int.
+bad :: Either String Int
+bad = Right "bad"
+```
+
+The stable key phrase is `Couldn't match type`; the surrounding expected/actual ordering depends on the expression context. The repair is `bad = Left "bad"` if the text describes failure.
+
+## 29. Exam questions
+
+These questions restate their requirements so you can attempt them without reading the definitions first. For each answer, compare the choice of equations as well as the final value.
+
+### Exam question 1: read both parameters (4 marks)
+
+Give the constructor types and explain whether `Either String Int` stores a string and an integer together.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" requires signatures; "explain" requires the meaning of the declaration.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate the type constructor `Either` from the value constructors `Left` and `Right`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+leftValue :: a -> Either a b
+leftValue x = Left x
+rightValue :: b -> Either a b
+rightValue y = Right y
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`Left "bad" :: Either String Int` carries only a string; `Right 3 :: Either String Int` carries only an integer. A tuple `(String,Int)` would store both.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: implement `describeChoice` (4 marks)
+
+Write `describeChoice :: Either Int String -> String`. Display a numeric left payload with prefix "code " and a text right payload with prefix "name ". Both choices are valid identifiers.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Display a numeric left payload with prefix "code " and a text right payload with prefix "name ". Both choices are valid identifiers.
+
+</Step>
+
+<Step title="2. Plan">
+
+A list may contain different constructors while every element has the same overall type. This can describe imported identifiers which are either numeric codes or text names, without treating either side as failure.
+
+Apply this template: `[Left code, Right name] :: [Either Int String]`: map a two-branch consumer over a uniformly typed list.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+describeChoice :: Either Int String -> String
+describeChoice (Left n) = "code " ++ show n
+describeChoice (Right s) = "name " ++ s
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`map` on `[]` returns `[]`; no choice is consumed. As a separate check, The first call matches `Left n` with `n = 7`; the second matches `Right s` with `s = "Ada"`. `map` preserves order. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: implement `parseNatural` (4 marks)
+
+Write `parseNatural :: String -> Maybe Integer`. Parse a non-empty string of ASCII digits into an unbounded non-negative integer. Reject an empty input or any non-digit character, including a bad suffix.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Parse a non-empty string of ASCII digits into an unbounded non-negative integer. Reject an empty input or any non-digit character, including a bad suffix.
+
+</Step>
+
+<Step title="2. Plan">
+
+Reject empty or non-digit input, otherwise accumulate the value. Each digit shifts the previous accumulator one decimal place.
+
+Apply this template: `digits accumulator remaining`: update with `10 * accumulator + digit`, and return the accumulator when no characters remain.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The first digit sets the accumulator to 1; `'x'` fails the range test and returns absence. As a separate check, `digits 0 "120" -> digits 1 "20" -> digits 12 "0" -> digits 120 [] -> Just 120`. Each step uses the digit guard. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: implement `safeDivE` (4 marks)
+
+Write `safeDivE :: Integer -> Integer -> Either String Integer`. Reject a zero divisor with reason "zero divisor"; otherwise return the floor-divided quotient, using unbounded integers.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Reject a zero divisor with reason "zero divisor"; otherwise return the floor-divided quotient, using unbounded integers.
+
+</Step>
+
+<Step title="2. Plan">
+
+The `Maybe` quotient lost the explanation. This version returns a text reason on zero division and an unbounded integer quotient otherwise.
+
+Apply this template: `safeDivE numerator divisor`: return a reason before attempting an invalid operation.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+safeDivE :: Integer -> Integer -> Either String Integer
+safeDivE _ 0 = Left "zero divisor"
+safeDivE x y = Right (x `div` y)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The non-zero equation uses floor division, giving `Right (-4)`. As a separate check, The divisor is non-zero; `Right (div 19 4) = Right 4`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: implement `parseAge` (4 marks)
+
+Write `parseAge :: String -> Either String Integer`. Parse whole ages written as non-empty ASCII digits. Distinguish "age missing", "age must contain digits only" and "age out of range"; accept ages 0 through 130.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Parse whole ages written as non-empty ASCII digits. Distinguish "age missing", "age must contain digits only" and "age out of range"; accept ages 0 through 130.
+
+</Step>
+
+<Step title="2. Plan">
+
+An age parser must distinguish missing input, invalid characters and a value outside the permitted range. Here valid ages are whole years from 0 through 130.
+
+Apply this template: `parseAge text`: check missing first, parse digits, then validate the numerical range.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+parseAge :: String -> Either String Integer
+parseAge "" = Left "age missing"
+parseAge s = case parseNatural s of
+  Nothing -> Left "age must contain digits only"
+  Just n | n > 130 -> Left "age out of range"
+         | otherwise -> Right n
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Parsing gives `Just 131`; the range guard succeeds, so return the range reason. As a separate check, The input is non-empty. Accumulation gives `Just 21`; `21 > 130` is `False`, so return `Right 21`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: implement `validatePassword` (4 marks)
+
+Write `validatePassword :: String -> Either String String`. Check, in order: at least six characters, no spaces, and at least one ASCII digit. Use reasons "too short", "contains space" and "digit required", and return the unchanged string on success.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Check, in order: at least six characters, no spaces, and at least one ASCII digit. Use reasons "too short", "contains space" and "digit required", and return the unchanged string on success.
+
+</Step>
+
+<Step title="2. Plan">
+
+This teaching policy requires at least six characters, no spaces and at least one ASCII digit. Rule order defines which failure is reported when several rules fail; it is not a security recommendation.
+
+Apply this template: `validatePassword text`: test each rejection rule in its stated priority, then return the original value.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+validatePassword :: String -> Either String String
+validatePassword s
+  | length s < 6 = Left "too short"
+  | ' ' `elem` s = Left "contains space"
+  | not (any (\c -> c >= '0' && c <= '9') s) = Left "digit required"
+  | otherwise = Right s
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Length and spacing pass; `any` finds no digit, so `not False = True` selects the third reason. As a separate check, Length 6 passes, no space occurs, and a digit exists. The final guard returns the original string. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: implement `withdraw` (4 marks)
+
+Write `withdraw :: Integer -> Integer -> Either String Integer`. Given a non-negative balance, reject a non-positive amount with "amount must be positive" and an amount above the balance with "insufficient funds"; otherwise return the remaining balance.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Given a non-negative balance, reject a non-positive amount with "amount must be positive" and an amount above the balance with "insufficient funds"; otherwise return the remaining balance.
+
+</Step>
+
+<Step title="2. Plan">
+
+A non-positive amount is invalid; a positive amount exceeding the balance has insufficient funds. Assume a non-negative starting balance; amounts and balances are integer units.
+
+Apply this template: `withdraw balance amount`: validate amount, then available funds, then return the new balance.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+withdraw :: Integer -> Integer -> Either String Integer
+withdraw balance amount
+  | amount <= 0 = Left "amount must be positive"
+  | amount > balance = Left "insufficient funds"
+  | otherwise = Right (balance - amount)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The amount is positive but exceeds 100, so the second guard chooses the funds reason. As a separate check, `30 <= 0` and `30 > 100` are `False`; return `Right (100 - 30) = Right 70`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: implement `lookupE` (4 marks)
+
+Write `lookupE :: String -> [(String,v)] -> Either String v`. Return the first value matching a text key. If no key matches, return the reason "missing key: " followed by that key.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Return the first value matching a text key. If no key matches, return the reason "missing key: " followed by that key.
+
+</Step>
+
+<Step title="2. Plan">
+
+A failed lookup can include the requested key so a caller knows which item was absent. Text keys keep this example's type simple.
+
+Apply this template: `lookupE requested table`: first matching key succeeds; exhaustion constructs a key-specific message.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+lookupE :: String -> [(String,v)] -> Either String v
+lookupE key [] = Left ("missing key: " ++ key)
+lookupE key ((k,v):rest)
+  | key == k = Right v
+  | otherwise = lookupE key rest
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The first equality succeeds, so later matches are not consulted. As a separate check, Skip `"a"`; match `"b"` and return `Right 7`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: implement `rootE` (4 marks)
+
+Write `rootE :: Double -> Either String Double`. For finite real inputs, reject a negative radicand with "negative radicand", otherwise return the square root.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. For finite real inputs, reject a negative radicand with "negative radicand", otherwise return the square root.
+
+</Step>
+
+<Step title="2. Plan">
+
+Within finite real inputs, preserve the root on success and explain negative arguments on failure. NaN and infinities are outside this example's domain.
+
+Apply this template: `rootE number`: validate the real domain before calling `sqrt`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+rootE :: Double -> Either String Double
+rootE x
+  | x < 0 = Left "negative radicand"
+  | otherwise = Right (sqrt x)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The first guard returns the reason before `sqrt` is demanded. As a separate check, The guard is `False`; `Right (sqrt 16) = Right 4.0`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: implement `checkSorted` (4 marks)
+
+Write `checkSorted :: Ord a => [a] -> Either Int [a]`. Check non-decreasing order. Return the original list on success, or the zero-based index of the right element of the first descending adjacent pair. Empty and singleton lists succeed.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Check non-decreasing order. Return the original list on success, or the zero-based index of the right element of the first descending adjacent pair. Empty and singleton lists succeed.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check non-decreasing order, allowing equal neighbours. On failure report the **zero-based index of the right element** of the first descending adjacent pair. Empty and singleton lists are sorted.
+
+Apply this template: `go rightIndex remaining`: compare neighbours; move one place only after a successful comparison. A success returns the original list.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+checkSorted :: Ord a => [a] -> Either Int [a]
+checkSorted xs = go 1 xs
+  where
+    go _ [] = Right xs
+    go _ [_] = Right xs
+    go i (x:y:rest)
+      | x > y = Left i
+      | otherwise = go (i + 1) (y:rest)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`go 1 [] = Right xs`, with original `xs = []`. As a separate check, Compare `(1,2)` at index 1, `(2,2)` at 2 and `(2,4)` at 3. None descends; the singleton base case returns the original list. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: implement `readMark` (4 marks)
+
+Write `readMark :: String -> Either String Integer`. Parse marks written as non-empty ASCII digits. Distinguish "mark missing", "mark must contain digits only" and "mark out of range"; accept the inclusive range 0 through 100.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Parse marks written as non-empty ASCII digits. Distinguish "mark missing", "mark must contain digits only" and "mark out of range"; accept the inclusive range 0 through 100.
+
+</Step>
+
+<Step title="2. Plan">
+
+Read a mark containing ASCII decimal digits only, then check the inclusive range 0 through 100. A sign or spaces is a syntax failure in this defined input language.
+
+Apply this template: `readMark text`: distinguish empty input, invalid syntax and a parsed but out-of-range number.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+readMark :: String -> Either String Integer
+readMark "" = Left "mark missing"
+readMark s = case parseNatural s of
+  Nothing -> Left "mark must contain digits only"
+  Just n | n > 100 -> Left "mark out of range"
+         | otherwise -> Right n
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The missing-input equation applies directly. As a separate check, Accumulate `1`, `10`, `100`; the range guard is `False`, so accept 100. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: trace both handlers (4 marks)
+
+State the type and evaluate `either length negate (Left "bad" :: Either String Int)` and the variation `Right 4`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" asks for the result type; "evaluate" asks for the selected handler, not a new wrapper.
+
+</Step>
+
+<Step title="2. Plan">
+
+The left handler consumes `String` and returns `Int`; the right consumes `Int` and returns `Int`.
+
+</Step>
+
+<Step title="3. Solution">
+
+The common result type is `Int`. The left expression becomes `length "bad" = 3`; the right becomes `negate 4 = -4`. Neither returns an `Either`.
+
+</Step>
+
+<Step title="4. Check">
+
+`either length negate (Left "" :: Either String Int) = 0`. Both handlers agree on their result type even when one is unused.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: collect only lefts (4 marks)
+
+Evaluate `lefts [Right 2, Left "a", Left "b" :: Either String Int]` and give its type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for payloads in encounter order, not wrapped choices.
+
+</Step>
+
+<Step title="2. Plan">
+
+Skip the right entry and emit each left payload into a list of `String`.
+
+</Step>
+
+<Step title="3. Solution">
+
+Skip `Right 2`; emit `"a"`, then `"b"`, then apply the empty equation. The result is `["a","b"] :: [String]`.
+
+</Step>
+
+<Step title="4. Check">
+
+An empty input gives `[] :: [String]` with the same full input annotation. No numeric payload is returned.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 14: characters form a string (4 marks)
+
+Evaluate `rights [Right 'a', Left 1, Right 'b' :: Either Int Char]`, giving the exact printed result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Exact" includes the special display of character lists. The right payload type is `Char`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep the two right characters, skipping the numeric left value.
+
+</Step>
+
+<Step title="3. Solution">
+
+The list is `['a','b'] :: [Char]`, which is `String`. `print` displays `"ab"`, with quotes.
+
+</Step>
+
+<Step title="4. Check">
+
+The output has two elements; the dropped left entry does not contribute a character or a placeholder.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 15: two lists, not a list of pairs (4 marks)
+
+Evaluate `partitionEithers [Right 4, Left "x", Right 2 :: Either String Int]`, and explain whether it sorts the successes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" needs the pair shape. The second instruction asks which ordering rule applies.
+
+</Step>
+
+<Step title="2. Plan">
+
+Collect left payloads first and right payloads second; preserve encounter order in each list.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is `(["x"],[4,2]) :: ([String],[Int])`. It does not sort: the right payload 4 still precedes 2.
+
+</Step>
+
+<Step title="4. Check">
+
+The empty case is `([],[])`, and all-success input leaves the first list empty. The output is one pair of lists, not a list of pairs.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 16: empty reason is still left (4 marks)
+
+Evaluate `isLeft (Left "" :: Either String Int)` and `isRight (Right [] :: Either String [Int])`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks about constructors. Neither payload emptiness nor usefulness is part of these tests.
+
+</Step>
+
+<Step title="2. Plan">
+
+Match the outer constructor and ignore its payload with a wildcard.
+
+</Step>
+
+<Step title="3. Solution">
+
+Both results are `True`. The first has outer `Left`; the second has outer `Right`. Empty payloads remain real payloads.
+
+</Step>
+
+<Step title="4. Check">
+
+Changing either outer constructor changes the corresponding Boolean, even if the payload stays empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 17: implement `isRight` (4 marks)
+
+Write `isRight :: Either a b -> Bool`. Report whether the outer constructor is Right, without examining its payload.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Report whether the outer constructor is Right, without examining its payload.
+
+</Step>
+
+<Step title="2. Plan">
+
+Test whether a right payload exists. Success is the meaning assigned by the validation convention, rather than by the declaration itself.
+
+Apply this template: `isRight choice`: return `True` for `Right` regardless of payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+isRight :: Either a b -> Bool
+isRight (Left _) = False
+isRight (Right _) = True
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The right constructor is present despite its empty list payload. As a separate check, The left equation returns `False`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 18: type the default (4 marks)
+
+Explain why `fromLeft 0 (Left "bad" :: Either String Int)` is rejected, and give a well-typed repair which retains the left reason.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks for conflicting types; "repair" must preserve the actual left payload.
+
+</Step>
+
+<Step title="2. Plan">
+
+The first argument of `fromLeft` must have the left payload type, which is `String` here.
+
+</Step>
+
+<Step title="3. Solution">
+
+A numeric literal 0 would need `Num String`, but no such instance exists. Use `fromLeft "none" (Left "bad" :: Either String Int)`, whose result is `"bad"`.
+
+</Step>
+
+<Step title="4. Check">
+
+On `Right 4` at the same Either type, the repaired expression returns the default `"none"`. The default is not of the right-side type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 19: discarding an error reason (4 marks)
+
+Trace `fromRight 0 (Left "bad" :: Either String Int)` and explain what information is lost.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" needs the left-case equation. The result type is the right payload type, `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Match `Left`, ignore its payload and choose the supplied right-type default.
+
+</Step>
+
+<Step title="3. Solution">
+
+`fromRight 0 (Left "bad") = 0`. The original text reason is discarded, so the caller can no longer distinguish it from any other failure.
+
+</Step>
+
+<Step title="4. Check">
+
+`fromRight 0 (Right 0 :: Either String Int)` also gives 0, confirming that failure and a present default value are merged.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 20: implement `checkedHalfE` (4 marks)
+
+Write `checkedHalfE :: Int -> Either String Int`. First require a positive integer, reporting "not positive" on failure; then require an even integer, reporting "not even" on failure, and halve it. Use nested case expressions and preserve the first error.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. First require a positive integer, reporting "not positive" on failure; then require an even integer, reporting "not even" on failure, and halve it. Use nested case expressions and preserve the first error.
+
+</Step>
+
+<Step title="2. Plan">
+
+A dependent second step runs only after the first succeeds. Copy a failure payload unchanged so the caller can identify the failed stage.
+
+Apply this template: `case first input of Left reason -> Left reason; Right x -> next x`: each dependency adds a match.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+checkPositive :: Int -> Either String Int
+checkPositive n
+  | n <= 0 = Left "not positive"
+  | otherwise = Right n
+halfE :: Int -> Either String Int
+halfE n
+  | odd n = Left "not even"
+  | otherwise = Right (n `div` 2)
+checkedHalfE :: Int -> Either String Int
+checkedHalfE n = case checkPositive n of
+  Left reason -> Left reason
+  Right x -> case halfE x of
+    Left reason -> Left reason
+    Right y -> Right y
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The first call returns `Right 3`. The second rejects odd 3; propagate its reason. As a separate check, `checkPositive 8 = Right 8`; pass 8 to `halfE`, which returns `Right 4`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 21: implement `andThenE` (4 marks)
+
+Write `andThenE :: Either e a -> (a -> Either e b) -> Either e b`. Propagate an existing left reason; otherwise call the next Either-producing function with the right payload. Both stages share one error type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Propagate an existing left reason; otherwise call the next Either-producing function with the right payload. Both stages share one error type.
+
+</Step>
+
+<Step title="2. Plan">
+
+The same error type `e` must be usable at every stage. On success, the next function already returns an `Either`, so return its result directly.
+
+Apply this template: `andThenE firstResult nextStep`: the continuation has type `a -> Either e b`, sharing error type `e`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+andThenE :: Either e a -> (a -> Either e b) -> Either e b
+andThenE (Left reason) _ = Left reason
+andThenE (Right x) f = f x
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The right equation calls `halfE 3`, which fails; return that left result unchanged. As a separate check, `andThenE (Right 8) halfE = halfE 8 = Right 4`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 22: find the first failed stage (4 marks)
+
+For a positive check followed by two even-only halves, trace input 6 and explain which error is returned.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" requires all reached stages, while "which" asks where the first failure occurs.
+
+</Step>
+
+<Step title="2. Plan">
+
+Expand one stage at a time. Apply the right bind equation until a stage returns left; then propagate it.
+
+</Step>
+
+<Step title="3. Solution">
+
+`checkPositive 6 = Right 6`; `halfE 6 = Right 3`; `halfE 3 = Left "not even"`. The final result is `Left "not even" :: Either String Int`.
+
+</Step>
+
+<Step title="4. Check">
+
+Input -3 instead stops at `Left "not positive"`, and neither half is called. Input 8 returns `Right 2`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 23: why the extra argument? (4 marks)
+
+Explain why converting `Maybe a` to `Either e a` requires an error argument in a total, general-purpose conversion.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks what information is absent from the input but required by the output.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect the absent input constructor: it contains no payload from which to build an arbitrary `e`.
+
+</Step>
+
+<Step title="3. Solution">
+
+On `Just x`, return `Right x`. On `Nothing`, a left result needs an `e`, so accept it as a parameter: `maybeToRight reason Nothing = Left reason`. No general terminating function can invent a meaningful value of every possible error type.
+
+</Step>
+
+<Step title="4. Check">
+
+`maybeToRight "missing" (Nothing :: Maybe Int) = Left "missing"`; presence ignores that reason and returns its right payload.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 24: conversion is not reversible (4 marks)
+
+Compare converting `Left "missing"` and `Left "invalid"` from `Either String Int` to `Maybe Int`. Can their original reasons be recovered?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" asks whether the different inputs remain distinguishable after conversion.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the left conversion equation, which ignores the reason.
+
+</Step>
+
+<Step title="3. Solution">
+
+Both values become `Nothing :: Maybe Int`. The result stores no reason, so the original messages cannot be recovered from it.
+
+</Step>
+
+<Step title="4. Check">
+
+A right zero becomes `Just 0`, preserving its successful payload. A later default reason adds new information rather than restoring the original error.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 25: equality crosses no constructors (4 marks)
+
+Evaluate `(Left 1 :: Either Int Int) == Right 1` and state the equality constraints for general `Either a b` values.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for a Boolean. The signature question asks which payload operations the complete comparison requires.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare constructors first. Matching sides would need equality for the corresponding payload type.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is `False`: the constructors differ even though both payloads are 1. General equality needs `(Eq a, Eq b)` so both matching-side cases can compare their payloads.
+
+</Step>
+
+<Step title="4. Check">
+
+`Left 1 == (Left 1 :: Either Int Int)` is `True`; two right payloads use `Eq b` instead. A single used constructor does not remove the other instance constraint.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 26: constructor ordering (4 marks)
+
+Evaluate `(Left 1 :: Either Int Int) < Right 0` and explain why it is not the comparison `1 < 0`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for the standard instance result, and the explanation must identify constructor precedence.
+
+</Step>
+
+<Step title="2. Plan">
+
+Different constructors decide order before payloads are considered.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result is `True`: every `Left` precedes every `Right`. The payload relation `1 < 0` is irrelevant.
+
+</Step>
+
+<Step title="4. Check">
+
+`compare (Right 0 :: Either Int Int) (Left 1) = GT`. Two matching right constructors instead compare their right payloads.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 27: fix an ambiguous printed choice (4 marks)
+
+Why does a bare `print (Left 3)` lack enough type context? Supply an annotation and state the output.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Why" asks about the unseen type parameter. A left payload alone does not fix the right payload type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Printing requires `Show` for both parameters of the Either instance. Fix both types with an annotation.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `print (Left 3 :: Either Int String)`. It displays `Left 3`. Without the annotation, the numeric side may default, but the unseen right-side `Show` constraint remains unresolved.
+
+</Step>
+
+<Step title="4. Check">
+
+`print (Left (-3) :: Either Int String)` displays `Left (-3)`. Changing the annotated right type does not add a right payload to this value.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+`Either a b` holds one left payload or one right payload. Failure-on-left is a convention; validators use it to preserve reasons. `either` consumes with two handlers of one common result type. Collectors process a batch, whereas bind stops a dependent chain at its first error. Conversion to `Maybe` discards reasons. Equality and ordering inspect constructors before payloads.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Does Either String Int store both a string and an integer?">
+
+No. Each value stores one side. A tuple `(String,Int)` would store both.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why must the two either handlers return the same type?">
+
+The whole expression has one result type, regardless of which constructor it consumes.
+
+</CheckQuestion>
+
+<CheckQuestion question="What order does partitionEithers preserve?">
+
+The encounter order within each side. The original interleaving between the two sides is lost.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does bind collect every validation error?">
+
+No. It propagates the first left result and skips subsequent dependent stages.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can rightToMaybe preserve the error reason?">
+
+No. Its result type has no error payload. A later conversion cannot reconstruct discarded information.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Maybe and Either Exam Practice](/docs/sem3/csi243/09-polymorphism/notes/maybe-either-exam-practice).

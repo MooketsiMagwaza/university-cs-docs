@@ -1,0 +1,2245 @@
+---
+title: "Data Types by Example"
+description: "Apply templates for custom types to varied domains, write complete functions and instances, and diagnose partial patterns."
+---
+
+The introduction in [Custom Data Types](/docs/sem3/csi243/08-modules-types/notes/custom-types) explains what a constructor is. Here you practise choosing a representation, taking its values apart, and checking every alternative. Each program is independent: copy one whole block into a file to run it.
+
+<LearningObjectives items={[
+  'Choose an enumeration, product, sum, record or newtype from a requirement',
+  'Use Pair, optional values and alternatives at several element types',
+  'Write recursive functions for lists, both tree shapes and expressions',
+  'Follow calls between mutually recursive types',
+  'Write Show, Eq and Ord instances with consistent behaviour',
+  'Find missing patterns and repair unsafe functions',
+]} />
+
+<Prerequisites items={['Custom Data Types', 'Pattern matching, recursion and type signatures']} />
+
+For a declaration, first list the alternatives; then list the information each alternative needs. For a function, copy that list into patterns and give every constructor an equation. An underscore discards a field, whereas a lowercase name binds it for use on the right.
+
+**How to use the deliberately broken definitions.** They appear in plain fences, never in a runnable editor. Compile such a definition with `-Wincomplete-patterns`: the key warning is `Pattern match(es) are non-exhaustive`. If a missing case is demanded at run time, the key exception text is `Non-exhaustive patterns in function`. File locations and function names surround these phrases and are omitted here. Warnings do not make the function safe. The complete functions in the runnable examples are the repairs. For a single-constructor type there is no alternative constructor to forget; the corresponding failure must omit a field pattern or a guard case instead. The sections state that distinction explicitly.
+
+## 1. Enumerations: finite choices in declaration order
+
+An enumeration stores only which choice was made. Its constructors have no fields. Declaration order supplies the standard order and numbering, which need not match alphabetical order or a business rule.
+
+**Template** (replace `Choice`, `First`, `Second` and `Last` with names):
+
+```haskell
+data Choice = First | Second | Last
+  deriving (Show, Eq, Ord, Enum, Bounded)
+code :: Choice -> Int
+code First = 10
+code Second = 20
+code Last = 30
+```
+
+`Show` supplies text for `show` and `print`; `Eq` supplies equality and inequality; `Ord` supplies comparison, including `compare`, with earlier constructors smaller. `Enum` supplies numbering from zero, `succ`, `pred` and ranges. `Bounded` supplies the first and last values as `minBound` and `maxBound`. The annotation in `[minBound .. maxBound] :: [Choice]` tells Haskell which type's bounds to use. Neither bound is a wrap-around rule: `succ maxBound` is not a cycle.
+
+### Worked variation: game phases
+
+Three choices carry no data, but a score function gives each its own meaning.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: list all phases and score the final phase.
+data Phase = Lobby | Playing | Finished
+  deriving (Show, Eq, Ord, Enum, Bounded)
+score :: Phase -> Int
+score Lobby = 0
+score Playing = 1
+score Finished = 2
+main :: IO ()
+main = do
+  print ([minBound .. maxBound] :: [Phase])
+  print (succ Lobby, fromEnum Finished)
+  print (Lobby < Finished, Playing == Playing, score Finished)
+```
+
+```text
+[Lobby,Playing,Finished]
+(Playing,2)
+(True,True,2)
+```
+
+</HaskellTryIt>
+
+The range starts at `Lobby` and ends at `Finished`. `succ` moves one place, `fromEnum Finished` counts two places from zero, and the last equation supplies score `2`.
+
+### Worked variation: bank review stages
+
+Same shape, but numbering and the function's result now deliberately differ.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: enumerate review stages and find their waiting allowance.
+data Review = Submitted | Checked | Approved
+  deriving (Show, Eq, Ord, Enum, Bounded)
+allowance :: Review -> Int
+allowance Submitted = 5
+allowance Checked = 2
+allowance Approved = 0
+main :: IO ()
+main = do
+  print ([minBound .. maxBound] :: [Review])
+  print (succ Checked, fromEnum Approved)
+  print (Submitted < Approved, allowance Submitted)
+```
+
+```text
+[Submitted,Checked,Approved]
+(Approved,2)
+(True,5)
+```
+
+</HaskellTryIt>
+
+`Submitted` is smaller because it is written first, although its allowance is larger. Derived ordering does not inspect `allowance`.
+
+### Worked variation: calendar slots
+
+Same finite-choice template, with a boundary value and a duration rather than a score.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: list slots, advance one slot and total its minutes.
+data Slot = Dawn | Noon | Dusk
+  deriving (Show, Eq, Ord, Enum, Bounded)
+minutes :: Slot -> Int
+minutes Dawn = 30
+minutes Noon = 60
+minutes Dusk = 45
+main :: IO ()
+main = do
+  print ([minBound .. maxBound] :: [Slot])
+  print (succ Dawn, fromEnum Dusk)
+  print (maxBound :: Slot)
+  print (minutes Noon)
+```
+
+```text
+[Dawn,Noon,Dusk]
+(Noon,2)
+Dusk
+60
+```
+
+</HaskellTryIt>
+
+`maxBound` is the last constructor, `Dusk`. The `Noon` equation returns `60`; enumeration numbering would instead return `1`.
+
+### Exam question 1: wrapping an enumeration (5 marks)
+
+Declare three delivery stages and write a function that cycles through them.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "declare" and "write". The stages have no fields; the function returns a stage.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the enumeration template. Unlike `succ`, the final equation must return the first constructor.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Stage = Packed | Sent | Arrived deriving (Show, Eq, Ord, Enum, Bounded)
+nextStage :: Stage -> Stage
+nextStage Packed = Sent
+nextStage Sent = Arrived
+nextStage Arrived = Packed
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`nextStage Arrived` returns `Packed`; applying the function three times to `Packed` returns `Packed`. All three constructors are covered.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Missing case and common errors
+
+```haskell
+-- Wrong: Dusk has no equation; incomplete-pattern warning.
+data Slot = Dawn | Noon | Dusk
+onlyMorning :: Slot -> Int
+onlyMorning Dawn = 30
+onlyMorning Noon = 60
+-- Demanding onlyMorning Dusk fails.
+```
+
+Add `onlyMorning Dusk = 45`. `succ (maxBound :: Slot)` exceeds the enumeration; repair it by writing an explicit cycle with one equation per constructor. Writing `Dawn == Noon` without deriving `Eq` leads to the key diagnostic `No instance for (Eq Slot)`; add `Eq`. Without `Show`, `print Dawn` similarly needs `Show Slot`.
+
+**Practice with answer.** What is `fromEnum Noon`? `1`: count constructors from zero, independently of the duration.
+
+## 2. One constructor carrying fields
+
+A product groups fields that must all be present together. The constructor's type is a curried function: one arrow per field followed by the result type. Field order matters even when two fields share a type.
+
+**Template:**
+
+```haskell
+data Item = Item String Int deriving (Show, Eq)
+quantity :: Item -> Int
+quantity (Item _ n) = n
+```
+
+`String` and `Int` stand for the required field types. `Item :: String -> Int -> Item`; a partially applied constructor is still a function. A one-constructor type needs just one constructor equation, but that equation must accept every valid field value.
+
+### Worked variation: a game move
+
+Two integer fields store changes in different directions.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: compute a move's Manhattan distance.
+data Move = Move Int Int deriving (Show, Eq)
+distance :: Move -> Int
+distance (Move dx dy) = abs dx + abs dy
+main :: IO ()
+main = do
+  print (Move (-2) 3)
+  print (distance (Move (-2) 3))
+  print (distance (Move 0 0))
+```
+
+```text
+Move (-2) 3
+5
+0
+```
+
+</HaskellTryIt>
+
+The pattern binds `dx = -2`, `dy = 3`; absolute values give `2 + 3`. Derived `Show` puts parentheses around a negative constructor argument.
+
+### Worked variation: a library loan
+
+Same product shape, but the first field is text and the second is a day count.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: extend a loan by seven days.
+data Loan = Loan String Int deriving (Show, Eq)
+extend :: Loan -> Loan
+extend (Loan title days) = Loan title (days + 7)
+main :: IO ()
+main = do
+  print (extend (Loan "Atlas" 0))
+  print (extend (Loan "Poems" 3))
+```
+
+```text
+Loan "Atlas" 7
+Loan "Poems" 10
+```
+
+</HaskellTryIt>
+
+The constructor is taken apart and rebuilt. The title is copied and only the day count changes: zero becomes seven, three becomes ten.
+
+### Worked variation: a bank entry
+
+Same grouping, now a signed amount is combined with its reference.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: turn an entry into a readable line.
+data Entry = Entry String Int deriving (Show, Eq)
+entryLine :: Entry -> String
+entryLine (Entry ref amount) = ref ++ ": " ++ show amount
+main :: IO ()
+main = do
+  putStrLn (entryLine (Entry "fee" (-3)))
+  print (Entry "fee" (-3))
+```
+
+```text
+fee: -3
+Entry "fee" (-3)
+```
+
+</HaskellTryIt>
+
+`putStrLn` displays the returned string without quotation marks. Printing the entry instead invokes its derived constructor-based format.
+
+### Exam question 2: a product transformation (5 marks)
+
+Declare a parcel with a reference string and an integer mass. Write a function that doubles the mass.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Declare" requires a type; "write" requires a definition. Both fields are always present.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one constructor with two fields. Bind both fields, preserve the reference and rebuild with twice the mass.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Parcel = Parcel String Int deriving (Show, Eq)
+doubleMass :: Parcel -> Parcel
+doubleMass (Parcel ref mass) = Parcel ref (2 * mass)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`doubleMass (Parcel "P1" 3)` is `Parcel "P1" 6`; a zero mass remains zero. One unrestricted constructor pattern covers the type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Restricted fields and common errors
+
+```haskell
+-- Wrong: there is only one constructor, but not every Move is covered.
+data Move = Move Int Int
+onAxis :: Move -> Int
+onAxis (Move 0 y) = abs y
+-- onAxis (Move 1 2) fails; -Wincomplete-patterns warns.
+```
+
+Repair with `onAxis (Move x y) = abs x + abs y` if distance was intended. This is missing a field case, not a constructor. `Move "left" 3` has the wrong field type (key diagnostic `Couldn't match`); supply an `Int`. `distance Move 2 3` fails because `Move` alone is a function; write `distance (Move 2 3)`. To display a partly applied constructor, first supply its remaining argument.
+
+**Practice with answer.** What is the type of `Loan "Atlas"`? `Int -> Loan`: it still needs the days.
+
+## 3. Several constructors with different fields
+
+A sum offers alternatives. Each alternative can require different information; a value contains exactly one alternative, not all of them at once. Functions choose an equation using the outer constructor.
+
+**Template:**
+
+```haskell
+data Request = Cancelled | Named String | Counted Int Bool
+  deriving (Show, Eq)
+weight :: Request -> Int
+weight Cancelled = 0
+weight (Named _) = 1
+weight (Counted n _) = n
+```
+
+The pipe means an alternative. Parentheses gather each constructor pattern and its fields into one function argument.
+
+### Worked variation: game rewards
+
+A reward is absent, numerical, or named.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: score every kind of reward.
+data Reward = NoReward | Coins Int | Badge String deriving (Show, Eq)
+points :: Reward -> Int
+points NoReward = 0
+points (Coins n) = n
+points (Badge _) = 10
+main :: IO ()
+main = print (map points [NoReward, Coins 4, Badge "Scout"])
+```
+
+```text
+[0,4,10]
+```
+
+</HaskellTryIt>
+
+The outer names select three different equations. The badge's string is irrelevant to scoring, so its pattern uses an underscore.
+
+### Worked variation: bank instructions
+
+Same alternatives idea, but a transfer has two fields and a freeze has none.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: compute the balance effect of each instruction.
+data Instruction = Freeze | Deposit Int | Transfer String Int
+  deriving (Show, Eq)
+effect :: Instruction -> Int
+effect Freeze = 0
+effect (Deposit n) = n
+effect (Transfer _ n) = negate n
+main :: IO ()
+main = print (map effect [Freeze, Deposit 8, Transfer "B" 3])
+```
+
+```text
+[0,8,-3]
+```
+
+</HaskellTryIt>
+
+A transfer removes its amount. Negative numbers inside a list print directly; the parentheses required for a constructor argument are unnecessary here.
+
+### Worked variation: calendar appointments
+
+Same sum, but one alternative requires both a day and a duration.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: count occupied minutes for each appointment kind.
+data Appointment = Holiday String | Meeting Int Int | Free
+  deriving (Show, Eq)
+occupied :: Appointment -> Int
+occupied (Holiday _) = 0
+occupied (Meeting _ duration) = duration
+occupied Free = 0
+main :: IO ()
+main = print (map occupied [Holiday "Founders", Meeting 12 40, Free])
+```
+
+```text
+[0,40,0]
+```
+
+</HaskellTryIt>
+
+Only `Meeting` stores minutes. Its first `Int` is the day, which the function discards; confusing field positions would give `12`, not `40`.
+
+### Exam question 3: different alternatives (5 marks)
+
+Declare a contact method that is absent, an email string, or a phone string with an extension number. Return its address as text.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The three alternatives require zero, one and two fields. The command "return" asks for a function producing `String`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the sum template and one equation for each alternative; convert the extension with `show`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Contact = NoContact | Email String | Phone String Int deriving (Show, Eq)
+address :: Contact -> String
+address NoContact = "none"
+address (Email s) = s
+address (Phone s ext) = s ++ ":" ++ show ext
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`address (Phone "555" 2)` gives `"555:2"`; `address NoContact` gives `"none"`. The unused alternatives are not silently forgotten.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Missing case and common errors
+
+```haskell
+-- Wrong: Badge is missing.
+data Reward = NoReward | Coins Int | Badge String
+cash :: Reward -> Int
+cash NoReward = 0
+cash (Coins n) = n
+-- cash (Badge "Scout") fails; -Wincomplete-patterns warns.
+```
+
+Add `cash (Badge _) = 0` if badges have no cash value. `Coins 1 "bonus"` gives a constructor too many arguments; GHC's key phrase is `applied to too many arguments`. `Coins n` and `Badge s` must both return the function's declared result type: returning `s` from an `Int` function leads to `Couldn't match`.
+
+**Practice with answer.** Can `[NoReward, Coins 3, Badge "A"]` be one list? Yes: all three values have type `Reward`, despite different field types.
+
+## 4. Records: named fields, accessors and updates
+
+A record names each field so callers can read and update it without remembering a position. The accessor is a function. An update returns a new value; the original remains available.
+
+**Template:**
+
+```haskell
+data Stock = Stock { stockName :: String, stockCount :: Int }
+  deriving (Show, Eq)
+restock :: Stock -> Stock
+restock (Stock name n) = Stock name (n + 1)
+-- Equivalent update expression: s { stockCount = stockCount s + 1 }
+```
+
+`stockName :: Stock -> String` and `stockCount :: Stock -> Int` are generated. Construction can use field labels or positional arguments. Derived `Show` always uses the record labels, even if construction was positional.
+
+### Worked variation: a game player
+
+Names make a score update explicit, and the original is printed afterwards.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: award two points without changing the original player.
+data Player = Player { playerName :: String, playerScore :: Int }
+  deriving (Show, Eq)
+award :: Player -> Player
+award p = p { playerScore = playerScore p + 2 }
+label :: Player -> String
+label (Player name _) = name
+main :: IO ()
+main = do
+  let p = Player "Ivy" 4
+  print (award p)
+  print p
+  putStrLn (label p)
+```
+
+```text
+Player {playerName = "Ivy", playerScore = 6}
+Player {playerName = "Ivy", playerScore = 4}
+Ivy
+```
+
+</HaskellTryIt>
+
+`award` reads `4`, adds `2`, and returns a copy with `6`. The second print confirms the original's score is still `4`. `label` shows the single positional constructor equation.
+
+### Worked variation: bank account
+
+Same record mechanics, but a withdrawal can produce a negative field.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: withdraw five units and read the account owner.
+data Account = Account { owner :: String, balance :: Int }
+  deriving (Show, Eq)
+withdraw :: Account -> Account
+withdraw a = a { balance = balance a - 5 }
+accountLabel :: Account -> String
+accountLabel (Account name _) = name
+main :: IO ()
+main = do
+  print (withdraw (Account "Ann" 2))
+  putStrLn (owner (Account "Ann" 2))
+```
+
+```text
+Account {owner = "Ann", balance = -3}
+Ann
+```
+
+</HaskellTryIt>
+
+The new balance is `2 - 5`. Record syntax prints the negative value after `=`, without argument parentheses. `owner` is the generated accessor; `accountLabel` is an explicit equivalent.
+
+### Worked variation: library catalogue
+
+Same update syntax, now the changed field is a Boolean rather than a number.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: mark a book unavailable and read its title.
+data Book = Book { bookTitle :: String, available :: Bool }
+  deriving (Show, Eq)
+borrow :: Book -> Book
+borrow b = b { available = False }
+isAvailable :: Book -> Bool
+isAvailable (Book _ flag) = flag
+main :: IO ()
+main = do
+  let b = Book { bookTitle = "Maps", available = True }
+  print (borrow b)
+  print (isAvailable b)
+  putStrLn (bookTitle b)
+```
+
+```text
+Book {bookTitle = "Maps", available = False}
+True
+Maps
+```
+
+</HaskellTryIt>
+
+The update copies the title and replaces the availability. Reading the original still gives `True`; accessor order is ordinary function application.
+
+### Exam question 4: updating a record (5 marks)
+
+Declare a named counter record. Write a function that returns a copy with count zero.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Returns a copy" specifies a pure update, not mutation. The record needs a name and count.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use named fields; the update names only the count. The generated name accessor remains usable.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Counter = Counter { counterName :: String, count :: Int } deriving (Show, Eq)
+clear :: Counter -> Counter
+clear c = c { count = 0 }
+```
+
+</Step>
+
+<Step title="4. Check">
+
+For `c = Counter "visits" 7`, `clear c` has count zero and the same name. `count c` is still seven. There is one constructor so this update is safe on every `Counter`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Partial selectors and common errors
+
+Records with several constructors can have partial accessors. Here `balance` exists only on `Open`:
+
+```haskell
+-- Wrong: Closed is missing from manualBalance.
+data Bank = Closed | Open { bankBalance :: Int }
+manualBalance :: Bank -> Int
+manualBalance (Open n) = n
+-- manualBalance Closed fails; -Wincomplete-patterns warns.
+-- bankBalance Closed is also unsafe: Closed has no bankBalance field.
+```
+
+Repair with `manualBalance Closed = 0`, or return `Maybe Int` if closed and zero-balance are different meanings. Generated partial selectors have their own diagnostics; `-Wincomplete-patterns` here refers to the manual function. An update on an alternative lacking the named field is also unsafe. `p { score = 6 }` when the field is `playerScore` gives the key diagnostic `Not in scope`; use the exact declared field name. Expecting an update to mutate `p` is a reasoning error and produces no compiler warning.
+
+**Practice with answer.** What is the positional form of `Book { available = False, bookTitle = "Maps" }`? `Book "Maps" False`: positional order comes from the declaration, not the labelled construction.
+
+## 5. newtype: one distinct wrapper
+
+Use `newtype` when exactly one stored value needs its own type. Construction and unwrapping remain explicit. Deriving `Show`, `Eq` or `Ord` does not automatically derive arithmetic. Unlike a synonym, the wrapper cannot be passed directly where its field type is expected.
+
+**Template:**
+
+```haskell
+newtype Identifier = Identifier Int deriving (Show, Eq, Ord)
+unIdentifier :: Identifier -> Int
+unIdentifier (Identifier n) = n
+```
+
+Replace the type name, constructor and field type. There must be exactly one constructor and exactly one field. A tuple can itself be that single field. Recursive newtypes are legal in Haskell; the single-field rule does not prohibit recursion. They are unnecessary for these examples.
+
+### Worked variation: game lives
+
+Wrap a number, unwrap it to calculate, then rebuild the same wrapper.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: lose one life, stopping at zero.
+newtype Lives = Lives Int deriving (Show, Eq, Ord)
+lose :: Lives -> Lives
+lose (Lives n) = Lives (max 0 (n - 1))
+main :: IO ()
+main = do
+  print (lose (Lives 3))
+  print (lose (Lives 0))
+```
+
+```text
+Lives 2
+Lives 0
+```
+
+</HaskellTryIt>
+
+`3 - 1` gives `2`. For zero, `max 0 (-1)` gives `0`; the wrapper does not itself enforce non-negativity, so the function supplies that policy.
+
+### Worked variation: banking cents
+
+Same single-field wrapper, now an arithmetic operation must be defined explicitly.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: add two amounts of cents.
+newtype Cents = Cents Int deriving (Show, Eq, Ord)
+addCents :: Cents -> Cents -> Cents
+addCents (Cents x) (Cents y) = Cents (x + y)
+main :: IO ()
+main = do
+  print (addCents (Cents 12) (Cents 8))
+  print (Cents 2 < Cents 5)
+```
+
+```text
+Cents 20
+True
+```
+
+</HaskellTryIt>
+
+The equation unwraps both inputs and adds their `Int` fields. Derived ordering compares those fields, so `2` is smaller than `5`.
+
+### Worked variation: a library identifier
+
+Same wrapper, but its field is text and must not be mistaken for an arbitrary title.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: make a shelf label from a catalogue identifier.
+newtype CatalogueId = CatalogueId String deriving (Show, Eq, Ord)
+shelfLabel :: CatalogueId -> String
+shelfLabel (CatalogueId s) = "ID:" ++ s
+main :: IO ()
+main = do
+  putStrLn (shelfLabel (CatalogueId "Q7"))
+  print (CatalogueId "Q7" == CatalogueId "Q7")
+```
+
+```text
+ID:Q7
+True
+```
+
+</HaskellTryIt>
+
+The string is unwrapped, prefixed and returned as ordinary text. Equality compares wrapped identifiers using their string fields.
+
+### Exam question 5: a newtype conversion (5 marks)
+
+Declare a distinct number of weeks and convert it to an integer number of days.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A week count carries one value but must be distinct from ordinary `Int`. The result is an unwrapped `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose `newtype`, unwrap its only field and multiply by seven.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+newtype Weeks = Weeks Int deriving (Show, Eq, Ord)
+days :: Weeks -> Int
+days (Weeks n) = 7 * n
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`days (Weeks 2)` is `14` and `days (Weeks 0)` is `0`. The one field is explicitly extracted before arithmetic.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Restricted fields and common errors
+
+```haskell
+-- Wrong: there is no missing constructor, but this guard misses zero.
+newtype Lives = Lives Int
+unsafeLose :: Lives -> Lives
+unsafeLose (Lives n)
+  | n > 0 = Lives (n - 1)
+-- unsafeLose (Lives 0) fails; -Wincomplete-patterns warns.
+```
+
+Use the total `lose` above. Omitting the only constructor equation altogether is not a partial definition: it is a missing definition. `newtype Bad = Bad Int Int` violates the field rule; the key GHC phrase is `must have exactly one field`. Use `data`, or a single tuple field. `Cents 2 + Cents 3` without a `Num Cents` instance produces `No instance for (Num Cents)`; use `addCents`.
+
+**Practice with answer.** Does `deriving (Show, Eq, Ord)` let `CatalogueId "Q7"` stand in for `String`? No. Use a constructor pattern to extract its field.
+
+## 6. Parameterised types: Pair, optional values and alternatives
+
+A lowercase parameter names a type to be supplied later. `Pair String Int` and `Pair Bool String` use the same declaration with different choices for its two parameters. A repeated parameter, as in `Pair a a`, requires matching types; different letters allow different types but do not require them to differ.
+
+### Pair template: keep both values
+
+```haskell
+data Pair a b = Pair a b deriving (Show, Eq)
+swapPair :: Pair a b -> Pair b a
+swapPair (Pair x y) = Pair y x
+```
+
+The first `a` and `b` are parameters; the ones on the right are field types. There is one constructor equation and no constraint: swapping never compares or displays a field.
+
+### Worked variation: pairing a player and a score
+
+Start with text paired with an integer.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: swap this domain-specific pair.
+data Pair a b = Pair a b deriving (Show, Eq)
+swapPair :: Pair a b -> Pair b a
+swapPair (Pair x y) = Pair y x
+main :: IO ()
+main = print (swapPair (Pair "Ayo" (9 :: Int)))
+```
+
+```text
+Pair 9 "Ayo"
+```
+
+</HaskellTryIt>
+
+The pattern binds the name to `x` and score to `y`, then constructs `Pair y x`. The result has type `Pair Int String`.
+
+### Worked variation: pairing an account flag and reference
+
+Same template, but neither field is numerical.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: swap this domain-specific pair.
+data Pair a b = Pair a b deriving (Show, Eq)
+swapPair :: Pair a b -> Pair b a
+swapPair (Pair x y) = Pair y x
+main :: IO ()
+main = print (swapPair (Pair True "K2"))
+```
+
+```text
+Pair "K2" True
+```
+
+</HaskellTryIt>
+
+The Boolean moves into the second field. Its type moves with it, giving `Pair String Bool`.
+
+### Worked variation: pairing two calendar days
+
+Same template, now both parameter choices are Int and zero is allowed.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: swap this domain-specific pair.
+data Pair a b = Pair a b deriving (Show, Eq)
+swapPair :: Pair a b -> Pair b a
+swapPair (Pair x y) = Pair y x
+main :: IO ()
+main = print (swapPair (Pair (0 :: Int) (6 :: Int)))
+```
+
+```text
+Pair 6 0
+```
+
+</HaskellTryIt>
+
+Both fields have type `Int`; different parameter letters allow this. Reversing positions leaves their values intact.
+
+### Maybe template: a value may be absent
+
+`Maybe'` is a fresh type name, with an apostrophe to distinguish it from Prelude `Maybe`. A `Maybe' a` stores no value or one value of type `a`. This makes failure visible in the result type.
+
+```haskell
+data Maybe' a = Nothing' | Just' a deriving (Show, Eq)
+withDefault :: a -> Maybe' a -> a
+withDefault fallback Nothing' = fallback
+withDefault _ (Just' x) = x
+```
+
+The two equations cover both alternatives. The fallback must have the same type as the stored value.
+
+### Worked variation: an optional game score
+
+Use an integer when the score exists, zero otherwise.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: extract the value or use the default.
+data Maybe' a = Nothing' | Just' a deriving (Show, Eq)
+withDefault :: a -> Maybe' a -> a
+withDefault fallback Nothing' = fallback
+withDefault _ (Just' x) = x
+main :: IO ()
+main = do
+  print (withDefault (0 :: Int) (Just' 7))
+  print (withDefault (0 :: Int) Nothing')
+```
+
+```text
+7
+0
+```
+
+</HaskellTryIt>
+
+`Just' 7` selects the second equation; `Nothing'` selects the fallback equation. Absence is distinct from an actual score of zero.
+
+### Worked variation: an optional library title
+
+Same optional template, now the stored type is String.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: extract the value or use the default.
+data Maybe' a = Nothing' | Just' a deriving (Show, Eq)
+withDefault :: a -> Maybe' a -> a
+withDefault fallback Nothing' = fallback
+withDefault _ (Just' x) = x
+main :: IO ()
+main = do
+  print (withDefault "Unknown" (Just' "Dunes"))
+  print (withDefault "Unknown" Nothing')
+```
+
+```text
+"Dunes"
+"Unknown"
+```
+
+</HaskellTryIt>
+
+The present title passes through. The absent title returns the supplied string, and `print` includes its quotation marks.
+
+### Worked variation: an optional calendar confirmation
+
+Same optional template, now absence has a Boolean default.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: extract the value or use the default.
+data Maybe' a = Nothing' | Just' a deriving (Show, Eq)
+withDefault :: a -> Maybe' a -> a
+withDefault fallback Nothing' = fallback
+withDefault _ (Just' x) = x
+main :: IO ()
+main = do
+  print (withDefault False (Just' True))
+  print (withDefault False Nothing')
+```
+
+```text
+True
+False
+```
+
+</HaskellTryIt>
+
+A present `True` overrides the fallback. Absence returns `False`; the declaration could also store a present `False`.
+
+### Either-like template: retain the reason for failure
+
+An optional value records absence; an either-like value can retain an explanation instead. `Outcome e a` supplies a failure field of type `e` or a success field of type `a`.
+
+```haskell
+data Outcome e a = Rejected e | Accepted a deriving (Show, Eq)
+resolve :: (e -> b) -> (a -> b) -> Outcome e a -> b
+resolve bad _ (Rejected e) = bad e
+resolve _ good (Accepted x) = good x
+```
+
+Both handlers return the same type `b`, even though their inputs can differ. `Rejected` and `Accepted` are alternatives, not two fields stored together.
+
+### Worked variation: a game action result
+
+Success carries points; failure carries a message.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: handle success and failure without losing their meaning.
+data Outcome e a = Rejected e | Accepted a deriving (Show, Eq)
+resolve :: (e -> b) -> (a -> b) -> Outcome e a -> b
+resolve bad _ (Rejected e) = bad e
+resolve _ good (Accepted x) = good x
+main :: IO ()
+main = do
+  putStrLn (resolve id show (Accepted (5 :: Int)))
+  putStrLn (resolve id show (Rejected "blocked" :: Outcome String Int))
+```
+
+```text
+5
+blocked
+```
+
+</HaskellTryIt>
+
+The success handler `show` turns five into text. The failure handler `id` leaves the message unchanged. Both branches produce `String`.
+
+### Worked variation: a bank decision
+
+Same alternatives, but failure is a numeric code and success is a reference.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: handle success and failure without losing their meaning.
+data Outcome e a = Rejected e | Accepted a deriving (Show, Eq)
+resolve :: (e -> b) -> (a -> b) -> Outcome e a -> b
+resolve bad _ (Rejected e) = bad e
+resolve _ good (Accepted x) = good x
+main :: IO ()
+main = do
+  putStrLn (resolve show id (Accepted "TX8" :: Outcome Int String))
+  putStrLn (resolve show id (Rejected (403 :: Int)))
+```
+
+```text
+TX8
+403
+```
+
+</HaskellTryIt>
+
+Here the handlers exchange roles: `id` preserves the successful reference, while `show` converts the numeric rejection code.
+
+### Worked variation: a library search
+
+Same alternatives, now success holds a list of titles.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: handle success and failure without losing their meaning.
+data Outcome e a = Rejected e | Accepted a deriving (Show, Eq)
+resolve :: (e -> b) -> (a -> b) -> Outcome e a -> b
+resolve bad _ (Rejected e) = bad e
+resolve _ good (Accepted x) = good x
+main :: IO ()
+main = do
+  putStrLn (resolve id (\xs -> show (length xs)) (Accepted ["Maps", "Sky"]))
+  putStrLn (resolve id (\xs -> show (length xs)) (Rejected "offline" :: Outcome String [String]))
+```
+
+```text
+2
+offline
+```
+
+</HaskellTryIt>
+
+The successful list is counted, producing the text `2`. Failure still preserves useful information rather than becoming an unexplained absence.
+
+### Exam question 6: choosing a parameterised shape (5 marks)
+
+Choose types for a name paired with a score, an optional score, and a failure message or score. Write safe score extraction for the optional case.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "choose" asks which shape matches each requirement. The final "write" asks for a total function.
+
+</Step>
+
+<Step title="2. Plan">
+
+Both values together need `Pair`; absence needs `Maybe'`; failure information needs `Outcome`. A fallback handles the absent score.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Pair a b = Pair a b deriving (Show, Eq)
+data Maybe' a = Nothing' | Just' a deriving (Show, Eq)
+data Outcome e a = Rejected e | Accepted a deriving (Show, Eq)
+scoreOrZero :: Maybe' Int -> Int
+scoreOrZero Nothing' = 0
+scoreOrZero (Just' n) = n
+-- Name and score: Pair String Int
+-- Optional score: Maybe' Int
+-- Failure message or score: Outcome String Int
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`scoreOrZero Nothing'` gives `0`; `scoreOrZero (Just' 8)` gives `8`. The type records absence instead of making a field value such as negative one act as a marker.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Partial extraction and common errors
+
+```haskell
+-- Wrong: Nothing' is missing.
+data Maybe' a = Nothing' | Just' a
+extract :: Maybe' a -> a
+extract (Just' x) = x
+-- extract Nothing' fails; -Wincomplete-patterns warns.
+
+-- Wrong: Rejected is missing.
+data Outcome e a = Rejected e | Accepted a
+acceptedOnly :: Outcome e a -> a
+acceptedOnly (Accepted x) = x
+-- acceptedOnly (Rejected "offline") fails.
+
+-- Wrong: Pair has one constructor, but the False field case is missing.
+data Pair a b = Pair a b
+truePair :: Pair Bool b -> b
+truePair (Pair True y) = y
+-- truePair (Pair False "x") fails.
+```
+
+Use `withDefault` or `resolve` instead of unsafe extraction; use `swapPair`'s unrestricted field pattern for complete pair handling. All three restricted functions trigger the incomplete-pattern warning. `Pair Int` is a type still waiting for a second type argument; where a complete type is required GHC reports `Expecting one more argument`. `withDefault 0 (Just' "Maps")` incorrectly requires a string to behave as a number (key diagnostic `No instance for (Num String)`); use a string fallback. A signature `f :: a -> a` cannot promise an `Int` result for every possible `a`: `f _ = (1 :: Int)` gives `Couldn't match`.
+
+**Practice with answers.** `withDefault "none" (Just' "")` returns the empty string, not `"none"`. An empty value is still present. `resolve length id (Rejected "bad")` returns `3`; the successful branch would have to carry an `Int` too, because both handlers return `Int`.
+
+## 7. Recursive lists: stop or continue
+
+A recursive type mentions itself in a field. A finite value must eventually use a stopping constructor. Each recursive field leads to a recursive call on that smaller piece.
+
+**Template:**
+
+```haskell
+data Chain a = End | Link a (Chain a) deriving (Show, Eq)
+toList :: Chain a -> [a]
+toList End = []
+toList (Link x rest) = x : toList rest
+```
+
+`End` corresponds to `[]`; `Link` corresponds to `(:)`. `Chain a` is a complete field type and must be parenthesised as a constructor argument in the declaration.
+
+### Worked variation: a game action chain
+
+Start with two strings and an explicit end.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: convert the custom chain to a built-in list.
+data Chain a = End | Link a (Chain a) deriving (Show, Eq)
+toList :: Chain a -> [a]
+toList End = []
+toList (Link x rest) = x : toList rest
+main :: IO ()
+main = do
+  print (toList (Link "jump" (Link "rest" End)))
+  print (toList (End :: Chain String))
+```
+
+```text
+["jump","rest"]
+[]
+```
+
+</HaskellTryIt>
+
+The two `Link` equations produce `"jump" : "rest" : []`; `End` contributes no extra element.
+
+### Worked variation: a bank transaction chain
+
+Same recursive spine, now its fields are signed integers.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: convert the custom chain to a built-in list.
+data Chain a = End | Link a (Chain a) deriving (Show, Eq)
+toList :: Chain a -> [a]
+toList End = []
+toList (Link x rest) = x : toList rest
+main :: IO ()
+main = do
+  print (toList (Link (4 :: Int) (Link (-3) End)))
+  print (toList (End :: Chain Int))
+```
+
+```text
+[4,-3]
+[]
+```
+
+</HaskellTryIt>
+
+The calls give `4 : (-3) : []`. Unwrapping does not add the amounts: it preserves them in order.
+
+### Worked variation: a library route chain
+
+Same spine, but a single character tests the one-element case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: convert the custom chain to a built-in list.
+data Chain a = End | Link a (Chain a) deriving (Show, Eq)
+toList :: Chain a -> [a]
+toList End = []
+toList (Link x rest) = x : toList rest
+main :: IO ()
+main = do
+  print (toList (Link 'A' End))
+  print (length (toList (End :: Chain Char)))
+```
+
+```text
+"A"
+0
+```
+
+</HaskellTryIt>
+
+A list of `Char` prints as a string. The recursive call on `End` returns an empty character list; its length is zero.
+
+### Exam question 7: counting a chain (5 marks)
+
+Write a polymorphic function counting the links of a custom chain.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Counting" asks for `Int`; "polymorphic" means the fields can have any element type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the stopping case zero and add one per `Link`. The field value is not examined, so no constraint is required.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Chain a = End | Link a (Chain a) deriving (Show, Eq)
+chainLength :: Chain a -> Int
+chainLength End = 0
+chainLength (Link _ rest) = 1 + chainLength rest
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`chainLength (Link True (Link False End))` reduces to `1 + 1 + 0 = 2`; the empty chain gives zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Missing case and common errors
+
+```haskell
+-- Wrong: End is missing.
+data Chain a = End | Link a (Chain a)
+first :: Chain a -> a
+first (Link x _) = x
+-- first End fails; -Wincomplete-patterns warns.
+```
+
+A total first-element function should return `Maybe a`, with `Nothing` for `End` and `Just x` for `Link x _`. `Link 1 []` fails with `Couldn't match`: the tail must be `Chain Int`, not `[Int]`. `Link 1 End` is the repair. Recursing on the original chain rather than `rest` loops; GHC need not warn because all constructors may still have patterns.
+
+**Practice with answer.** How many links are in `Link True End`? One. `End` is a stopping marker, not an element.
+
+## 8. Node-labelled trees: a value and two subtrees
+
+Here `Leaf` means an empty tree and stores no value. A `Node` stores a left subtree, one value and a right subtree. This differs from a leaf-labelled tree, where values live only at leaves. A parameter makes this shape reusable at many types.
+
+**Template:**
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+inorder :: Tree a -> [a]
+inorder Leaf = []
+inorder (Node l x r) = inorder l ++ [x] ++ inorder r
+```
+
+Read `Node :: Tree a -> a -> Tree a -> Tree a`. There are two recursive fields, so the node equation has two recursive calls. Inorder means left values, this value, then right values; it sorts nothing by itself.
+
+### Worked variation: a game decision tree
+
+An unbalanced tree stores game action names.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: list the stored values in inorder.
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+inorder :: Tree a -> [a]
+inorder Leaf = []
+inorder (Node l x r) = inorder l ++ [x] ++ inorder r
+main :: IO ()
+main = do
+  print (inorder (Node (Node Leaf "hide" Leaf) "move" Leaf))
+  print (inorder (Leaf :: Tree String))
+```
+
+```text
+["hide","move"]
+[]
+```
+
+</HaskellTryIt>
+
+The left node contributes `["hide"]`, the root contributes `["move"]`, and the empty right tree contributes `[]`.
+
+### Worked variation: a bank search tree
+
+Same shape, now integers appear in left-root-right order.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: list the stored values in inorder.
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+inorder :: Tree a -> [a]
+inorder Leaf = []
+inorder (Node l x r) = inorder l ++ [x] ++ inorder r
+main :: IO ()
+main = do
+  print (inorder (Node (Node Leaf (2 :: Int) Leaf) 5 (Node Leaf 8 Leaf)))
+  print (inorder (Leaf :: Tree Int))
+```
+
+```text
+[2,5,8]
+[]
+```
+
+</HaskellTryIt>
+
+The two subtree results are `[2]` and `[8]`. Joining them around `[5]` gives three stored values; empty leaves contribute none.
+
+### Worked variation: a library catalogue tree
+
+Same shape, but the root is the only stored character.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: list the stored values in inorder.
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+inorder :: Tree a -> [a]
+inorder Leaf = []
+inorder (Node l x r) = inorder l ++ [x] ++ inorder r
+main :: IO ()
+main = do
+  print (inorder (Node Leaf 'Q' Leaf))
+  print (length (inorder (Leaf :: Tree Char)))
+```
+
+```text
+"Q"
+0
+```
+
+</HaskellTryIt>
+
+The two empty sides give `[] ++ ['Q'] ++ []`. As a character list this displays as `"Q"`.
+
+### Exam question 8: mapping a node-labelled tree (5 marks)
+
+Write mapTree for a tree with empty leaves and values at nodes.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" needs a definition. The supplied function can change each stored value from type `a` to `b`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Preserve `Leaf`. At `Node`, recursively map both subtrees and apply the supplied function to the stored value.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a) deriving (Show, Eq)
+mapTree :: (a -> b) -> Tree a -> Tree b
+mapTree _ Leaf = Leaf
+mapTree f (Node l x r) = Node (mapTree f l) (f x) (mapTree f r)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`mapTree (+1) (Node Leaf 4 Leaf)` is `Node Leaf 5 Leaf`. On `Leaf`, the function is never applied. Both recursive fields are handled.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Missing case and common errors
+
+```haskell
+-- Wrong: Leaf is missing.
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+root :: Tree a -> a
+root (Node _ x _) = x
+-- root Leaf fails; -Wincomplete-patterns warns.
+```
+
+Return `Maybe a` with `root Leaf = Nothing` and `root (Node _ x _) = Just x`. `Node 5 Leaf Leaf` swaps a subtree and value, leading to `Couldn't match`; write `Node Leaf 5 Leaf`. `Leaf 5` is invalid for this declaration: `Leaf` takes no fields (key diagnostic `applied to one value argument`). Do not copy the leaf-labelled template into this one.
+
+**Practice with answer.** Does inorder always produce an ordered list? No. `Node Leaf 8 (Node Leaf 2 Leaf)` gives `[8,2]`; the declaration enforces shape, not a search-tree invariant.
+
+## 9. Leaf-labelled trees: values at the ends
+
+A leaf-labelled tree has no empty constructor. A leaf stores one value; a branch joins two trees and stores no value of its own. Counting values means counting leaves, not branches.
+
+**Template:**
+
+```haskell
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a)
+  deriving (Show, Eq)
+fringe :: LTree a -> [a]
+fringe (LLeaf x) = [x]
+fringe (LBranch l r) = fringe l ++ fringe r
+```
+
+`LLeaf :: a -> LTree a`, whereas `LBranch` takes two trees. Every finite value contains at least one stored value.
+
+### Worked variation: game outcome leaves
+
+Two ending descriptions are joined by a branch.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: read every leaf value from left to right.
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a)
+  deriving (Show, Eq)
+fringe :: LTree a -> [a]
+fringe (LLeaf x) = [x]
+fringe (LBranch l r) = fringe l ++ fringe r
+main :: IO ()
+main = print (fringe (LBranch (LLeaf "win") (LLeaf "draw")))
+```
+
+```text
+["win","draw"]
+```
+
+</HaskellTryIt>
+
+The branch equation joins `["win"]` to `["draw"]`. The branch itself adds no description.
+
+### Worked variation: bank total leaves
+
+Same tree, now the right branch is deeper and values are numeric.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: read every leaf value from left to right.
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a)
+  deriving (Show, Eq)
+fringe :: LTree a -> [a]
+fringe (LLeaf x) = [x]
+fringe (LBranch l r) = fringe l ++ fringe r
+main :: IO ()
+main = print (fringe (LBranch (LLeaf (2 :: Int)) (LBranch (LLeaf 3) (LLeaf 4))))
+```
+
+```text
+[2,3,4]
+```
+
+</HaskellTryIt>
+
+The right branch yields `[3] ++ [4]`; the outer branch prefixes `[2]`. There are three leaves and two branches.
+
+### Worked variation: library shelf leaf
+
+Same declaration, but the smallest possible tree contains one character.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: read every leaf value from left to right.
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a)
+  deriving (Show, Eq)
+fringe :: LTree a -> [a]
+fringe (LLeaf x) = [x]
+fringe (LBranch l r) = fringe l ++ fringe r
+main :: IO ()
+main = print (fringe (LLeaf 'Z'))
+```
+
+```text
+"Z"
+```
+
+</HaskellTryIt>
+
+The leaf equation yields `['Z']`. Unlike empty `Leaf` in the previous section, this constructor stores a value and cannot represent an empty tree.
+
+### Exam question 9: counting leaf labels (5 marks)
+
+Write a function counting stored values in a leaf-labelled tree.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The values occur at `LLeaf`, and branches do not store an element. Count values rather than constructors.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one for a leaf and the sum of both recursive counts for a branch.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a) deriving (Show, Eq)
+valueCount :: LTree a -> Int
+valueCount (LLeaf _) = 1
+valueCount (LBranch l r) = valueCount l + valueCount r
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`valueCount (LBranch (LLeaf "A") (LLeaf "B"))` is `1 + 1 = 2`, whereas the tree has three constructors. A singleton leaf gives one.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Missing case and common errors
+
+```haskell
+-- Wrong: LBranch is missing.
+data LTree a = LLeaf a | LBranch (LTree a) (LTree a)
+leafValue :: LTree a -> a
+leafValue (LLeaf x) = x
+-- leafValue (LBranch (LLeaf 1) (LLeaf 2)) fails.
+```
+
+`-Wincomplete-patterns` warns. To choose the leftmost value, add `leafValue (LBranch l _) = leafValue l`; it terminates for finite trees. `LLeaf` alone is a function, not a tree; supplying it as a completed tree causes `Couldn't match`. `LBranch (LLeaf 1)` is also still a function awaiting its right subtree.
+
+**Practice with answer.** Can `fringe` return `[]` on a finite defined `LTree`? No: the leaf case returns one element and branches join non-empty fringes.
+
+## 10. Expression trees: evaluation and readable printing
+
+An expression tree represents syntax as data. A number stops the recursion; arithmetic constructors hold subexpressions. Evaluation computes an integer, whereas pretty printing describes the syntax as text. These functions have different result types and meanings.
+
+**Template:**
+
+```haskell
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr deriving (Show, Eq)
+eval :: Expr -> Int
+eval (Num n) = n
+eval (Add l r) = eval l + eval r
+eval (Mul l r) = eval l * eval r
+pretty :: Expr -> String
+pretty (Num n) = show n
+pretty (Add l r) = "(" ++ pretty l ++ "+" ++ pretty r ++ ")"
+pretty (Mul l r) = "(" ++ pretty l ++ "*" ++ pretty r ++ ")"
+```
+
+`Num` here is a value constructor; Prelude `Num` is a type class in a separate namespace. Both functions need all three constructor equations. Parentheses in `pretty` deliberately preserve grouping; `show` derived for `Expr` instead exposes the constructors.
+
+### Worked variation: a game score expression
+
+Addition combines a basic score with a multiplied bonus.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: display, evaluate and pretty print this expression.
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr deriving (Show, Eq)
+eval :: Expr -> Int
+eval (Num n) = n
+eval (Add l r) = eval l + eval r
+eval (Mul l r) = eval l * eval r
+pretty :: Expr -> String
+pretty (Num n) = show n
+pretty (Add l r) = "(" ++ pretty l ++ "+" ++ pretty r ++ ")"
+pretty (Mul l r) = "(" ++ pretty l ++ "*" ++ pretty r ++ ")"
+main :: IO ()
+main = do
+  let e = Add (Num 2) (Mul (Num 3) (Num 4))
+  print e
+  print (eval e)
+  putStrLn (pretty e)
+```
+
+```text
+Add (Num 2) (Mul (Num 3) (Num 4))
+14
+(2+(3*4))
+```
+
+</HaskellTryIt>
+
+`eval` first gives `3 * 4 = 12` on the right, then `2 + 12 = 14`. Derived output shows nesting; `pretty` prints the same grouping using operators.
+
+### Worked variation: a bank adjustment expression
+
+Same language, now a negative amount offsets a deposit.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: display, evaluate and pretty print this expression.
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr deriving (Show, Eq)
+eval :: Expr -> Int
+eval (Num n) = n
+eval (Add l r) = eval l + eval r
+eval (Mul l r) = eval l * eval r
+pretty :: Expr -> String
+pretty (Num n) = show n
+pretty (Add l r) = "(" ++ pretty l ++ "+" ++ pretty r ++ ")"
+pretty (Mul l r) = "(" ++ pretty l ++ "*" ++ pretty r ++ ")"
+main :: IO ()
+main = do
+  let e = Add (Num (-3)) (Num 8)
+  print e
+  print (eval e)
+  putStrLn (pretty e)
+```
+
+```text
+Add (Num (-3)) (Num 8)
+5
+(-3+8)
+```
+
+</HaskellTryIt>
+
+The numeric leaves yield negative three and eight, so addition gives five. Derived `Show` parenthesises the negative argument of `Num`.
+
+### Worked variation: a library charge expression
+
+Same language, now multiplication by zero tests a boundary case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: display, evaluate and pretty print this expression.
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr deriving (Show, Eq)
+eval :: Expr -> Int
+eval (Num n) = n
+eval (Add l r) = eval l + eval r
+eval (Mul l r) = eval l * eval r
+pretty :: Expr -> String
+pretty (Num n) = show n
+pretty (Add l r) = "(" ++ pretty l ++ "+" ++ pretty r ++ ")"
+pretty (Mul l r) = "(" ++ pretty l ++ "*" ++ pretty r ++ ")"
+main :: IO ()
+main = do
+  let e = Mul (Add (Num 2) (Num 5)) (Num 0)
+  print e
+  print (eval e)
+  putStrLn (pretty e)
+```
+
+```text
+Mul (Add (Num 2) (Num 5)) (Num 0)
+0
+((2+5)*0)
+```
+
+</HaskellTryIt>
+
+The left expression evaluates to seven and the right to zero, so the product is zero. Printing preserves the left addition as a grouped subexpression.
+
+### Exam question 10: extending an expression language (5 marks)
+
+Add subtraction to a number/addition language and write its evaluator.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Add" changes the declaration and every function that examines its alternatives. The result of evaluation is `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Make subtraction carry two expressions. Evaluate them in left-right order for subtraction; unlike addition, swapping matters.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Expr = Num Int | Add Expr Expr | Sub Expr Expr deriving (Show, Eq)
+eval :: Expr -> Int
+eval (Num n) = n
+eval (Add l r) = eval l + eval r
+eval (Sub l r) = eval l - eval r
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`eval (Sub (Num 2) (Num 5))` gives negative three. The result would be positive three if the operands were reversed.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Missing case and common errors
+
+```haskell
+-- Wrong: Mul is missing.
+data Expr = Num Int | Add Expr Expr | Mul Expr Expr
+evalBad :: Expr -> Int
+evalBad (Num n) = n
+evalBad (Add l r) = evalBad l + evalBad r
+-- evalBad (Mul (Num 2) (Num 3)) fails; -Wincomplete-patterns warns.
+```
+
+Add the multiplication equation, including recursive calls on both subexpressions. `Add 2 3` causes `Couldn't match`: its arguments must be `Expr`, so write `Add (Num 2) (Num 3)`. `eval (Add l r) = l + r` attempts to return syntax-tree arithmetic where the signature requires `Int`; GHC reports `Couldn't match`. Evaluate the children first. `pretty (Num n) = n` has result type `Int` instead of `String`; use `show n`.
+
+**Practice with answer.** Are `show e` and `show (eval e)` equal for `e = Num 2`? No: they are `"Num 2"` and `"2"`; one describes syntax, the other describes its numeric result.
+
+## 11. Mutually recursive types: two shapes refer to each other
+
+Two types are mutually recursive when each declaration contains the other type in a field. Their functions can follow the same alternating path. Write both signatures and all constructor cases before tracing any call; a base case in one type may stop calls originating in the other.
+
+**Template:**
+
+```haskell
+data Outer = Stop | Wrap Inner deriving (Show, Eq)
+data Inner = Back Outer deriving (Show, Eq)
+countOuter :: Outer -> Int
+countOuter Stop = 0
+countOuter (Wrap i) = 1 + countInner i
+countInner :: Inner -> Int
+countInner (Back o) = countOuter o
+```
+
+Replace the type and constructor names for your domain. `Outer` has two alternatives, `Inner` one; there are three equations across the two functions. In a finite `Wrap (Back Stop)`, the call path is `countOuter` to `countInner` to `countOuter Stop`.
+
+### Worked variation: game rounds and turns
+
+The round count increases only at a `Round`, not at its administrative `Turn` wrapper.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: count rounds in an alternating rounds-and-turns structure.
+data Rounds = GameOver | Round Turn deriving (Show, Eq)
+data Turn = Turn Rounds deriving (Show, Eq)
+roundCount :: Rounds -> Int
+roundCount GameOver = 0
+roundCount (Round t) = 1 + turnCount t
+turnCount :: Turn -> Int
+turnCount (Turn rs) = roundCount rs
+main :: IO ()
+main = do
+  print (roundCount (Round (Turn (Round (Turn GameOver)))))
+  print (roundCount GameOver)
+```
+
+```text
+2
+0
+```
+
+</HaskellTryIt>
+
+Unfolding gives `1 + turnCount (Turn (Round (Turn GameOver)))`, then `1 + roundCount (Round (Turn GameOver))`, then `1 + 1 + roundCount GameOver = 2`. The base case returns zero immediately.
+
+### Worked variation: bank files and reviews
+
+Same alternating types, but the counted object is now a file and the smallest non-empty value is tested.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: count files while following review links.
+data Files = NoFiles | File ReviewLink deriving (Show, Eq)
+data ReviewLink = Reviewed Files deriving (Show, Eq)
+fileCount :: Files -> Int
+fileCount NoFiles = 0
+fileCount (File r) = 1 + reviewCount r
+reviewCount :: ReviewLink -> Int
+reviewCount (Reviewed fs) = fileCount fs
+main :: IO ()
+main = do
+  print (fileCount (File (Reviewed NoFiles)))
+  print (reviewCount (Reviewed NoFiles))
+```
+
+```text
+1
+0
+```
+
+</HaskellTryIt>
+
+`File` adds one and calls through `Reviewed` to `NoFiles`. A review link alone adds nothing, so the second call returns zero.
+
+### Worked variation: library shelves and sections
+
+Same mutual-recursion idea, but each section holds two shelves, so one equation branches into two recursive calls.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: count named shelves across sections.
+data Shelf = EmptyShelf | NamedShelf String Section deriving (Show, Eq)
+data Section = Section Shelf Shelf deriving (Show, Eq)
+shelfCount :: Shelf -> Int
+shelfCount EmptyShelf = 0
+shelfCount (NamedShelf _ section) = 1 + sectionCount section
+sectionCount :: Section -> Int
+sectionCount (Section l r) = shelfCount l + shelfCount r
+main :: IO ()
+main = print (shelfCount
+  (NamedShelf "A" (Section EmptyShelf
+    (NamedShelf "B" (Section EmptyShelf EmptyShelf)))))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+Shelf A adds one. Its left shelf adds zero; shelf B adds one, and B's two empty shelves add zero. Hence `1 + (0 + (1 + (0 + 0))) = 2`.
+
+### Exam question 11: following mutual links (5 marks)
+
+Write functions counting a chain that alternates between A and B, with Done as the stopping case.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The request names two types: the functions must accept different inputs and call each other.
+
+</Step>
+
+<Step title="2. Plan">
+
+Count each `More` once; pass through `Back` without incrementing. `Done` returns zero.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data A = Done | More B deriving (Show, Eq)
+data B = Back A deriving (Show, Eq)
+countA :: A -> Int
+countA Done = 0
+countA (More b) = 1 + countB b
+countB :: B -> Int
+countB (Back a) = countA a
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`countA (More (Back Done))` becomes `1 + countB (Back Done)`, then `1 + countA Done = 1`. Each function receives the right type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Missing case and common errors
+
+```haskell
+-- Wrong: GameOver is missing, even though the functions call each other.
+data Rounds = GameOver | Round Turn
+data Turn = Turn Rounds
+badRounds :: Rounds -> Int
+badRounds (Round t) = 1 + badTurn t
+badTurn :: Turn -> Int
+badTurn (Turn rs) = badRounds rs
+-- badRounds (Round (Turn GameOver)) eventually fails.
+```
+
+`-Wincomplete-patterns` warns for `badRounds`; add `badRounds GameOver = 0`. `Round GameOver` fails with `Couldn't match` because the field requires `Turn`, not `Rounds`; write `Round (Turn GameOver)`. Each call must pass the correct alternating type. Calling `roundCount t` in the `Round t` equation makes the same mistake; call `turnCount t`.
+
+**Practice with answer.** Why not add one in both functions? That would count both wrappers and give two for one round. The required meaning decides which constructor contributes, not the presence of recursion.
+
+## 12. Handwritten Show, Eq and Ord instances
+
+A class describes operations; an instance defines those operations for one type. Write `show` to return `String`, `(==)` to return `Bool`, and `compare` to return `LT`, `EQ` or `GT`. The implementation can choose a domain meaning, but equality and ordering must agree: `compare x y == EQ` exactly when `x == y`. A lawful order is transitive, and equality is reflexive, symmetric and transitive for these finite defined examples.
+
+**Template:**
+
+```haskell
+data Rank = Low | High
+instance Show Rank where
+  show Low = "low"
+  show High = "high"
+instance Eq Rank where
+  Low == Low = True
+  Low == High = False
+  High == Low = False
+  High == High = True
+instance Ord Rank where
+  compare Low Low = EQ
+  compare Low High = LT
+  compare High Low = GT
+  compare High High = EQ
+```
+
+Every constructor is covered. For two-argument methods, every combination must be covered; a wildcard equation can cover several combinations when justified. Defining `(==)` is sufficient for `Eq` because its default `(/=)` negates equality. Defining `compare` is sufficient for `Ord`; its defaults supply the relational operators. `Ord` also requires an `Eq` instance. Define an instance once: do not both derive and handwrite the same one.
+
+For a parameterised wrapper the template adds a constraint, for example `instance Eq a => Eq (Box a) where ...`. This says that comparing boxes needs equality for their fields. An instance head uses the complete applied type `Box a`, not the constructor `Box` by itself.
+
+### Worked variation: game ranks with all three instances
+
+Start with no fields, explicit coverage of the constructor pairs, and custom lowercase display.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: define readable, comparable game ranks by hand.
+data Rank = Low | High
+instance Show Rank where
+  show Low = "low"
+  show High = "high"
+instance Eq Rank where
+  Low == Low = True
+  Low == High = False
+  High == Low = False
+  High == High = True
+instance Ord Rank where
+  compare Low Low = EQ
+  compare Low High = LT
+  compare High Low = GT
+  compare High High = EQ
+rankPoints :: Rank -> Int
+rankPoints Low = 1
+rankPoints High = 5
+main :: IO ()
+main = do
+  print [Low, High]
+  print (Low == High, Low < High, rankPoints High)
+```
+
+```text
+[low,high]
+(False,True,5)
+```
+
+</HaskellTryIt>
+
+`print` uses custom `show`, so constructor values appear as `low` and `high` without quotes. Equality selects the second equation; comparison selects `LT`, making the less-than test true. `rankPoints` is a separate total function.
+
+### Worked variation: bank references ignore a comment
+
+Same three instances, but equality and ordering use only the reference field, not the descriptive comment.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: compare references by number while ignoring comments.
+data Ref = Ref Int String
+instance Show Ref where
+  show (Ref n _) = "ref#" ++ show n
+instance Eq Ref where
+  Ref n _ == Ref m _ = n == m
+instance Ord Ref where
+  compare (Ref n _) (Ref m _) = compare n m
+refNumber :: Ref -> Int
+refNumber (Ref n _) = n
+main :: IO ()
+main = do
+  print (Ref 4 "paid")
+  print (Ref 4 "paid" == Ref 4 "checked")
+  print (compare (Ref 4 "paid") (Ref 9 "new"))
+  print (refNumber (Ref 4 "paid"))
+```
+
+```text
+ref#4
+True
+LT
+4
+```
+
+</HaskellTryIt>
+
+Both equality operands carry reference four, so equality is true despite different comments. Comparing four with nine gives `LT`. Both methods use the same key; the display deliberately hides comments.
+
+### Worked variation: library shelf codes compare a pair of fields
+
+Same three instances, now ordering checks two fields from left to right.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: compare shelf codes by aisle then position.
+data Code = Code Int Int
+instance Show Code where
+  show (Code aisle position) = show aisle ++ ":" ++ show position
+instance Eq Code where
+  Code a p == Code b q = a == b && p == q
+instance Ord Code where
+  compare (Code a p) (Code b q) = compare (a, p) (b, q)
+positionOf :: Code -> Int
+positionOf (Code _ p) = p
+main :: IO ()
+main = do
+  print (Code 2 8)
+  print (Code 2 8 == Code 2 9)
+  print (compare (Code 2 8) (Code 3 1))
+  print (compare (Code 2 8) (Code 2 9))
+```
+
+```text
+2:8
+False
+LT
+LT
+```
+
+</HaskellTryIt>
+
+Equality checks both fields. The first comparison stops at aisle `2` versus `3`, ignoring positions `8` and `1`; the second has equal aisles and therefore compares positions. Tuple ordering implements that left-to-right policy.
+
+### How derived Ord treats constructors and fields
+
+Derived ordering first compares constructor positions in the declaration. Only if the constructors match does it compare their fields, from left to right, stopping at the first unequal pair. Record labels do not change this rule; declaration order of the fields matters.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: distinguish constructor priority from field priority.
+data Ticket = Standard Int Int | Premium Int deriving (Show, Eq, Ord)
+main :: IO ()
+main = do
+  print (Standard 999 999 < Premium 0)
+  print (Standard 2 100 < Standard 3 0)
+  print (Standard 2 100 < Standard 2 101)
+  print (Premium 9 < Premium 2)
+```
+
+```text
+True
+True
+True
+False
+```
+
+</HaskellTryIt>
+
+The first test uses constructor order alone. The second stops at field one. The third reaches field two. The last compares two `Premium` amounts, and nine is not smaller than two. No function such as ticket price is consulted.
+
+### Exam question 12: a consistent custom order (5 marks)
+
+Write Eq and Ord instances comparing a package by its identifier and ignoring its description.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command "write" requires instance methods. Equality and ordering must both ignore the description.
+
+</Step>
+
+<Step title="2. Plan">
+
+Pattern match each single-constructor value, extract identifiers and delegate to integer equality and comparison.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Package = Package Int String deriving (Show)
+instance Eq Package where
+  Package i _ == Package j _ = i == j
+instance Ord Package where
+  compare (Package i _) (Package j _) = compare i j
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`Package 3 "old" == Package 3 "new"` is true and their comparison is `EQ`. Comparing identifier three with four gives `LT`, regardless of description.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Partial methods and common errors
+
+```haskell
+-- Wrong: show is missing High.
+data Rank = Low | High
+instance Show Rank where
+  show Low = "low"
+-- print High fails when show is demanded; incomplete-pattern warning.
+
+-- Wrong: equality and comparison omit mixed-constructor pairs.
+instance Eq Rank where
+  Low == Low = True
+  High == High = True
+instance Ord Rank where
+  compare Low Low = EQ
+  compare High High = EQ
+-- Low == High and compare Low High fail; incomplete-pattern warnings.
+```
+
+Repair using all four pairs from the template. `show Low = 1` has the wrong result type and leads to `No instance for (Num String)`; return `"low"`. Writing `compare Low High = True` leads to `Couldn't match` because the result must be `Ordering`, not `Bool`. Two `Show Rank` instances produce `Duplicate instance declarations`. An `Ord` instance without the required `Eq` instance produces `No instance for (Eq Rank)`. A custom equality that ignores comments and an order that compares them would compile but violate agreement: use the same key for both.
+
+**Practice with answers.** If `data Tag = B Int | A Int deriving (Eq, Ord)`, is `B 900 < A 0` true? Yes: declaration order comes before the names and numbers. If custom `show Low = "low"`, `print Low` prints `low`, while `print (show Low)` prints `"low"` because its argument is a string.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+List alternatives before fields. Use one equation per constructor and recurse once on each recursive piece that matters. Pair keeps both values; an optional type represents absence; an either-like type retains a reason. Empty-leaf and leaf-labelled trees have different base cases. Record updates return copies. A newtype has one constructor with one field. Derived ordering uses constructor order, then fields from left to right. Handwritten equality and ordering must agree. Enable `-Wincomplete-patterns` to find omitted cases, including restricted field patterns.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does declaration order matter for an enumeration?">
+
+It determines derived ordering, zero-based enumeration numbers and the two bounds. It does not determine a separate score or price function.
+
+</CheckQuestion>
+
+<CheckQuestion question="When is a missing-constructor example impossible?">
+
+When the type has one constructor and its equation is present. Such a function can still be partial through restricted field patterns or guards.
+
+</CheckQuestion>
+
+<CheckQuestion question="How do the two tree templates differ?">
+
+A node-labelled tree has an empty Leaf and stores values at Node. A leaf-labelled tree stores a value at LLeaf and has no empty finite tree.
+
+</CheckQuestion>
+
+<CheckQuestion question="What must be checked in a mutually recursive function pair?">
+
+Every constructor across both types must have an equation. Calls must pass the right alternating type and move towards a stopping case for finite inputs.
+
+</CheckQuestion>
+
+<CheckQuestion question="If equality ignores a comment, may ordering use that comment to break ties?">
+
+No: equal values must compare as EQ. Use the same identifying key for both methods.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Data Types Exam Practice](/docs/sem3/csi243/08-modules-types/notes/data-types-exam-practice).

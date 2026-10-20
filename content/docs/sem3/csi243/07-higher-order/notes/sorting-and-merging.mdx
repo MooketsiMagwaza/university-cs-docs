@@ -1,0 +1,1352 @@
+---
+title: "Sorting and Merging"
+description: "Choose ordering rules, trace stable insertion and merge sorts, and build frequency tables without losing sight of input order."
+---
+
+Sorting rearranges a finite list according to an ordering rule. Merging combines two lists that already obey that rule. This lesson extends [Importing](/docs/sem3/csi243/08-modules-types/notes/imports) and uses the function arguments explained in [More Higher-Order Functions](/docs/sem3/csi243/07-higher-order/notes/more-higher-order-functions).
+
+<LearningObjectives items={[
+  'Choose sort, sortBy and projected or reversed comparators',
+  'Explain ascending order, descending order and stable ties',
+  'Trace insertion, insertion sort, merge and merge sort',
+  'Build sorted frequency tables and recognise when input order must be preserved',
+  'Repair ordering mistakes and check empty, unequal and duplicate inputs',
+]} />
+
+All examples use finite lists and lawful orderings. An `Ord` constraint means the element type supplies comparisons. A comparator supplies the rule explicitly and returns `LT`, `EQ` or `GT`: first argument before, tied with, or after the second. It must give consistent decisions, including reversing `LT`/`GT` when arguments swap and respecting transitivity. The compiler checks types, not those laws. Diagnostics below are key phrases, not complete compiler transcripts.
+
+## 1. Natural ascending order with sort
+
+`sort` returns all the elements in increasing order, keeping duplicates. Strings use character order; tuples compare their first fields, then their next fields if tied. Sorting does not mutate the input binding.
+
+**Template and reading guide.** `sort values`, with `sort :: Ord a => [a] -> [a]` from `Data.List`. Replace `values` by the finite list. The result has the same element type and length.
+
+### Numbers with duplicates
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sort)
+
+main :: IO ()
+main = print (sort [3,1,2,1])
+```
+
+```text
+[1,1,2,3]
+```
+
+</HaskellTryIt>
+
+The two 1s come before 2 and 3. Neither is discarded.
+
+### An empty list
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sort)
+
+main :: IO ()
+main = print (sort ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There is nothing to rearrange. The annotation fixes the otherwise unknown element type.
+
+### Words rather than numbers
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sort)
+
+main :: IO ()
+main = print (sort ["pear","ant","apple"])
+```
+
+```text
+["ant","apple","pear"]
+```
+
+</HaskellTryIt>
+
+Both a-words precede pear; n precedes p at the first differing character.
+
+### Exam question 1: Natural ascending order with sort (6 marks)
+
+State the type and value of `sort [(2,"a"),(1,"z"),(2,"b")]` when the numeric fields are `Int`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" asks for a type and a value. No special key is specified, so the whole pair is ordered.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the `Ord` instances for pairs and strings. Compare the number first, then the word.
+
+</Step>
+
+<Step title="3. Solution">
+
+The type is `[(Int,String)]`. The value is `[(1,"z"),(2,"a"),(2,"b")]`. The two 2s are ordered by their second fields.
+
+</Step>
+
+<Step title="4. Check">
+
+Length stays three and every original pair occurs once. A singleton pair list stays unchanged.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** `sort [3,1]` is not `[1,3,3]`: sorting preserves multiplicities. Forgetting the import gives the key phrase `Variable not in scope`; add `import Data.List (sort)`.
+
+**Practice with answer.** Predict `sort [False,True,False]`. Answer: `[False,False,True]`, because `False` precedes `True`.
+
+## 2. The comparator result compare
+
+`compare x y` reports an ordering decision rather than a Boolean. `EQ` means tied under this comparison. For natural ordering it agrees with equality for ordinary values such as the integers and strings here.
+
+**Template and reading guide.** `compare first second :: Ordering`, with `compare :: Ord a => a -> a -> Ordering`. Both arguments have the same type.
+
+### A smaller first argument
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare (2 :: Int) 7)
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+2 belongs before 7.
+
+### An equal pair
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare "ant" "ant")
+```
+
+```text
+EQ
+```
+
+</HaskellTryIt>
+
+No character differs, so the words tie.
+
+### A larger first argument
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare (4 :: Int, "b") (4,"a"))
+```
+
+```text
+GT
+```
+
+</HaskellTryIt>
+
+The numeric fields tie; b follows a.
+
+### Exam question 2: The comparator result compare (6 marks)
+
+Explain why `sortBy (<) [3,1,2]` is rejected and give the repair.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks about the supplied function type, not about a sorting trace.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare the comparator result type with the result type of the less-than operator.
+
+</Step>
+
+<Step title="3. Solution">
+
+`(<)` returns `Bool`; `sortBy` requires `Ordering`. Use `sortBy compare [3,1,2]` with `sortBy` imported from `Data.List`. This returns `[1,2,3]`.
+
+</Step>
+
+<Step title="4. Check">
+
+`compare 1 2` gives `LT`, a valid comparator result. `1 < 2` gives `True`, a different type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Using a Boolean where `Ordering` is expected produces the key phrase `Couldn't match`. Repair the function, rather than converting an arbitrary True/False to an inconsistent ordering.
+
+**Practice with answer.** What is `compare ("a",9 :: Int) ("b",0)`? Answer: `LT`; the first field decides before the numbers matter.
+
+## 3. Ascending sortBy with a supplied comparator
+
+`sortBy` is a higher-order sort: it accepts a comparison function. Its own signature has no `Ord a` constraint; the supplied comparator may obtain an ordering from only part of each element.
+
+**Template and reading guide.** `sortBy cmp values`, where `sortBy :: (a -> a -> Ordering) -> [a] -> [a]`. Read `cmp left right` as the order of those two elements.
+
+### Natural comparator
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+
+main :: IO ()
+main = print (sortBy compare [3,1,2])
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+The comparisons put 1 before 2 before 3.
+
+### An explicit lambda
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+
+main :: IO ()
+main = print (sortBy (\x y -> compare x y) "cab")
+```
+
+```text
+"abc"
+```
+
+</HaskellTryIt>
+
+The lambda is another spelling of compare; a character list prints as a quoted string.
+
+### Empty comparator-driven sort
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+
+main :: IO ()
+main = print (sortBy compare ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No comparison is needed when the input has no elements.
+
+### Exam question 3: Ascending sortBy with a supplied comparator (6 marks)
+
+Write an ascending sorter using `sortBy`, and give its most general type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" requires a definition; "most general" means do not unnecessarily fix the elements to Int.
+
+</Step>
+
+<Step title="2. Plan">
+
+Supply natural compare. That function introduces an Ord constraint even though sortBy itself has none.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.List (sortBy)
+ascending :: Ord a => [a] -> [a]
+ascending = sortBy compare
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`ascending [2,1,2]` gives `[1,2,2]`; `ascending []` gives `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Supplying `compare x` fixes one argument and leaves a one-argument function. The sort needs two arguments. A type error includes `Couldn't match`; supply `compare` itself.
+
+**Practice with answer.** Rewrite the lambda variation without a lambda. Answer: `sortBy compare "cab"`.
+
+## 4. Descending order by reversing the decision
+
+Descending order puts larger values first. Reverse the comparator arguments, so an ordinary greater-than decision becomes a before decision. Reversing an already sorted result also descends, but reverses the order within equal-key groups.
+
+**Template and reading guide.** `sortBy (flip compare) values`, equivalently `sortBy (\x y -> compare y x) values`. `flip` exchanges arguments; the comparator still returns Ordering.
+
+### Numbers descending
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+
+main :: IO ()
+main = print (sortBy (flip compare) [1,3,2,3])
+```
+
+```text
+[3,3,2,1]
+```
+
+</HaskellTryIt>
+
+Compare the right value against the left to place larger numbers earlier.
+
+### Lambda spelling on words
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+
+main :: IO ()
+main = print (sortBy (\x y -> compare y x) ["ant","pear","bee"])
+```
+
+```text
+["pear","bee","ant"]
+```
+
+</HaskellTryIt>
+
+The words are in reverse lexical order.
+
+### One value
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+
+main :: IO ()
+main = print (sortBy (flip compare) [7 :: Int])
+```
+
+```text
+[7]
+```
+
+</HaskellTryIt>
+
+A singleton is already ordered either way.
+
+### Exam question 4: Descending order by reversing the decision (6 marks)
+
+Sort `[2,5,1,5]` descending without calling reverse. State the comparator type at Int.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The prohibition selects a reversed comparator, not a reversal of the final list.
+
+</Step>
+
+<Step title="2. Plan">
+
+Swap the arguments to compare with flip.
+
+</Step>
+
+<Step title="3. Solution">
+
+`sortBy (flip compare) [2,5,1,5]` is `[5,5,2,1]`. At Int, `flip compare :: Int -> Int -> Ordering`.
+
+</Step>
+
+<Step title="4. Check">
+
+Both 5s remain; all adjacent values are non-increasing.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** `negate (compare x y)` is rejected because Ordering is not numeric; the diagnostic includes `No instance for`. Swap arguments instead. Do not use a comparator that returns LT for ties.
+
+**Practice with answer.** Give the lambda spelling of `flip compare`. Answer: `\x y -> compare y x`.
+
+## 5. Projected keys and explicit tie-breaks
+
+A projection extracts the part used for ordering: length of a word, a mark in a pair, or several fields in a tuple. The rest of each element travels with that key. `Data.Ord.comparing` and `Data.Function.on` are alternate spellings of the same comparison pattern.
+
+**Template and reading guide.** `sortBy (\x y -> compare (key x) (key y)) values`. Here `key :: a -> k` and `Ord k` is required; the element a need not itself have an Ord instance. Equivalent comparators are `comparing key` and `compare `on` key`.
+
+### Lambda on word lengths
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+
+main :: IO ()
+main = print (sortBy (\x y -> compare (length x) (length y)) ["pear","a","ox"])
+```
+
+```text
+["a","ox","pear"]
+```
+
+</HaskellTryIt>
+
+Keys are 4, 1 and 2. Only lengths decide.
+
+### comparing on pair fields
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+import Data.Ord (comparing)
+
+main :: IO ()
+main = print (sortBy (comparing snd) [("b",2),("a",1),("c",2)])
+```
+
+```text
+[("a",1),("b",2),("c",2)]
+```
+
+</HaskellTryIt>
+
+The two key-2 pairs remain in input order because sortBy is stable.
+
+### on with a compound key
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+import Data.Function (on)
+
+main :: IO ()
+main = print (sortBy (compare `on` (\s -> (length s,s))) ["ox","an","a"])
+```
+
+```text
+["a","an","ox"]
+```
+
+</HaskellTryIt>
+
+Length decides first; tied length-2 words use lexical order as an explicit secondary key.
+
+### Exam question 5: Projected keys and explicit tie-breaks (6 marks)
+
+Order name/mark pairs by ascending mark and then ascending name. Explain why comparing snd alone is insufficient.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two keys are requested. Preserving input order for marks that tie does not necessarily give alphabetical names.
+
+</Step>
+
+<Step title="2. Plan">
+
+Build a tuple key `(mark,name)` and compare keys lexicographically.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.List (sortBy)
+rank :: [(String,Int)] -> [(String,Int)]
+rank = sortBy (\(n,m) (p,q) -> compare (m,n) (q,p))
+```
+For `[("Z",2),("A",2),("B",1)]`, the keys are `(2,"Z")`, `(2,"A")`, `(1,"B")`, giving `[("B",1),("A",2),("Z",2)]`.
+
+</Step>
+
+<Step title="4. Check">
+
+If the keys were only marks, Z would stay ahead of A. The secondary key is responsible for their exchange.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** `sortBy length` has the wrong arity and result type, leading to `Couldn't match`. Compare two extracted lengths. Sorting a `[String]` after uppercase conversion needs `map (map toUpper)`; `map toUpper` expects a single String.
+
+**Practice with answer.** Write a descending mark comparator. Answer: `\x y -> compare (snd y) (snd x)`; names with tied marks retain input order.
+
+## 6. Stability and preserving the required order
+
+A stable sort preserves the relative input order of elements whose comparator returns EQ. It still changes the order between different keys. If a question asks for first occurrence order, sorting first is generally the wrong method. A stable descending comparator preserves ties; reverse after an ascending sort reverses them.
+
+**Template and reading guide.** `sortBy keyComparator records` preserves tied records; `reverse (sortBy keyComparator records)` reverses every position. Decide which order the specification actually asks for before choosing either.
+
+### Stable ascending ties
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+import Data.Ord (comparing)
+
+main :: IO ()
+main = print (sortBy (comparing snd) [("Z",2),("A",1),("B",2)])
+```
+
+```text
+[("A",1),("Z",2),("B",2)]
+```
+
+</HaskellTryIt>
+
+Z originally precedes B and still does among mark-2 entries.
+
+### Stable descending ties
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+import Data.Ord (comparing)
+
+main :: IO ()
+main = print (sortBy (flip (comparing snd)) [("Z",2),("A",1),("B",2)])
+```
+
+```text
+[("Z",2),("B",2),("A",1)]
+```
+
+</HaskellTryIt>
+
+The reversed comparator changes which mark comes first, not the order of the equal-mark records.
+
+### Reversing the result changes ties
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sortBy)
+import Data.Ord (comparing)
+
+main :: IO ()
+main = print (reverse (sortBy (comparing snd) [("Z",2),("A",1),("B",2)]))
+```
+
+```text
+[("B",2),("Z",2),("A",1)]
+```
+
+</HaskellTryIt>
+
+Reversing exchanges Z and B. It is descending, but fails the stable-tie requirement.
+
+### Exam question 6: Stability and preserving the required order (6 marks)
+
+A report requires descending score and original order within tied scores. Is `reverse . sortBy (comparing snd)` suitable?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Is suitable" asks you to check both descending scores and tie order, not just scores.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use labelled records with equal scores as a counterexample, then reverse the comparator instead.
+
+</Step>
+
+<Step title="3. Solution">
+
+It is unsuitable: the third variation reverses Z and B. Use `sortBy (flip (comparing snd))`. This puts mark 2 first and keeps Z before B.
+
+</Step>
+
+<Step title="4. Check">
+
+An all-tied list should come back unchanged. The reverse-after-sort version fails that check for two different records.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** A tuple comparator automatically compares later fields on a tie. That may violate the request to preserve input ties; compare only the specified field. This is a valid program with wrong behaviour, so GHC gives no error.
+
+**Practice with answer.** What happens when every key is equal? Answer: a stable sort preserves the entire input list order.
+
+## 7. Insert into an ordered list
+
+Insertion walks an already ordered list until the new value belongs before the current head, then keeps the rest untouched. It does not sort a disordered tail. `Data.List.insert` uses natural Ord; `Data.List.insertBy` accepts a comparator. Both insert before existing ties.
+
+**Template and reading guide.** `insertByRule cmp new sortedValues`, with the following reusable definition. Read the guard as "new is before or tied with the head". The other branch keeps that head and searches its tail. Natural insertion is `insertByRule compare`.
+
+### Natural insertion with existing and absent values
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (insert)
+
+main :: IO ()
+main = print ((insert 2 [1,2,4], insert 3 [1,2,4], insert 2 ([] :: [Int])))
+```
+
+```text
+([1,2,2,4],[1,2,3,4],[2])
+```
+
+</HaskellTryIt>
+
+Inserting an existing value adds a duplicate. An absent 3 goes between 2 and 4; the empty case becomes a singleton.
+
+### The recursive rule, including boundaries
+
+<HaskellTryIt>
+
+```haskell
+insertByRule :: (a -> a -> Ordering) -> a -> [a] -> [a]
+insertByRule cmp x [] = [x]
+insertByRule cmp x (y:ys)
+  | cmp x y /= GT = x:y:ys
+  | otherwise = y : insertByRule cmp x ys
+
+main :: IO ()
+main = print ((insertByRule compare 2 [1,2,4], insertByRule compare 3 [1,2,4], insertByRule compare 0 []))
+```
+
+```text
+([1,2,2,4],[1,2,3,4],[0])
+```
+
+</HaskellTryIt>
+
+For 3, compare against 1 then 2, keeping both; 3 precedes 4. At [] use the base equation.
+
+### Comparator insertion with tagged ties
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (insertBy)
+import Data.Ord (comparing)
+
+main :: IO ()
+main = print ((insertBy (comparing snd) ("new",2) [("a",1),("old",2)], insertBy (comparing snd) ("new",3) [("a",1),("old",2)], insertBy (comparing snd) ("new",2) []))
+```
+
+```text
+([("a",1),("new",2),("old",2)],[("a",1),("old",2),("new",3)],[("new",2)])
+```
+
+</HaskellTryIt>
+
+An equal-key insertion goes before old. An absent key 3 reaches the end. The third call checks empty input.
+
+### Exam question 7: Insert into an ordered list (6 marks)
+
+Trace `insertByRule compare 3 [1,2,4]`. State the precondition.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" requires the branch decisions. The list must already be ascending for natural compare.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep a head when the new element compares GT; otherwise insert and stop.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+insertByRule compare 3 [1,2,4]
+= 1 : insertByRule compare 3 [2,4] -- compare 3 1 = GT
+= 1 : 2 : insertByRule compare 3 [4] -- compare 3 2 = GT
+= 1 : 2 : 3 : [4] -- compare 3 4 = LT
+= [1,2,3,4] -- list notation
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Existing 2 is retained when inserting another 2; empty input returns `[3]`. These check multiplicity and the base case.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Using only LT instead of "not GT" inserts after ties. That changes stability in the tail-first sort below. Inserting into `[4,1]` is not guaranteed to sort it. Both mistakes can compile without a diagnostic.
+
+**Practice with answer.** Insert 4 into `[1,4]`. Answer: `[1,4,4]`; the new 4 precedes the existing tied value.
+
+## 8. Insertion sort from a sorted tail
+
+Insertion sort removes the first element, sorts the tail, then inserts the first element into that ordered result. Tail-first sorting together with insertion before ties makes this definition stable. An equivalent higher-order definition is `foldr (insertByRule cmp) []`.
+
+**Template and reading guide.** `insertionSortBy cmp values`. The empty list is sorted; the recursive call sorts one fewer element. Use the insertByRule definition from the preceding section; each runnable program repeats it to stand alone.
+
+### Unordered numbers
+
+<HaskellTryIt>
+
+```haskell
+insertByRule :: (a -> a -> Ordering) -> a -> [a] -> [a]
+insertByRule cmp x [] = [x]
+insertByRule cmp x (y:ys)
+  | cmp x y /= GT = x:y:ys
+  | otherwise = y : insertByRule cmp x ys
+
+insertionSortBy :: (a -> a -> Ordering) -> [a] -> [a]
+insertionSortBy cmp [] = []
+insertionSortBy cmp (x:xs) = insertByRule cmp x (insertionSortBy cmp xs)
+
+main :: IO ()
+main = print (insertionSortBy compare [3,1,2])
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+Sort [1,2] first: sorting [2] gives [2], inserting 1 gives [1,2], then inserting 3 gives [1,2,3].
+
+### Empty, singleton and duplicate input
+
+<HaskellTryIt>
+
+```haskell
+insertByRule :: (a -> a -> Ordering) -> a -> [a] -> [a]
+insertByRule cmp x [] = [x]
+insertByRule cmp x (y:ys)
+  | cmp x y /= GT = x:y:ys
+  | otherwise = y : insertByRule cmp x ys
+
+insertionSortBy :: (a -> a -> Ordering) -> [a] -> [a]
+insertionSortBy cmp [] = []
+insertionSortBy cmp (x:xs) = insertByRule cmp x (insertionSortBy cmp xs)
+
+main :: IO ()
+main = print ((insertionSortBy compare ([] :: [Int]), insertionSortBy compare [7 :: Int], insertionSortBy compare [2,1,2]))
+```
+
+```text
+([],[7],[1,2,2])
+```
+
+</HaskellTryIt>
+
+The first two use the base and one insertion. Both 2s survive the third call.
+
+### Descending stable records
+
+<HaskellTryIt>
+
+```haskell
+import Data.Ord (comparing)
+
+insertByRule :: (a -> a -> Ordering) -> a -> [a] -> [a]
+insertByRule cmp x [] = [x]
+insertByRule cmp x (y:ys)
+  | cmp x y /= GT = x:y:ys
+  | otherwise = y : insertByRule cmp x ys
+
+insertionSortBy :: (a -> a -> Ordering) -> [a] -> [a]
+insertionSortBy cmp [] = []
+insertionSortBy cmp (x:xs) = insertByRule cmp x (insertionSortBy cmp xs)
+
+main :: IO ()
+main = print (insertionSortBy (flip (comparing snd)) [("Z",2),("A",1),("B",2)])
+```
+
+```text
+[("Z",2),("B",2),("A",1)]
+```
+
+</HaskellTryIt>
+
+The tail sorts to B then A. Inserting Z before its tied B restores their original order.
+
+### Exam question 8: Insertion sort from a sorted tail (6 marks)
+
+Trace insertion sort on `[3,1,2]` and explain why a before-ties insertion is needed for stability.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The question asks for the intermediate sorted tails and a reason about labelled equal keys.
+
+</Step>
+
+<Step title="2. Plan">
+
+Unfold the recursive sort to []; rebuild by insertion from the rightmost element.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+insertionSortBy compare [3,1,2]
+= insertByRule compare 3 (insertByRule compare 1 (insertByRule compare 2 []))
+= insertByRule compare 3 (insertByRule compare 1 [2])
+= insertByRule compare 3 [1,2]
+= [1,2,3]
+```
+For two tied records X then Y, the tail places Y first during rebuilding; inserting X before Y restores X then Y.
+
+</Step>
+
+<Step title="4. Check">
+
+`[]` stays empty and `[2,2]` retains both elements. Tagged ties check stability, which bare equal integers cannot demonstrate.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Calling insert on the original unsorted tail breaks the insertion precondition. Forgetting the [] equation causes `Non-exhaustive patterns` when the recursion reaches empty input. Supply both equations.
+
+**Practice with answer.** Sort `[2,1]` with the fold spelling. Answer: `foldr (insertByRule compare) [] [2,1]` builds `[1]`, then `[1,2]`.
+
+## 9. Merge two ordered lists
+
+Merging compares the two heads and emits the earlier one, consuming only that head. Both inputs must already be ordered by the same comparator. Ties are taken from the left list first. When one list runs out, keep all of the other list.
+
+**Template and reading guide.** `mergeByRule cmp leftSorted rightSorted`. There are two empty-side equations and two head-choice branches. A stable merge respects the order within each input and prefers the left input on ties.
+
+### Unequal numeric lists with ties and empty sides
+
+<HaskellTryIt>
+
+```haskell
+mergeByRule :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeByRule cmp [] ys = ys
+mergeByRule cmp xs [] = xs
+mergeByRule cmp (x:xs) (y:ys)
+  | cmp x y /= GT = x : mergeByRule cmp xs (y:ys)
+  | otherwise = y : mergeByRule cmp (x:xs) ys
+
+main :: IO ()
+main = print ((mergeByRule compare [1,2,4] [2], mergeByRule compare [] [2,2], mergeByRule compare [1,2] []))
+```
+
+```text
+([1,2,2,4],[2,2],[1,2])
+```
+
+</HaskellTryIt>
+
+Emit 1, then the left 2 on EQ, then the right 2; retain [4]. Each empty-side call returns the non-empty side.
+
+### Descending merge with all boundaries
+
+<HaskellTryIt>
+
+```haskell
+mergeByRule :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeByRule cmp [] ys = ys
+mergeByRule cmp xs [] = xs
+mergeByRule cmp (x:xs) (y:ys)
+  | cmp x y /= GT = x : mergeByRule cmp xs (y:ys)
+  | otherwise = y : mergeByRule cmp (x:xs) ys
+
+main :: IO ()
+main = print ((mergeByRule (flip compare) [5,3,3] [3,1], mergeByRule (flip compare) [] [3,3], mergeByRule (flip compare) [3] []))
+```
+
+```text
+([5,3,3,3,1],[3,3],[3])
+```
+
+</HaskellTryIt>
+
+Both lists already descend. All three 3s remain; left ties are emitted before the right tie. Empty sides still return the other side.
+
+### Tagged merge showing tie provenance
+
+<HaskellTryIt>
+
+```haskell
+import Data.Ord (comparing)
+
+mergeByRule :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeByRule cmp [] ys = ys
+mergeByRule cmp xs [] = xs
+mergeByRule cmp (x:xs) (y:ys)
+  | cmp x y /= GT = x : mergeByRule cmp xs (y:ys)
+  | otherwise = y : mergeByRule cmp (x:xs) ys
+
+main :: IO ()
+main = print ((mergeByRule (comparing snd) [("L1",1),("L2",2)] [("R2",2)], mergeByRule (comparing snd) [] [("R2",2)], mergeByRule (comparing snd) [("L2",2)] []))
+```
+
+```text
+([("L1",1),("L2",2),("R2",2)],[("R2",2)],[("L2",2)])
+```
+
+</HaskellTryIt>
+
+Unequal lengths, tied 2s and both empty-side directions are explicit. L2 precedes R2 because the tie selects the left head.
+
+### Exam question 9: Merge two ordered lists (6 marks)
+
+Trace the numeric merge in the first variation. Explain why consuming both heads is wrong.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Both inputs are supplied sorted. "Trace" asks which head each branch consumes.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare heads, retain the unchosen head for the next comparison, then apply an empty equation.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+mergeByRule compare [1,2,4] [2]
+= 1 : mergeByRule compare [2,4] [2] -- LT
+= 1 : 2 : mergeByRule compare [4] [2] -- EQ, choose left
+= 1 : 2 : 2 : mergeByRule compare [4] [] -- GT, choose right
+= [1,2,2,4] -- right empty; retain [4]
+```
+Consuming both heads after emitting just one loses data.
+
+</Step>
+
+<Step title="4. Check">
+
+Result length is 3 + 1 = 4. Merge with an empty side must return the other unchanged, including its duplicates.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** A base case only for `[] []` misses one-empty cases and can cause `Non-exhaustive patterns`. Using LT alone for the left branch reverses ties across lists. Neither input may be arbitrarily unsorted.
+
+**Practice with answer.** Merge `[1,3]` with `[1]`. Answer: `[1,1,3]`; first choose the left tied 1, then the right 1, then return [3].
+
+## 10. Merge sort by splitting and rebuilding
+
+Merge sort splits an unsorted list into two contiguous halves, sorts both recursively, then merges the results. Empty and singleton lists stop recursion. For length at least two, each half is strictly shorter. Contiguous halves and a left-before-right tie rule preserve original tie order.
+
+**Template and reading guide.** `mergeSortBy cmp values`, using the merge definition from the previous section. `splitAt (length xs `div` 2)` makes the left half and its remaining suffix; do not alternate elements between halves when claiming this stability argument.
+
+### Odd length with a tie
+
+<HaskellTryIt>
+
+```haskell
+mergeByRule :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeByRule cmp [] ys = ys
+mergeByRule cmp xs [] = xs
+mergeByRule cmp (x:xs) (y:ys)
+  | cmp x y /= GT = x : mergeByRule cmp xs (y:ys)
+  | otherwise = y : mergeByRule cmp (x:xs) ys
+
+mergeSortBy :: (a -> a -> Ordering) -> [a] -> [a]
+mergeSortBy cmp [] = []
+mergeSortBy cmp [x] = [x]
+mergeSortBy cmp xs = mergeByRule cmp (mergeSortBy cmp left) (mergeSortBy cmp right)
+  where
+    (left,right) = splitAt (length xs `div` 2) xs
+
+main :: IO ()
+main = print (mergeSortBy compare [3,1,2,1,4])
+```
+
+```text
+[1,1,2,3,4]
+```
+
+</HaskellTryIt>
+
+Split into [3,1] and [2,1,4]. Their sorted results [1,3] and [1,2,4] have unequal lengths and a tied 1; merge chooses the left 1 first.
+
+### Stopping cases and repeated values
+
+<HaskellTryIt>
+
+```haskell
+mergeByRule :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeByRule cmp [] ys = ys
+mergeByRule cmp xs [] = xs
+mergeByRule cmp (x:xs) (y:ys)
+  | cmp x y /= GT = x : mergeByRule cmp xs (y:ys)
+  | otherwise = y : mergeByRule cmp (x:xs) ys
+
+mergeSortBy :: (a -> a -> Ordering) -> [a] -> [a]
+mergeSortBy cmp [] = []
+mergeSortBy cmp [x] = [x]
+mergeSortBy cmp xs = mergeByRule cmp (mergeSortBy cmp left) (mergeSortBy cmp right)
+  where
+    (left,right) = splitAt (length xs `div` 2) xs
+
+main :: IO ()
+main = print ((mergeSortBy compare ([] :: [Int]), mergeSortBy compare [8 :: Int], mergeSortBy compare [2,2,1]))
+```
+
+```text
+([],[8],[1,2,2])
+```
+
+</HaskellTryIt>
+
+Empty and singleton branches stop immediately. Splitting [2,2,1] gives lengths one and two; tied 2s are retained.
+
+### Stable descending keys
+
+<HaskellTryIt>
+
+```haskell
+import Data.Ord (comparing)
+
+mergeByRule :: (a -> a -> Ordering) -> [a] -> [a] -> [a]
+mergeByRule cmp [] ys = ys
+mergeByRule cmp xs [] = xs
+mergeByRule cmp (x:xs) (y:ys)
+  | cmp x y /= GT = x : mergeByRule cmp xs (y:ys)
+  | otherwise = y : mergeByRule cmp (x:xs) ys
+
+mergeSortBy :: (a -> a -> Ordering) -> [a] -> [a]
+mergeSortBy cmp [] = []
+mergeSortBy cmp [x] = [x]
+mergeSortBy cmp xs = mergeByRule cmp (mergeSortBy cmp left) (mergeSortBy cmp right)
+  where
+    (left,right) = splitAt (length xs `div` 2) xs
+
+main :: IO ()
+main = print (mergeSortBy (flip (comparing snd)) [("Z",2),("A",1),("B",2)])
+```
+
+```text
+[("Z",2),("B",2),("A",1)]
+```
+
+</HaskellTryIt>
+
+The left half is [Z]; the right sorts to B,A. The merge sees tied Z/B and takes Z first, retaining input tie order.
+
+### Exam question 10: Merge sort by splitting and rebuilding (6 marks)
+
+Trace merge sort on `[3,1,2]`. Why is the singleton base case necessary?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The input is unsorted, so the merge precondition must be established by recursive sorts first.
+
+</Step>
+
+<Step title="2. Plan">
+
+Draw the split tree until each leaf is empty or singleton; combine only sorted children.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+[3,1,2] -> [3] and [1,2] -- split at 1
+[1,2] -> [1] and [2] -- split at 1
+merge [1] [2] -> [1,2] -- choose 1, return [2]
+merge [3] [1,2] -> [1,2,3] -- choose 1, choose 2, return [3]
+```
+Without the singleton case, splitting [3] gives [] and [3]; the recursive [3] never gets smaller.
+
+</Step>
+
+<Step title="4. Check">
+
+The result has three elements in order. For each merge, an empty side retains its partner; the previous section checks both sides, unequal lengths and ties under each comparator.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Two recursive calls do not by themselves imply exponential cost. Subproblem sizes and merge work matter. A missing singleton case loops without a compiler error; restore the stopping case.
+
+**Practice with answer.** What halves does `[4,3,2,1,0]` produce? Answer: `[4,3]` and `[2,1,0]`, of lengths two and three.
+
+## 11. Sorted groups as a frequency table
+
+A frequency table gives each distinct value and its total count. Sorting makes all equal values adjacent; group then makes one non-empty group per value. This is different from counting adjacent runs in the original list. The general equality operations are covered in [Eq and Class Constraints](/docs/sem3/csi243/09-polymorphism/notes/eq-and-class-constraints); here the point is the ordering pipeline.
+
+**Template and reading guide.** `map (\g -> (head g,length g)) (group (sort values))`. `sort` orders; `group` makes adjacent groups; each group contributes its representative and length. The type is `Ord a => [a] -> [(a,Int)]` because sorting requires Ord.
+
+### Repeated numbers separated in input
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sort,group)
+
+frequencies :: Ord a => [a] -> [(a,Int)]
+frequencies = map (\g -> (head g,length g)) . group . sort
+
+main :: IO ()
+main = print (frequencies [2,1,2,1,2])
+```
+
+```text
+[(1,2),(2,3)]
+```
+
+</HaskellTryIt>
+
+Sort gives [1,1,2,2,2], group gives [[1,1],[2,2,2]], then count each group.
+
+### Characters
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sort,group)
+
+frequencies :: Ord a => [a] -> [(a,Int)]
+frequencies = map (\g -> (head g,length g)) . group . sort
+
+main :: IO ()
+main = print (frequencies "banana")
+```
+
+```text
+[('a',3),('b',1),('n',2)]
+```
+
+</HaskellTryIt>
+
+Sorting gives aaabnn. Each representative is a Char, so the pairs print single quotes.
+
+### Empty input and the run-count contrast
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (sort,group)
+
+frequencies :: Ord a => [a] -> [(a,Int)]
+frequencies = map (\g -> (head g,length g)) . group . sort
+
+main :: IO ()
+main = print ((frequencies ([] :: [Int]), map length (group [2,1,2]), frequencies [2,1,2]))
+```
+
+```text
+([],[1,1,1],[(1,1),(2,2)])
+```
+
+</HaskellTryIt>
+
+Empty input creates no groups, so head is never applied to []. Without sorting there are three runs, not two distinct-value totals.
+
+### Exam question 11: Sorted groups as a frequency table (6 marks)
+
+Build a frequency table for `[3,1,3,2,1]` in ascending value order. Explain whether it preserves first occurrence order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The required order is ascending value, so sorting is permitted. A first occurrence order would instead begin with 3.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use sort, then group, then representative/count. Record an intermediate list for each stage.
+
+</Step>
+
+<Step title="3. Solution">
+
+Sort: `[1,1,2,3,3]`. Groups: `[[1,1],[2],[3,3]]`. Table: `[(1,2),(2,1),(3,2)]`. It does not preserve first occurrence order, which would be 3,1,2.
+
+</Step>
+
+<Step title="4. Check">
+
+Counts sum to five, and keys are strictly increasing. For [] the table is []. Every group produced by group is non-empty, justifying head here.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Counting groups before sorting measures runs; removing duplicates before counting loses multiplicities. A comparator grouping by one projected field requires a matching equality grouping rule, rather than ordinary group on whole unequal records. These semantic mistakes can compile.
+
+**Practice with answer.** What is the table for `"aba"`? Answer: `[('a',2),('b',1)]`. The run lengths before sorting would be `[1,1,1]`.
+
+## 12. Choosing and checking an ordering solution
+
+| Requirement | Choice | Check |
+|---|---|---|
+| Natural ascending values | `sort` | Same length and multiplicities |
+| One extracted key | `sortBy (comparing key)` | Equal keys keep input order |
+| Descending while preserving ties | `sortBy (flip (comparing key))` | Tagged ties remain in order |
+| Several priority fields | Compare a tuple of keys | Secondary field acts only on a tie |
+| Add one item to ordered input | `insert` or `insertBy` | Existing item adds a duplicate |
+| Combine two ordered inputs | `mergeByRule` | Empty sides, unequal lengths and ties |
+| Implement a sort recursively | Insertion sort or merge sort | Base cases and smaller recursive inputs |
+| Total frequencies by value | `group . sort`, then count | Counts sum to input length |
+
+For cost derivations, read [Complexity by Recurrence](/docs/sem3/csi243/10-reasoning-revision/notes/complexity-by-recurrence). Under the usual comparison/list-operation cost model, insertion sort has quadratic worst-case work; merge sort has `T(n) = 2T(n/2) + O(n)` up to rounding, giving `O(n log n)`. Counting recursive branches alone cannot establish either result.
+
+The existing [insertion-sort download](/files/sem3/csi243/downloads/completed-examples/List_InsertionSort.hs) and [merge download](/files/sem3/csi243/downloads/completed-examples/List_Merge.hs) practise natural integer ordering. Extend them on paper with a comparator parameter, tagged ties and descending inputs. Their [insertion starter](/files/sem3/csi243/downloads/starter-code/List_InsertionSort.hs) and [merge starter](/files/sem3/csi243/downloads/starter-code/List_Merge.hs) let you attempt the definitions independently.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Comparators return Ordering. Reverse their arguments for descending order; extract only the required keys. Stability concerns EQ ties, not the order of all input elements. Insertion requires an ordered tail; merge requires two ordered inputs and retains all remaining elements. Merge sort needs empty and singleton base cases. Sort before grouping for total frequencies, and check whether rearranging the original input is permitted.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does sortBy not have an Ord a constraint?">
+
+Its caller supplies the ordering. A projected comparator needs Ord only for its key type.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can reversing an ascending result break stable descending ties?">
+
+It reverses every equal-key group too. Reverse the comparator arguments instead.
+
+</CheckQuestion>
+
+<CheckQuestion question="What makes a merge stable?">
+
+Preserve each input's order and take the left head on EQ. Stable merge sort also uses contiguous halves.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is group alone insufficient for frequencies?">
+
+It groups adjacent equal values. Separated occurrences need sorting first if ascending key order is wanted.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why do two recursive merge-sort calls not imply exponential work?">
+
+They operate on halves, and the local merge is linear. The recurrence includes input sizes as well as call count.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with the [practice questions](/docs/sem3/csi243/07-higher-order/questions).

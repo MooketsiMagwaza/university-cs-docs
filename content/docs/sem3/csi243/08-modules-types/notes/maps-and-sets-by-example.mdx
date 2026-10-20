@@ -1,0 +1,3247 @@
+---
+title: "Maps and Sets by Example"
+description: "Choose lists, maps and sets, trace immutable operations, and handle absence, duplicate keys and ordered traversal."
+---
+
+A map connects keys to values; a set records which values are present. This lesson extends [Importing](/docs/sem3/csi243/08-modules-types/notes/imports), taking its short collection examples into complete operations and exam questions. The import forms themselves are prerequisites. [More Higher-Order Functions](/docs/sem3/csi243/07-higher-order/notes/more-higher-order-functions) explains the function arguments used in combining operations below.
+
+<LearningObjectives items={[
+  'Choose an association list, Map or Set from a requirement',
+  'Read qualified operation names and their distinct types',
+  'Search and update present and absent keys without changing the original collection',
+  'Explain duplicate-key policies and ordered traversal',
+  'Calculate set algebra and combine maps using explicit collision rules',
+]} />
+
+`Data.Map` and `Data.Set` come from **containers**, a package that ships with GHC, rather than base. The examples assume a normal GHC installation with containers available; no separate installation is needed for these exercises. A package supplies modules; a qualified import gives their exported names a prefix. Every complete program below includes its imports inside its Haskell fence.
+
+`Map.Map k v` holds keys of type k and values of type v. `Set.Set a` holds elements of type a. Ordered searches and insertions need Ord keys or elements; map values do not need ordering. Updates return new values. Keep their results to retain the changes.
+
+**Ordering correction.** A Map does not preserve insertion order, but it is an ordered-key structure: Map.toList and Map.keys traverse ascending keys. Calling it simply "unsorted" hides this distinction. Set traversal is likewise ascending. Neither structure retains repeated occurrences and encounter order as a list does.
+
+Diagnostics below are key phrases rather than complete compiler transcripts. A valid program with the wrong duplicate policy often produces no compiler warning.
+
+## 1. Association list, Map or Set
+
+An association list is an ordinary list of key/value pairs. It can repeat keys and retains pair order; Prelude.lookup takes the first matching pair. A Map stores one value per key; fromList keeps the last pair for a repeated key. A Set stores unique elements without associated values.
+
+**Template and reading guide.** `lookup key pairs`, `Map.lookup key (Map.fromList pairs)` and `Set.member item (Set.fromList items)` ask different questions. `Prelude.lookup :: Eq k => k -> [(k,v)] -> Maybe v` searches pairs; Map.lookup needs Ord keys.
+
+### Duplicate-key policies
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+pairs :: [(String,Int)]
+pairs = [("a",1),("a",2)]
+
+main :: IO ()
+main = print ((lookup "a" pairs, lookup "z" pairs, Map.lookup "a" (Map.fromList pairs), Map.lookup "z" (Map.fromList pairs)))
+```
+
+```text
+(Just 1,Nothing,Just 2,Nothing)
+```
+
+</HaskellTryIt>
+
+The list finds first a, the Map retains last a, and both return Nothing for missing z.
+
+### Order and information
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+pairs :: [(String,Int)]
+pairs = [("b",2),("a",1),("b",3)]
+
+main :: IO ()
+main = print ((pairs, Map.toList (Map.fromList pairs), Set.toList (Set.fromList (map fst pairs))))
+```
+
+```text
+([("b",2),("a",1),("b",3)],[("a",1),("b",3)],["a","b"])
+```
+
+</HaskellTryIt>
+
+The list keeps all events; Map keeps latest b in key order; Set keeps only names.
+
+### Empty structures
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print ((lookup "a" ([] :: [(String,Int)]), Map.lookup "a" (Map.empty :: Map.Map String Int), Set.member "a" (Set.empty :: Set.Set String)))
+```
+
+```text
+(Nothing,Nothing,False)
+```
+
+</HaskellTryIt>
+
+Neither optional lookup finds a value. Set membership returns a Boolean instead.
+
+### Exam question 1: Association list, Map or Set (6 marks)
+
+Choose representations for an event log, current mark per student, and registered names. Explain duplicates.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Choose" requires a justified representation for three given uses: a chronological event log, one current mark per name, and names without values.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check which information must survive: every occurrence, one current value per key, or presence only.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use a list for the event log, `Map.Map String Int` for current marks with an explicit update policy, and `Set.Set String` for unique names.
+
+</Step>
+
+<Step title="4. Check">
+
+Two updates remain two log events, one current mark and one registration. Empty inputs represent no events, marks or registrations.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Converting the log to Map erases repeated-key history. A Set of names erases marks. Both conversions can compile; the error is in the representation choice.
+
+**Practice with answer.** Which representation preserves every attempt in order? Answer: a list, possibly `[(String,Int)]`.
+
+## 2. Map.empty
+
+Map.empty holds no bindings. Its two type parameters describe permitted keys and values, not existing entries. Context or an annotation selects those types.
+
+**Template and reading guide.** `Map.empty :: Map.Map keyType valueType`. The general type `Map.empty :: Map.Map k v` has no Ord constraint.
+
+### Empty marks
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.empty :: Map.Map String Int))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No key/value pairs are stored.
+
+### A different value type
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.empty :: Map.Map Int String))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+Integer keys and String values still produce no pairs when empty.
+
+### Values can be lists
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.size (Map.empty :: Map.Map Bool [Int]))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+There are no bindings, even though each permitted value is itself a list.
+
+### Exam question 2: Map.empty (6 marks)
+
+Declare an empty table from Int codes to String labels and state its size.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Declare" asks for a typed binding. Keys are Int codes and values are String labels; "state" also requires a numeric size.
+
+</Step>
+
+<Step title="2. Plan">
+
+Instantiate k as Int and v as String; use an annotation to state the intended table type.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import qualified Data.Map as Map
+labels :: Map.Map Int String
+labels = Map.empty
+```
+Its size is 0.
+
+</Step>
+
+<Step title="4. Check">
+
+Map.toList labels is []. It does not contain an implicit key zero or empty String.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** `Map.empty []` treats a map as a function. The diagnostic includes `applied to one value argument`; remove []. Printing an unconstrained empty map can require type annotations.
+
+**Practice with answer.** Give an empty map from Char to Bool. Answer: `Map.empty :: Map.Map Char Bool`.
+
+## 3. Map.fromList and duplicate keys
+
+Map.fromList constructs bindings from pairs, retaining the last value for each repeated key. Keys are compared with Ord; values need no Ord instance. Traversal order becomes key order.
+
+**Template and reading guide.** `Map.fromList pairs`, with `Map.fromList :: Ord k => [(k,v)] -> Map.Map k v`. Every pair must have the same key and value types.
+
+### Later mark replaces earlier
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.fromList [("b",2),("a",1),("b",9)]))
+```
+
+```text
+[("a",1),("b",9)]
+```
+
+</HaskellTryIt>
+
+Last b wins, then a is traversed before b.
+
+### String values
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.fromList [(2,"old"),(1,"one"),(2,"new")]))
+```
+
+```text
+[(1,"one"),(2,"new")]
+```
+
+</HaskellTryIt>
+
+Key 2 ends with new; values are not sorted independently.
+
+### No pairs
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.fromList ([] :: [(String,Int)])))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The empty pair list constructs the empty map.
+
+### Exam question 3: Map.fromList and duplicate keys (6 marks)
+
+Evaluate `Map.toList (Map.fromList [(2,"x"),(1,"y"),(2,"z")])`. Explain the value and ordering choices.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for the concrete pair list. The input repeats key 2, so resolve its value as well as the final order.
+
+</Step>
+
+<Step title="2. Plan">
+
+Resolve repeated keys first, then traverse ascending keys.
+
+</Step>
+
+<Step title="3. Solution">
+
+Key 2 ends with z; key 1 holds y. The list is `[(1,"y"),(2,"z")]`.
+
+</Step>
+
+<Step title="4. Check">
+
+Two distinct keys give two pairs. The source contained three pairs, so one earlier binding was discarded.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Expecting the first duplicate to win confuses fromList with association-list lookup. GHC does not warn about discarded source pairs; use fromListWith when collisions must combine.
+
+**Practice with answer.** What remains from `[("a",7),("a",7)]`? Answer: one binding a=7, with size one.
+
+## 4. Map.toList
+
+Map.toList walks ascending keys and returns each binding as a pair. It does not sort values or recover insertion order. Keeping pairs together preserves their association.
+
+**Template and reading guide.** `Map.toList table`, with `Map.toList :: Map.Map k v -> [(k,v)]`. Walking an existing map needs no new Ord constraint.
+
+### Values follow their keys
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.fromList [(3,"a"),(1,"z"),(2,"m")]))
+```
+
+```text
+[(1,"z"),(2,"m"),(3,"a")]
+```
+
+</HaskellTryIt>
+
+Keys 1,2,3 determine the order; z therefore comes before a.
+
+### Singleton map
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.fromList [("only",True)]))
+```
+
+```text
+[("only",True)]
+```
+
+</HaskellTryIt>
+
+The single binding becomes one pair in a list.
+
+### Empty map
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.empty :: Map.Map Int Bool))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There are no pairs to traverse.
+
+### Exam question 4: Map.toList (6 marks)
+
+A map was built with keys 3, then 1, then 2. Explain what determines toList order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks for the ordering rule after construction with keys 3,1,2. No value ordering or insertion-order requirement is supplied.
+
+</Step>
+
+<Step title="2. Plan">
+
+Distinguish the update sequence from the map's traversal rule.
+
+</Step>
+
+<Step title="3. Solution">
+
+The key order determines traversal: keys 1,2,3 appear in that order, each with its own value. Insertion order is not retained as the traversal rule.
+
+</Step>
+
+<Step title="4. Check">
+
+The first variation uses the same 3,1,2 construction order and still traverses 1,2,3.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Calling this arbitrary or unsorted traversal is misleading. Sorting keys and values separately can attach values to the wrong keys; that error compiles. Retain pairs.
+
+**Practice with answer.** Does `Map.toList . Map.fromList` preserve all pair lists? Answer: no; repeated keys collapse and keys are ordered.
+
+## 5. Map.lookup
+
+Map.lookup returns Just value for a present key and Nothing for an absent one. A stored zero, False or empty String is still a present value. The Maybe wrapper records absence separately.
+
+**Template and reading guide.** `Map.lookup key table`, with `Map.lookup :: Ord k => k -> Map.Map k v -> Maybe v`. Compare Prelude.lookup, whose second argument is a pair list.
+
+### Stored zero, missing name and empty map
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",0 :: Int)]
+
+main :: IO ()
+main = print ((Map.lookup "a" m, Map.lookup "z" m, Map.lookup "a" (Map.empty :: Map.Map String Int)))
+```
+
+```text
+(Just 0,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+a is present with zero. Missing z and empty-map searches give Nothing.
+
+### Integer keys and String values
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(1 :: Int,"one"),(2,"two")]
+
+main :: IO ()
+main = print ((Map.lookup 2 m, Map.lookup 9 m, Map.lookup 2 (Map.empty :: Map.Map Int String)))
+```
+
+```text
+(Just "two",Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+Just wraps the String, which retains its printed quotes.
+
+### Pair keys and Boolean values
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [((1 :: Int,2 :: Int),False)]
+
+main :: IO ()
+main = print ((Map.lookup (1,2) m, Map.lookup (2,1) m, Map.lookup (1,2) (Map.empty :: Map.Map (Int,Int) Bool)))
+```
+
+```text
+(Just False,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+The whole pair identifies a key; swapping fields requests a different key. False is a present value.
+
+### Exam question 5: Map.lookup (6 marks)
+
+Safely query present student a and absent student z in a map containing a=42. State the result type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Query" asks for two optional results, one at present a and one at absent z. Values are Int marks and the requested type must retain absence.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use an optional lookup because the query can have no answer. Instantiate v as Int.
+
+</Step>
+
+<Step title="3. Solution">
+
+`Map.lookup "a" m` is `Just 42`; `Map.lookup "z" m` is `Nothing` for `m = Map.fromList [("a",42 :: Int)]`. Both have type `Maybe Int`.
+
+</Step>
+
+<Step title="4. Check">
+
+An empty map returns Nothing for either name. A present zero returns Just 0, so zero must not be used to infer absence.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** `Map.lookup "a" [("a",42)]` gives `Couldn't match` because the second argument is a list. Use Prelude.lookup or construct a Map. Handle Just/Nothing before doing arithmetic on the result.
+
+**Practice with answer.** What does lookup return for a key mapped to False? Answer: `Just False`, rather than Nothing.
+
+## 6. Map.member
+
+Map.member tests keys, returning Bool. It does not search the values and does not return the stored value. Use lookup if the value is also needed.
+
+**Template and reading guide.** `Map.member key table`, with `Map.member :: Ord k => k -> Map.Map k v -> Bool`.
+
+### Present zero and absent name
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",0 :: Int)]
+
+main :: IO ()
+main = print ((Map.member "a" m, Map.member "z" m, Map.member "a" (Map.empty :: Map.Map String Int)))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+a is a stored key regardless of its value; z and empty-map a are absent.
+
+### Negative key
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(-1 :: Int,"minus")]
+
+main :: IO ()
+main = print ((Map.member (-1) m, Map.member 0 m, Map.member (-1) (Map.empty :: Map.Map Int String)))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+Negative one is present and zero absent; parentheses delimit the negative argument.
+
+### Empty value
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(False,"")]
+
+main :: IO ()
+main = print ((Map.member False m, Map.member True m, Map.member False (Map.empty :: Map.Map Bool String)))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+An empty String value does not make its False key absent.
+
+### Exam question 6: Map.member (6 marks)
+
+Evaluate key membership for a and z in a table storing a=0. Explain why testing whether marks are non-zero is different.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for two Boolean key tests. The stored zero must be distinguished from a missing name.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect keys, not the numeric contents of the stored value.
+
+</Step>
+
+<Step title="3. Solution">
+
+a gives True and z gives False. Mark 0 is a valid stored value, so a non-zero-mark test would answer a different question.
+
+</Step>
+
+<Step title="4. Check">
+
+Lookup at a gives Just 0, confirming presence. Both searches in an empty map give False.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Searching values with member searches the wrong field. Different key/value types may produce `Couldn't match`; identical types can hide the mistake. For a value-list query, use Map.elems.
+
+**Practice with answer.** Which operation returns presence and the value together? Answer: Map.lookup with its Just/Nothing result.
+
+## 7. Map.insert
+
+Map.insert adds an absent key or replaces an existing key's value. Replacement does not increase size. Every insertion returns a new map; the old value remains available.
+
+**Template and reading guide.** `Map.insert key value oldMap`, with `Map.insert :: Ord k => k -> v -> Map.Map k v -> Map.Map k v`.
+
+### Replace, add and begin empty
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",1 :: Int)]
+
+main :: IO ()
+main = print ((Map.toList (Map.insert "a" 9 m), Map.toList (Map.insert "z" 9 m), Map.toList (Map.insert "a" 9 Map.empty), Map.toList m))
+```
+
+```text
+([("a",9)],[("a",1),("z",9)],[("a",9)],[("a",1)])
+```
+
+</HaskellTryIt>
+
+Existing a is replaced; absent z is added; empty becomes a singleton. Original m keeps a=1.
+
+### String replacements
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(1 :: Int,"old")]
+
+main :: IO ()
+main = print ((Map.toList (Map.insert 1 "new" m), Map.toList (Map.insert 2 "two" m), Map.toList m))
+```
+
+```text
+([(1,"new")],[(1,"old"),(2,"two")],[(1,"old")])
+```
+
+</HaskellTryIt>
+
+Key 1 is present and 2 absent. Both results start from the same original.
+
+### Zero does not delete
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(False,5 :: Int)]
+
+main :: IO ()
+main = print ((Map.toList (Map.insert False 0 m), Map.toList (Map.insert True 0 m), Map.toList m))
+```
+
+```text
+([(False,0)],[(False,5),(True,0)],[(False,5)])
+```
+
+</HaskellTryIt>
+
+Existing False remains present with new zero; absent True becomes a new key.
+
+### Exam question 7: Map.insert (6 marks)
+
+From m containing a=1, create a new map with a=7 and b=8. Show the original too.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Create" asks for a new map derived from a supplied old map. There is one replacement at a and one addition at b; the original must also be shown.
+
+</Step>
+
+<Step title="2. Plan">
+
+Replace present a, add absent b and pass one result into the next insertion.
+
+</Step>
+
+<Step title="3. Solution">
+
+`new = Map.insert "b" 8 (Map.insert "a" 7 m)` traverses as `[("a",7),("b",8)]`. The original m still traverses as `[("a",1)]`.
+
+</Step>
+
+<Step title="4. Check">
+
+Size rises from one to two, not three, because replacing a adds no second a. Empty input would create two keys.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Discarding the returned value leaves later old-map queries unchanged; GHC gives no mutation warning. Swapping key and value arguments may cause `Couldn't match`, or silently construct the wrong binding if types coincide.
+
+**Practice with answer.** Does replacing a key increase size? Answer: no. Adding an absent key increases size by one.
+
+## 8. Map.delete
+
+Map.delete removes a present key and leaves an absent key's map unchanged in content. It retains all other bindings and does not alter the original map.
+
+**Template and reading guide.** `Map.delete key oldMap`, with `Map.delete :: Ord k => k -> Map.Map k v -> Map.Map k v`.
+
+### Present, absent and empty deletion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",1 :: Int),("b",2)]
+
+main :: IO ()
+main = print ((Map.toList (Map.delete "a" m), Map.toList (Map.delete "z" m), Map.toList (Map.delete "a" (Map.empty :: Map.Map String Int)), Map.toList m))
+```
+
+```text
+([("b",2)],[("a",1),("b",2)],[],[("a",1),("b",2)])
+```
+
+</HaskellTryIt>
+
+Deleting a removes its binding; z changes nothing; empty stays empty; original m survives.
+
+### Singleton deletion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(1 :: Int,"one")]
+
+main :: IO ()
+main = print ((Map.toList (Map.delete 1 m), Map.toList (Map.delete 2 m), Map.toList m))
+```
+
+```text
+([],[(1,"one")],[(1,"one")])
+```
+
+</HaskellTryIt>
+
+Removing the only key makes an empty result; an absent key leaves the singleton.
+
+### Keys, not values
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(1 :: Int,9 :: Int),(2,1)]
+
+main :: IO ()
+main = print ((Map.toList (Map.delete 1 m), Map.toList (Map.delete 9 m), Map.toList m))
+```
+
+```text
+([(2,1)],[(1,9),(2,1)],[(1,9),(2,1)])
+```
+
+</HaskellTryIt>
+
+Delete key 1, not value 1. Missing key 9 does not remove the entry whose value is 9.
+
+### Exam question 8: Map.delete (6 marks)
+
+Delete present key 2 and absent key 9 separately from a map built from `[(1,"a"),(2,"b")]`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Delete separately" asks for two results from one original map. Key 2 is present; key 9 is absent.
+
+</Step>
+
+<Step title="2. Plan">
+
+Both operations start from the same map; remove a binding only if its key matches.
+
+</Step>
+
+<Step title="3. Solution">
+
+The two toList results are `[(1,"a")]` and `[(1,"a"),(2,"b")]`, respectively.
+
+</Step>
+
+<Step title="4. Check">
+
+Present deletion reduces size by one; absent deletion keeps it unchanged. Empty deletion remains empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** A missing-key exception is not expected: delete is defined for missing keys. Supplying an extra value argument confuses delete with insert and yields an application/type error; use key then map.
+
+**Practice with answer.** Delete the same key twice in sequence. Answer: the second deletion makes no further change.
+
+## 9. Map.size
+
+Map.size counts bindings, hence distinct keys. It does not count input pairs before duplicate resolution or the lengths of stored values. Its result type is Int.
+
+**Template and reading guide.** `Map.size table`, with `Map.size :: Map.Map k v -> Int`.
+
+### No keys
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.size (Map.empty :: Map.Map String Int))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+No bindings means zero.
+
+### Repeated source key
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.size (Map.fromList [("a",1),("a",2),("b",3)]))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+Three input pairs resolve to two distinct keys.
+
+### A list-valued binding
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.size (Map.fromList [(1 :: Int,[10,20,30 :: Int])]))
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+One key holds a list of three numbers, but that is still one binding.
+
+### Exam question 9: Map.size (6 marks)
+
+A map is built from four pairs with keys a,b,a,b. What is its size, and can you know the final values from these keys alone?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"What is its size" asks for a binding count after duplicate resolution. The second part asks what information the given keys do not supply.
+
+</Step>
+
+<Step title="2. Plan">
+
+Count distinct keys; final values come from their last supplied pair.
+
+</Step>
+
+<Step title="3. Solution">
+
+The size is 2. The keys alone do not reveal the final values, only which source occurrences would supply them.
+
+</Step>
+
+<Step title="4. Check">
+
+Adding absent c raises size to 3. Replacing existing a keeps it at 2.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Counting the source pair list gives occurrence count, not Map size. The compiler cannot infer which count the question intended; choose the collection after resolving duplicates.
+
+**Practice with answer.** A singleton map stores an empty list. Its size? Answer: 1, not 0.
+
+## 10. Map.keys
+
+Map.keys extracts each key once in ascending order. It discards values and returns a list, not a Set. Duplicate source keys have already been resolved.
+
+**Template and reading guide.** `Map.keys table`, with `Map.keys :: Map.Map k v -> [k]`.
+
+### Names in key order
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.keys (Map.fromList [("b",2),("a",1),("b",3)]))
+```
+
+```text
+["a","b"]
+```
+
+</HaskellTryIt>
+
+The final map has two keys, a then b.
+
+### Numeric keys
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.keys (Map.fromList [(9,"x"),(-1,"y"),(3,"z")]))
+```
+
+```text
+[-1,3,9]
+```
+
+</HaskellTryIt>
+
+The numbers, including the negative one, are ascending.
+
+### No keys
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.keys (Map.empty :: Map.Map Int Bool))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+Empty input produces no keys.
+
+### Exam question 10: Map.keys (6 marks)
+
+Write a function returning all names in a name-to-mark map, in ascending name order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" asks for a function definition. The input is a name-to-mark Map, the output a list of names, and ascending order is required.
+
+</Step>
+
+<Step title="2. Plan">
+
+The result is a key list; Map.keys already supplies that traversal.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import qualified Data.Map as Map
+names :: Map.Map String Int -> [String]
+names = Map.keys
+```
+
+</Step>
+
+<Step title="4. Check">
+
+For b=1,a=9 the result is `["a","b"]`. Empty input gives [].
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Map.elems returns the marks instead. A signature expecting String names but a body producing Int marks gives `Couldn't match`; select keys.
+
+**Practice with answer.** Do duplicate source keys appear twice? Answer: no, keys walks the final map.
+
+## 11. Map.elems
+
+Map.elems extracts values in ascending key order. Values may repeat because uniqueness applies only to keys. Keep Map.toList instead if the key/value relationship must remain visible.
+
+**Template and reading guide.** `Map.elems table`, with `Map.elems :: Map.Map k v -> [v]`. The library name is elems, not values.
+
+### Values are not independently sorted
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.elems (Map.fromList [("b",1),("a",9)]))
+```
+
+```text
+[9,1]
+```
+
+</HaskellTryIt>
+
+a is visited first with 9, followed by b with 1.
+
+### Repeated values remain
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.elems (Map.fromList [(2,"same"),(1,"same")]))
+```
+
+```text
+["same","same"]
+```
+
+</HaskellTryIt>
+
+Two distinct keys contribute two values, even when equal.
+
+### Empty value list
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.elems (Map.empty :: Map.Map String Bool))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No bindings means no values.
+
+### Exam question 11: Map.elems (6 marks)
+
+Evaluate keys and elems for a map from `[(2,"a"),(1,"z")]`. Is the value list alphabetical?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for two projections of the same map. The follow-up asks whether the values obey alphabetical order.
+
+</Step>
+
+<Step title="2. Plan">
+
+Traverse key 1 then key 2, collecting each field in the same traversal.
+
+</Step>
+
+<Step title="3. Solution">
+
+keys gives `[1,2]`; elems gives `["z","a"]`. The value list follows keys, so it need not be alphabetical.
+
+</Step>
+
+<Step title="4. Check">
+
+Zipping these projections from the same map recovers its toList. Sorting either projection independently can corrupt that pairing.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** `Map.values` is not this exported operation; the key diagnostic is `Not in scope`. Use Map.elems. A Map does not enforce unique values.
+
+**Practice with answer.** What are the values for a=4,b=4? Answer: `[4,4]`, one per binding.
+
+## 12. Immutable update and retaining the result
+
+An update calculates a new value. The old binding still refers to its original collection. Updates calculated independently from old do not automatically combine; chain the returned values.
+
+**Template and reading guide.** `let new = operation arguments old`, then query new. Pass new into the next operation to keep both changes. This pattern applies to Map and Set.
+
+### Independent map versions
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+old = Map.fromList [("a",1 :: Int)]
+replaced = Map.insert "a" 9 old
+added = Map.insert "z" 8 old
+
+main :: IO ()
+main = print ((Map.toList old, Map.toList replaced, Map.toList added))
+```
+
+```text
+([("a",1)],[("a",9)],[("a",1),("z",8)])
+```
+
+</HaskellTryIt>
+
+Replacing existing a and adding absent z separately produce separate versions. Neither changes old.
+
+### Set versions
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+old = Set.fromList [1,2 :: Int]
+again = Set.insert 2 old
+added = Set.insert 3 old
+removed = Set.delete 1 old
+absent = Set.delete 9 old
+
+main :: IO ()
+main = print ((Set.toList old, Set.toList again, Set.toList added, Set.toList removed, Set.toList absent))
+```
+
+```text
+([1,2],[1,2],[1,2,3],[2],[1,2])
+```
+
+</HaskellTryIt>
+
+Existing insertion keeps membership; absent insertion adds 3. Present deletion removes 1; absent deletion keeps the set. Old survives.
+
+### Chained updates
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+old = Map.fromList [("a",1 :: Int),("b",2)]
+new = Map.delete "q" (Map.delete "b" (Map.insert "z" 8 (Map.insert "a" 7 old)))
+
+main :: IO ()
+main = print ((Map.toList old, Map.toList new))
+```
+
+```text
+([("a",1),("b",2)],[("a",7),("z",8)])
+```
+
+</HaskellTryIt>
+
+Replace present a, add absent z, delete present b and absent q. Passing the results onwards retains all changes.
+
+### Exam question 12: Immutable update and retaining the result (6 marks)
+
+A student inserts absent b into new but queries old for b. Explain the missing result and repair this while also replacing existing a.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain and repair" asks you to locate the wrong version being queried. One absent-key addition and one present-key replacement must be retained.
+
+</Step>
+
+<Step title="2. Plan">
+
+Trace which version the query uses. Insertion returns a map instead of changing an earlier binding.
+
+</Step>
+
+<Step title="3. Solution">
+
+For `old = Map.fromList [("a",1)]`, use `new = Map.insert "a" 9 (Map.insert "b" 2 old)`. Query new: a gives Just 9 and b Just 2. Query old: a gives Just 1 and b Nothing.
+
+</Step>
+
+<Step title="4. Check">
+
+Old has size one and new size two. Replacement changes value without adding a duplicate key.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** This compiles because both versions are valid maps. GHC has no warning that the chosen version is not the one intended. Name and query the returned value.
+
+**Practice with answer.** Does discarding `Set.insert 3 old` change old? Answer: no; use the returned set.
+
+## 13. Map.fromListWith
+
+Map.fromListWith combines contributions at repeated keys. Its combining function receives the new value first and the stored value second. Argument order matters for subtraction or concatenation.
+
+**Template and reading guide.** `Map.fromListWith combine pairs`, with type `Ord k => (v -> v -> v) -> [(k,v)] -> Map.Map k v`. Select combine from the collision policy.
+
+### Add contributions
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.fromListWith (+) [("a",1),("b",2),("a",3)]))
+```
+
+```text
+[("a",4),("b",2)]
+```
+
+</HaskellTryIt>
+
+At the second a, new 3 plus old 1 gives 4.
+
+### Concatenation exposes order
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.fromListWith (++) [(1,"old"),(1,"new")]))
+```
+
+```text
+[(1,"newold")]
+```
+
+</HaskellTryIt>
+
+The combination is new ++ old, not old ++ new.
+
+### Empty and maximum policies
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print ((Map.toList (Map.fromListWith (+) ([] :: [(String,Int)])), Map.toList (Map.fromListWith max [("a",4),("a",2),("b",7)])))
+```
+
+```text
+([],[("a",4),("b",7)])
+```
+
+</HaskellTryIt>
+
+No pairs create no bindings. max retains the larger contribution at repeated a.
+
+### Exam question 13: Map.fromListWith (6 marks)
+
+Write an ascending frequency table using Map, rather than grouping a sorted list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" asks for a frequency function. Each input occurrence contributes a count, repeated keys must combine, and output keys must ascend.
+
+</Step>
+
+<Step title="2. Plan">
+
+Each occurrence contributes one. Convert to pairs, sum duplicate-key contributions, then traverse keys.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import qualified Data.Map as Map
+counts :: Ord a => [a] -> [(a,Int)]
+counts xs = Map.toList (Map.fromListWith (+) [(x,1) | x <- xs])
+```
+For `[2,1,2]`, the result is `[(1,1),(2,2)]`.
+
+</Step>
+
+<Step title="4. Check">
+
+Counts sum to three; empty input gives []. This is an alternative to [Sorting and Merging](/docs/sem3/csi243/07-higher-order/notes/sorting-and-merging)'s sorted grouping pipeline.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Ordinary fromList would keep only the last 1. Swapping new and old can change a non-commutative combination without a type error; substitute actual arguments to check.
+
+**Practice with answer.** With values 10 then 3 and combine (-), what remains? Answer: 3 - 10 = -7.
+
+## 14. Map.insertWith
+
+Map.insertWith uses the proposed value directly at an absent key and combines proposed with old at an existing key. It supports counters without a separate search. It still returns a new map.
+
+**Template and reading guide.** `Map.insertWith combine key proposed oldMap`, with type `Ord k => (v -> v -> v) -> k -> v -> Map.Map k v -> Map.Map k v`. Combine gets proposed first, old second.
+
+### Increment or initialise
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",4 :: Int)]
+
+main :: IO ()
+main = print ((Map.toList (Map.insertWith (+) "a" 1 m), Map.toList (Map.insertWith (+) "z" 1 m), Map.toList m))
+```
+
+```text
+([("a",5)],[("a",4),("z",1)],[("a",4)])
+```
+
+</HaskellTryIt>
+
+Existing a gets 1+4; absent z starts at 1. The original remains a=4.
+
+### Subtraction distinguishes argument order
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(1 :: Int,10 :: Int)]
+
+main :: IO ()
+main = print ((Map.toList (Map.insertWith (-) 1 3 m), Map.toList (Map.insertWith (-) 2 3 m), Map.toList m))
+```
+
+```text
+([(1,-7)],[(1,10),(2,3)],[(1,10)])
+```
+
+</HaskellTryIt>
+
+At present 1 compute 3-10. Absent 2 stores 3 without combining.
+
+### String accumulation and empty input
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a","O")]
+
+main :: IO ()
+main = print ((Map.toList (Map.insertWith (++) "a" "N" m), Map.toList (Map.insertWith (++) "z" "N" m), Map.toList (Map.insertWith (++) "a" "N" Map.empty)))
+```
+
+```text
+([("a","NO")],[("a","O"),("z","N")],[("a","N")])
+```
+
+</HaskellTryIt>
+
+Present a combines N++O. Absent z and empty input store N directly.
+
+### Exam question 14: Map.insertWith (6 marks)
+
+Increment present counter a=4 and absent counter b by one. Contrast this with plain insert.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Increment" requires accumulation at a present key and initialisation at an absent key. The contrast asks how this differs from replacement.
+
+</Step>
+
+<Step title="2. Plan">
+
+Counter means accumulate. Use insertWith (+) with proposed 1 and chain the results.
+
+</Step>
+
+<Step title="3. Solution">
+
+`Map.insertWith (+) "b" 1 (Map.insertWith (+) "a" 1 m)` gives pairs `[("a",5),("b",1)]`. Plain insert would replace a by 1.
+
+</Step>
+
+<Step title="4. Check">
+
+Original m still contains a=4 and no b. An empty original would initialise both counters to 1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Thinking insertWith (-) means old minus new reverses the arguments. Addition can hide the mistake. GHC accepts either arithmetic rule, so trace proposed and stored values explicitly.
+
+**Practice with answer.** What happens for proposed 0 at an absent key? Answer: a present binding to 0 is created.
+
+## 15. Map.union
+
+Map.union keeps every key from either map and prefers the left value at collisions. This is different from fromList's last-pair-wins policy and from Set.union, where competing values do not exist.
+
+**Template and reading guide.** `Map.union preferred fallback`, with type `Ord k => Map.Map k v -> Map.Map k v -> Map.Map k v`. Both maps must share key and value types.
+
+### Overlapping keys
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.union (Map.fromList [("a",1),("b",2)]) (Map.fromList [("b",9),("c",3)])))
+```
+
+```text
+[("a",1),("b",2),("c",3)]
+```
+
+</HaskellTryIt>
+
+Shared b keeps left value 2; absent-left c is included from the right.
+
+### Reversed preference
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.union (Map.fromList [("b",9),("c",3)]) (Map.fromList [("a",1),("b",2)])))
+```
+
+```text
+[("a",1),("b",9),("c",3)]
+```
+
+</HaskellTryIt>
+
+The key set stays the same but b now takes left value 9.
+
+### Empty-side identities
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(1 :: Int,"one")]
+
+main :: IO ()
+main = print ((Map.toList (Map.union Map.empty m), Map.toList (Map.union m Map.empty)))
+```
+
+```text
+([(1,"one")],[(1,"one")])
+```
+
+</HaskellTryIt>
+
+An empty side provides no collisions.
+
+### Exam question 15: Map.union (6 marks)
+
+Merge preferred settings a=1,b=2 with fallback b=9,c=3, retaining preferred values on collision.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Merge" asks for one map containing both settings tables. The word preferred fixes which value wins at shared key b.
+
+</Step>
+
+<Step title="2. Plan">
+
+The preference policy determines which map goes on the left.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `Map.union preferred fallback`; its toList is `[("a",1),("b",2),("c",3)]`.
+
+</Step>
+
+<Step title="4. Check">
+
+All three keys remain; shared b occurs once with preferred value 2. Empty fallback changes nothing.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Assuming commutativity from mathematical set union loses Map's value preference. Both argument orders compile; choose the one implementing the policy.
+
+**Practice with answer.** When do swapped union calls agree? Answer: when overlapping keys have equal values, including when keys are disjoint.
+
+## 16. Set.empty
+
+Set.empty has no elements. Its single type parameter describes whole elements, because sets have no separate associated values. There is no implicit zero or empty String member.
+
+**Template and reading guide.** `Set.empty :: Set.Set elementType`; generally `Set.empty :: Set.Set a`, without an Ord constraint.
+
+### Empty numbers
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.empty :: Set.Set Int))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No numbers are stored.
+
+### Empty names
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.size (Set.empty :: Set.Set String))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Changing the element type does not change empty size.
+
+### Pair elements
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.empty :: Set.Set (Int,Bool)))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+A pair can be one whole element, but no pair is present.
+
+### Exam question 16: Set.empty (6 marks)
+
+Declare an empty collection of unique String course codes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Declare" asks for a named empty value and its type. Unique course codes need only membership and each whole element is a String.
+
+</Step>
+
+<Step title="2. Plan">
+
+Membership without associated values selects Set. Instantiate its element type at String.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import qualified Data.Set as Set
+codes :: Set.Set String
+codes = Set.empty
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Its size is 0 and toList is []. It does not contain the empty String.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** `Set.Set String Int` gives too many type parameters, leading to `Expected kind` in the diagnostic. Supply one element type; choose Map for separate keys and values.
+
+**Practice with answer.** Does an empty String set contain ""? Answer: no. A set containing "" has size one.
+
+## 17. Set.fromList
+
+Set.fromList retains distinct elements. Repeated occurrences collapse and traversal becomes ascending. This loses frequency information and encounter order.
+
+**Template and reading guide.** `Set.fromList values`, with `Set.fromList :: Ord a => [a] -> Set.Set a`. Ordering determines uniqueness for the lawful types used here.
+
+### Repeated numbers
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.fromList [3,1,3,2]))
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+Repeated 3 becomes one element; traversal orders 1,2,3.
+
+### Characters
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.fromList "banana"))
+```
+
+```text
+"abn"
+```
+
+</HaskellTryIt>
+
+Unique characters are a,b,n. A Char list prints as a String.
+
+### Empty input
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.fromList ([] :: [Int])))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No elements construct an empty set.
+
+### Exam question 17: Set.fromList (6 marks)
+
+Find the size of the set constructed from `[2,2,1,2,1]` and explain what is lost.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Find" asks for the number of distinct elements after Set construction. The explanation must identify lost occurrences and encounter order.
+
+</Step>
+
+<Step title="2. Plan">
+
+Count distinct elements after construction, not source occurrences.
+
+</Step>
+
+<Step title="3. Solution">
+
+The set has elements 1 and 2, hence size 2. It no longer says that 2 occurred three times or that 2 came first.
+
+</Step>
+
+<Step title="4. Check">
+
+Set.toList gives `[1,2]`. Converting that back cannot reconstruct the five-element source.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Using a Set to make a frequency table discards counts before counting. This compiles; use a count Map or sorted grouping instead.
+
+**Practice with answer.** What does `[True,False,True]` become under fromList then toList? Answer: `[False,True]`.
+
+## 18. Set.toList
+
+Set.toList returns distinct elements in ascending order. If an element is itself a pair, the whole pair is one element. This differs from a Map's key/value interpretation of a pair list.
+
+**Template and reading guide.** `Set.toList collection`, with `Set.toList :: Set.Set a -> [a]`. No additional Ord constraint is needed to walk the structure.
+
+### A String as one element
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.fromList ["zoo"]))
+```
+
+```text
+["zoo"]
+```
+
+</HaskellTryIt>
+
+This is one String element, rather than three Char elements.
+
+### Whole pair ordering
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.fromList [(2,"a"),(1,"z"),(2,"b")]))
+```
+
+```text
+[(1,"z"),(2,"a"),(2,"b")]
+```
+
+</HaskellTryIt>
+
+Pairs compare first field then second. Both distinct pairs starting with 2 survive.
+
+### Empty set
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.empty :: Set.Set Bool))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There are no elements.
+
+### Exam question 18: Set.toList (6 marks)
+
+Compare a Set of pairs and a Map built from `[(1,"a"),(1,"b")]`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" asks how the same pair list behaves under two representations. Repeated first fields are map keys but only part of whole Set elements.
+
+</Step>
+
+<Step title="2. Plan">
+
+Distinguish whole-pair equality from key equality.
+
+</Step>
+
+<Step title="3. Solution">
+
+The Set traversal is `[(1,"a"),(1,"b")]`, size 2. The Map traversal is `[(1,"b")]`, size 1: last value at key 1 wins.
+
+</Step>
+
+<Step title="4. Check">
+
+The same first field is insufficient to collapse distinct Set pair elements. Empty source lists give empty traversals in both cases.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Assuming a Set of pairs enforces unique first fields is wrong. Both pairs differ and survive. GHC accepts this representation; use Map for one value per key.
+
+**Practice with answer.** Does Set.toList retain insertion order? Answer: no; it follows ascending element order.
+
+## 19. Set.member
+
+Set.member tests whether the whole requested element is stored. It returns Bool, not Maybe: there is no separate value to retrieve.
+
+**Template and reading guide.** `Set.member element collection`, with `Set.member :: Ord a => a -> Set.Set a -> Bool`. Compare Map.member on keys and Prelude.elem on lists.
+
+### Present, absent and empty numbers
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1,2 :: Int]
+
+main :: IO ()
+main = print ((Set.member 2 s, Set.member 9 s, Set.member 2 (Set.empty :: Set.Set Int)))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+2 is present; 9 and every query in the empty set are absent.
+
+### Character membership
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList "banana"
+
+main :: IO ()
+main = print ((Set.member 'a' s, Set.member 'z' s, Set.member 'a' (Set.empty :: Set.Set Char)))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+a occurs in banana, z does not. Empty input has neither.
+
+### Whole pairs
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [(1 :: Int,"a")]
+
+main :: IO ()
+main = print ((Set.member (1,"a") s, Set.member (1,"b") s, Set.member (1,"a") (Set.empty :: Set.Set (Int,String))))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+Matching the first field alone does not establish whole-pair membership.
+
+### Exam question 19: Set.member (6 marks)
+
+Query (1,a) and (1,b) in a set containing only (1,a). Explain why both do not succeed.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Query" asks for two whole-pair Boolean tests. The first fields match, but the second fields differ.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare entire pair elements, including the second field after the first-field tie.
+
+</Step>
+
+<Step title="3. Solution">
+
+`Set.member (1,"a") s` is True; `Set.member (1,"b") s` is False. The second pair is absent despite its matching first field.
+
+</Step>
+
+<Step title="4. Check">
+
+Both are False in an empty set. A Map keyed by 1 would ask a different question.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Using Map.member on a Set produces `Couldn't match`. Using a String for a Char set also mismatches types. Select the qualified function and the whole element type correctly.
+
+**Practice with answer.** What is its result type? Answer: Bool. Use Map.lookup for a separate value selected by a key.
+
+## 20. Set.insert
+
+Set.insert ensures an element is present. Inserting an existing element adds no duplicate; inserting an absent element increases size by one. The result is a new set.
+
+**Template and reading guide.** `Set.insert element oldSet`, with `Set.insert :: Ord a => a -> Set.Set a -> Set.Set a`. Unlike Map.insert there is no separate value argument.
+
+### Existing, absent and empty number cases
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1,2 :: Int]
+
+main :: IO ()
+main = print ((Set.toList (Set.insert 2 s), Set.toList (Set.insert 3 s), Set.toList (Set.insert 2 Set.empty), Set.toList s))
+```
+
+```text
+([1,2],[1,2,3],[2],[1,2])
+```
+
+</HaskellTryIt>
+
+Existing 2 adds nothing new; absent 3 adds membership; empty becomes singleton; original survives.
+
+### Character insertion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList "ba"
+
+main :: IO ()
+main = print ((Set.toList (Set.insert 'a' s), Set.toList (Set.insert 'o' s), Set.toList s))
+```
+
+```text
+("ab","abo","ab")
+```
+
+</HaskellTryIt>
+
+a is already present, o is absent. Traversing characters prints Strings.
+
+### Pair insertion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [(1 :: Int,"a")]
+
+main :: IO ()
+main = print ((Set.toList (Set.insert (1,"a") s), Set.toList (Set.insert (1,"b") s), Set.toList s))
+```
+
+```text
+([(1,"a")],[(1,"a"),(1,"b")],[(1,"a")])
+```
+
+</HaskellTryIt>
+
+The existing whole pair is unchanged; the different second field creates a new whole element.
+
+### Exam question 20: Set.insert (6 marks)
+
+Insert existing 2 and absent 3 separately into a set containing 1 and 2. Show results and original.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Insert separately" asks for independent results from the same original set. One element is present, one absent, and the original must remain visible.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply each insertion to the same original and enforce uniqueness.
+
+</Step>
+
+<Step title="3. Solution">
+
+Traversals are `[1,2]` after inserting 2, `[1,2,3]` after inserting 3, and `[1,2]` for the original.
+
+</Step>
+
+<Step title="4. Check">
+
+Sizes are 2,3,2. Inserting into empty gives a singleton.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Expecting size to rise for existing insertion confuses sets with lists. Giving a separate value as for Map.insert causes an application/type error; use element then set.
+
+**Practice with answer.** Insert the same absent element twice successively. Answer: it appears once, and size rises only once.
+
+## 21. Set.delete
+
+Set.delete removes membership if present. An absent deletion is harmless. The original set is unchanged; the result contains every other original element.
+
+**Template and reading guide.** `Set.delete element oldSet`, with `Set.delete :: Ord a => a -> Set.Set a -> Set.Set a`.
+
+### Present, absent and empty deletion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1,2 :: Int]
+
+main :: IO ()
+main = print ((Set.toList (Set.delete 2 s), Set.toList (Set.delete 9 s), Set.toList (Set.delete 2 (Set.empty :: Set.Set Int)), Set.toList s))
+```
+
+```text
+([1],[1,2],[],[1,2])
+```
+
+</HaskellTryIt>
+
+Present 2 is removed; missing 9 changes nothing; empty stays empty; s remains unchanged.
+
+### Character deletion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList "aba"
+
+main :: IO ()
+main = print ((Set.toList (Set.delete 'a' s), Set.toList (Set.delete 'z' s), Set.toList s))
+```
+
+```text
+("b","ab","ab")
+```
+
+</HaskellTryIt>
+
+a is present once in the set even though the source repeats it; z is absent.
+
+### Whole-pair deletion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [(1 :: Int,"a")]
+
+main :: IO ()
+main = print ((Set.toList (Set.delete (1,"a") s), Set.toList (Set.delete (1,"b") s), Set.toList s))
+```
+
+```text
+([],[(1,"a")],[(1,"a")])
+```
+
+</HaskellTryIt>
+
+Only the matching whole pair is removed. The absent pair with matching first field changes nothing.
+
+### Exam question 21: Set.delete (6 marks)
+
+Delete present a and absent z separately from the character set built from "aba".
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Delete separately" asks for independent present and absent deletions after converting a repeated-character String into a Set.
+
+</Step>
+
+<Step title="2. Plan">
+
+Construct distinct membership first, then remove the requested element from each independent result.
+
+</Step>
+
+<Step title="3. Solution">
+
+Original traversal is `"ab"`. Deleting a yields `"b"`; deleting z yields `"ab"`; original remains `"ab"`.
+
+</Step>
+
+<Step title="4. Check">
+
+Deleting a again from the first result leaves `"b"`. Empty input also remains empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** There are no stored repeated copies to remove one at a time. A missing element does not crash. Use a list when individual repeated occurrences must survive; GHC cannot enforce that representation policy.
+
+**Practice with answer.** Can deletion increase size? Answer: no. It reduces by one on presence and otherwise leaves size unchanged.
+
+## 22. Set.size
+
+Set.size counts stored unique elements. It does not count original list occurrences or only the first fields of pair elements.
+
+**Template and reading guide.** `Set.size collection`, with `Set.size :: Set.Set a -> Int`.
+
+### Duplicates collapse
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.size (Set.fromList [2,2,1,2]))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The set contains just 1 and 2.
+
+### Different whole pairs
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.size (Set.fromList [(1,"a"),(1,"b")]))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+The second fields differ, so there are two elements.
+
+### Empty set
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.size (Set.empty :: Set.Set String))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+No elements give zero.
+
+### Exam question 22: Set.size (6 marks)
+
+Compare the list length of "banana" and the size of its character set.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" asks for two counts of the same source: all list occurrences and distinct set elements.
+
+</Step>
+
+<Step title="2. Plan">
+
+Distinguish occurrence counting from distinct-element counting.
+
+</Step>
+
+<Step title="3. Solution">
+
+The list length is 6; `Set.size (Set.fromList "banana")` is 3 because the distinct characters are a,b,n.
+
+</Step>
+
+<Step title="4. Check">
+
+Set.toList gives `"abn"`, a three-character String. Empty input produces zero for either count.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Trying to infer frequencies after Set construction is too late: occurrences have been discarded. The types are valid, so GHC gives no warning; count before losing the information.
+
+**Practice with answer.** A set contains two different Strings of length five. Its size? Answer: 2, not 10.
+
+## 23. Set.union
+
+Set.union includes elements in either set, including elements in both only once. For the ordinary lawful element types here, swapping operands preserves membership.
+
+**Template and reading guide.** `Set.union left right`, with `Set.union :: Ord a => Set.Set a -> Set.Set a -> Set.Set a`. Both operands have the same element type.
+
+### Overlap
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.union (Set.fromList [1,2]) (Set.fromList [2,3])))
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+Shared 2 is included once.
+
+### Disjoint names
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.union (Set.fromList ["red"]) (Set.fromList ["blue"])))
+```
+
+```text
+["blue","red"]
+```
+
+</HaskellTryIt>
+
+Both elements are retained in ascending order.
+
+### Empty sides
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1,2 :: Int]
+
+main :: IO ()
+main = print ((Set.toList (Set.union Set.empty s), Set.toList (Set.union s Set.empty)))
+```
+
+```text
+([1,2],[1,2])
+```
+
+</HaskellTryIt>
+
+An empty side contributes no membership.
+
+### Exam question 23: Set.union (6 marks)
+
+Find students taking course A or B, where A has [1,2] and B has [2,3].
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Find" asks for a roster containing students in either course. Inclusive or allows membership in both but forbids duplicate result membership.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inclusive or selects union; a student in both must appear once.
+
+</Step>
+
+<Step title="3. Solution">
+
+`Set.toList (Set.union a b)` gives `[1,2,3]` after constructing the two roster sets.
+
+</Step>
+
+<Step title="4. Check">
+
+2 occurs once; swapping operands preserves this membership. Empty union returns the other set.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Concatenating the traversals gives `[1,2,2,3]`, an occurrence list rather than a union traversal. This compiles but fails the uniqueness requirement.
+
+**Practice with answer.** What is union of a set with itself? Answer: the same membership and size.
+
+## 24. Set.intersection
+
+Set.intersection keeps elements in both inputs. It answers an and requirement and cannot create new members. Disjoint inputs have empty intersection.
+
+**Template and reading guide.** `Set.intersection left right`, with `Set.intersection :: Ord a => Set.Set a -> Set.Set a -> Set.Set a`.
+
+### Overlapping numbers
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.intersection (Set.fromList [1,2,4]) (Set.fromList [2,3,4])))
+```
+
+```text
+[2,4]
+```
+
+</HaskellTryIt>
+
+Only 2 and 4 occur on both sides.
+
+### Disjoint String elements
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.intersection (Set.fromList ["a","b"]) (Set.fromList ["x","y"])))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There are no common String elements, so the result is an empty list of Strings.
+
+### Empty-side cases
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1,2 :: Int]
+
+main :: IO ()
+main = print ((Set.toList (Set.intersection Set.empty s), Set.toList (Set.intersection s Set.empty)))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+No element can occur on both sides when either side is empty.
+
+### Exam question 24: Set.intersection (6 marks)
+
+Find students taking both courses from rosters [1,2,4] and [2,3,4].
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Find" asks for students in both supplied rosters. Each result must satisfy membership on each side.
+
+</Step>
+
+<Step title="2. Plan">
+
+The word both selects intersection. Retain only candidates present in each roster.
+
+</Step>
+
+<Step title="3. Solution">
+
+The traversal of the intersection is `[2,4]`; 1 fails membership on the right and 3 fails on the left.
+
+</Step>
+
+<Step title="4. Check">
+
+Every returned student belongs to each input. Empty or disjoint inputs produce an empty result.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Union for a both requirement includes students taking only one course. The types still fit; GHC cannot detect the wrong Boolean interpretation. Translate both to intersection before coding.
+
+**Practice with answer.** Intersect a set with itself, then with empty. Answers: the set itself, then empty.
+
+## 25. Set.difference
+
+Set.difference left right retains left members absent from right. It is directional, unlike union or intersection. Symmetric difference would retain both left-only and right-only members, which is a different requirement.
+
+**Template and reading guide.** `Set.difference left right`, with `Set.difference :: Ord a => Set.Set a -> Set.Set a -> Set.Set a`. Read it as left excluding right.
+
+### Both directions
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+a = Set.fromList [1,2 :: Int]
+b = Set.fromList [2,3 :: Int]
+
+main :: IO ()
+main = print ((Set.toList (Set.difference a b), Set.toList (Set.difference b a)))
+```
+
+```text
+([1],[3])
+```
+
+</HaskellTryIt>
+
+a-only is 1; b-only is 3. Shared 2 is excluded in either direction.
+
+### Disjoint inputs
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.toList (Set.difference (Set.fromList "ab") (Set.fromList "xy")))
+```
+
+```text
+"ab"
+```
+
+</HaskellTryIt>
+
+No right member removes any left member.
+
+### Empty sides differ
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1,2 :: Int]
+
+main :: IO ()
+main = print ((Set.toList (Set.difference s Set.empty), Set.toList (Set.difference Set.empty s)))
+```
+
+```text
+([1,2],[])
+```
+
+</HaskellTryIt>
+
+Subtracting empty keeps s; starting empty leaves nothing to keep.
+
+### Exam question 25: Set.difference (6 marks)
+
+Find registered students who have not submitted: registered=[1,2,3], submitted=[2,4]. Explain 4.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Find" asks for registered students lacking a submission. The extra submitted student 4 tests which input determines the candidate population.
+
+</Step>
+
+<Step title="2. Plan">
+
+Start with registered and exclude submitted, so registered is the left operand.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result traversal is `[1,3]`. Student 4 is not registered, so cannot enter the result. Reversing operands would give `[4]`.
+
+</Step>
+
+<Step title="4. Check">
+
+The answer is a subset of registered and has no submitted member. Empty submitted leaves all registered students.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Reversing operands compiles but answers the opposite question. Union minus intersection computes symmetric difference and would include 4, also violating this question.
+
+**Practice with answer.** What is the difference of a set with itself? Answer: empty; every original member is excluded.
+
+## 26. Set.isSubsetOf
+
+A subset test asks whether every candidate member belongs to the allowed set. Overlap alone is insufficient. Empty is a subset of every set because it has no violating member. Equality also satisfies subset; a proper subset would require inequality as well.
+
+**Template and reading guide.** `Set.isSubsetOf candidate allowed`, with `Set.isSubsetOf :: Ord a => Set.Set a -> Set.Set a -> Bool`.
+
+### Containment and its reverse
+
+The library operation is shown in a plain fence because the site interpreter does not implement `Set.isSubsetOf`. The following runnable equivalent checks every candidate with membership; `all` returns True on an empty candidate.
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+a = Set.fromList [1,2 :: Int]
+b = Set.fromList [1,2,3 :: Int]
+
+main :: IO ()
+main = print ((Set.isSubsetOf a b, Set.isSubsetOf b a))
+```
+
+```text
+(True,False)
+```
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+a = Set.fromList [1,2 :: Int]
+b = Set.fromList [1,2,3 :: Int]
+
+subset :: Ord a => Set.Set a -> Set.Set a -> Bool
+subset candidate allowed = all (\x -> Set.member x allowed) (Set.toList candidate)
+
+main :: IO ()
+main = print ((subset a b, subset b a))
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+a's members all occur in b; b has the extra 3.
+
+### Overlap is insufficient
+
+The library operation is shown in a plain fence because the site interpreter does not implement `Set.isSubsetOf`. The following runnable equivalent checks every candidate with membership; `all` returns True on an empty candidate.
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Set.isSubsetOf (Set.fromList [1,2]) (Set.fromList [2,3]))
+```
+
+```text
+False
+```
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+subset :: Ord a => Set.Set a -> Set.Set a -> Bool
+subset candidate allowed = all (\x -> Set.member x allowed) (Set.toList candidate)
+
+main :: IO ()
+main = print (subset (Set.fromList [1,2]) (Set.fromList [2,3]))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Shared 2 does not compensate for missing 1.
+
+### Empty and equal candidates
+
+The library operation is shown in a plain fence because the site interpreter does not implement `Set.isSubsetOf`. The following runnable equivalent checks every candidate with membership; `all` returns True on an empty candidate.
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1 :: Int]
+
+main :: IO ()
+main = print ((Set.isSubsetOf Set.empty s, Set.isSubsetOf s s, Set.isSubsetOf s Set.empty))
+```
+
+```text
+(True,True,False)
+```
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+s = Set.fromList [1 :: Int]
+
+subset :: Ord a => Set.Set a -> Set.Set a -> Bool
+subset candidate allowed = all (\x -> Set.member x allowed) (Set.toList candidate)
+
+main :: IO ()
+main = print ((subset Set.empty s, subset s s, subset s Set.empty))
+```
+
+```text
+(True,True,False)
+```
+
+</HaskellTryIt>
+
+Empty and equal candidates fit. A non-empty candidate cannot fit into empty.
+
+### Exam question 26: Set.isSubsetOf (6 marks)
+
+Check whether submitted students [1,3] are all registered in [1,2,3]. Explain why intersection alone has the wrong result shape.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Check whether" asks for one Boolean expressing every submitted student being registered. The result shape is not a common-member Set.
+
+</Step>
+
+<Step title="2. Plan">
+
+Whether all asks for one Bool. Make submitted the candidate and registered the allowed set.
+
+</Step>
+
+<Step title="3. Solution">
+
+`Set.isSubsetOf (Set.fromList [1,3]) (Set.fromList [1,2,3])` is True. Intersection alone returns a Set, not the requested Boolean.
+
+</Step>
+
+<Step title="4. Check">
+
+Adding 4 to submitted makes False. Empty submitted gives True, including when registered is empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Swapping arguments tests the opposite containment and still compiles. Requiring smaller size accidentally tests proper containment and rejects equal sets.
+
+**Practice with answer.** Is empty a subset of itself? Answer: True; there is no violating element.
+
+## 27. Map.findWithDefault
+
+Map.findWithDefault uses a specified fallback for absent keys and the stored value for present keys. It does not insert the default. Absence and a stored value equal to the default become indistinguishable in this returned result.
+
+**Template and reading guide.** `Map.findWithDefault fallback key table`, with type `Ord k => v -> k -> Map.Map k v -> v`. Default and stored values share the same type.
+
+### Zero fallback
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",7 :: Int)]
+
+main :: IO ()
+main = print ((Map.findWithDefault 0 "a" m, Map.findWithDefault 0 "z" m, Map.toList m))
+```
+
+```text
+(7,0,[("a",7)])
+```
+
+</HaskellTryIt>
+
+Present a returns 7; missing z returns 0 without changing m.
+
+### String fallback
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [(1 :: Int,"one")]
+
+main :: IO ()
+main = print ((Map.findWithDefault "unknown" 1 m, Map.findWithDefault "unknown" 9 m, Map.toList m))
+```
+
+```text
+("one","unknown",[(1,"one")])
+```
+
+</HaskellTryIt>
+
+Present 1 returns its label; absent 9 uses the String fallback.
+
+### Actual zero and absent zero
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",0 :: Int)]
+
+main :: IO ()
+main = print ((Map.findWithDefault 0 "a" m, Map.findWithDefault 0 "z" m, Map.findWithDefault 0 "a" (Map.empty :: Map.Map String Int)))
+```
+
+```text
+(0,0,0)
+```
+
+</HaskellTryIt>
+
+Present zero, missing key and empty map look the same after this default policy.
+
+### Exam question 27: Map.findWithDefault (6 marks)
+
+Display missing scores as 0, but separately report whether a score is missing or actually zero. Choose queries.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Choose queries" gives two missing-data policies: a zero display fallback and a diagnostic result that must still recognise absence.
+
+</Step>
+
+<Step title="2. Plan">
+
+One display policy deliberately erases absence; the diagnostic report must preserve it.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `Map.findWithDefault 0 key scores` for display and `Map.lookup key scores` for the diagnostic report. The latter distinguishes Nothing from Just 0.
+
+</Step>
+
+<Step title="4. Check">
+
+Present zero displays 0 and looks up as Just 0; an absent key displays 0 and looks up as Nothing. Neither query inserts a binding.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** An arbitrary fallback can conceal missing data. A fallback of a different type produces `Couldn't match`; respect both the specified missing-data policy and value type.
+
+**Practice with answer.** Does querying with a default add the key? Answer: no; insertion is a separate operation.
+
+## 28. Map.unionWith
+
+Map.unionWith keeps all keys and combines values at overlaps. Its combiner receives left value then right value, unlike the new/old convention of insertWith. Disjoint keys retain their original value.
+
+**Template and reading guide.** `Map.unionWith combine left right`, with type `Ord k => (v -> v -> v) -> Map.Map k v -> Map.Map k v -> Map.Map k v`.
+
+### Add partial totals
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.unionWith (+) (Map.fromList [("a",2),("b",1)]) (Map.fromList [("a",3),("c",4)])))
+```
+
+```text
+[("a",5),("b",1),("c",4)]
+```
+
+</HaskellTryIt>
+
+Only a collides: 2+3=5. b and c keep their values.
+
+### Order is visible
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+main :: IO ()
+main = print (Map.toList (Map.unionWith (++) (Map.fromList [(1,"L")]) (Map.fromList [(1,"R")])))
+```
+
+```text
+[(1,"LR")]
+```
+
+</HaskellTryIt>
+
+The combination is left ++ right, giving LR.
+
+### Empty-side identities
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+
+m = Map.fromList [("a",2 :: Int)]
+
+main :: IO ()
+main = print ((Map.toList (Map.unionWith (+) Map.empty m), Map.toList (Map.unionWith (+) m Map.empty)))
+```
+
+```text
+([("a",2)],[("a",2)])
+```
+
+</HaskellTryIt>
+
+Empty provides no collisions, so both results retain m.
+
+### Exam question 28: Map.unionWith (6 marks)
+
+Combine count maps a=2,b=1 and a=3,c=4 by summing. Explain why ordinary union is insufficient.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Combine by summing" asks for one count map with added overlapping contributions. The explanation must contrast this with one-side preference.
+
+</Step>
+
+<Step title="2. Plan">
+
+Summing fixes the collision policy. Choose unionWith (+), not one-side preference.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result traversal is `[("a",5),("b",1),("c",4)]`. Ordinary Map.union would retain a=2 rather than include the second contribution.
+
+</Step>
+
+<Step title="4. Check">
+
+Total counts are 10, matching input totals 3+7. Empty-side combination preserves the other map.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repair.** Copying insertWith's new/old argument convention here breaks non-commutative combiners. Addition hides order errors; use strings or subtraction when checking.
+
+**Practice with answer.** For shared left=10,right=3 under (-), what is stored? Answer: 7. Disjoint bindings remain unchanged.
+
+## 29. Shared names, different types
+
+| Name | Map version | Set or list version |
+|---|---|---|
+| empty | `Map.empty :: Map.Map k v` | `Set.empty :: Set.Set a` |
+| fromList | `Map.fromList :: Ord k => [(k,v)] -> Map.Map k v` | `Set.fromList :: Ord a => [a] -> Set.Set a` |
+| toList | `Map.toList :: Map.Map k v -> [(k,v)]` | `Set.toList :: Set.Set a -> [a]` |
+| lookup | `Map.lookup :: Ord k => k -> Map.Map k v -> Maybe v` | `Prelude.lookup :: Eq k => k -> [(k,v)] -> Maybe v` |
+| member | `Map.member :: Ord k => k -> Map.Map k v -> Bool` | `Set.member :: Ord a => a -> Set.Set a -> Bool` |
+| insert | `Map.insert :: Ord k => k -> v -> Map.Map k v -> Map.Map k v` | `Set.insert :: Ord a => a -> Set.Set a -> Set.Set a` |
+| delete | `Map.delete :: Ord k => k -> Map.Map k v -> Map.Map k v` | `Set.delete :: Ord a => a -> Set.Set a -> Set.Set a` |
+| size | `Map.size :: Map.Map k v -> Int` | `Set.size :: Set.Set a -> Int` |
+| union | `Map.union :: Ord k => Map.Map k v -> Map.Map k v -> Map.Map k v` | `Set.union :: Ord a => Set.Set a -> Set.Set a -> Set.Set a` |
+
+The prefixes help you read the operation. Data.List.insert inserts into an already ordered list, retaining repeated occurrences; Set.insert ensures membership; Map.insert provides a value for a key. The compiler checks argument types but cannot choose the intended duplicate policy for you.
+
+The [Eq and Class Constraints](/docs/sem3/csi243/09-polymorphism/notes/eq-and-class-constraints) lesson covers list equality operations. The new choice here is representation and ordering: Map and Set operations use ordered keys or elements, while association-list lookup only requires equality. For tree-operation costs rather than a catalogue of library names, use [Complexity by Recurrence](/docs/sem3/csi243/10-reasoning-revision/notes/complexity-by-recurrence).
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Lists retain occurrence order; Maps retain one value per key and traverse ordered keys; Sets retain unique ordered elements. Map.fromList keeps the last duplicate key. lookup preserves absence with Maybe; member returns Bool. Updates return new collections. Map.insert replaces while Set.insert ensures membership. Missing deletion is harmless. Union means either, intersection both, difference left excluding right, and subset every candidate is allowed. Select collision combiners deliberately and check their argument order.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Is Map traversal insertion order or arbitrary order?">
+
+Neither: Map.toList traverses ascending keys, each with its associated value.
+
+</CheckQuestion>
+
+<CheckQuestion question="How does lookup distinguish missing from stored zero?">
+
+Nothing means missing; Just 0 means present zero. A zero-default query deliberately erases that distinction.
+
+</CheckQuestion>
+
+<CheckQuestion question="How do duplicate insertion policies differ?">
+
+Map.insert replaces a value; Set.insert leaves existing membership unchanged; list insertion adds an occurrence.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which argument policies are directional?">
+
+Set.difference is left excluding right; Map.union prefers left. insertWith and fromListWith combine new then old; unionWith combines left then right.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can an update change the original collection binding?">
+
+No. Use the returned collection and pass it into later operations to retain changes.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Type Synonyms](/docs/sem3/csi243/08-modules-types/notes/type-synonyms).

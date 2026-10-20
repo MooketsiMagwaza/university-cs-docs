@@ -1,0 +1,5198 @@
+---
+title: "Numeric Recursion by Example"
+description: "Design numeric recursive algorithms from specifications, with signed inputs, boundary policies, decreasing measures and accumulator invariants."
+---
+
+[Writing Recursive Functions](/docs/sem3/csi243/05-recursion/notes/writing-recursive-functions) gives the design procedure; [Dry Running a Recursive Function](/docs/sem3/csi243/05-recursion/notes/dry-running) gives the substitution layout. Apply those methods here to new specifications and variations. The existing Rec_ and Lab1_ completed examples and starter files in the [downloads catalogue](/files/sem3/csi243/downloads/README.md) remain starting practice.
+
+<LearningObjectives items={[
+  'Turn a specification into a domain, base case, recursive relationship and tests',
+  'Distinguish inclusive, exclusive, empty-range and invalid-input policies',
+  'Handle signs in multiplication, Euclid and digit algorithms',
+  'Name a decreasing measure when parameters rise, change together or halve',
+  'Choose accumulator state and explain its invariant',
+  'Separate finite testing, correctness and evaluation-cost claims',
+]} />
+
+Before each runnable variation, predict the output and identify its input partition. Blocks are self-contained. The safe wrappers use [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth); they reject invalid inputs rather than invent a numeric answer. Except for the explicitly typed Double price specification, calculations use exact Integer arithmetic. Integer avoids bounded Int overflow but does not make large arithmetic constant-time. Templates describe the general shape; runnable variations supply complete definitions.
+
+## 1. Start from the words: cube and multTen
+
+A specification describes the result that an input means. A recursive implementation is justified only when a smaller instance helps. Cubing and multiplying by ten are useful controls: neither needs recursion. Both accept all integers, including negatives. Use Integer for exact whole-number results; the type alone does not specify the formula.
+
+For each design in this lesson, write purpose, examples, domain, base case, recursive relationship, signature, dry run and tests. If no recursion is needed, explain that decision. This applies the existing design procedure rather than replacing it.
+
+### Template and reading guide
+
+```text
+f :: Integer -> Integer
+f x = expressionUsingX
+```
+
+Translate cube into three factors and ten times into multiplication by ten. No smaller subproblem is needed. In the template, f is the requested name and expressionUsingX translates the words.
+
+### Worked variation: Positive cube
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print (cube 3)
+```
+
+```text
+27
+```
+
+</HaskellTryIt>
+
+Substituting gives three factors: 3 times 3 times 3 is 27.
+
+### Worked variation: Zero cube
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print (cube 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Each factor is zero, giving zero.
+
+### Worked variation: Negative cube
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print (cube (-2))
+```
+
+```text
+-8
+```
+
+</HaskellTryIt>
+
+Two negative factors give four, then the third makes negative eight.
+
+### Worked variation: Equivalent power formula
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print (((-2) ^ (3 :: Integer)))
+```
+
+```text
+-8
+```
+
+</HaskellTryIt>
+
+A non-negative exponent three expresses the same three factors.
+
+### Worked variation: Positive scaling
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print (multTen 7)
+```
+
+```text
+70
+```
+
+</HaskellTryIt>
+
+Ten times seven is seventy.
+
+### Worked variation: Zero scaling
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print (multTen 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+No recursive stopping case is needed: the direct formula already handles zero.
+
+### Worked variation: Negative scaling
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print (multTen (-4))
+```
+
+```text
+-40
+```
+
+</HaskellTryIt>
+
+The positive factor ten preserves the negative sign.
+
+### Worked variation: Equivalent addition formula
+
+<HaskellTryIt>
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+
+main :: IO ()
+main = print ((7+7+7+7+7+7+7+7+7+7 :: Integer))
+```
+
+```text
+70
+```
+
+</HaskellTryIt>
+
+Ten copies of seven sum to seventy, agreeing with the shorter multiplication formula.
+
+### Exam question 1: Start from the words: cube and multTen
+
+Write cube and multTen for all integers. State whether recursion is necessary and give a negative check for each. (4 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is write. Each input and output is an Integer, with all signs permitted. State whether a smaller subproblem is actually useful.
+
+</Step>
+
+<Step title="2. Plan">
+
+Translate cube into three factors and ten times into multiplication by ten. No smaller subproblem is needed. In the template, f is the requested name and expressionUsingX translates the words.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+cube :: Integer -> Integer
+cube x = x * x * x
+multTen :: Integer -> Integer
+multTen x = 10 * x
+```
+
+</Step>
+
+<Step title="4. Check">
+
+cube (-3) is -27 and multTen (-3) is -30. Both give zero at zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+cube x = x * 3 compiles but triples rather than cubes. GHC gives no error for that logical fault; use three factors. A self-call that discards x does not implement either specification.
+
+### Practice with answer
+
+Return both the cube and ten times one input. Check negative one.
+
+<details>
+
+<summary>Answer</summary>
+
+both x = (cube x, multTen x) has type Integer -> (Integer, Integer) and gives (-1,-10). A tuple holds two results.
+
+</details>
+
+### Related specification: A sign predicate
+
+A predicate answers a yes-or-no question with Bool. Negative means strictly below zero; zero is not negative. All Integer inputs are valid, so no rejection or recursion is needed.
+
+### Template and reading guide
+
+```haskell
+isNegative :: Integer -> Bool
+isNegative x = x < 0
+```
+
+Translate negative to x < 0. The result is Bool, not the original number or a string. All inputs are valid and the direct comparison needs no decreasing measure.
+
+### Worked variation: Zero boundary
+
+<HaskellTryIt>
+
+```haskell
+isNegative :: Integer -> Bool
+isNegative x = x < 0
+
+main :: IO ()
+main = print (isNegative 0)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Strictly below zero excludes zero.
+
+### Worked variation: Negative input
+
+<HaskellTryIt>
+
+```haskell
+isNegative :: Integer -> Bool
+isNegative x = x < 0
+
+main :: IO ()
+main = print (isNegative (-1))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Negative one is below zero.
+
+### Worked variation: Positive input
+
+<HaskellTryIt>
+
+```haskell
+isNegative :: Integer -> Bool
+isNegative x = x < 0
+
+main :: IO ()
+main = print (isNegative 5)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Five is above zero.
+
+### Worked variation: Another negative magnitude
+
+<HaskellTryIt>
+
+```haskell
+isNegative :: Integer -> Bool
+isNegative x = x < 0
+
+main :: IO ()
+main = print (isNegative (-100))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Magnitude does not change the sign test.
+
+### Exam question 2: A sign predicate
+
+Write a predicate recognising negative integers. Explain the boundary at zero and check both signs. (3 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is write or translate. Read the input roles, output type and valid domain before choosing a formula.
+
+</Step>
+
+<Step title="2. Plan">
+
+Translate negative to x < 0. The result is Bool, not the original number or a string. All inputs are valid and the direct comparison needs no decreasing measure.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+isNegative :: Integer -> Bool
+isNegative x = x < 0
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At zero return False; at -1 return True; at one return False.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Using `x <= 0` wrongly includes zero. This compiles, so GHC gives no error. Use the strict comparison. Returning the text True would have type String rather than Bool.
+
+### Practice with answer
+
+How would you recognise non-positive integers instead?
+
+<details>
+
+<summary>Answer</summary>
+
+Use `x <= 0`; unlike isNegative this returns True at zero.
+
+</details>
+
+### Related specification: Two arithmetic results from two inputs
+
+Two input arrows and a tuple output express different roles. addAndDifference a b receives two separate integers and returns their sum and the directed difference a-b. Difference here is not absolute distance. State which meaning the words require.
+
+### Template and reading guide
+
+```haskell
+addAndDifference :: Integer -> Integer -> (Integer, Integer)
+addAndDifference a b = (a + b, a - b)
+```
+
+Use two arrows for separate inputs and a pair for two outputs. Put a+b first and a-b second, matching the requested order. No recursion is required.
+
+### Worked variation: Unequal positive inputs
+
+<HaskellTryIt>
+
+```haskell
+addAndDifference :: Integer -> Integer -> (Integer, Integer)
+addAndDifference a b = (a + b, a - b)
+
+main :: IO ()
+main = print (addAndDifference 2 5)
+```
+
+```text
+(7,-3)
+```
+
+</HaskellTryIt>
+
+The sum is seven and the directed difference two minus five is negative three.
+
+### Worked variation: Equal inputs
+
+<HaskellTryIt>
+
+```haskell
+addAndDifference :: Integer -> Integer -> (Integer, Integer)
+addAndDifference a b = (a + b, a - b)
+
+main :: IO ()
+main = print (addAndDifference 4 4)
+```
+
+```text
+(8,0)
+```
+
+</HaskellTryIt>
+
+Equal values have zero difference.
+
+### Worked variation: Both zero
+
+<HaskellTryIt>
+
+```haskell
+addAndDifference :: Integer -> Integer -> (Integer, Integer)
+addAndDifference a b = (a + b, a - b)
+
+main :: IO ()
+main = print (addAndDifference 0 0)
+```
+
+```text
+(0,0)
+```
+
+</HaskellTryIt>
+
+Each arithmetic expression returns zero.
+
+### Worked variation: Mixed signs
+
+<HaskellTryIt>
+
+```haskell
+addAndDifference :: Integer -> Integer -> (Integer, Integer)
+addAndDifference a b = (a + b, a - b)
+
+main :: IO ()
+main = print (addAndDifference (-3) 2)
+```
+
+```text
+(-1,-5)
+```
+
+</HaskellTryIt>
+
+Negative three plus two is negative one; negative three minus two is negative five.
+
+### Exam question 3: Two arithmetic results from two inputs
+
+Return the sum and directed difference of two Integer inputs. Write the signature and explain the order of the tuple fields. (4 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is write or translate. Read the input roles, output type and valid domain before choosing a formula.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use two arrows for separate inputs and a pair for two outputs. Put a+b first and a-b second, matching the requested order. No recursion is required.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+addAndDifference :: Integer -> Integer -> (Integer, Integer)
+addAndDifference a b = (a + b, a - b)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At (2,5) the result is (7,-3). Reversing inputs gives (7,3), so subtraction order matters.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Using abs (a-b) computes distance, a different contract. Returning two separate equations does not create a pair. GHC accepts an absolute-difference implementation but cannot prove it matches the words.
+
+### Practice with answer
+
+What does swapping the inputs change?
+
+<details>
+
+<summary>Answer</summary>
+
+The sum stays the same; the directed difference changes sign. Equal inputs keep difference zero.
+
+</details>
+
+### Related specification: A percentage formula with an explicit valid domain
+
+A price after a percentage discount is the original price times the remaining fraction. Here price must be non-negative and percentage must lie from zero through one hundred. These are preconditions of the direct Double function; the checked wrapper rejects values outside that domain. The examples use finite values with exact simple outputs. General monetary rounding and floating tolerance belong to arithmetic and formatting lessons.
+
+### Template and reading guide
+
+```haskell
+finalPrice :: Double -> Double -> Double
+finalPrice price discount = price * (1 - discount / 100)
+finalPriceChecked :: Double -> Double -> Maybe Double
+finalPriceChecked price discount
+  | price < 0 || discount < 0 || discount > 100 = Nothing
+  | otherwise = Just (finalPrice price discount)
+```
+
+Subtract discount/100 from one to obtain the fraction remaining. Multiplying by discount/100 alone would compute the saving. The wrapper validates finite inputs before applying the formula; no recursion is necessary.
+
+### Worked variation: Ordinary discount
+
+<HaskellTryIt>
+
+```haskell
+finalPrice :: Double -> Double -> Double
+finalPrice price discount = price * (1 - discount / 100)
+finalPriceChecked :: Double -> Double -> Maybe Double
+finalPriceChecked price discount
+  | price < 0 || discount < 0 || discount > 100 = Nothing
+  | otherwise = Just (finalPrice price discount)
+
+main :: IO ()
+main = print (finalPrice 100 20)
+```
+
+```text
+80.0
+```
+
+</HaskellTryIt>
+
+Twenty percent off leaves eighty percent of one hundred. The Double output includes .0.
+
+### Worked variation: Zero discount
+
+<HaskellTryIt>
+
+```haskell
+finalPrice :: Double -> Double -> Double
+finalPrice price discount = price * (1 - discount / 100)
+finalPriceChecked :: Double -> Double -> Maybe Double
+finalPriceChecked price discount
+  | price < 0 || discount < 0 || discount > 100 = Nothing
+  | otherwise = Just (finalPrice price discount)
+
+main :: IO ()
+main = print (finalPrice 50 0)
+```
+
+```text
+50.0
+```
+
+</HaskellTryIt>
+
+A remaining fraction of one leaves the price unchanged.
+
+### Worked variation: Full discount and zero price
+
+<HaskellTryIt>
+
+```haskell
+finalPrice :: Double -> Double -> Double
+finalPrice price discount = price * (1 - discount / 100)
+finalPriceChecked :: Double -> Double -> Maybe Double
+finalPriceChecked price discount
+  | price < 0 || discount < 0 || discount > 100 = Nothing
+  | otherwise = Just (finalPrice price discount)
+
+main :: IO ()
+main = print ((finalPrice 50 100, finalPrice 0 20))
+```
+
+```text
+(0.0,0.0)
+```
+
+</HaskellTryIt>
+
+Full discount leaves fraction zero; zero price stays zero for a valid percentage.
+
+### Worked variation: Reject invalid finite inputs
+
+<HaskellTryIt>
+
+```haskell
+finalPrice :: Double -> Double -> Double
+finalPrice price discount = price * (1 - discount / 100)
+finalPriceChecked :: Double -> Double -> Maybe Double
+finalPriceChecked price discount
+  | price < 0 || discount < 0 || discount > 100 = Nothing
+  | otherwise = Just (finalPrice price discount)
+
+main :: IO ()
+main = print ((finalPriceChecked (-1) 20, finalPriceChecked 10 101))
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+The wrapper rejects a negative price and a percentage above one hundred before using the formula.
+
+### Exam question 4: A percentage formula with an explicit valid domain
+
+Translate a percentage discount specification into a function and a checked wrapper. Reject negative prices and percentages outside zero through one hundred. Assume finite Double inputs. (5 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is write or translate. Read the input roles, output type and valid domain before choosing a formula.
+
+</Step>
+
+<Step title="2. Plan">
+
+Subtract discount/100 from one to obtain the fraction remaining. Multiplying by discount/100 alone would compute the saving. The wrapper validates finite inputs before applying the formula; no recursion is necessary.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+finalPrice :: Double -> Double -> Double
+finalPrice price discount = price * (1 - discount / 100)
+finalPriceChecked :: Double -> Double -> Maybe Double
+finalPriceChecked price discount
+  | price < 0 || discount < 0 || discount > 100 = Nothing
+  | otherwise = Just (finalPrice price discount)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+One hundred with twenty percent off gives eighty. Zero discount leaves the price unchanged; one hundred percent off gives zero. A percentage of 101 returns Nothing.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Subtracting the percentage directly from the price confuses units. Multiplying by discount/100 computes the discount amount rather than the final price. Both can compile; use the remaining fraction and test zero/full discount. These domain checks are stated for finite inputs; they are not a general NaN validator.
+
+### Practice with answer
+
+What is finalPrice 200 25, and why is it not fifty?
+
+<details>
+
+<summary>Answer</summary>
+
+It is 150.0. Fifty is the saving, while the specification asks for the price remaining.
+
+</details>
+
+## 2. Factorial variants with agreeing domains
+
+Factorial multiplies the positive integers up to a non-negative input. Extend the familiar countdown by comparing an ascending range product, a list product and a stride-two product. Validate negatives before entering a worker. An empty product is one, but an invalid factorial input is not an empty valid problem.
+
+The double factorial n!! multiplies every second positive integer. It is not (n!)!. Its bases are 0!! = 1 and 1!! = 1 because both parities must stop. The Maybe wrappers use the already-taught safe-result pattern, not a new error mechanism.
+
+### Template and reading guide
+
+```text
+checked n
+  | n < 0 = Nothing
+  | otherwise = Just (worker n)
+worker 0 = 1
+worker n = n * worker (n - 1)
+```
+
+Use the checked-worker template but subtract two. Both zero and one must return one. The countdown decreases by one for factorial, by two for double factorial; the ascending worker decreases the count of remaining factors.
+
+### Worked variation: Equivalent countdown, ascending and list algorithms
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print ((factCountdown 5, factProduct 5, factViaList 5))
+```
+
+```text
+(Just 120,Just 120,Just 120)
+```
+
+</HaskellTryIt>
+
+The countdown multiplies 5,4,3,2,1; the other versions multiply 1,2,3,4,5. Integer multiplication gives 120 in either order.
+
+### Worked variation: Zero and the empty product
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print ((factCountdown 0, factProduct 0, factViaList 0))
+```
+
+```text
+(Just 1,Just 1,Just 1)
+```
+
+</HaskellTryIt>
+
+The countdown stops, the ascending range starts beyond its end, and the list is empty. Each yields one.
+
+### Worked variation: Reject the negative domain consistently
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print ((factCountdown (-1), factProduct (-1), factViaList (-1)))
+```
+
+```text
+(Nothing,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+All three validate before their workers. Otherwise a list version could disguise negative input as an empty range.
+
+### Worked variation: Change stride and support both parities
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print ((doubleFact 6, doubleFact 5, doubleFact 0, doubleFact (-2)))
+```
+
+```text
+(Just 48,Just 15,Just 1,Nothing)
+```
+
+</HaskellTryIt>
+
+Even factors give 6*4*2=48; odd factors give 5*3*1=15. Zero returns one; negatives are rejected.
+
+### Worked variation: One-factor factorial boundary
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print ((factCountdown 1, factProduct 1, factViaList 1))
+```
+
+```text
+(Just 1,Just 1,Just 1)
+```
+
+</HaskellTryIt>
+
+Each algorithm multiplies just one factor. The ascending and list versions agree with the countdown at the smallest positive input.
+
+### Worked variation: Stride-two zero seed
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print (doubleFact 0)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The even path stops at zero, returning the empty product.
+
+### Worked variation: Stride-two odd seed
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print (doubleFact 1)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The odd path stops at one. It must not subtract two again.
+
+### Worked variation: Stride-two signed-domain check
+
+<HaskellTryIt>
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+
+main :: IO ()
+main = print (doubleFact (-3))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Negative odd inputs are invalid, not another path towards a base.
+
+### Exam question 5: Factorial variants with agreeing domains
+
+Design a safe stride-two product on non-negative integers. Explain its bases and decreasing measure. (6 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is design. The stride is two, the valid domain is non-negative integers, and the result must distinguish rejection from a valid product.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the checked-worker template but subtract two. Both zero and one must return one. The countdown decreases by one for factorial, by two for double factorial; the ascending worker decreases the count of remaining factors.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+factCountdown :: Integer -> Maybe Integer
+factCountdown n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down 0 = 1
+    down k = k * down (k - 1)
+factProduct :: Integer -> Maybe Integer
+factProduct n
+  | n < 0 = Nothing
+  | otherwise = Just (between 1 n)
+  where
+    between a b
+      | a > b = 1
+      | otherwise = a * between (a + 1) b
+productList :: [Integer] -> Integer
+productList [] = 1
+productList (x:xs) = x * productList xs
+factViaList :: Integer -> Maybe Integer
+factViaList n
+  | n < 0 = Nothing
+  | otherwise = Just (productList [1..n])
+doubleFact :: Integer -> Maybe Integer
+doubleFact n
+  | n < 0 = Nothing
+  | otherwise = Just (down n)
+  where
+    down k
+      | k <= 1 = 1
+      | otherwise = k * down (k - 2)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At four the stride-two worker gives 4*(2*1)=8. At three it gives 3*1=3. Every worker step decreases a non-negative argument or the remaining range length.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Only base zero makes odd stride-two inputs skip the stopping case. Seed zero makes every product zero. These type-correct algorithms need not produce a GHC warning. Repair with both bases and the multiplicative identity.
+
+### Practice with answer
+
+Why must factViaList validate negativity even though [1..(-3)] is empty?
+
+<details>
+
+<summary>Answer</summary>
+
+The product of an empty list is one, but negative factorial inputs are outside the contract. Return Nothing rather than silently changing that contract.
+
+</details>
+
+## 3. Inclusive, exclusive and stepped sums
+
+Inclusive includes the endpoint; exclusive omits it. Derive the added term from that wording. Here zero is valid and negative upper bounds are rejected. An empty sum is zero. A sum of the first n odd numbers uses n as a count; a sum of even numbers up to n uses n as a bound. Those inputs mean different things.
+
+### Template and reading guide
+
+```text
+sumTo 0 = 0
+sumTo n = n + sumTo (n - 1)
+sumBelow n = sumTo (n - 1) -- handle zero before this call
+```
+
+The last term is 2*n-1. Remove it to obtain the same problem for n-1. Zero terms give zero. In the template the counter counts remaining terms; the even-bound worker first rounds its bound down to even so subtraction by two reaches zero.
+
+### Worked variation: Change endpoint inclusion
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print ((sumInclusive 4, sumExclusive 4))
+```
+
+```text
+(Just 10,Just 6)
+```
+
+</HaskellTryIt>
+
+Four plus three plus two plus one is ten. Removing endpoint four leaves six.
+
+### Worked variation: Zero has no positive terms
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print ((sumInclusive 0, sumExclusive 0, sumEven 0))
+```
+
+```text
+(Just 0,Just 0,Just 0)
+```
+
+</HaskellTryIt>
+
+Exclusive handles zero before subtracting one, preserving zero as a valid input.
+
+### Worked variation: Reject negative bounds
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print ((sumInclusive (-2), sumExclusive (-2), sumEven (-2)))
+```
+
+```text
+(Nothing,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+The wrappers all reject the same invalid partition instead of decrementing away from zero.
+
+### Worked variation: Change stride and distinguish count from bound
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print ((sumEven 7, sumOddCount 4))
+```
+
+```text
+(Just 12,Just 16)
+```
+
+</HaskellTryIt>
+
+Even values up to seven are 6,4,2,0, totalling twelve. Four odd terms are 7,5,3,1, totalling sixteen.
+
+### Worked variation: Odd-term zero count
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print (sumOddCount 0)
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+No odd terms means the additive identity zero.
+
+### Worked variation: Odd-term first count
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print (sumOddCount 1)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The recurrence adds 2*1-1=1, then stops at count zero.
+
+### Worked variation: Odd-term invalid count
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print (sumOddCount (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+A negative count is rejected before decrementing.
+
+### Worked variation: Even-bound one
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print (sumEven 1)
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+Round the bound down to zero; there are no positive even terms.
+
+### Worked variation: Endpoint-one comparison
+
+<HaskellTryIt>
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+
+main :: IO ()
+main = print ((sumInclusive 1, sumExclusive 1))
+```
+
+```text
+(Just 1,Just 0)
+```
+
+</HaskellTryIt>
+
+One belongs in the inclusive sum but not the exclusive sum, exposing the endpoint rule.
+
+### Exam question 6: Inclusive, exclusive and stepped sums
+
+Derive and implement the sum of the first n odd positive integers, rejecting negative n. (5 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is derive and implement. The input counts odd terms, rather than naming the largest odd term. Negative counts are invalid.
+
+</Step>
+
+<Step title="2. Plan">
+
+The last term is 2*n-1. Remove it to obtain the same problem for n-1. Zero terms give zero. In the template the counter counts remaining terms; the even-bound worker first rounds its bound down to even so subtraction by two reaches zero.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+sumInclusive :: Integer -> Maybe Integer
+sumInclusive n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = k + go (k - 1)
+sumExclusive :: Integer -> Maybe Integer
+sumExclusive n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumInclusive (n - 1)
+sumEven :: Integer -> Maybe Integer
+sumEven n
+  | n < 0 = Nothing
+  | otherwise = Just (go (n - n `mod` 2))
+  where
+    go 0 = 0
+    go k = k + go (k - 2)
+sumOddCount :: Integer -> Maybe Integer
+sumOddCount n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go k = (2 * k - 1) + go (k - 1)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+For three terms: go 3 = 5 + go 2 = 5 + (3 + go 1) = 5 + (3 + (1 + 0)) = 9. The counter decreases to zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+An exclusive sum that adds n includes the forbidden endpoint. A stride-two worker starting odd with only base zero skips zero. GHC accepts both logical errors; round an even-sum bound down and test endpoints.
+
+### Practice with answer
+
+What inclusive and exclusive sums distinguish the algorithms at input one?
+
+<details>
+
+<summary>Answer</summary>
+
+Just 1 versus Just 0. One is the smallest positive endpoint test.
+
+</details>
+
+## 4. Range traversal and reversed endpoints
+
+Incrementing a lower bound can be progress: the number of remaining terms decreases. Signed endpoints are valid. Reversed bounds need a separate stated policy: empty, swap to normalise, or reject. These are different contracts, not equivalent implementations. A half-open range includes its lower endpoint but excludes its upper.
+
+### Template and reading guide
+
+```text
+range lo hi
+  | lo > hi = identity
+  | otherwise = combine lo (range (lo + 1) hi)
+```
+
+In the range template identity is one and combine is multiplication. The measure is max 0 (hi-lo+1). For a half-open sum the stop test changes to lo >= hi.
+
+### Worked variation: Signed range crossing zero
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print ((rangeTotal (-2) 2, rangeProduct (-2) 2))
+```
+
+```text
+(0,0)
+```
+
+</HaskellTryIt>
+
+The terms -2,-1,0,1,2 cancel in the sum; zero absorbs the product.
+
+### Worked variation: Singleton and half-open equality
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print ((rangeTotal 4 4, rangeHalfOpen 4 4, rangeProduct 4 4))
+```
+
+```text
+(4,0,4)
+```
+
+</HaskellTryIt>
+
+Inclusive equality contains one term; half-open equality contains none.
+
+### Worked variation: Three reversed-bounds policies
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print ((rangeTotal 5 3, rangeNormalised 5 3, rangeChecked 5 3))
+```
+
+```text
+(0,12,Nothing)
+```
+
+</HaskellTryIt>
+
+Empty gives zero; swapping sums 3+4+5=12; checked rejects. Read the specification to choose.
+
+### Worked variation: Product identity and changed bound
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print ((rangeProduct 5 3, rangeProduct 2 4, rangeHalfOpen 2 4))
+```
+
+```text
+(1,24,5)
+```
+
+</HaskellTryIt>
+
+Empty product is one. Inclusive multiplication gives 2*3*4=24; half-open addition gives 2+3=5.
+
+### Worked variation: Normalise negative endpoints
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeNormalised 2 (-1))
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+Swap to -1 through 2; -1+0+1+2=2.
+
+### Worked variation: Normalised singleton
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeNormalised 0 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Min and max are both zero. One zero term gives sum zero.
+
+### Worked variation: Normalised ordinary range
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeNormalised 2 4)
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+Already ascending, the range is unchanged and totals nine.
+
+### Worked variation: Checked signed range
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeChecked (-2) 0)
+```
+
+```text
+Just (-3)
+```
+
+</HaskellTryIt>
+
+The ordered signed terms -2,-1,0 sum to negative three; Show parenthesises the negative payload.
+
+### Worked variation: Checked singleton
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeChecked 4 4)
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+Equal endpoints are valid and inclusive.
+
+### Worked variation: Checked ordinary range
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeChecked 2 4)
+```
+
+```text
+Just 9
+```
+
+</HaskellTryIt>
+
+The guard accepts the bounds and the worker adds 2+3+4.
+
+### Worked variation: Half-open reversed range
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeHalfOpen 4 2)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The lo>=hi stop test classifies this range as empty.
+
+### Worked variation: Half-open signed range
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeHalfOpen (-2) 1)
+```
+
+```text
+-3
+```
+
+</HaskellTryIt>
+
+Include -2,-1,0 but exclude one; the total is negative three.
+
+### Worked variation: Product entirely below zero
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeProduct (-3) (-1))
+```
+
+```text
+-6
+```
+
+</HaskellTryIt>
+
+Three negative factors give (-3)*(-2)*(-1)=-6.
+
+### Worked variation: Ordinary ascending range
+
+<HaskellTryIt>
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+
+main :: IO ()
+main = print (rangeTotal 2 4)
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+Include endpoints two and four with three between: 2+3+4=9.
+
+### Exam question 7: Range traversal and reversed endpoints
+
+Write an inclusive range product with reversed bounds treated as empty. Give singleton and reversed checks and a measure. (6 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is write. The input is two signed endpoints, the result is a product, and reversed bounds explicitly mean an empty product.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the range template identity is one and combine is multiplication. The measure is max 0 (hi-lo+1). For a half-open sum the stop test changes to lo >= hi.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+rangeTotal :: Integer -> Integer -> Integer
+rangeTotal lo hi
+  | lo > hi = 0
+  | otherwise = lo + rangeTotal (lo + 1) hi
+rangeProduct :: Integer -> Integer -> Integer
+rangeProduct lo hi
+  | lo > hi = 1
+  | otherwise = lo * rangeProduct (lo + 1) hi
+rangeHalfOpen :: Integer -> Integer -> Integer
+rangeHalfOpen lo hi
+  | lo >= hi = 0
+  | otherwise = lo + rangeHalfOpen (lo + 1) hi
+rangeNormalised :: Integer -> Integer -> Integer
+rangeNormalised a b = rangeTotal (min a b) (max a b)
+rangeChecked :: Integer -> Integer -> Maybe Integer
+rangeChecked a b
+  | a > b = Nothing
+  | otherwise = Just (rangeTotal a b)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At (3,3), 3 * rangeProduct 4 3 = 3. At (4,3), the answer is one. Incrementing lo decreases the remaining count by one.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Decrementing lo moves away from a higher endpoint. Equality alone cannot stop reversed inputs. Zero as product seed destroys all results. GHC gives no diagnostic for these well-typed algorithm errors.
+
+### Practice with answer
+
+Under the normalised policy, what is the sum from two to negative one?
+
+<details>
+
+<summary>Answer</summary>
+
+Swap to -1 through 2 and add -1+0+1+2=2. The empty policy would give zero, so the policy matters.
+
+</details>
+
+## 5. Sum of factorials without restarting factorial
+
+The existing sumFac includes 0! through n!. Its direct definition restarts factorial for each term. Instead, carry the latest factorial with the inclusive total. From k! obtain (k+1)! with one multiplication. Negative indices are rejected. An exclusive version ends before n!, so zero has no terms.
+
+### Template and reading guide
+
+```text
+go k f total
+  | k == n = total
+  | otherwise = go (k + 1) nextF (total + nextF)
+  where nextF = (k + 1) * f
+```
+
+In the template, k is the last processed index, f=k!, and total is the sum through k!. Seed (0,1,1). The measure n-k decreases. nextF must update both the factorial and the total.
+
+### Worked variation: Zero includes zero factorial
+
+<HaskellTryIt>
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+
+main :: IO ()
+main = print (sumFacFast 0)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The initial state already includes 0!=1; its stopping test returns one.
+
+### Worked variation: Reuse the previous factorial
+
+<HaskellTryIt>
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+
+main :: IO ()
+main = print (sumFacFast 4)
+```
+
+```text
+Just 34
+```
+
+</HaskellTryIt>
+
+States (k,f,total) are (0,1,1),(1,1,2),(2,2,4),(3,6,10),(4,24,34). Each new factorial uses the previous one.
+
+### Worked variation: Reject negatives before starting
+
+<HaskellTryIt>
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+
+main :: IO ()
+main = print (sumFacFast (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Increasing k from zero could never reach negative one. Validation prevents that path.
+
+### Worked variation: Change endpoint inclusion
+
+<HaskellTryIt>
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+
+main :: IO ()
+main = print ((sumFacBelow 4, sumFacBelow 0))
+```
+
+```text
+(Just 10,Just 0)
+```
+
+</HaskellTryIt>
+
+Below four ends at 3!, giving ten. Below zero contains no terms and gives zero.
+
+### Worked variation: Exclusive factorial-sum seed
+
+<HaskellTryIt>
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+
+main :: IO ()
+main = print (sumFacBelow 0)
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+There are no indices below zero in the valid non-negative domain.
+
+### Worked variation: Exclusive factorial-sum one
+
+<HaskellTryIt>
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+
+main :: IO ()
+main = print ((sumFacBelow 1, sumFacFast 1))
+```
+
+```text
+(Just 1,Just 2)
+```
+
+</HaskellTryIt>
+
+Below one includes only 0!. Inclusive one also includes 1!, giving two.
+
+### Worked variation: Exclusive factorial-sum invalid index
+
+<HaskellTryIt>
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+
+main :: IO ()
+main = print (sumFacBelow (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Negative indices are rejected, not treated as empty sums.
+
+### Exam question 8: Sum of factorials without restarting factorial
+
+Design an inclusive factorial sum that never restarts factorial. State the state invariant and initial values. (7 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is design. The requested sum includes index zero, and the algorithm must reuse factorial work rather than restart it.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template, k is the last processed index, f=k!, and total is the sum through k!. Seed (0,1,1). The measure n-k decreases. nextF must update both the factorial and the total.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+sumFacFast :: Integer -> Maybe Integer
+sumFacFast n
+  | n < 0 = Nothing
+  | otherwise = Just (go 0 1 1)
+  where
+    go k f total
+      | k == n = total
+      | otherwise = go (k + 1) nextF (total + nextF)
+      where
+        nextF = (k + 1) * f
+sumFacBelow :: Integer -> Maybe Integer
+sumFacBelow n
+  | n < 0 = Nothing
+  | n == 0 = Just 0
+  | otherwise = sumFacFast (n - 1)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At (2,2,4), nextF=3*2=6, so the next state is (3,6,10). At k=n the invariant says total is exactly the requested sum.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Starting total at zero loses 0!. Adding old f rather than nextF adds the wrong term. Both compile; GHC gives no error. Use the same nextF binding in both updates.
+
+### Practice with answer
+
+Why is the total two at n=1 rather than one?
+
+<details>
+
+<summary>Answer</summary>
+
+It includes two terms: 0!=1 and 1!=1. Equal values still belong to distinct indices.
+
+</details>
+
+## 6. Signed multiplication by repeated addition
+
+The first argument is a value to add; the second is a repetition count. A negative value is harmless, but a negative count requires sign handling. Normalise the multiplier, add that many copies, then negate the result once. An alternative moves a negative multiplier upwards to zero while adding the negated value.
+
+### Template and reading guide
+
+```text
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+```
+
+The template keeps x fixed. copies receives the absolute count and has zero as its additive base. The measure is that non-negative count. Alternatively, the direct signed worker decreases abs y on either sign branch.
+
+### Worked variation: Positive multiplier
+
+<HaskellTryIt>
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+
+main :: IO ()
+main = print (multiply 4 3)
+```
+
+```text
+12
+```
+
+</HaskellTryIt>
+
+Three copies give 4+(4+(4+0))=12.
+
+### Worked variation: Zero multiplier
+
+<HaskellTryIt>
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+
+main :: IO ()
+main = print (multiply (-7) 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Zero copies sum to zero regardless of the value sign.
+
+### Worked variation: Negative multiplier
+
+<HaskellTryIt>
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+
+main :: IO ()
+main = print (multiply 4 (-3))
+```
+
+```text
+-12
+```
+
+</HaskellTryIt>
+
+Three positive copies total twelve; negate once for the negative multiplier.
+
+### Worked variation: Both negatives and another recurrence
+
+<HaskellTryIt>
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+
+main :: IO ()
+main = print ((multiply (-4) (-3), multiplyTowardsZero (-4) (-3)))
+```
+
+```text
+(12,12)
+```
+
+</HaskellTryIt>
+
+The first sums negative twelve then negates. The second adds positive four while y moves -3,-2,-1,0. Both give twelve.
+
+### Worked variation: Direct signed worker with positive count
+
+<HaskellTryIt>
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+
+main :: IO ()
+main = print (multiplyTowardsZero 5 2)
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+The positive branch adds five twice while y goes 2,1,0.
+
+### Worked variation: Direct signed worker at zero
+
+<HaskellTryIt>
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+
+main :: IO ()
+main = print (multiplyTowardsZero 5 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Zero copies return zero directly.
+
+### Worked variation: Direct signed worker with negative count
+
+<HaskellTryIt>
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+
+main :: IO ()
+main = print (multiplyTowardsZero 5 (-2))
+```
+
+```text
+-10
+```
+
+</HaskellTryIt>
+
+The negative branch adds negative five twice while y goes -2,-1,0.
+
+### Exam question 9: Signed multiplication by repeated addition
+
+Repair repeated-addition multiplication for negative multipliers without using multiplication in the worker. Dry-run 3 times negative two. (6 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is repair and dry-run. Both multiplier signs are valid, and multiplication may not appear in the addition worker.
+
+</Step>
+
+<Step title="2. Plan">
+
+The template keeps x fixed. copies receives the absolute count and has zero as its additive base. The measure is that non-negative count. Alternatively, the direct signed worker decreases abs y on either sign branch.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+multiply :: Integer -> Integer -> Integer
+multiply x y
+  | y < 0 = negate (copies (negate y))
+  | otherwise = copies y
+  where
+    copies 0 = 0
+    copies k = x + copies (k - 1)
+multiplyTowardsZero :: Integer -> Integer -> Integer
+multiplyTowardsZero x y
+  | y == 0 = 0
+  | y > 0 = x + multiplyTowardsZero x (y - 1)
+  | otherwise = negate x + multiplyTowardsZero x (y + 1)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+multiply 3 (-2) = negate (copies 2) = negate (3 + copies 1) = negate (3 + (3 + copies 0)) = negate 6 = -6.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Decrementing negative counts moves away from zero. Negating both x and the final answer handles the sign twice. GHC accepts these logic errors. Also sum (replicate (fromIntegral n) n) is zero for negative n, not n*n: negative repetitions do not model a square.
+
+### Practice with answer
+
+Check multiplication at (0,-5) and (-3,2).
+
+<details>
+
+<summary>Answer</summary>
+
+Zero and negative six. Use both sign positions and zero in the test partitions.
+
+</details>
+
+## 7. Recursive power and its exponent domain
+
+Integral power repeats multiplication of a fixed base. The base may be negative; this Integer-result contract rejects negative exponents, since those generally require fractions. Zero exponent returns one, including zero to zero for this algorithm. A different mathematical convention requires a different specification.
+
+### Template and reading guide
+
+```text
+power x 0 = 1
+power x n = x * power x (n - 1)
+```
+
+In the template x is a fixed factor and n is the remaining factor count. Validate n before the worker. One is the empty product; the measure is n, not x.
+
+### Worked variation: Ordinary exponent
+
+<HaskellTryIt>
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+
+main :: IO ()
+main = print (powerSafe 3 4)
+```
+
+```text
+Just 81
+```
+
+</HaskellTryIt>
+
+Four factors produce 3*(3*(3*(3*1)))=81.
+
+### Worked variation: Zero exponent and zero base
+
+<HaskellTryIt>
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+
+main :: IO ()
+main = print ((powerSafe 0 0, powerSafe 0 3))
+```
+
+```text
+(Just 1,Just 0)
+```
+
+</HaskellTryIt>
+
+The zero-exponent rule returns one. A positive count of zero factors gives zero.
+
+### Worked variation: Negative base, odd and even counts
+
+<HaskellTryIt>
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+
+main :: IO ()
+main = print ((powerSafe (-2) 3, powerSafe (-2) 4))
+```
+
+```text
+(Just (-8),Just 16)
+```
+
+</HaskellTryIt>
+
+Odd count gives negative eight; even count gives sixteen. Show parenthesises a negative payload of Just.
+
+### Worked variation: Negative exponent and equivalent if form
+
+<HaskellTryIt>
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+
+main :: IO ()
+main = print ((powerSafe 2 (-1), powerIf 2 3))
+```
+
+```text
+(Nothing,Just 8)
+```
+
+</HaskellTryIt>
+
+Reject the negative exponent. The if worker has the same base and decrement as the pattern worker.
+
+### Worked variation: If-form zero exponent
+
+<HaskellTryIt>
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+
+main :: IO ()
+main = print (powerIf 0 0)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The outer validation accepts zero and the inner base returns one.
+
+### Worked variation: If-form negative exponent
+
+<HaskellTryIt>
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+
+main :: IO ()
+main = print (powerIf 2 (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+The first if rejects negative exponents without calling its worker.
+
+### Worked variation: If-form signed base
+
+<HaskellTryIt>
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+
+main :: IO ()
+main = print (powerIf (-3) 2)
+```
+
+```text
+Just 9
+```
+
+</HaskellTryIt>
+
+Two copies of negative three multiply to nine; the exponent is non-negative.
+
+### Exam question 10: Recursive power and its exponent domain
+
+Write safe recursive integer exponentiation. Explain which argument decreases and check a negative base and zero exponent. (5 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is write and explain. The base may be negative but the exponent may not; zero exponent is valid.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template x is a fixed factor and n is the remaining factor count. Validate n before the worker. One is the empty product; the measure is n, not x.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+powerSafe :: Integer -> Integer -> Maybe Integer
+powerSafe x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k = x * go (k - 1)
+powerIf :: Integer -> Integer -> Maybe Integer
+powerIf x n = if n < 0 then Nothing else Just (go n)
+  where
+    go k = if k == 0 then 1 else x * go (k - 1)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+powerSafe (-3) 2 is Just 9; powerSafe 9 0 is Just 1. Reducing x instead would change the factors rather than reduce how many remain.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Base zero destroys every product. Decreasing x while leaving n fixed cannot reach the exponent base. GHC accepts both definitions when well-typed. Repair the seed and shrink the exponent; do not silently accept negative exponents.
+
+### Practice with answer
+
+Compare powerSafe (-1) 6 and powerSafe 1 (-6).
+
+<details>
+
+<summary>Answer</summary>
+
+Just 1 and Nothing. A harmless-looking base does not override the chosen exponent domain.
+
+</details>
+
+## 8. Exponentiation by squaring and sharing
+
+Halving an exponent can replace a countdown. For n=2q, square the power at q. For n=2q+1, also multiply by the base. Bind the half-power once and reuse it. Two separately written recursive calls describe repeated work rather than this intended shared design. Accept signed bases, reject negative exponents, and define exponent zero as one.
+
+### Template and reading guide
+
+```text
+go 0 = 1
+go n
+  | even n = half * half
+  | otherwise = x * half * half
+  where half = go (n `div` 2)
+```
+
+In the template half is the result for quotient n div 2. A positive exponent halves to a smaller non-negative integer. Even parity needs half squared; odd parity needs an extra x.
+
+### Worked variation: Even exponent
+
+<HaskellTryIt>
+
+```haskell
+powerSquare :: Integer -> Integer -> Maybe Integer
+powerSquare x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k
+      | even k = half * half
+      | otherwise = x * half * half
+      where
+        half = go (k `div` 2)
+
+main :: IO ()
+main = print (powerSquare 3 6)
+```
+
+```text
+Just 729
+```
+
+</HaskellTryIt>
+
+Exponent path 6,3,1,0 returns powers 729,27,3,1. At six, half is 27, whose square is 729.
+
+### Worked variation: Odd exponent and negative base
+
+<HaskellTryIt>
+
+```haskell
+powerSquare :: Integer -> Integer -> Maybe Integer
+powerSquare x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k
+      | even k = half * half
+      | otherwise = x * half * half
+      where
+        half = go (k `div` 2)
+
+main :: IO ()
+main = print (powerSquare (-2) 5)
+```
+
+```text
+Just (-32)
+```
+
+</HaskellTryIt>
+
+The half-power at two is four; -2*4*4=-32.
+
+### Worked variation: Zero must stop before halving
+
+<HaskellTryIt>
+
+```haskell
+powerSquare :: Integer -> Integer -> Maybe Integer
+powerSquare x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k
+      | even k = half * half
+      | otherwise = x * half * half
+      where
+        half = go (k `div` 2)
+
+main :: IO ()
+main = print (powerSquare 0 0)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The base returns one directly. Recursing by halving zero would repeat zero forever.
+
+### Worked variation: Reject negative exponent and check one
+
+<HaskellTryIt>
+
+```haskell
+powerSquare :: Integer -> Integer -> Maybe Integer
+powerSquare x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k
+      | even k = half * half
+      | otherwise = x * half * half
+      where
+        half = go (k `div` 2)
+
+main :: IO ()
+main = print ((powerSquare 2 (-3), powerSquare 2 1))
+```
+
+```text
+(Nothing,Just 2)
+```
+
+</HaskellTryIt>
+
+Negative three is rejected. One halves to zero, then its odd branch supplies one factor two.
+
+### Exam question 11: Exponentiation by squaring and sharing
+
+Derive exponentiation by squaring from even and odd cases, with one shared recursive binding. Trace exponent five at base two. (7 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is derive and trace. The required method halves the exponent and shares its smaller result.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template half is the result for quotient n div 2. A positive exponent halves to a smaller non-negative integer. Even parity needs half squared; odd parity needs an extra x.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+powerSquare :: Integer -> Integer -> Maybe Integer
+powerSquare x n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 1
+    go k
+      | even k = half * half
+      | otherwise = x * half * half
+      where
+        half = go (k `div` 2)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+go 5 needs go 2, which needs go 1, which needs go 0=1. Therefore go 1=2, go 2=4 and go 5=2*4*4=32.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Omitting the odd factor gives sixteen instead of thirty-two at exponent five. Calling go twice rather than binding half repeats source-level subproblems. GHC need not diagnose either design fault.
+
+### Practice with answer
+
+Which exponents does the shared worker visit at eight?
+
+<details>
+
+<summary>Answer</summary>
+
+8,4,2,1,0. A decrementing algorithm visits every exponent from eight down to zero. Subproblem sizes matter to the cost argument.
+
+</details>
+
+## 9. Euclid: both parameters change
+
+Choose a non-negative greatest common divisor. Normalise both inputs with abs, then replace (a,b) by (b,a mod b) until b is zero. Both arguments change, but only the second is the decreasing measure. For positive b, the remainder lies from zero through b-1. This bound needs the normalised domain. Define gcd 0 0 as zero, following Prelude, as a convention for that exceptional pair.
+
+### Template and reading guide
+
+```text
+gcdEuclid a b = go (abs a) (abs b)
+go a 0 = a
+go a b = go b (a `mod` b)
+```
+
+The template normalises signs first. In its worker a and b are non-negative. Record both arguments but use the second as the measure; there is one recursive call, not two.
+
+### Worked variation: Ordinary Euclid chain
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+
+main :: IO ()
+main = print (gcdEuclid 48 18)
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+Pairs (48,18),(18,12),(12,6),(6,0) reach the zero base.
+
+### Worked variation: Signed inputs
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+
+main :: IO ()
+main = print ((gcdEuclid (-48) 18, gcdEuclid 48 (-18)))
+```
+
+```text
+(6,6)
+```
+
+</HaskellTryIt>
+
+Abs makes both workers begin at (48,18). The gcd is non-negative.
+
+### Worked variation: Zero in each position
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+
+main :: IO ()
+main = print ((gcdEuclid 0 9, gcdEuclid 9 0, gcdEuclid 0 0))
+```
+
+```text
+(9,9,0)
+```
+
+</HaskellTryIt>
+
+The first reaches (9,0); the other two return directly at their zero second argument.
+
+### Worked variation: Smaller first input and coprime values
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+
+main :: IO ()
+main = print (gcdEuclid 5 12)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+Pairs (5,12),(12,5),(5,2),(2,1),(1,0) return one. The first component initially grows, disproving it as the measure.
+
+### Exam question 12: Euclid: both parameters change
+
+Dry-run Euclid at (14,35), explaining termination even when one argument increases. (5 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is dry-run and explain. Track both parameters at every Euclid replacement, after normalising signs.
+
+</Step>
+
+<Step title="2. Plan">
+
+The template normalises signs first. In its worker a and b are non-negative. Record both arguments but use the second as the measure; there is one recursive call, not two.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+(14,35) -> (35,14) -> (14,7) -> (7,0), returning seven. Second components 35,14,7,0 decrease. The first grows to 35 without invalidating progress.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Taking the remainder before testing zero risks the run-time key phrase divide by zero. Keeping signed inputs invalidates this stated non-negative remainder argument. Normalise once, and put the zero equation first.
+
+### Practice with answer
+
+Why is both arguments decrease false at (3,8)?
+
+<details>
+
+<summary>Answer</summary>
+
+The next pair is (8,3); the first grows but the second decreases. That one non-negative measure is sufficient.
+
+</details>
+
+## 10. Derive lcm and protect the zero case
+
+Least common multiple is also chosen non-negative. For non-zero inputs, divide one magnitude by the gcd, then multiply by the other magnitude. The division is exact. If either input is zero, return zero, including at two zeros. This derived algorithm uses the recursive Euclid helper; lcm needs no independent recursive search.
+
+### Template and reading guide
+
+```text
+lcmEuclid a b
+  | a == 0 || b == 0 = 0
+  | otherwise = (abs a `div` gcd a b) * abs b
+```
+
+In the template gcd is a positive exact divisor only in the non-zero branch. Divide before multiplying to reduce the intermediate magnitude. Integer avoids bounded overflow, but large arithmetic still has a cost. Termination is inherited from the Euclid helper.
+
+### Worked variation: Shared factors
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+lcmEuclid :: Integer -> Integer -> Integer
+lcmEuclid a b
+  | a == 0 || b == 0 = 0
+  | otherwise = (abs a `div` gcdEuclid a b) * abs b
+
+main :: IO ()
+main = print (lcmEuclid 12 18)
+```
+
+```text
+36
+```
+
+</HaskellTryIt>
+
+Gcd is six, so (12 div 6)*18=36. Remove shared factors once.
+
+### Worked variation: Coprime inputs
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+lcmEuclid :: Integer -> Integer -> Integer
+lcmEuclid a b
+  | a == 0 || b == 0 = 0
+  | otherwise = (abs a `div` gcdEuclid a b) * abs b
+
+main :: IO ()
+main = print (lcmEuclid 5 7)
+```
+
+```text
+35
+```
+
+</HaskellTryIt>
+
+Gcd is one, so the product needs no shared-factor reduction.
+
+### Worked variation: Sign convention
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+lcmEuclid :: Integer -> Integer -> Integer
+lcmEuclid a b
+  | a == 0 || b == 0 = 0
+  | otherwise = (abs a `div` gcdEuclid a b) * abs b
+
+main :: IO ()
+main = print ((lcmEuclid (-12) 18, lcmEuclid (-12) (-18)))
+```
+
+```text
+(36,36)
+```
+
+</HaskellTryIt>
+
+Taking both magnitudes produces a non-negative result independently of the signs.
+
+### Worked variation: Every zero placement
+
+<HaskellTryIt>
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+lcmEuclid :: Integer -> Integer -> Integer
+lcmEuclid a b
+  | a == 0 || b == 0 = 0
+  | otherwise = (abs a `div` gcdEuclid a b) * abs b
+
+main :: IO ()
+main = print ((lcmEuclid 0 7, lcmEuclid 7 0, lcmEuclid 0 0))
+```
+
+```text
+(0,0,0)
+```
+
+</HaskellTryIt>
+
+The guard returns before division, especially when the gcd itself is zero.
+
+### Exam question 13: Derive lcm and protect the zero case
+
+Use gcd to calculate lcm for all signed and zero inputs. Explain why the unguarded formula fails at (0,0). (5 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is use and explain. Build on gcd, accept all signed pairs, and give a non-negative lcm with a defined zero case.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template gcd is a positive exact divisor only in the non-zero branch. Divide before multiplying to reduce the intermediate magnitude. Integer avoids bounded overflow, but large arithmetic still has a cost. Termination is inherited from the Euclid helper.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+gcdEuclid :: Integer -> Integer -> Integer
+gcdEuclid a b = go (abs a) (abs b)
+  where
+    go x 0 = x
+    go x y = go y (x `mod` y)
+lcmEuclid :: Integer -> Integer -> Integer
+lcmEuclid a b
+  | a == 0 || b == 0 = 0
+  | otherwise = (abs a `div` gcdEuclid a b) * abs b
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At (6,8), gcd is two and the lcm is 24. At (0,0), an unguarded formula would demand 0 div 0; the zero guard returns safely.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Using a*b directly can give a negative lcm when one input is negative. Missing the zero guard causes divide by zero at two zeros. Use magnitudes and test zero before division.
+
+### Practice with answer
+
+When can lcm equal the larger magnitude?
+
+<details>
+
+<summary>Answer</summary>
+
+For non-zero inputs, when one divides the other; lcm 4 12 is twelve.
+
+</details>
+
+## 11. Count digits using a magnitude
+
+Decimal decomposition writes a non-negative integer as 10*q+r. The quotient q removes the last digit; r is that digit. Use div when only the quotient is needed, and divMod when both pieces are needed. A minus sign is not a digit. Zero has one decimal digit. Normalise before division: signed division on negative one can keep producing negative one.
+
+### Template and reading guide
+
+```text
+countDigits n = go (abs n)
+go k
+  | k < 10 = 1
+  | otherwise = 1 + go (k `div` 10)
+```
+
+In the template k is the remaining magnitude. Below ten it has one digit. Otherwise count one removed digit and recurse on the quotient. For k at least ten the quotient is strictly smaller.
+
+### Worked variation: Several digits including internal zero
+
+<HaskellTryIt>
+
+```haskell
+countDigits :: Integer -> Integer
+countDigits n = go (abs n)
+  where
+    go k
+      | k < 10 = 1
+      | otherwise = 1 + go (k `div` 10)
+
+main :: IO ()
+main = print (countDigits 5072)
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+Quotients 5072,507,50,5 remove three digits. The final one-digit magnitude contributes one.
+
+### Worked variation: Zero has a digit
+
+<HaskellTryIt>
+
+```haskell
+countDigits :: Integer -> Integer
+countDigits n = go (abs n)
+  where
+    go k
+      | k < 10 = 1
+      | otherwise = 1 + go (k `div` 10)
+
+main :: IO ()
+main = print (countDigits 0)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+Zero satisfies the one-digit base immediately. No quotient is needed.
+
+### Worked variation: Negative sign is excluded
+
+<HaskellTryIt>
+
+```haskell
+countDigits :: Integer -> Integer
+countDigits n = go (abs n)
+  where
+    go k
+      | k < 10 = 1
+      | otherwise = 1 + go (k `div` 10)
+
+main :: IO ()
+main = print (countDigits (-100))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+Abs gives 100, then ten, then one. The sign contributes no digit.
+
+### Worked variation: Powers-of-ten boundaries
+
+<HaskellTryIt>
+
+```haskell
+countDigits :: Integer -> Integer
+countDigits n = go (abs n)
+  where
+    go k
+      | k < 10 = 1
+      | otherwise = 1 + go (k `div` 10)
+
+main :: IO ()
+main = print ((countDigits 9, countDigits 10, countDigits 1000))
+```
+
+```text
+(1,2,4)
+```
+
+</HaskellTryIt>
+
+Nine has one digit; ten has two; a thousand has four. Zero remainders still represent digits.
+
+### Exam question 14: Count digits using a magnitude
+
+Design digit count for all integers, with zero counting as one digit and signs excluded. Give a measure. (5 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is design. Count decimal digits of a magnitude, exclude the minus sign and include the single digit zero.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template k is the remaining magnitude. Below ten it has one digit. Otherwise count one removed digit and recurse on the quotient. For k at least ten the quotient is strictly smaller.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+countDigits :: Integer -> Integer
+countDigits n = go (abs n)
+  where
+    go k
+      | k < 10 = 1
+      | otherwise = 1 + go (k `div` 10)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+100 -> 10 -> 1 contributes 1+1+1=3. Zero returns one directly, and negative ten is normalised to ten.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+A zero base returning zero without a public special case miscounts zero. Direct signed div can satisfy (-1) div 10 = -1, so a zero-only base may never be reached. GHC accepts that recursion; use abs and the one-digit base.
+
+### Practice with answer
+
+How many digits does negative ten have?
+
+<details>
+
+<summary>Answer</summary>
+
+Two: the worker sees ten then one, so one recursive contribution plus one base contribution.
+
+</details>
+
+## 12. Sum digits and generalise the base
+
+Digit sum adds removed remainders rather than counting them. Its result at zero is zero, even though the digit count of zero is one. Work on the magnitude so sums are non-negative. A sibling specification uses base b instead of ten: require b at least two, then the same quotient/remainder recurrence works. Base one does not decrease a positive quotient.
+
+### Template and reading guide
+
+```text
+go 0 = 0
+go k = r + go q
+  where (q,r) = k `divMod` base
+```
+
+In the template base chooses the digit system, r is one digit and q the rest. Validate base so q is smaller than positive k. Add r and recurse on q.
+
+### Worked variation: Decimal sum
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print (digitSum 5072)
+```
+
+```text
+14
+```
+
+</HaskellTryIt>
+
+Remainders 2,7,0,5 total fourteen. Each quotient removes one digit.
+
+### Worked variation: Zero is an additive base
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print (digitSum 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The sum contributes no value at the stopping case. Do not copy the count base of one.
+
+### Worked variation: Negative magnitude
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print (digitSum (-908))
+```
+
+```text
+17
+```
+
+</HaskellTryIt>
+
+Abs gives 908; 9+0+8=17.
+
+### Worked variation: Another radix and invalid radix
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print ((digitSumBase 2 13, digitSumBase 1 13))
+```
+
+```text
+(Just 3,Nothing)
+```
+
+</HaskellTryIt>
+
+Thirteen is binary 1101. Pairs (6,1),(3,0),(1,1),(0,1) give sum three. Base one is rejected.
+
+### Worked variation: General-base zero
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print (digitSumBase 2 0)
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+For valid base two, the additive base returns zero.
+
+### Worked variation: General-base signed input
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print (digitSumBase 2 (-6))
+```
+
+```text
+Just 2
+```
+
+</HaskellTryIt>
+
+Abs gives six, binary 110; the digits add to two.
+
+### Worked variation: Another valid radix
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print (digitSumBase 16 255)
+```
+
+```text
+Just 30
+```
+
+</HaskellTryIt>
+
+Base-sixteen digits are fifteen and fifteen, found by pairs (15,15),(0,15). Their numeric digit values add to thirty.
+
+### Worked variation: Decimal power of ten
+
+<HaskellTryIt>
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+
+main :: IO ()
+main = print (digitSum 1000)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+Three zero remainders contribute nothing; the last remaining digit one contributes one.
+
+### Exam question 15: Sum digits and generalise the base
+
+Generalise digit sum to a supplied base, rejecting bases below two and accepting signed values by magnitude. Trace base two at six. (6 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is generalise and trace. Base is a validated parameter; the signed value contributes digits of its magnitude.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template base chooses the digit system, r is one digit and q the rest. Validate base so q is smaller than positive k. Add r and recurse on q.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+digitSum :: Integer -> Integer
+digitSum n = go (abs n)
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` 10
+digitSumBase :: Integer -> Integer -> Maybe Integer
+digitSumBase base n
+  | base < 2 = Nothing
+  | otherwise = Just (go (abs n))
+  where
+    go 0 = 0
+    go k = r + go q
+      where
+        (q,r) = k `divMod` base
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Six in base two gives (3,0), then (1,1), then (0,1), totalling two. Every quotient decreases; zero returns Just 0 for any valid base.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Adding q sums truncated prefixes rather than digits. Recursing on r can repeat a final digit forever. These mistakes type-check. Use r as contribution and q as remaining input; base zero risks divide by zero, so validate it first.
+
+### Practice with answer
+
+Find the decimal digit sum of 1001 and the binary digit sum of eight.
+
+<details>
+
+<summary>Answer</summary>
+
+Two and one. Zeros contribute nothing but still must be removed; eight in binary is 1000.
+
+</details>
+
+## 13. Reverse decimal digits with an accumulator
+
+Digit reversal builds a number in the opposite order. Append each extracted digit to the right of the answer so far: multiply the accumulator by ten then add that digit. Preserve the original sign, define reverse zero as zero, and allow leading zeros of the reversed numeral to disappear. A fixed-width textual reversal is a different specification.
+
+### Template and reading guide
+
+```text
+go remaining acc
+  | remaining == 0 = acc
+  | otherwise = go q (10 * acc + r)
+  where (q,r) = remaining `divMod` 10
+```
+
+In the template remaining is the unprocessed magnitude and acc holds its processed suffix in reverse digit order, interpreted as a number. Start acc at zero, decrease remaining by quotient and restore the sign outside.
+
+### Worked variation: Ordinary reversal
+
+<HaskellTryIt>
+
+```haskell
+reverseDigits :: Integer -> Integer
+reverseDigits n = signum n * go (abs n) 0
+  where
+    go 0 acc = acc
+    go k acc = go q (10 * acc + r)
+      where
+        (q,r) = k `divMod` 10
+
+main :: IO ()
+main = print (reverseDigits 472)
+```
+
+```text
+274
+```
+
+</HaskellTryIt>
+
+States (remaining,acc) are (472,0),(47,2),(4,27),(0,274). Each remainder is appended to acc.
+
+### Worked variation: Zero input
+
+<HaskellTryIt>
+
+```haskell
+reverseDigits :: Integer -> Integer
+reverseDigits n = signum n * go (abs n) 0
+  where
+    go 0 acc = acc
+    go k acc = go q (10 * acc + r)
+      where
+        (q,r) = k `divMod` 10
+
+main :: IO ()
+main = print (reverseDigits 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The worker immediately returns seed zero, and signum zero is zero.
+
+### Worked variation: Preserve sign
+
+<HaskellTryIt>
+
+```haskell
+reverseDigits :: Integer -> Integer
+reverseDigits n = signum n * go (abs n) 0
+  where
+    go 0 acc = acc
+    go k acc = go q (10 * acc + r)
+      where
+        (q,r) = k `divMod` 10
+
+main :: IO ()
+main = print (reverseDigits (-305))
+```
+
+```text
+-503
+```
+
+</HaskellTryIt>
+
+The worker reverses magnitude 305 into 503; signum restores the negative sign once.
+
+### Worked variation: Trailing and internal zeros
+
+<HaskellTryIt>
+
+```haskell
+reverseDigits :: Integer -> Integer
+reverseDigits n = signum n * go (abs n) 0
+  where
+    go 0 acc = acc
+    go k acc = go q (10 * acc + r)
+      where
+        (q,r) = k `divMod` 10
+
+main :: IO ()
+main = print ((reverseDigits 1200, reverseDigits 1002))
+```
+
+```text
+(21,2001)
+```
+
+</HaskellTryIt>
+
+1200 reverses textually to 0021, whose numeric value is 21. Internal zeros in 1002 remain significant in 2001.
+
+### Exam question 16: Reverse decimal digits with an accumulator
+
+Choose an accumulator for signed decimal reversal. Trace 120 and decide whether reversing twice always restores the input. (7 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is choose, trace and decide. Return a signed number, not a fixed-width string, and examine the proposed reversal law.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template remaining is the unprocessed magnitude and acc holds its processed suffix in reverse digit order, interpreted as a number. Start acc at zero, decrease remaining by quotient and restore the sign outside.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+reverseDigits :: Integer -> Integer
+reverseDigits n = signum n * go (abs n) 0
+  where
+    go 0 acc = acc
+    go k acc = go q (10 * acc + r)
+      where
+        (q,r) = k `divMod` 10
+```
+
+</Step>
+
+<Step title="4. Check">
+
+(120,0) -> (12,0) -> (1,2) -> (0,21), returning 21. Reversing 21 gives 12, refuting the proposed universal law with this counterexample.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Using acc+r sums digits rather than appending them. Using q instead of r appends a whole prefix rather than one digit. Both compile; use 10*acc+r. Numeric results cannot retain leading zero width.
+
+### Practice with answer
+
+What happens when reversing 1010 twice?
+
+<details>
+
+<summary>Answer</summary>
+
+It first becomes 101, then stays 101. Numeric reversal lost a leading zero, so the original width cannot be recovered.
+
+</details>
+
+## 14. Two-branch Fibonacci and repeated subproblems
+
+A recurrence defines a value from earlier values. Standard Fibonacci uses seeds F(0)=0 and F(1)=1, then adds F(n-1) and F(n-2). Different seeds with the same recurrence define different sequences. Reject negative indices before branching. Both children decrease, but their descendants overlap: the same index can be recomputed in different branches. Two calls alone do not establish a complexity class; their sizes and local work matter.
+
+### Template and reading guide
+
+```text
+go 0 = firstSeed
+go 1 = secondSeed
+go n = go (n - 1) + go (n - 2)
+```
+
+In the template the seeds determine values and both smaller indices are non-negative for n at least two. For entries, use different bases: C(0)=C(1)=1 and C(n)=1+C(n-1)+C(n-2). The one counts the current entry.
+
+### Worked variation: Ordinary Fibonacci value
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print (fibSafe 6)
+```
+
+```text
+Just 8
+```
+
+</HaskellTryIt>
+
+Values at zero through six are 0,1,1,2,3,5,8. The last adds five and three.
+
+### Worked variation: Both seed indices
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print ((fibSafe 0, fibSafe 1))
+```
+
+```text
+(Just 0,Just 1)
+```
+
+</HaskellTryIt>
+
+Each seed stops directly; neither should reach the two-branch equation.
+
+### Worked variation: Reject negative index
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print (fibSafe (-2))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Validation prevents children moving to increasingly negative indices.
+
+### Worked variation: Change seeds but retain recurrence
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print ((lucasSafe 0, lucasSafe 4))
+```
+
+```text
+(Just 2,Just 7)
+```
+
+</HaskellTryIt>
+
+Lucas values start 2,1,3,4,7. Initial values are part of the specification, not optional decoration.
+
+### Worked variation: Lucas first seed
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print (lucasSafe 1)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The second seed is one, independently of the first seed two.
+
+### Worked variation: Lucas negative index
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print (lucasSafe (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+The sibling sequence uses the same index-domain validation.
+
+### Worked variation: Lucas first recursive index
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print (lucasSafe 2)
+```
+
+```text
+Just 3
+```
+
+</HaskellTryIt>
+
+The recurrence adds seeds one and two, giving three.
+
+### Worked variation: First non-seed Fibonacci index
+
+<HaskellTryIt>
+
+```haskell
+fibSafe :: Integer -> Maybe Integer
+fibSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 0
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+lucasSafe :: Integer -> Maybe Integer
+lucasSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n)
+  where
+    go 0 = 2
+    go 1 = 1
+    go k = go (k - 1) + go (k - 2)
+
+main :: IO ()
+main = print (fibSafe 2)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+The two valid base calls return one and zero; their sum is one.
+
+### Exam question 17: Two-branch Fibonacci and repeated subproblems
+
+Derive the number of entries for the direct Fibonacci worker at index four, including base entries. Explain a repeated subproblem. (6 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is derive and explain. Count entries including base calls; this is distinct from computing the Fibonacci value.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template the seeds determine values and both smaller indices are non-negative for n at least two. For entries, use different bases: C(0)=C(1)=1 and C(n)=1+C(n-1)+C(n-2). The one counts the current entry.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+-- Precondition: n is non-negative.
+fibCalls :: Integer -> Integer
+fibCalls 0 = 1
+fibCalls 1 = 1
+fibCalls n = 1 + fibCalls (n - 1) + fibCalls (n - 2)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+C(2)=3, C(3)=5, C(4)=9. Index two occurs inside the index-three branch and again as the other direct child of index four. Each path decreases its index but does overlapping work.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+A single base zero leaves index one reaching negative one. Seeds one and one shift the sequence. GHC need not diagnose these semantic faults. Keep both specified seeds and validate negatives.
+
+### Practice with answer
+
+How many direct worker entries are used at index five? Is that its Fibonacci value?
+
+<details>
+
+<summary>Answer</summary>
+
+Fifteen entries: 1+9+5. The value F(5) is five; result and work are different quantities.
+
+</details>
+
+## 15. Fibonacci with adjacent-value accumulators
+
+Carry two adjacent values instead of recomputing two branches. After k transitions they are F(k) and F(k+1). Advancing replaces (a,b) with (b,a+b), with both expressions using the old state. A remaining counter decreases to zero. This is one recursive call with several changing arguments, not two branches. Tail-call shape does not force arithmetic in lazy Haskell.
+
+### Template and reading guide
+
+```text
+go 0 a b = a
+go remaining a b = go (remaining - 1) b (a + b)
+fib n = go n 0 1
+```
+
+In the template a is the current value, b the next, and remaining is the number of transitions left. Seed with (0,1) and return a after n transitions. The counter is the decreasing measure.
+
+### Worked variation: Adjacent values for an ordinary index
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print (fibAccSafe 6)
+```
+
+```text
+Just 8
+```
+
+</HaskellTryIt>
+
+Pairs are (0,1),(1,1),(1,2),(2,3),(3,5),(5,8),(8,13). After six transitions the first component is eight.
+
+### Worked variation: Zero and one transitions
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print ((fibAccSafe 0, fibAccSafe 1))
+```
+
+```text
+(Just 0,Just 1)
+```
+
+</HaskellTryIt>
+
+Zero returns the first seed directly; one transition changes (0,1) to (1,1) and returns one.
+
+### Worked variation: Negative index policy
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print (fibAccSafe (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Without validation the remaining counter would decrement away from zero.
+
+### Worked variation: Change seeds for a sibling sequence
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print ((lucasAccSafe 0, lucasAccSafe 4))
+```
+
+```text
+(Just 2,Just 7)
+```
+
+</HaskellTryIt>
+
+Seeds (2,1) progress to (1,3),(3,4),(4,7),(7,11); the same state transition supports Lucas values.
+
+### Worked variation: Lucas accumulator first transition
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print (lucasAccSafe 1)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+One transition from (2,1) gives (1,3), so return one.
+
+### Worked variation: Lucas accumulator negative index
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print (lucasAccSafe (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Validation precedes the countdown for either seed choice.
+
+### Worked variation: Lucas accumulator zero transitions
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print (lucasAccSafe 0)
+```
+
+```text
+Just 2
+```
+
+</HaskellTryIt>
+
+No transition means return the first seed two.
+
+### Worked variation: First combined accumulator value
+
+<HaskellTryIt>
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+
+main :: IO ()
+main = print (fibAccSafe 2)
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+From (0,1) advance to (1,1), then (1,2). Return the first component one.
+
+### Exam question 18: Fibonacci with adjacent-value accumulators
+
+Design accumulator Fibonacci, trace index four, and explain what a state trace does not prove about evaluation. (7 marks)
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is design and trace. Use adjacent sequence values and distinguish a mathematical state trace from an evaluation-order claim.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the template a is the current value, b the next, and remaining is the number of transitions left. Seed with (0,1) and return a after n transitions. The counter is the decreasing measure.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+fibAccSafe :: Integer -> Maybe Integer
+fibAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 0 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+lucasAccSafe :: Integer -> Maybe Integer
+lucasAccSafe n
+  | n < 0 = Nothing
+  | otherwise = Just (go n 2 1)
+  where
+    go 0 a b = a
+    go k a b = go (k - 1) b (a + b)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+go 4 0 1 -> go 3 1 1 -> go 2 1 2 -> go 1 2 3 -> go 0 3 5 -> 3. These are mathematical state values. Actual additions may remain unevaluated until demanded.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Returning b gives F(n+1), already wrong at zero. Transition (a+b,b) loses adjacency. A tail call also does not guarantee constant space: accumulator expressions may remain as thunks, which are expressions waiting for evaluation.
+
+### Practice with answer
+
+How many accumulator worker entries are used at index five?
+
+<details>
+
+<summary>Answer</summary>
+
+Six including the zero-counter entry: five transitions plus the base. The direct worker uses fifteen. This counts entries, not allocation or large-integer arithmetic cost.
+
+</details>
+
+## 16. Compare the designs
+
+| Shape | What changes | Decreasing measure |
+| --- | --- | --- |
+| Countdown | One count | Remaining terms or factors |
+| Ascending range | Lower bound rises | Number of integers left |
+| Multiplication | Normalise sign then count | Absolute multiplier |
+| Squaring | Exponent halves | Non-negative exponent |
+| Euclid | Both inputs change | Normalised second input |
+| Decimal algorithm | Quotient removes a digit | Remaining magnitude |
+| Direct Fibonacci | Two smaller indices | Index on each path |
+| Accumulator Fibonacci | Counter and adjacent values | Remaining transitions |
+
+A guard, pattern, if or case can express the same choice. Use [Writing Recursive Functions](/docs/sem3/csi243/05-recursion/notes/writing-recursive-functions) for the general conversions. Range conditions often suit guards; literal seeds suit patterns. Changing syntax must preserve the contract.
+
+For correctness for all valid inputs, use [Proofs of Programs I](/docs/sem3/csi243/10-reasoning-revision/notes/proofs-of-programs-i); finite checks alone do not prove a universal claim. Cost derivations for repeated factorials, Fibonacci and halving belong to [Complexity by Recurrence](/docs/sem3/csi243/10-reasoning-revision/notes/complexity-by-recurrence). For pending accumulator expressions see [Lazy Evaluation](/docs/sem3/csi243/10-reasoning-revision/notes/lazy-evaluation).
+
+The Test1 Fibonacci function returns Either String Integer. Its applicative expression `((+) <$> fibonacci (n - 1)) <*> fibonacci (n - 2)` combines two successful smaller results while retaining failure. It still has the same overlapping recursive subproblems; it is not an accumulator optimisation. See [Functor and Applicative Patterns](/docs/sem3/csi243/09-polymorphism/notes/functor-and-applicative-patterns) for its types and first-failure behaviour.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+State the domain and boundary policy first. Derive the missing term or state transition. Name a non-negative measure that decreases on every recursive path. Use the additive or multiplicative identity from the specification. Accumulators need an invariant and the correct returned component. Test a base, an ordinary case, a boundary and each signed or invalid partition. A type-correct function can still loop or give a wrong answer.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="How do inclusive and exclusive factorial sums differ at zero?">
+The inclusive sum contains 0! and is one; the exclusive sum has no terms and is zero.
+</CheckQuestion>
+
+<CheckQuestion question="Why can an increasing lower bound still be progress?">
+The number of terms remaining before a fixed upper bound decreases by one.
+</CheckQuestion>
+
+<CheckQuestion question="Why normalise signs before Euclid and decimal processing?">
+The quotient and remainder bounds in these termination arguments require non-negative worker inputs.
+</CheckQuestion>
+
+<CheckQuestion question="What state does accumulator Fibonacci carry?">
+A remaining counter and adjacent sequence values. Advance (a,b) to (b,a+b) and return a at counter zero.
+</CheckQuestion>
+
+<CheckQuestion question="Does tail recursion guarantee constant space in lazy Haskell?">
+No. Accumulator arithmetic can remain unevaluated, and large Integer results themselves occupy growing space.
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Numeric Recursion Exam Practice](/docs/sem3/csi243/05-recursion/notes/numeric-recursion-exam-practice).

@@ -1,12 +1,21 @@
+import { explainJavaFailure, prepareJava, topLevelTypeNames } from './compat';
+
 export type JavaOutputLine = { stream: 'out' | 'err'; text: string };
 
 export type JavaRunResult = {
   ok: boolean;
   lines: JavaOutputLine[];
   diagnostics: string[];
+  /** Plain-language explanations: what was changed to make the program run, and why it failed. */
+  notes?: string[];
   error?: string;
   elapsedMs: number;
   timedOut?: boolean;
+};
+
+export type JavaRunOptions = {
+  /** What the program reads from System.in (the Input box). */
+  stdin?: string;
 };
 
 type CompilerMessage = {
@@ -22,18 +31,21 @@ type CompilerMessage = {
   text?: string;
 };
 
-const MAX_OUTPUT_LINES = 500;
-const MAX_OUTPUT_CHARACTERS = 64 * 1024;
+const MAX_OUTPUT_LINES = 2000;
+const MAX_OUTPUT_CHARACTERS = 256 * 1024;
 
 let compilerWorker: Worker | undefined;
 let compilerReady: Promise<Worker> | undefined;
 let requestId = 1;
 let queue: Promise<unknown> = Promise.resolve();
+/** The types the last program declared. The compiler keeps the classes of earlier programs. */
+let previousTypes: string[] = [];
 
 function resetCompiler() {
   compilerWorker?.terminate();
   compilerWorker = undefined;
   compilerReady = undefined;
+  previousTypes = [];
 }
 
 function waitForMessage(
@@ -119,7 +131,7 @@ function formatDiagnostic(message: CompilerMessage) {
 function execute(script: Int8Array | ArrayBuffer, onStatus?: (status: string) => void) {
   return new Promise<{ lines: JavaOutputLine[]; error?: string; timedOut?: boolean }>((resolve) => {
     onStatus?.('Running in the browser…');
-    const worker = new Worker('/java-playground/executor-worker.js?v=4', { type: 'module' });
+    const worker = new Worker('/java-playground/executor-worker.js?v=5', { type: 'module' });
     const lines: JavaOutputLine[] = [];
     let outputCharacters = 0;
     let settled = false;
@@ -140,7 +152,7 @@ function execute(script: Int8Array | ArrayBuffer, onStatus?: (status: string) =>
         const text = message.text || '';
         outputCharacters += text.length + 1;
         if (lines.length >= MAX_OUTPUT_LINES || outputCharacters > MAX_OUTPUT_CHARACTERS) {
-          finish({ error: 'Output limit exceeded (500 lines or 64 KiB).' });
+          finish({ error: `Output limit exceeded (${MAX_OUTPUT_LINES} lines or ${MAX_OUTPUT_CHARACTERS / 1024} KiB).` });
           return;
         }
         lines.push({ stream: message.stream, text });
@@ -156,40 +168,78 @@ function execute(script: Int8Array | ArrayBuffer, onStatus?: (status: string) =>
   });
 }
 
-async function runJavaNow(code: string, onStatus?: (status: string) => void): Promise<JavaRunResult> {
-  const started = performance.now();
+type Compiled = { script?: Int8Array | ArrayBuffer; diagnostics: string[]; error?: string };
+
+async function compile(source: string, onStatus?: (status: string) => void): Promise<Compiled> {
   const diagnostics: string[] = [];
+  const worker = await getCompiler(onStatus);
+  onStatus?.('Compiling Main.java…');
+  const id = String(requestId++);
+  const completed = waitForMessage(
+    worker,
+    (message) => message.id === id && (message.command === 'compilation-complete' || message.command === 'error'),
+    (message) => {
+      if (message.id === id && (message.command === 'compiler-diagnostic' || message.command === 'diagnostic')) {
+        diagnostics.push(formatDiagnostic(message));
+      }
+    },
+    60_000,
+  );
+  worker.postMessage({ id, command: 'compile', text: source });
+  const response = await completed;
+
+  if (response.command === 'error') return { diagnostics, error: response.text || 'Compilation failed.' };
+  if (response.status !== 'successful' || !response.script) {
+    return { diagnostics, error: diagnostics.length ? undefined : 'Compilation failed.' };
+  }
+  return { script: response.script, diagnostics };
+}
+
+async function runJavaNow(code: string, onStatus?: (status: string) => void, options: JavaRunOptions = {}): Promise<JavaRunResult> {
+  const started = performance.now();
+  const prepared = prepareJava(code, options.stdin ?? '');
+  const notes = [...prepared.notes];
 
   try {
-    const worker = await getCompiler(onStatus);
-    onStatus?.('Compiling Main.java…');
-    const id = String(requestId++);
-    const completed = waitForMessage(
-      worker,
-      (message) => message.id === id && (message.command === 'compilation-complete' || message.command === 'error'),
-      (message) => {
-        if (message.id === id && (message.command === 'compiler-diagnostic' || message.command === 'diagnostic')) {
-          diagnostics.push(formatDiagnostic(message));
-        }
-      },
-      60_000,
-    );
-    worker.postMessage({ id, command: 'compile', text: code });
-    const response = await completed;
+    // The compiler keeps the classes of earlier programs. A type the last program had and this one lacks would stay
+    // behind and could clash (two classes with a main method), so start from a fresh compiler when that happens.
+    const types = topLevelTypeNames(prepared.code);
+    if (previousTypes.some((name) => !types.includes(name))) resetCompiler();
 
-    if (response.command === 'error') {
-      return { ok: false, lines: [], diagnostics, error: response.text || 'Compilation failed.', elapsedMs: performance.now() - started };
+    let compiled = await compile(prepared.code, onStatus);
+    const clash = (result: Compiled) => /Multiple main methods found/.test(`${result.diagnostics.join('\n')}\n${result.error ?? ''}`);
+    if (!compiled.script && clash(compiled)) {
+      resetCompiler();
+      compiled = await compile(prepared.code, onStatus);
     }
-    if (response.status !== 'successful' || !response.script) {
-      return { ok: false, lines: [], diagnostics, error: diagnostics.length ? undefined : 'Compilation failed.', elapsedMs: performance.now() - started };
+    previousTypes = types;
+
+    if (!compiled.script) {
+      const hints = explainJavaFailure(compiled.diagnostics, compiled.error, prepared.code);
+      return {
+        ok: false,
+        lines: [],
+        diagnostics: compiled.diagnostics,
+        notes: [...notes, ...hints],
+        error: compiled.error,
+        elapsedMs: performance.now() - started,
+      };
     }
 
-    const execution = await execute(response.script, onStatus);
+    const execution = await execute(compiled.script, onStatus);
+    let error = execution.error;
+    if (error) {
+      const hints = explainJavaFailure([], error, prepared.code);
+      // A JavaScript stack trace means nothing to a student; the explanation replaces it.
+      if (hints.length && /RangeError|RuntimeError|WebAssembly|at .*\(.*:\d+:\d+\)/.test(error)) error = hints.join('\n');
+      else notes.push(...hints);
+    }
     return {
-      ok: !execution.error,
+      ok: !error,
       lines: execution.lines,
-      diagnostics,
-      error: execution.error,
+      diagnostics: compiled.diagnostics,
+      notes,
+      error,
       timedOut: execution.timedOut,
       elapsedMs: performance.now() - started,
     };
@@ -198,15 +248,16 @@ async function runJavaNow(code: string, onStatus?: (status: string) => void): Pr
     return {
       ok: false,
       lines: [],
-      diagnostics,
+      diagnostics: [],
+      notes,
       error: `Java compiler worker failed: ${error instanceof Error ? error.message : String(error)}`,
       elapsedMs: performance.now() - started,
     };
   }
 }
 
-export function runJava(code: string, onStatus?: (status: string) => void) {
-  const task = queue.then(() => runJavaNow(code, onStatus), () => runJavaNow(code, onStatus));
+export function runJava(code: string, onStatus?: (status: string) => void, options?: JavaRunOptions) {
+  const task = queue.then(() => runJavaNow(code, onStatus, options), () => runJavaNow(code, onStatus, options));
   queue = task.then(() => undefined, () => undefined);
   return task;
 }

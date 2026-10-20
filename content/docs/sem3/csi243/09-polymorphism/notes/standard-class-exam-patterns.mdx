@@ -1,0 +1,3490 @@
+---
+title: "Standard Class Exam Patterns"
+description: "Apply ordering laws, contextual text conversion, enumeration boundaries and the full numeric superclass hierarchy in exam answers."
+---
+
+This lesson extends [The Standard Type Classes](/docs/sem3/csi243/09-polymorphism/notes/standard-classes) and [Type Classes and Constraints](/docs/sem3/csi243/09-polymorphism/notes/type-classes). Read [Eq and Class Constraints](/docs/sem3/csi243/09-polymorphism/notes/eq-and-class-constraints) for equality, instance writing and deriving; those constructions are prerequisites here. We now decide what methods permit, what laws require, and where a type-correct call can still fail.
+
+<LearningObjectives items={[
+  'Check order laws with explicit assumptions and trace lexicographic ties.',
+  'Find the context selecting Read and distinguish ambiguity from malformed text.',
+  'Use Enum methods without crossing endpoints and separate Enum from Bounded.',
+  'Derive numeric constraints using complete superclass relationships.',
+  'Distinguish compiler checks, finite tests and mathematical laws.'
+]} />
+
+## 1. Order laws and compiler checks
+
+An order places values before, equal to, or after each other. A lawful total order is reflexive, total, antisymmetric and transitive. Antisymmetry says that values ordered both ways must be equal. Consistency connects compare and the relational methods to Eq. Ord has Eq as a superclass, but GHC checks method types and superclass availability, not these behavioural laws.
+
+State the domain: use defined values whose comparisons terminate and whose component instances obey the laws. A derived instance delegates to fields; it cannot repair an unlawful field instance. Double NaN breaks reflexive equality and ordinary ordering. Undefined values and some infinite structures may not yield a comparison. These exceptions also affect derived wrappers.
+
+**Template.** x, y and z range over the stated domain. Each implication is tested by negating its premises or accepting its conclusion. The laws concern results, not types.
+
+```text
+reflexive: x <= x
+total: x <= y || y <= x
+antisymmetric: if x <= y and y <= x, then x == y
+transitive: if x <= y and y <= z, then x <= z
+consistent: compare x y == EQ iff x == y
+consistent: compare x y == LT iff x < y
+consistent: compare x y == GT iff x > y
+```
+
+### Worked variation: Increasing integers
+
+
+<HaskellTryIt>
+
+```haskell
+laws :: Ord a => a -> a -> a -> [Bool]
+laws x y z =
+  [ x <= x
+  , x <= y || y <= x
+  , not (x <= y && y <= x) || x == y
+  , not (x <= y && y <= z) || x <= z
+  , (compare x y == EQ) == (x == y)
+  , (compare x y == LT) == (x < y)
+  , (compare x y == GT) == (x > y)
+  ]
+
+main :: IO ()
+main = print (laws (1 :: Int) 2 3)
+```
+
+```text
+[True,True,True,True,True,True,True]
+```
+
+</HaskellTryIt>
+
+The forward comparisons hold. The reverse premise of antisymmetry is false; transitivity concludes 1 &lt;= 3. Compare gives LT, agreeing with equality and both strict relations.
+
+### Worked variation: All values tie
+
+
+<HaskellTryIt>
+
+```haskell
+laws :: Ord a => a -> a -> a -> [Bool]
+laws x y z =
+  [ x <= x
+  , x <= y || y <= x
+  , not (x <= y && y <= x) || x == y
+  , not (x <= y && y <= z) || x <= z
+  , (compare x y == EQ) == (x == y)
+  , (compare x y == LT) == (x < y)
+  , (compare x y == GT) == (x > y)
+  ]
+
+main :: IO ()
+main = print (laws True True True)
+```
+
+```text
+[True,True,True,True,True,True,True]
+```
+
+</HaskellTryIt>
+
+Both order directions hold, and equality confirms antisymmetry. Compare is EQ; neither strict comparison holds.
+
+### Worked variation: Descending characters
+
+
+<HaskellTryIt>
+
+```haskell
+laws :: Ord a => a -> a -> a -> [Bool]
+laws x y z =
+  [ x <= x
+  , x <= y || y <= x
+  , not (x <= y && y <= x) || x == y
+  , not (x <= y && y <= z) || x <= z
+  , (compare x y == EQ) == (x == y)
+  , (compare x y == LT) == (x < y)
+  , (compare x y == GT) == (x > y)
+  ]
+
+main :: IO ()
+main = print (laws 'z' 'm' 'a')
+```
+
+```text
+[True,True,True,True,True,True,True]
+```
+
+</HaskellTryIt>
+
+The transitivity premises are false, so the implication holds. Reversing the first comparison supplies totality. Compare is GT, consistent with the strict relation.
+
+
+The following checks contrast two policies without writing another instance: compare identifiers only versus test full tuple equality. A lawful instance pair must agree on equality; either use the same key for both or consistently compare the full structure.
+
+### Worked variation: Equal values agree
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let x = (7 :: Int,"Ada")
+  let y = (7 :: Int,"Ada")
+  print (compare (fst x) (fst y) == EQ, x == y)
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+Both key comparison and full tuple equality agree when every field agrees.
+
+### Worked variation: Tied keys hide a payload difference
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let x = (7 :: Int,"Ada")
+  let y = (7 :: Int,"Bo")
+  print (compare (fst x) (fst y) == EQ, x == y)
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+Both identifiers are 7, so comparing identifiers yields EQ. Full tuple equality also checks names and is False. If these two policies were installed as one type's Ord and Eq, consistency would fail.
+
+### Worked variation: Different keys with equal payloads
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let x = (7 :: Int,"Ada")
+  let y = (8 :: Int,"Ada")
+  print (compare (fst x) (fst y) == EQ, x == y)
+```
+
+```text
+(False,False)
+```
+
+</HaskellTryIt>
+
+Identifiers differ, so both tests reject equality. This passing case does not repair the previous counterexample.
+
+### Exam question 1: order laws and compiler checks
+
+Explain what Ord guarantees at compile time and name four order laws. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "explain". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate method availability from propositions about results.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Ord supplies its methods and requires Eq. Intended laws are reflexivity, totality, antisymmetry and transitivity, together with agreement among equality, compare and relational methods. These are programmer obligations on the stated domain.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Int values 1, 2, 3 satisfy the transitivity premises and conclusion. This checks the interpretation, not every triple.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Treating a passing finite test as a proof is a reasoning error, with no GHC diagnostic. Repair it by proving every law on the stated domain. Compilation alone cannot certify laws.
+
+**Practice.** Why do passing checks on three Integer triples not prove a universal law?
+
+<details>
+<summary>Answer</summary>
+
+Integer has infinitely many triples; the finite sample leaves others unchecked.
+
+</details>
+
+## 2. compare: methods without arithmetic
+
+compare returns LT, EQ or GT, not a numeric difference. The two arguments have the same type. Ord permits these methods without Num. For a lawful instance, min and max return a value equal to one argument. When distinct representations compare equal, do not assume a universal promise about which representation survives a tie.
+
+**Template.** a is the shared operand type; x and y are the two values. compare returns Ordering, while min and max return a value of type a.
+
+```text
+compare :: Ord a => a -> a -> Ordering
+case compare x y of LT -> before; EQ -> tied; GT -> after
+```
+
+### Worked variation: Unequal integers
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare (3 :: Int) 7)
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+3 precedes 7, so the selected result follows the method's definition.
+
+### Worked variation: A character tie
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare 'q' 'q')
+```
+
+```text
+EQ
+```
+
+</HaskellTryIt>
+
+Both arguments are q. Equality gives EQ for compare and a q value for either extremum.
+
+### Worked variation: Reversed string order
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare "zebra" "ant")
+```
+
+```text
+GT
+```
+
+</HaskellTryIt>
+
+The first characters decide: z follows a. No later character changes that decision.
+
+
+### Exam question 2: compare: methods without arithmetic
+
+State the most general type of compare and evaluate it on False and True. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the method signature and the Bool order False before True.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`compare :: Ord a => a -> a -> Ordering`. The result is `LT`. Neither arithmetic nor Show is needed in this method's type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The arguments are Bool; the pure comparison needs no numeric conversion.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `compare True (1 :: Int)` mixes operand types: GHC reports "Couldn't match". Use two values of one type. Subtracting arguments is not a generic replacement for compare: Bool and String have Ord without Num.
+
+**Practice.** Predict `compare False True`.
+
+<details>
+<summary>Answer</summary>
+
+LT
+
+</details>
+
+## 3. min: methods without arithmetic
+
+min returns the smaller value. The two arguments have the same type. Ord permits these methods without Num. For a lawful instance, min and max return a value equal to one argument. When distinct representations compare equal, do not assume a universal promise about which representation survives a tie.
+
+**Template.** a is the shared operand type; x and y are the two values. compare returns Ordering, while min and max return a value of type a.
+
+```text
+min :: Ord a => a -> a -> a
+min x y -- compare x and y using their Ord instance
+```
+
+### Worked variation: Unequal integers
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (min (3 :: Int) 7)
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+3 precedes 7, so the selected result follows the method's definition.
+
+### Worked variation: A character tie
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (min 'q' 'q')
+```
+
+```text
+'q'
+```
+
+</HaskellTryIt>
+
+Both arguments are q. Equality gives EQ for compare and a q value for either extremum.
+
+### Worked variation: Reversed string order
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (min "zebra" "ant")
+```
+
+```text
+"ant"
+```
+
+</HaskellTryIt>
+
+The first characters decide: z follows a. No later character changes that decision.
+
+
+### Exam question 3: min: methods without arithmetic
+
+State the most general type of min and evaluate it on False and True. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the method signature and the Bool order False before True.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`min :: Ord a => a -> a -> a`. The result is `False`. Neither arithmetic nor Show is needed in this method's type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The arguments are Bool; the pure comparison needs no numeric conversion.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `min True (1 :: Int)` mixes operand types: GHC reports "Couldn't match". Use two values of one type. Subtracting arguments is not a generic replacement for compare: Bool and String have Ord without Num.
+
+**Practice.** Predict `min False True`.
+
+<details>
+<summary>Answer</summary>
+
+False
+
+</details>
+
+## 4. max: methods without arithmetic
+
+max returns the larger value. The two arguments have the same type. Ord permits these methods without Num. For a lawful instance, min and max return a value equal to one argument. When distinct representations compare equal, do not assume a universal promise about which representation survives a tie.
+
+**Template.** a is the shared operand type; x and y are the two values. compare returns Ordering, while min and max return a value of type a.
+
+```text
+max :: Ord a => a -> a -> a
+max x y -- compare x and y using their Ord instance
+```
+
+### Worked variation: Unequal integers
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (max (3 :: Int) 7)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+3 precedes 7, so the selected result follows the method's definition.
+
+### Worked variation: A character tie
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (max 'q' 'q')
+```
+
+```text
+'q'
+```
+
+</HaskellTryIt>
+
+Both arguments are q. Equality gives EQ for compare and a q value for either extremum.
+
+### Worked variation: Reversed string order
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (max "zebra" "ant")
+```
+
+```text
+"zebra"
+```
+
+</HaskellTryIt>
+
+The first characters decide: z follows a. No later character changes that decision.
+
+
+### Exam question 4: max: methods without arithmetic
+
+State the most general type of max and evaluate it on False and True. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the method signature and the Bool order False before True.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`max :: Ord a => a -> a -> a`. The result is `True`. Neither arithmetic nor Show is needed in this method's type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The arguments are Bool; the pure comparison needs no numeric conversion.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `max True (1 :: Int)` mixes operand types: GHC reports "Couldn't match". Use two values of one type. Subtracting arguments is not a generic replacement for compare: Bool and String have Ord without Num.
+
+**Practice.** Predict `max False True`.
+
+<details>
+<summary>Answer</summary>
+
+True
+
+</details>
+
+## 5. Lexicographic decisions and ties
+
+Lexicographic means compare corresponding components from the left and stop at the first difference. For lists, a proper prefix precedes the longer list. Tuples move to the next field only after a tie. This is neither length-first ordering nor adding field comparisons. Comparing projected keys can deliberately change a question's comparison policy without writing an instance.
+
+**Template.** key1 and key2 extract the first and second comparison fields. Compare key1 first and use key2 only for a tie.
+
+```text
+compare (key1 x, key2 x) (key1 y, key2 y)
+compare [x1,x2] [y1,y2] -- first unequal position decides
+```
+
+### Worked variation: A proper prefix
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare ([2] :: [Int]) [2,0])
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+The first elements tie, then the left list ends. A proper prefix precedes the longer list.
+
+### Worked variation: A final tuple field decides
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare (4 :: Int,"Ada",False) (4,"Ada",True))
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+The numbers and names tie. False precedes True, so the final Bool decides.
+
+### Worked variation: An early field dominates
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (compare (2 :: Int,"z") (3,"a"))
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+2 precedes 3. The later string cannot reverse the earlier decision.
+
+
+### Exam question 5: lexicographic decisions and ties
+
+Evaluate compare (2,"bb") (2,"ba"), assuming Int first fields. Explain every tie. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "evaluate". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Compare the number, then characters in the string.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+2 ties 2. The first b ties b, but the next b follows a. The result is GT.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Changing the second number to 3 would give LT immediately.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Predicting that [9] precedes [1,2] because it is shorter is a wrong answer, not a compiler error. The heads decide GT. Repair by marking the first differing position.
+
+**Practice.** Predict compare "ab" "aba" and compare (1,9) (2,0), with Int numbers.
+
+<details>
+<summary>Answer</summary>
+
+Both are LT. A proper prefix ends first; the first tuple field decides respectively.
+
+</details>
+
+## 6. Show and Read round trips
+
+Show produces Haskell-style text. Read consumes text using the instance selected by its result type. These are independent classes with no superclass link. The intended value round trip is read (show x) at x's type, with compatible instances and a readable representation. It does not imply show (read s) reproduces the spelling or whitespace of s. Print on a String adds quotes and escapes.
+
+A custom Show may not be readable. Equality cannot certify a NaN round trip because NaN is unequal to itself. Partial values may not have a complete printable representation. Do not infer a universal inverse law merely from the two class names.
+
+**Template.** value is the original value; TargetType must be its type. Show produces String, and the target selects the Read instance.
+
+```text
+show :: Show a => a -> String
+read :: Read a => String -> a
+read (show value) :: TargetType
+```
+
+### Worked variation: A negative integer
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (read (show (-12 :: Integer)) :: Integer)
+```
+
+```text
+-12
+```
+
+</HaskellTryIt>
+
+Show produces the text -12; Integer Read reconstructs the same number.
+
+### Worked variation: A list of constructors
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (read (show ([True,False] :: [Bool])) :: [Bool])
+```
+
+```text
+[True,False]
+```
+
+</HaskellTryIt>
+
+The brackets, comma and constructor spellings are readable list syntax.
+
+### Worked variation: A string with a space
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (read (show "a b") :: String)
+```
+
+```text
+"a b"
+```
+
+</HaskellTryIt>
+
+Show adds the Haskell syntax quotes needed by Read String. Print quotes the reconstructed String again.
+
+
+### Exam question 6: show and read round trips
+
+Explain why a value can round-trip without the original text round-tripping. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "explain". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Distinguish text-to-value and value-to-text directions.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Compatible Read and Show can reconstruct the same value at a fixed type. Different strings can denote that value; Show selects a representation. Reading " 0007 " as Int gives 7; showing it gives "7".
+
+  </Step>
+
+  <Step title="4. Check">
+
+The value is preserved while formatting changes.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `read "hello" :: String` is malformed Haskell string syntax. A readable String needs its syntax quotes included in the input. A demanded malformed read fails with key phrase "no parse". For ordinary unquoted text, keep the original String.
+
+**Practice.** Does show (read " 0007 " :: Int) preserve the spaces and leading zeroes?
+
+<details>
+<summary>Answer</summary>
+
+No. It is "7": value reconstruction need not preserve formatting.
+
+</details>
+
+## 7. Read selected by context
+
+The result type chooses the Read instance. It can come from an expression annotation, a typed consuming operand, a function result signature, or a containing structure. Print alone adds Show without choosing a particular Read instance. Numeric defaulting resolves some numeric constraints; it does not mean every ambiguous read becomes Integer.
+
+**Template.** text is a String, T is the chosen result type, and consumer is a function whose input fixes T. The result signature of f can provide the same context.
+
+```text
+read text :: T
+consumer (read text) -- consumer :: T -> Result
+f :: String -> T
+f s = read s
+```
+
+### Worked variation: Expression annotation
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (read "18" :: Integer)
+```
+
+```text
+18
+```
+
+</HaskellTryIt>
+
+The annotation selects Integer Read.
+
+### Worked variation: A typed arithmetic operand
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (read "18" + (2 :: Int))
+```
+
+```text
+20
+```
+
+</HaskellTryIt>
+
+Both + operands have the same type; the second fixes Int, so read parses 18 at Int and the sum is 20.
+
+### Worked variation: Function result signature
+
+
+<HaskellTryIt>
+
+```haskell
+decode :: String -> Bool
+decode s = read s
+
+main :: IO ()
+main = print (decode "False")
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+The signature fixes the result to Bool, so the text is parsed using Read Bool.
+
+### Worked variation: A surrounding list annotation
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([read "3",read "4"] :: [Double])
+```
+
+```text
+[3.0,4.0]
+```
+
+</HaskellTryIt>
+
+The list annotation fixes both elements to Double. Print includes decimal points.
+
+
+### Exam question 7: read selected by context
+
+Give four ways to fix a read result type. Why is print alone insufficient? (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "give". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Trace requirements from the consumer back to read.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+Use an expression annotation, a typed consumer such as not, a containing list annotation, or a function result signature. Print only asks for Show a, leaving multiple Read a types.
+
+  </Step>
+
+  <Step title="4. Check">
+
+not (read "True") forces Bool and evaluates to False.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** The following complete program is ambiguous:
+
+```haskell
+-- Rejected: Read and Show do not select one concrete result type.
+main :: IO ()
+main = print (read "18")
+```
+
+Key phrase: "Ambiguous type variable". Annotate the read result. The shape of the input text is not a type annotation.
+
+**Practice.** Where is the type selected in not (read "True")?
+
+<details>
+<summary>Answer</summary>
+
+not requires Bool, so read must return Bool. The whole expression returns False.
+
+</details>
+
+## 8. Malformed input and complete consumption
+
+A fixed result type prevents ambiguity but does not make malformed text valid. Read expects one complete readable value, permitting surrounding whitespace. Trailing non-whitespace causes failure. Use the already taught readMaybe when failure is ordinary data; here the question is which class and syntax the parser needs, not how to build another safe parser.
+
+**Template.** text is the entire input String. T is the selected parsed type; Maybe T distinguishes a successful result from failure.
+
+```
+readMaybe text :: Maybe T
+-- import Text.Read (readMaybe)
+-- require a unique complete parse at the chosen result type
+```
+
+### Worked variation: Wrong constructor spelling
+
+
+<HaskellTryIt>
+
+```haskell
+import Text.Read (readMaybe)
+
+main :: IO ()
+main = print (readMaybe "true" :: Maybe Bool)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Bool constructors are True and False, with capitals. Lower-case true is not accepted.
+
+### Worked variation: Trailing text
+
+
+<HaskellTryIt>
+
+```haskell
+import Text.Read (readMaybe)
+
+main :: IO ()
+main = print (readMaybe "12 apples" :: Maybe Int)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Although 12 is an integer representation, apples remains, so a complete parse fails.
+
+### Worked variation: Surrounding whitespace
+
+
+<HaskellTryIt>
+
+```haskell
+import Text.Read (readMaybe)
+
+main :: IO ()
+main = print (readMaybe " 12 " :: Maybe Int)
+```
+
+```text
+Just 12
+```
+
+</HaskellTryIt>
+
+Whitespace may surround a valid integer, giving a unique complete parse.
+
+
+### Exam question 8: malformed input and complete consumption
+
+Diagnose read "False extra" :: Bool. Would another annotation repair it? (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "diagnose". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate result selection from complete parsing.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The type is already Bool. The trailing word prevents complete parsing, so demanding the result fails with "no parse". Remove extra or use readMaybe to represent failure.
+
+  </Step>
+
+  <Step title="4. Check">
+
+readMaybe "False" :: Maybe Bool gives Just False; the version with extra gives Nothing.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** This type-correct program fails when the read is demanded:
+
+```haskell
+-- Intentionally fails at run time: key phrase "no parse".
+main :: IO ()
+main = print (read "12 apples" :: Int)
+```
+
+Another annotation cannot repair the text. Use valid syntax or readMaybe. Do not classify this as a compile-time type error.
+
+**Practice.** What is readMaybe "" :: Maybe Int?
+
+<details>
+<summary>Answer</summary>
+
+Nothing: there is no integer representation.
+
+</details>
+
+## 9. Enum method succ
+
+succ moves forwards by one enumeration step. It does not wrap at the last value of a finite enumeration. Enum has no Ord, Num or Bounded superclass. The method requires only Enum; its accepted values depend on the instance.
+
+**Template.** a is the selected enumeration type. succ and pred stay in a. toEnum takes an Int code and returns a; fromEnum takes a and returns Int.
+
+```text
+succ :: Enum a => a -> a
+```
+
+### Worked variation: A character
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (succ 'b')
+```
+
+```text
+'c'
+```
+
+</HaskellTryIt>
+
+Move one position forwards in the selected enumeration. Its result here is 'c'.
+
+### Worked variation: A Bool
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (succ False)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Move one position forwards in the selected enumeration. Its result here is True.
+
+### Worked variation: An unbounded integer
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (succ (9 :: Integer))
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+Move one position forwards in the selected enumeration. Its result here is 10.
+
+
+### Exam question 9: enum method succ
+
+State the type of succ and explain its boundary or conversion limitation. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate the general method signature from the valid inputs of a concrete instance.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`succ :: Enum a => a -> a`. A finite enumeration has no successor at its last value; crossing it is a run-time boundary failure.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations use valid inputs and select concrete types. Finite Bool has two positions; Integer can continue through zero.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** succ True crosses the Bool upper endpoint; when demanded it fails with key phrase "bad argument". Test the endpoint before stepping.
+
+**Practice.** Predict succ (pred True).
+
+<details>
+<summary>Answer</summary>
+
+True.
+
+</details>
+
+## 10. Enum method pred
+
+pred moves backwards by one step. Zero is not a universal lower endpoint: Integer continues to negative values. Enum has no Ord, Num or Bounded superclass. The method requires only Enum; its accepted values depend on the instance.
+
+**Template.** a is the selected enumeration type. succ and pred stay in a. toEnum takes an Int code and returns a; fromEnum takes a and returns Int.
+
+```text
+pred :: Enum a => a -> a
+```
+
+### Worked variation: A character
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pred 'b')
+```
+
+```text
+'a'
+```
+
+</HaskellTryIt>
+
+Move one position backwards in the selected enumeration. Its result here is 'a'.
+
+### Worked variation: A Bool
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pred True)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Move one position backwards in the selected enumeration. Its result here is False.
+
+### Worked variation: Crossing zero
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (pred (0 :: Integer))
+```
+
+```text
+-1
+```
+
+</HaskellTryIt>
+
+Move one position backwards in the selected enumeration. Its result here is -1.
+
+
+### Exam question 10: enum method pred
+
+State the type of pred and explain its boundary or conversion limitation. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate the general method signature from the valid inputs of a concrete instance.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`pred :: Enum a => a -> a`. A finite enumeration has no predecessor at its first value. Integer has no first value.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations use valid inputs and select concrete types. Finite Bool has two positions; Integer can continue through zero.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** pred False crosses the Bool lower endpoint; when demanded it fails with key phrase "bad argument". Guard it or define an explicit cyclic policy.
+
+**Practice.** Predict pred (succ False).
+
+<details>
+<summary>Answer</summary>
+
+False.
+
+</details>
+
+## 11. Enum method toEnum
+
+toEnum interprets an Int code using the selected result instance. Context must fix that result. Being an Int does not guarantee a code is valid. Enum has no Ord, Num or Bounded superclass. The method requires only Enum; its accepted values depend on the instance.
+
+**Template.** a is the selected enumeration type. succ and pred stay in a. toEnum takes an Int code and returns a; fromEnum takes a and returns Int.
+
+```text
+toEnum :: Enum a => Int -> a
+```
+
+### Worked variation: First Bool code
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (toEnum 0 :: Bool)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Interpret the Int code using the annotated target instance. Its result here is False.
+
+### Worked variation: Last Bool code
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (toEnum 1 :: Bool)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Interpret the Int code using the annotated target instance. Its result here is True.
+
+### Worked variation: A character code
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (toEnum 65 :: Char)
+```
+
+```text
+'A'
+```
+
+</HaskellTryIt>
+
+Interpret the Int code using the annotated target instance. Its result here is 'A'.
+
+
+### Exam question 11: enum method toenum
+
+State the type of toEnum and explain its boundary or conversion limitation. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate the general method signature from the valid inputs of a concrete instance.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`toEnum :: Enum a => Int -> a`. The Int code must be in the range accepted by the target instance. Context selects that target.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations use valid inputs and select concrete types. Finite Bool has two positions; Integer can continue through zero.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** toEnum 2 :: Bool is out of range and fails with key phrase "bad argument". A result annotation selects the instance; it does not validate the code.
+
+**Practice.** Predict toEnum (fromEnum True) :: Bool.
+
+<details>
+<summary>Answer</summary>
+
+True.
+
+</details>
+
+## 12. Enum method fromEnum
+
+fromEnum obtains an Int code. Bool uses 0 and 1; Char uses character codes. This is not a digit parser and is not a lossless encoding for arbitrarily large Integer values. Enum has no Ord, Num or Bounded superclass. The method requires only Enum; its accepted values depend on the instance.
+
+**Template.** a is the selected enumeration type. succ and pred stay in a. toEnum takes an Int code and returns a; fromEnum takes a and returns Int.
+
+```text
+fromEnum :: Enum a => a -> Int
+```
+
+### Worked variation: First Bool code
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fromEnum False)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Convert the enumeration position or character code to Int. Its result here is 0.
+
+### Worked variation: Last Bool code
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fromEnum True)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+Convert the enumeration position or character code to Int. Its result here is 1.
+
+### Worked variation: A character code
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (fromEnum 'A')
+```
+
+```text
+65
+```
+
+</HaskellTryIt>
+
+Convert the enumeration position or character code to Int. Its result here is 65.
+
+
+### Exam question 12: enum method fromenum
+
+State the type of fromEnum and explain its boundary or conversion limitation. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "state". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate the general method signature from the valid inputs of a concrete instance.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`fromEnum :: Enum a => a -> Int`. Its Int result cannot encode all Integer values injectively.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations use valid inputs and select concrete types. Finite Bool has two positions; Integer can continue through zero.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** fromEnum '7' is 55, not 7. This is a wrong answer with no compiler diagnostic. Do not use fromEnum as digit parsing or assume huge Integer values survive an Int conversion.
+
+**Practice.** Predict fromEnum (pred True).
+
+<details>
+<summary>Answer</summary>
+
+0.
+
+</details>
+
+## 13. Range forms and enumeration boundaries
+
+A range can return its endpoint and stop without returning a successor beyond it. This differs from explicitly asking for succ at the last value. In stepped notation the second element sets the step; it is not an upper bound. A zero step can repeat forever when the bound permits the first value. Integer has Enum without an upper endpoint.
+
+A guarded step can test the boundary before calling the method. The guard below needs Ord, Bounded and Enum. Safety relies on these instances describing the same intended sequence; their class constraints alone do not prove that relationship.
+
+**Template.** next takes one value x. Its guard uses the upper bound of that same type. In two-value ranges y is the endpoint; in stepped ranges it is the second value and z is the endpoint.
+
+```text
+next :: (Ord a, Enum a, Bounded a) => a -> Maybe a
+next x | x < maxBound = Just (succ x)
+       | otherwise = Nothing
+[x..y]     -- enumFromTo x y
+[x,y..z]   -- enumFromThenTo x y z
+[x..]      -- enumFrom x
+[x,y..]    -- enumFromThen x y
+```
+
+### Worked variation: Ascending reaches the last Bool
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([False .. True])
+```
+
+```text
+[False,True]
+```
+
+</HaskellTryIt>
+
+The range returns False and True, then stops. It does not ask to return succ True.
+
+### Worked variation: Reversed default-step endpoints
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([True .. False])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The implicit step is ascending; the start is already beyond the endpoint.
+
+### Worked variation: An explicit descending step
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([5,3 .. (-1 :: Int)])
+```
+
+```text
+[5,3,1,-1]
+```
+
+</HaskellTryIt>
+
+The difference is -2. After -1 the next candidate -3 would be beyond the descending bound.
+
+### Worked variation: Guard the upper endpoint
+
+
+```haskell
+next :: (Ord a, Enum a, Bounded a) => a -> Maybe a
+next x
+  | x < maxBound = Just (succ x)
+  | otherwise = Nothing
+
+main :: IO ()
+main = do
+  print (next False)
+  print (next True)
+```
+
+```text
+Just True
+Nothing
+```
+
+The site interpreter cannot resolve the polymorphic maxBound in the original definition. The runnable Bool specialisation selects the bound explicitly and follows the same stopping policy.
+
+<HaskellTryIt>
+
+```haskell
+next :: Bool -> Maybe Bool
+next x
+  | x < (maxBound :: Bool) = Just (succ x)
+  | otherwise = Nothing
+
+main :: IO ()
+main = do
+  print (next False)
+  print (next True)
+```
+
+```text
+Just True
+Nothing
+```
+
+</HaskellTryIt>
+
+False is below maxBound and steps to True. At True the guard fails, avoiding succ entirely.
+
+### Worked variation: A zero step with a finite observer
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 [2,2 .. (5 :: Int)])
+```
+
+```text
+[2,2,2,2]
+```
+
+</HaskellTryIt>
+
+The step is zero, so 2 repeats. Take demands only four elements and terminates.
+
+### Worked variation: The named method behind stepped syntax
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (enumFromThenTo (6 :: Int) 4 0)
+```
+
+```text
+[6,4,2,0]
+```
+
+</HaskellTryIt>
+
+The method receives first value, second value and endpoint. Its step is -2, exactly as [6,4..0].
+
+### Worked variation: The named method behind an ascending range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (enumFromTo 'x' 'z')
+```
+
+```text
+"xyz"
+```
+
+</HaskellTryIt>
+
+The method and ['x'..'z'] enumerate the same three characters; a character list prints as a String.
+
+### Worked variation: A singleton ascending range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([(3 :: Int)..3])
+```
+
+```text
+[3]
+```
+
+</HaskellTryIt>
+
+Equal endpoints yield exactly one value with the ordinary positive step.
+
+### Worked variation: A character range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (['a'..'c'])
+```
+
+```text
+"abc"
+```
+
+</HaskellTryIt>
+
+The three successive characters form a String.
+
+### Worked variation: An ascending explicit step
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([1,3..(7 :: Int)])
+```
+
+```text
+[1,3,5,7]
+```
+
+</HaskellTryIt>
+
+The second value sets step 2; the endpoint is included.
+
+### Worked variation: A descending step that misses the bound
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([8,5..(0 :: Int)])
+```
+
+```text
+[8,5,2]
+```
+
+</HaskellTryIt>
+
+Step -3 reaches 2, then -1 would cross the endpoint, so zero is not included.
+
+### Worked variation: An open Integer range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 [(2 :: Integer)..])
+```
+
+```text
+[2,3,4,5]
+```
+
+</HaskellTryIt>
+
+Integer has no last value; take demands a finite prefix.
+
+### Worked variation: An open finite enumeration
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([False ..])
+```
+
+```text
+[False,True]
+```
+
+</HaskellTryIt>
+
+The standard Bool enumFrom ends at True.
+
+### Worked variation: An open Ordering enumeration
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([EQ ..])
+```
+
+```text
+[EQ,GT]
+```
+
+</HaskellTryIt>
+
+The Ordering instance starts at EQ and stops at its last constructor.
+
+### Worked variation: An open positive stepped range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 [2,5..(100 :: Integer)])
+```
+
+```text
+[2,5,8,11]
+```
+
+</HaskellTryIt>
+
+The step is 3. Only the first four of the bounded candidates are demanded.
+
+### Worked variation: An unbounded stepped range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 [(2 :: Integer),5..])
+```
+
+```text
+[2,5,8,11]
+```
+
+</HaskellTryIt>
+
+No endpoint is supplied. The step is 3 and take limits observation.
+
+### Worked variation: A decreasing open stepped range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 [(3 :: Integer),1..])
+```
+
+```text
+[3,1,-1,-3]
+```
+
+</HaskellTryIt>
+
+The step is -2; unbounded Integer values continue below zero.
+
+### Worked variation: An open zero-step range
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 [(4 :: Integer),4..])
+```
+
+```text
+[4,4,4]
+```
+
+</HaskellTryIt>
+
+No endpoint is required for a zero-step repeat; take makes observation finite.
+
+
+### Exam question 13: range forms and enumeration boundaries
+
+Explain why [False..True] succeeds but succ True fails. Write a safe next function. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "explain". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Distinguish range termination from stepping beyond a bound.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The range includes its endpoint then ends. succ True requests a nonexistent next Bool. Use the next template, returning Just (succ x) below maxBound and Nothing at the bound.
+
+  </Step>
+
+  <Step title="4. Check">
+
+next False yields Just True; next True yields Nothing without evaluating succ True.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** These invalid calls belong outside the runnable editor:
+
+```haskell
+-- Each binding fails when demanded; inspect independently.
+-- For the Bool cases the key phrase is "bad argument".
+badSuccessor = succ True
+badPredecessor = pred False
+badCode = toEnum 2 :: Bool
+-- Char also has an endpoint; do not assume wraparound.
+badChar = succ (maxBound :: Char)
+```
+
+The bindings can type-check. Evaluation causes failure. Guard the endpoint or specify a cyclic policy explicitly. Do not print a whole zero-step infinite range.
+
+**Practice.** Predict take 3 [4,4 .. (4 :: Integer)] and [4..2 :: Integer].
+
+<details>
+<summary>Answer</summary>
+
+[4,4,4] and []. The first is a finite observation of repetition; the second has no ascending candidates.
+
+</details>
+
+## 14. Bounded independently of Enum
+
+Bounded names two distinguished bounds. It has no superclass: it provides neither comparison, successor nor enumeration. Pairs of Bounded components are Bounded componentwise, even though Prelude has no general Enum pair instance. Bounded does not prove a type is an enumerable finite set, or enforce agreement with a separately supplied Ord instance. Its class definition has no law checker.
+
+**Template.** a selects the bound instance. Both fields of bounds share that type. No ordering or step operation occurs.
+
+```text
+minBound, maxBound :: Bounded a => a
+bounds :: Bounded a => (a,a)
+bounds = (minBound,maxBound)
+```
+
+### Worked variation: Bool bounds
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((minBound :: Bool,maxBound :: Bool))
+```
+
+```text
+(False,True)
+```
+
+</HaskellTryIt>
+
+The Bool instance names False and True as its bounds.
+
+### Worked variation: Componentwise pair bounds
+
+
+```haskell
+main :: IO ()
+main = print ((minBound :: (Bool,Bool),maxBound :: (Bool,Bool)))
+```
+
+```text
+((False,False),(True,True))
+```
+
+The site interpreter cannot resolve pair bounds. The original pair instance is shown above; this runnable check builds its componentwise bounds explicitly.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((minBound :: Bool,minBound :: Bool),(maxBound :: Bool,maxBound :: Bool))
+```
+
+```text
+((False,False),(True,True))
+```
+
+</HaskellTryIt>
+
+Each field takes its own bound. No enumeration method is required.
+
+### Worked variation: Ordering bounds
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((minBound :: Ordering,maxBound :: Ordering))
+```
+
+```text
+(LT,GT)
+```
+
+</HaskellTryIt>
+
+The usual Ordering sequence has LT first and GT last, with EQ between.
+
+
+### Exam question 14: bounded independently of enum
+
+Refute the claim that every Bounded type has Enum. (3 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "refute". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Find a standard type with bounds but no enumeration instance.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+(Bool,Bool) has componentwise Bounded but no general Prelude Enum pair instance. Its bounds can be printed; succ on a pair is rejected.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The second variation prints the bounds without requesting Enum.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A pair does not acquire Enum from Bounded:
+
+```haskell
+-- Rejected: no general Prelude Enum pair instance.
+main :: IO ()
+main = print (succ (False,False))
+```
+
+Key phrase: "No instance for". Enumerate each component separately if all combinations are needed. Bounds alone cannot justify a range.
+
+**Practice.** Does Bounded a justify x &lt; maxBound or succ x?
+
+<details>
+<summary>Answer</summary>
+
+No. These need Ord a and Enum a respectively.
+
+</details>
+
+## 15. Enumeration using both constraints
+
+Listing a standard bounded enumeration from its first to last value needs Bounded for the endpoints and Enum for the range. Show is needed only if the function itself converts elements to text. The context expresses methods; completeness and termination still rely on the chosen instances behaving as intended. Bool and Ordering have the standard finite sequence used below.
+
+**Template.** a selects both endpoints and the enumeration method. The output is a list of that same a; the caller fixes the instance with context.
+
+```text
+allValues :: (Bounded a, Enum a) => [a]
+allValues = [minBound .. maxBound]
+```
+
+### Worked variation: All Bool values
+
+
+```haskell
+allValues :: (Bounded a, Enum a) => [a]
+allValues = [minBound .. maxBound]
+
+main :: IO ()
+main = print (allValues :: [Bool])
+```
+
+```text
+[False,True]
+```
+
+The site interpreter cannot propagate the result type into this polymorphic use of bounds. The general definition is shown above. This runnable specialisation explicitly selects the endpoint instances.
+
+<HaskellTryIt>
+
+```haskell
+allValues :: [Bool]
+allValues = [minBound :: Bool .. maxBound :: Bool]
+
+main :: IO ()
+main = print allValues
+```
+
+```text
+[False,True]
+```
+
+</HaskellTryIt>
+
+The result annotation selects Bool for both endpoints and enumFromTo.
+
+### Worked variation: All Ordering values
+
+
+```haskell
+allValues :: (Bounded a, Enum a) => [a]
+allValues = [minBound .. maxBound]
+
+main :: IO ()
+main = print (allValues :: [Ordering])
+```
+
+```text
+[LT,EQ,GT]
+```
+
+The site interpreter cannot propagate the result type into this polymorphic use of bounds. The general definition is shown above. This runnable specialisation explicitly selects the endpoint instances.
+
+<HaskellTryIt>
+
+```haskell
+allValues :: [Ordering]
+allValues = [minBound :: Ordering .. maxBound :: Ordering]
+
+main :: IO ()
+main = print allValues
+```
+
+```text
+[LT,EQ,GT]
+```
+
+</HaskellTryIt>
+
+The same definition now selects Ordering and enumerates three positions.
+
+### Worked variation: A product without Enum pairs
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([(x,y) | x <- [minBound .. maxBound :: Bool], y <- [minBound .. maxBound :: Bool]])
+```
+
+```text
+[(False,False),(False,True),(True,False),(True,True)]
+```
+
+</HaskellTryIt>
+
+Each generator enumerates Bool separately. The inner generator varies fastest; no Enum pair instance is used.
+
+
+### Exam question 15: enumeration using both constraints
+
+Write allValues with a minimal context and explain why neither constraint alone suffices. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Inventory the endpoint and range methods.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`allValues :: (Bounded a, Enum a) => [a]`, with `allValues = [minBound .. maxBound]`. Bounded supplies minBound and maxBound; Enum supplies enumFromTo. Neither class supplies the other.
+
+  </Step>
+
+  <Step title="4. Check">
+
+At Bool the result is [False,True]. The annotation selects all method instances.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Omitting Enum breaks the signature's promise:
+
+```haskell
+-- Rejected: bounds cannot supply range notation.
+allValues :: Bounded a => [a]
+allValues = [minBound .. maxBound]
+```
+
+Key phrase: "Could not deduce". Add Enum a. Conversely, Enum alone cannot supply bounds. Integer has Enum but no standard Bounded instance.
+
+**Practice.** Does a pure allValues need Show a just because callers print its result?
+
+<details>
+<summary>Answer</summary>
+
+No. The caller supplies Show at its selected concrete type; the producer uses only Enum and Bounded.
+
+</details>
+
+## 16. Choosing Num from a method
+
+Addition and integer literals need Num. Num has no Eq, Ord or Show superclass. Do not add such requirements merely because an input is numeric.
+
+**Template.** x is the input, of type a. The body method selects the input requirement. Where b appears, it is a separately chosen result type rather than another name for a.
+
+```text
+twice :: Num a => a -> a
+twice x = x + x
+```
+
+The following table gives **immediate** superclasses. Following the requirements transitively supplies inherited methods. Ord also has Eq as a superclass.
+
+| Class | Immediate superclasses | Representative method |
+| --- | --- | --- |
+| Num | none | (+) |
+| Real | Num, Ord | toRational |
+| Integral | Real, Enum | div, toInteger |
+| Fractional | Num | (/), recip |
+| RealFrac | Real, Fractional | properFraction |
+| Floating | Fractional | sqrt, pi |
+| RealFloat | RealFrac, Floating | isNaN, floatRadix |
+
+There is no superclass path from Num to Eq or Show, nor from Fractional to Ord. Integral and Fractional are separate branches; the class system does not declare them mutually exclusive. Ordinary Int and Integer are Integral, while Float and Double inhabit both the RealFrac and Floating branches. Rational has RealFrac without Floating; Complex Double has Floating without RealFrac. These relationships are requirements on operations, not guarantees of all mathematical laws for all payloads.
+
+The following sections derive constraints from methods. See [Arithmetic by Example](/docs/sem3/csi243/02-expressions-types/notes/arithmetic-by-example) for division signs, powers, conversions, tolerances and domains.
+
+### Worked variation: An ordinary input
+
+
+<HaskellTryIt>
+
+```haskell
+twice :: Num a => a -> a
+twice x = x + x
+
+main :: IO ()
+main = print (twice (3 :: Int))
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+Substitute the input twice into addition. The result here is 6.
+
+### Worked variation: A boundary or negative input
+
+
+<HaskellTryIt>
+
+```haskell
+twice :: Num a => a -> a
+twice x = x + x
+
+main :: IO ()
+main = print (twice (-2 :: Integer))
+```
+
+```text
+-4
+```
+
+</HaskellTryIt>
+
+Substitute the input twice into addition. The result here is -4.
+
+### Worked variation: Another value or result type
+
+
+<HaskellTryIt>
+
+```haskell
+twice :: Num a => a -> a
+twice x = x + x
+
+main :: IO ()
+main = print (twice (1.5 :: Double))
+```
+
+```text
+3.0
+```
+
+</HaskellTryIt>
+
+Substitute the input twice into addition. The result here is 3.0.
+
+
+### Exam question 16: choosing num from a method
+
+Derive the type of `twice x = x + x`. Justify each requirement. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "derive". The given body must receive a general signature; each input starts with an unknown type, and every requirement must come from a method.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the body operation, assign its argument type, and preserve any independent output variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`twice :: Num a => a -> a`. Assign x :: a. Match the input of `(+) :: Num t => t -> t -> t` with a, so t := a. The resulting requirement is Num a and the result type is a. The use of + earns Num. No Show is needed in the pure function; main displays a concrete result type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations select concrete types without narrowing the general function. Check zero and a nonzero input where applicable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A signature a -> a does not permit +; the missing requirement gives GHC key phrase "Could not deduce". Add Num a. Requiring Ord or Show when the body does neither comparison nor rendering is unnecessarily restrictive.
+
+**Practice.** Does Num alone permit x == 0?
+
+<details>
+<summary>Answer</summary>
+
+No. Eq is independent; testing equality requires Eq a too.
+
+</details>
+
+## 17. Choosing Integral from a method
+
+Integral has Real and Enum superclasses. It supplies integral division and conversion to Integer. The superclass path Integral to Real to Ord to Eq supplies ordering and equality, whereas Num alone would not.
+
+**Template.** x is the input, of type a. The body method selects the input requirement. Where b appears, it is a separately chosen result type rather than another name for a.
+
+```text
+halfWhole :: Integral a => a -> a
+halfWhole x = x `div` 2
+```
+
+### Worked variation: An ordinary input
+
+
+<HaskellTryIt>
+
+```haskell
+halfWhole :: Integral a => a -> a
+halfWhole x = x `div` 2
+
+main :: IO ()
+main = print (halfWhole (9 :: Int))
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+Divide by two using div. On the negative input the quotient rounds down, giving -2. The result here is 4.
+
+### Worked variation: A boundary or negative input
+
+
+<HaskellTryIt>
+
+```haskell
+halfWhole :: Integral a => a -> a
+halfWhole x = x `div` 2
+
+main :: IO ()
+main = print (halfWhole (0 :: Integer))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Divide by two using div. On the negative input the quotient rounds down, giving -2. The result here is 0.
+
+### Worked variation: Another value or result type
+
+
+<HaskellTryIt>
+
+```haskell
+halfWhole :: Integral a => a -> a
+halfWhole x = x `div` 2
+
+main :: IO ()
+main = print (halfWhole (-3 :: Integer))
+```
+
+```text
+-2
+```
+
+</HaskellTryIt>
+
+Divide by two using div. On the negative input the quotient rounds down, giving -2. The result here is -2.
+
+
+### Exam question 17: choosing integral from a method
+
+Derive the type of `halfWhole x = x `div` 2`. Justify each requirement. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "derive". The given body must receive a general signature; each input starts with an unknown type, and every requirement must come from a method.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the body operation, assign its argument type, and preserve any independent output variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`halfWhole :: Integral a => a -> a`. Assign x :: a. Match the input of `div :: Integral t => t -> t -> t` with a, so t := a. The resulting requirement is Integral a and the result type is a. The use of div earns Integral. No Show is needed in the pure function; main displays a concrete result type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations select concrete types without narrowing the general function. Check zero and a nonzero input where applicable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A signature promising only Num cannot provide div. For missing variable constraints GHC gives the key phrase "Could not deduce". Use the method-driven signature above. Adding unrelated Show constraints cannot supply the missing method.
+
+**Practice.** Does Integral already supply Ord?
+
+<details>
+<summary>Answer</summary>
+
+Yes. Integral requires Real, which requires Ord.
+
+</details>
+
+## 18. Choosing Fractional from a method
+
+Fractional extends Num, with / and recip. It does not imply Ord, Integral, RealFrac or Floating. Use Fractional when fractional division is the strongest operation needed.
+
+**Template.** x is the input, of type a. The body method selects the input requirement. Where b appears, it is a separately chosen result type rather than another name for a.
+
+```text
+half :: Fractional a => a -> a
+half x = x / 2
+```
+
+### Worked variation: An ordinary input
+
+
+<HaskellTryIt>
+
+```haskell
+half :: Fractional a => a -> a
+half x = x / 2
+
+main :: IO ()
+main = print (half (6 :: Double))
+```
+
+```text
+3.0
+```
+
+</HaskellTryIt>
+
+Divide the Double input by two. The result here is 3.0.
+
+### Worked variation: A boundary or negative input
+
+
+<HaskellTryIt>
+
+```haskell
+half :: Fractional a => a -> a
+half x = x / 2
+
+main :: IO ()
+main = print (half (0 :: Double))
+```
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+Divide the Double input by two. The result here is 0.0.
+
+### Worked variation: Another value or result type
+
+
+<HaskellTryIt>
+
+```haskell
+half :: Fractional a => a -> a
+half x = x / 2
+
+main :: IO ()
+main = print (half (-3 :: Double))
+```
+
+```text
+-1.5
+```
+
+</HaskellTryIt>
+
+Divide the Double input by two. The result here is -1.5.
+
+
+### Exam question 18: choosing fractional from a method
+
+Derive the type of `half x = x / 2`. Justify each requirement. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "derive". The given body must receive a general signature; each input starts with an unknown type, and every requirement must come from a method.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the body operation, assign its argument type, and preserve any independent output variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`half :: Fractional a => a -> a`. Assign x :: a. Match the input of `(/) :: Fractional t => t -> t -> t` with a, so t := a. The resulting requirement is Fractional a and the result type is a. The use of / earns Fractional. No Show is needed in the pure function; main displays a concrete result type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations select concrete types without narrowing the general function. Check zero and a nonzero input where applicable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A signature promising only Num cannot provide /. For missing variable constraints GHC gives the key phrase "Could not deduce". Use the method-driven signature above. Adding unrelated Show constraints cannot supply the missing method.
+
+**Practice.** Is (Num a, Fractional a) minimal for x / 2?
+
+<details>
+<summary>Answer</summary>
+
+No. Fractional already supplies Num; Fractional a alone suffices.
+
+</details>
+
+## 19. Choosing Real from a method
+
+Real requires Num and Ord and provides toRational. Rational represents an exact ratio of Integers. Restrict toRational examples to ordinary finite values: a class name does not prove that every machine payload denotes a mathematical real number.
+
+**Template.** x is the input, of type a. The body method selects the input requirement. Where b appears, it is a separately chosen result type rather than another name for a.
+
+```text
+nonnegative :: Real a => a -> Bool
+nonnegative x = toRational x >= 0
+```
+
+### Worked variation: An ordinary input
+
+
+```haskell
+nonnegative :: Real a => a -> Bool
+nonnegative x = toRational x >= 0
+
+main :: IO ()
+main = print (nonnegative (3 :: Int))
+```
+
+```text
+True
+```
+
+The site interpreter does not implement toRational. The original program above uses the required Real method. This runnable check compares the same finite input directly; its retained Real signature is sufficient but stronger than the direct comparison needs.
+
+<HaskellTryIt>
+
+```haskell
+nonnegative :: Real a => a -> Bool
+nonnegative x = x >= 0
+
+main :: IO ()
+main = print (nonnegative (3 :: Int))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Convert the finite input to an exact Rational and compare it with zero. The result here is True.
+
+### Worked variation: A boundary or negative input
+
+
+```haskell
+nonnegative :: Real a => a -> Bool
+nonnegative x = toRational x >= 0
+
+main :: IO ()
+main = print (nonnegative (-2 :: Integer))
+```
+
+```text
+False
+```
+
+The site interpreter does not implement toRational. The original program above uses the required Real method. This runnable check compares the same finite input directly; its retained Real signature is sufficient but stronger than the direct comparison needs.
+
+<HaskellTryIt>
+
+```haskell
+nonnegative :: Real a => a -> Bool
+nonnegative x = x >= 0
+
+main :: IO ()
+main = print (nonnegative (-2 :: Integer))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Convert the finite input to an exact Rational and compare it with zero. The result here is False.
+
+### Worked variation: Another value or result type
+
+
+```haskell
+nonnegative :: Real a => a -> Bool
+nonnegative x = toRational x >= 0
+
+main :: IO ()
+main = print (nonnegative (0.5 :: Double))
+```
+
+```text
+True
+```
+
+The site interpreter does not implement toRational. The original program above uses the required Real method. This runnable check compares the same finite input directly; its retained Real signature is sufficient but stronger than the direct comparison needs.
+
+<HaskellTryIt>
+
+```haskell
+nonnegative :: Real a => a -> Bool
+nonnegative x = x >= 0
+
+main :: IO ()
+main = print (nonnegative (0.5 :: Double))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Convert the finite input to an exact Rational and compare it with zero. The result here is True.
+
+
+### Exam question 19: choosing real from a method
+
+Derive the type of `nonnegative x = toRational x >= 0`. Justify each requirement. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "derive". The given body must receive a general signature; each input starts with an unknown type, and every requirement must come from a method.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the body operation, assign its argument type, and preserve any independent output variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`nonnegative :: Real a => a -> Bool`. Assign x :: a. Match the input of `toRational :: Real t => t -> Rational` with a, so t := a. The resulting requirement is Real a and the result type is Bool. The use of toRational earns Real. No Show is needed in the pure function; main displays a concrete result type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations select concrete types without narrowing the general function. Check zero and a nonzero input where applicable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A signature promising only Num cannot provide toRational. For missing variable constraints GHC gives the key phrase "Could not deduce". Use the method-driven signature above. Adding unrelated Show constraints cannot supply the missing method.
+
+**Practice.** Would x >= 0 alone earn Real?
+
+<details>
+<summary>Answer</summary>
+
+No. (Ord a, Num a) suffices. This body's toRational specifically earns Real.
+
+</details>
+
+## 20. Choosing RealFrac from a method
+
+RealFrac requires Real and Fractional. Its method properFraction splits a number into an integral part and a remainder of the original type. The related truncate, floor, ceiling and round choose an independently constrained Integral result. Their numeric rules are covered in The Standard Type Classes and Arithmetic by Example.
+
+**Template.** x is the input, of type a. The body method selects the input requirement. Where b appears, it is a separately chosen result type rather than another name for a.
+
+```text
+whole :: (RealFrac a, Integral b) => a -> b
+whole x = truncate x
+```
+
+### Worked variation: An ordinary input
+
+
+<HaskellTryIt>
+
+```haskell
+whole :: (RealFrac a, Integral b) => a -> b
+whole x = truncate x
+
+main :: IO ()
+main = print (whole (3.75 :: Double) :: Integer)
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+Discard the fractional part towards zero, selecting the result type from the annotation. The result here is 3.
+
+### Worked variation: A boundary or negative input
+
+
+<HaskellTryIt>
+
+```haskell
+whole :: (RealFrac a, Integral b) => a -> b
+whole x = truncate x
+
+main :: IO ()
+main = print (whole (-2.5 :: Double) :: Int)
+```
+
+```text
+-2
+```
+
+</HaskellTryIt>
+
+Discard the fractional part towards zero, selecting the result type from the annotation. The result here is -2.
+
+### Worked variation: Another value or result type
+
+
+<HaskellTryIt>
+
+```haskell
+whole :: (RealFrac a, Integral b) => a -> b
+whole x = truncate x
+
+main :: IO ()
+main = print (whole (0.0 :: Double) :: Integer)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Discard the fractional part towards zero, selecting the result type from the annotation. The result here is 0.
+
+
+### Exam question 20: choosing realfrac from a method
+
+Derive the type of `whole x = truncate x`. Justify each requirement. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "derive". The given body must receive a general signature; each input starts with an unknown type, and every requirement must come from a method.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the body operation, assign its argument type, and preserve any independent output variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`whole :: (RealFrac a, Integral b) => a -> b`. Assign x :: a. Match the input of `truncate :: (RealFrac t, Integral u) => t -> u` with a, so t := a. The result u remains independent, so write b for it. The resulting requirement is RealFrac a and Integral b and the result type is b. The use of truncate earns RealFrac. The independent result b is Integral. Its inherited Num already covers arithmetic on that result.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations select concrete types without narrowing the general function. Check zero and a nonzero input where applicable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A signature promising only Num cannot provide truncate. For missing variable constraints GHC gives the key phrase "Could not deduce". Use the method-driven signature above. Adding unrelated Show constraints cannot supply the missing method.
+
+**Practice.** Does RealFrac fix truncate's output to Int?
+
+<details>
+<summary>Answer</summary>
+
+No. Its independent Integral result may be Int or Integer, selected by context.
+
+</details>
+
+## 21. RealFrac's properFraction and its two outputs
+
+properFraction returns a pair: an integral part selected by context and a fractional remainder of the original input type. The whole part truncates towards zero, so a negative input has a negative or zero remainder. The reconstruction is fromIntegral wholePart + remainder, within the chosen type's numeric limitations. RealFrac supplies Fractional and Real; it does not fix the integral result to Int. This method explains the two independent variables behind the rounding functions without repeating their arithmetic drills.
+
+**Template.** a is the original fractional type and b is an independently selected integral type. WholeType chooses b; InputType chooses a.
+
+```text
+properFraction :: (RealFrac a, Integral b) => a -> (b,a)
+properFraction input :: (WholeType, InputType)
+```
+
+### Worked variation: Positive remainder
+
+
+```haskell
+main :: IO ()
+main = print (properFraction (3.5 :: Double) :: (Integer,Double))
+```
+
+```text
+(3,0.5)
+```
+
+The site interpreter does not implement properFraction. The original method call above is ordinary Haskell. For this exactly representable input, the runnable check reconstructs the same pair from truncate and subtraction.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let x = 3.5 :: Double
+  let n = truncate x :: Integer
+  print (n, x - fromIntegral n)
+```
+
+```text
+(3,0.5)
+```
+
+</HaskellTryIt>
+
+3 is the whole part towards zero; 0.5 remains in Double.
+
+### Worked variation: Negative remainder
+
+
+```haskell
+main :: IO ()
+main = print (properFraction (-2.75 :: Double) :: (Int,Double))
+```
+
+```text
+(-2,-0.75)
+```
+
+The site interpreter does not implement properFraction. The original method call above is ordinary Haskell. For this exactly representable input, the runnable check reconstructs the same pair from truncate and subtraction.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let x = -2.75 :: Double
+  let n = truncate x :: Int
+  print (n, x - fromIntegral n)
+```
+
+```text
+(-2,-0.75)
+```
+
+</HaskellTryIt>
+
+Truncation gives -2, not floor's -3. The remainder is -0.75, reconstructing -2.75.
+
+### Worked variation: An exact whole number
+
+
+```haskell
+main :: IO ()
+main = print (properFraction (4.0 :: Double) :: (Integer,Double))
+```
+
+```text
+(4,0.0)
+```
+
+The site interpreter does not implement properFraction. The original method call above is ordinary Haskell. For this exactly representable input, the runnable check reconstructs the same pair from truncate and subtraction.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  let x = 4.0 :: Double
+  let n = truncate x :: Integer
+  print (n, x - fromIntegral n)
+```
+
+```text
+(4,0.0)
+```
+
+</HaskellTryIt>
+
+The whole part is 4 and no fraction remains. The remainder still has type Double.
+
+
+### Exam question 21: realfrac's properfraction and its two outputs
+
+Give the type and value of properFraction (-3.5 :: Double) with Integer whole part. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "give". The question supplies the method or claim to inspect. Identify its result type and stated values before choosing the relevant template.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Select a := Double and b := Integer, then truncate towards zero.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The expression has type (Integer,Double) and value (-3,-0.5). The general requirements are RealFrac a and Integral b.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Converting -3 back to Double and adding -0.5 reconstructs -3.5 exactly for these binary-exact values.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Predicting (-3,0.25) for properFraction (-2.75) confuses truncation with floor. It is a semantic error, not a GHC diagnostic. The Integral whole-part type can sometimes be defaulted in a complete program. Annotate the pair when the question specifies Int or Integer rather than relying on defaulting.
+
+**Practice.** Predict properFraction (0.25 :: Double) :: (Int,Double).
+
+<details>
+<summary>Answer</summary>
+
+(0,0.25): the whole part is zero, while the remainder keeps the input's type.
+
+</details>
+
+## 22. Choosing Floating from a method
+
+Floating extends Fractional with sqrt, pi, exponentials, logarithms and trigonometry. It does not imply RealFrac or Ord. For example, Complex Double supports Floating without being an ordered real type.
+
+**Template.** x is the input, of type a. The body method selects the input requirement. Where b appears, it is a separately chosen result type rather than another name for a.
+
+```text
+root :: Floating a => a -> a
+root x = sqrt x
+```
+
+### Worked variation: An ordinary input
+
+
+<HaskellTryIt>
+
+```haskell
+root :: Floating a => a -> a
+root x = sqrt x
+
+main :: IO ()
+main = print (root (9 :: Double))
+```
+
+```text
+3.0
+```
+
+</HaskellTryIt>
+
+Take the non-negative square root at Double. The result here is 3.0.
+
+### Worked variation: A boundary or negative input
+
+
+<HaskellTryIt>
+
+```haskell
+root :: Floating a => a -> a
+root x = sqrt x
+
+main :: IO ()
+main = print (root (0 :: Double))
+```
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+Take the non-negative square root at Double. The result here is 0.0.
+
+### Worked variation: Another value or result type
+
+
+<HaskellTryIt>
+
+```haskell
+root :: Floating a => a -> a
+root x = sqrt x
+
+main :: IO ()
+main = print (root (16 :: Double))
+```
+
+```text
+4.0
+```
+
+</HaskellTryIt>
+
+Take the non-negative square root at Double. The result here is 4.0.
+
+
+### Exam question 22: choosing floating from a method
+
+Derive the type of `root x = sqrt x`. Justify each requirement. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "derive". The given body must receive a general signature; each input starts with an unknown type, and every requirement must come from a method.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the body operation, assign its argument type, and preserve any independent output variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`root :: Floating a => a -> a`. Assign x :: a. Match the input of `sqrt :: Floating t => t -> t` with a, so t := a. The resulting requirement is Floating a and the result type is a. The use of sqrt earns Floating. No Show is needed in the pure function; main displays a concrete result type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations select concrete types without narrowing the general function. Check zero and a nonzero input where applicable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A signature promising only Num cannot provide sqrt. For missing variable constraints GHC gives the key phrase "Could not deduce". Use the method-driven signature above. Adding unrelated Show constraints cannot supply the missing method.
+
+**Practice.** What constraint does sqrt x / 2 require?
+
+<details>
+<summary>Answer</summary>
+
+Floating a alone: it already supplies Fractional and Num.
+
+</details>
+
+## 23. Choosing RealFloat from a method
+
+RealFloat combines the RealFrac and Floating branches. It adds floating representation queries and classifications, including isNaN, isInfinite, floatRadix, floatDigits, decodeFloat and encodeFloat. Classifying special values avoids depending on their printed spelling. The type need not enforce every ideal order law for NaN.
+
+**Template.** x is the input, of type a. The body method selects the input requirement. Where b appears, it is a separately chosen result type rather than another name for a.
+
+```text
+special :: RealFloat a => a -> Bool
+special x = isNaN x || isInfinite x
+```
+
+### Worked variation: An ordinary input
+
+
+<HaskellTryIt>
+
+```haskell
+special :: RealFloat a => a -> Bool
+special x = isNaN x || isInfinite x
+
+main :: IO ()
+main = print (special (0.0 :: Double))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+Test for NaN first, then infinity. Zero is neither; Double division of one by zero is infinite, and zero by zero is NaN. The result here is False.
+
+### Worked variation: A boundary or negative input
+
+
+<HaskellTryIt>
+
+```haskell
+special :: RealFloat a => a -> Bool
+special x = isNaN x || isInfinite x
+
+main :: IO ()
+main = print (special ((1 / 0) :: Double))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Test for NaN first, then infinity. Zero is neither; Double division of one by zero is infinite, and zero by zero is NaN. The result here is True.
+
+### Worked variation: Another value or result type
+
+
+<HaskellTryIt>
+
+```haskell
+special :: RealFloat a => a -> Bool
+special x = isNaN x || isInfinite x
+
+main :: IO ()
+main = print (special ((0 / 0) :: Double))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Test for NaN first, then infinity. Zero is neither; Double division of one by zero is infinite, and zero by zero is NaN. The result here is True.
+
+
+### Exam question 23: choosing realfloat from a method
+
+Derive the type of `special x = isNaN x || isInfinite x`. Justify each requirement. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "derive". The given body must receive a general signature; each input starts with an unknown type, and every requirement must come from a method.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the body operation, assign its argument type, and preserve any independent output variable.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`special :: RealFloat a => a -> Bool`. Assign x :: a. Match the input of `isNaN, isInfinite :: RealFloat t => t -> Bool` with a, so t := a. The resulting requirement is RealFloat a and the result type is Bool. The use of isNaN and isInfinite earns RealFloat. No Show is needed in the pure function; main displays a concrete result type.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The three variations select concrete types without narrowing the general function. Check zero and a nonzero input where applicable.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A signature promising only Num cannot provide isNaN and isInfinite. For missing variable constraints GHC gives the key phrase "Could not deduce". Use the method-driven signature above. Adding unrelated Show constraints cannot supply the missing method.
+
+**Practice.** Does Floating alone justify isNaN?
+
+<details>
+<summary>Answer</summary>
+
+No. isNaN needs RealFloat, which includes both branches.
+
+</details>
+
+
+## 24. Context versus numeric defaulting
+
+Inference uses the program's constraints and surrounding types. Defaulting is a later rule that chooses a concrete numeric type for certain otherwise unresolved constrained variables. Under ordinary standard numeric defaulting, Integer is tried before Double. A variable constrained by Fractional cannot default to Integer, so an ordinary fractional expression can default to Double. Defaulting is not inspection of the input text and does not make a bare Read/Show ambiguity disappear.
+
+**Template.** First propagate context, then collect constraints, then ask whether standard numeric defaulting applies. Here a is the unresolved numeric type.
+
+```text
+read "5" + 1    -- Read a, Num a; printing also needs Show a
+read "5" / 2    -- Read a, Fractional a; printing also needs Show a
+consumer (read "5") -- a fixed consumer can select a without defaulting
+```
+
+### Worked variation: a whole-number default
+
+The body contains Num, Read and Show requirements with no concrete consumer type.
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (read "5" + 1)
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+Standard numeric defaulting selects Integer here. That chooses Read Integer, then 5 + 1 produces 6.
+
+### Worked variation: the fractional branch changes the default
+
+The slash replaces addition and earns Fractional.
+
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (read "5" / 2)
+```
+
+```text
+2.5
+```
+
+</HaskellTryIt>
+
+Integer cannot meet Fractional, so the ordinary numeric default is Double. Parsing 5 at Double and dividing by 2 gives 2.5.
+
+### Worked variation: inference from a fixed consumer
+
+A declared consumer now determines the type before defaulting is needed.
+
+
+<HaskellTryIt>
+
+```haskell
+keepInteger :: Integer -> Integer
+keepInteger x = x
+
+main :: IO ()
+main = print (keepInteger (read "5"))
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+keepInteger requires an Integer argument. Read selects that instance because of context, not because a default or the spelling selected it.
+
+
+### Exam question 24: inference or defaulting
+
+Explain the difference between the type selection in read "5" + 1, read "5" / 2 and keepInteger (read "5"), when each is printed. Use keepInteger :: Integer -> Integer. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command asks for an explanation of type selection, not only the numeric outputs.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Separate context propagation from numeric defaulting. Check the remaining class constraints in each case.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+With no other context, the first printed expression has Read, Num and Show constraints and defaults to Integer. The second has Fractional instead of Num as its strongest numeric constraint and defaults to Double. The third is fixed to Integer by keepInteger's argument type, without needing defaulting.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The results are 6, 2.5 and 5. The unchanged input text does not account for their different type selection.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** A bare `print (read "5")` has Read and Show but no numeric constraint selecting this defaulting rule. In an ordinary complete program it is rejected with key phrase "Ambiguous type variable". Add a concrete result annotation; do not claim every read defaults to Integer.
+
+**Practice.** Does `read "5" + (1 :: Double)` need defaulting?
+
+<details>
+<summary>Answer</summary>
+
+No. The typed second operand makes both operands Double. Read uses Read Double by context, and the result is 6.0.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+Ord supplies methods; laws require lawful components and defined comparisons. Read needs a selected result type and valid complete text. Enum steps and Bounded endpoints are independent capabilities. Numeric constraints follow methods and superclass paths. Compilation and passing examples do not prove universal laws.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="Does a class constraint prove instance laws?">
+
+No. It supplies operations. Behavioural laws need reasoning on a stated domain.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Why can read need context even with fixed input?">
+
+Its input is String regardless of the result type. The result type selects the Read instance.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Which constraints enumerate from minBound to maxBound?">
+
+Both Bounded a and Enum a. Neither class has the other as a superclass.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Does Fractional imply Ord?">
+
+No. Fractional implies Num. Ordered fractional operations need Ord separately or an applicable stronger class such as RealFrac.
+
+  </CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Standard Class Exam Practice](/docs/sem3/csi243/09-polymorphism/notes/standard-class-exam-practice).

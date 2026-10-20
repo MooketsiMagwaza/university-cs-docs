@@ -1,0 +1,1105 @@
+---
+title: "Character Exam Practice"
+description: "Twelve narrated character problems combine code points, safe digit domains, exact escapes, whitespace counts and nested String transformations."
+---
+
+Attempt each question before opening the answer. [Characters and Data.Char](/docs/sem3/csi243/06-lists-tuples/notes/characters-and-data-char) supplies all operation templates and worked variations used here. These are applications of those concepts, with normal, changed and boundary checks in each runnable answer. For the underlying syntax, refer to [Values, Names, Types, and Text](/docs/sem3/csi243/02-expressions-types/notes/values-text), [Lab 02: Making Choices](/docs/sem3/csi243/04-making-choices/notes/lab-02) and [Importing](/docs/sem3/csi243/08-modules-types/notes/imports).
+
+<LearningObjectives items={[
+ 'Read an exam specification into types, domains and a transformation policy',
+ 'Justify guards before partial code and digit conversion',
+ 'Derive exact output without confusing escapes with contents',
+ 'Repair the Char versus String versus list-of-String mismatch',
+ 'Check normal, invalid and empty cases independently',
+]} />
+
+## 1. A reusable exam template
+
+For each problem, write the input type, output type, accepted alphabet and invalid-input policy before writing the expression. Choose the single-character rule, then count the map levels. Check an ordinary input, a changed alphabet or invalid input, and a boundary or empty input. A few passing examples are evidence for the implementation, not a proof for every possible input.
+
+```haskell
+-- For a supplied rule :: Char -> Char:
+-- one value: rule c
+-- one String: map rule text
+-- a list of Strings: map (map rule) texts
+```
+
+The practice questions reuse the concept templates in the lesson. No new library operation is introduced here.
+
+## 2. Questions and narrated answers
+
+### Exam question 1: Code offsets are not digit values (5 marks)
+
+Write `distance :: Char -> Char -> Int`, subtracting the second code from the first. Evaluate it on two digits, two cases, and equal input.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write needs a two-argument definition returning Int. The order of subtraction is fixed by the wording.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply ord to each Char before subtracting. Do not silently convert digit values or take an absolute value.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (ord)
+
+distance :: Char -> Char -> Int
+distance a b = ord a - ord b
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'9'` minus `'0'` is `57-48=9`. `'A'` minus `'a'` is `65-97 = -32`. Equal input gives zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+distance :: Char -> Char -> Int
+distance a b = ord a - ord b
+
+main :: IO ()
+main = do
+  print (distance '9' '0')
+  print (distance 'A' 'a')
+  print (distance '?' '?')
+```
+
+```text
+9
+-32
+0
+```
+
+</HaskellTryIt>
+
+The three checks vary the alphabet, subtraction sign and equal-input boundary.
+
+### Common errors
+
+Reversing the operands compiles but flips the sign. Passing `"9"` instead of `'9'` is a type mismatch (`Couldn't match`); use Char inputs.
+
+### Further practice with answer
+
+Predict `distance '0' '9'`.
+
+<details>
+<summary>Answer</summary>
+
+`-9`; the first argument still supplies the left operand.
+
+</details>
+
+### Exam question 2: Validate before code conversion (5 marks)
+
+Write `codeOrQuestion :: Int -> Char`, returning ? for invalid chr input. Check just below, at, and just above the lower boundary.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write requires one Char on every permitted Int input; crashing is not the requested invalid-input result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Test both code boundaries before chr, otherwise return the replacement Char.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (chr)
+
+codeOrQuestion :: Int -> Char
+codeOrQuestion n
+  | 0 <= n && n <= 1114111 = chr n
+  | otherwise = '?'
+```
+
+</Step>
+
+<Step title="4. Check">
+
+-1 is rejected, 0 and 1 are accepted. Test outputs via ord so control characters do not depend on terminal display.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (chr, ord)
+
+codeOrQuestion :: Int -> Char
+codeOrQuestion n
+  | 0 <= n && n <= 1114111 = chr n
+  | otherwise = '?'
+
+main :: IO ()
+main = do
+  print (ord (codeOrQuestion (-1)))
+  print (ord (codeOrQuestion 0))
+  print (ord (codeOrQuestion 1))
+```
+
+```text
+63
+0
+1
+```
+
+</HaskellTryIt>
+
+The replacement question mark has code 63. The accepted boundary values retain their own codes.
+
+### Common errors
+
+Testing only non-negativity leaves the upper side unsafe (`bad argument`). Returning `"?"` instead of `'?'` causes a type mismatch (`Couldn't match`).
+
+### Further practice with answer
+
+What happens at 1114111 and 1114112?
+
+<details>
+<summary>Answer</summary>
+
+The first is accepted; the second returns ?.
+
+</details>
+
+### Exam question 3: Three numeric alphabets (5 marks)
+
+Write `classifyDigit :: Char -> (Bool, Bool, Bool)` reporting octal, decimal and hexadecimal membership in that order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write needs three Boolean results, not a numeric conversion. Predicate order is part of the specification.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply each alphabet predicate independently; the alphabets are nested but have different endpoints.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isOctDigit, isDigit, isHexDigit)
+
+classifyDigit :: Char -> (Bool, Bool, Bool)
+classifyDigit c = (isOctDigit c, isDigit c, isHexDigit c)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+7 belongs to all three, 9 fails octal only, and F belongs only to hexadecimal.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isOctDigit, isDigit, isHexDigit)
+
+classifyDigit :: Char -> (Bool, Bool, Bool)
+classifyDigit c = (isOctDigit c, isDigit c, isHexDigit c)
+
+main :: IO ()
+main = do
+  print (classifyDigit '7')
+  print (classifyDigit '9')
+  print (classifyDigit 'F')
+```
+
+```text
+(True,True,True)
+(False,True,True)
+(False,False,True)
+```
+
+</HaskellTryIt>
+
+The input moves across each alphabet boundary without asking the partial converter to run.
+
+### Common errors
+
+Using digitToInt as a predicate gives a type mismatch when Bool is expected (`Couldn't match`). A successful conversion alone does not prove decimal membership.
+
+### Further practice with answer
+
+Classify G and space.
+
+<details>
+<summary>Answer</summary>
+
+Both give `(False,False,False)`.
+
+</details>
+
+### Exam question 4: Guarded hexadecimal total (5 marks)
+
+Write `hexTotal :: String -> Int`, summing values of hex digits and ignoring other characters.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write requests a String-to-Int definition. Ignoring invalid characters differs from rejecting the entire input.
+
+</Step>
+
+<Step title="2. Plan">
+
+Filter using the exact digitToInt domain, convert what remains, then sum. No new safe-result type is needed.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (digitToInt, isHexDigit)
+
+hexTotal :: String -> Int
+hexTotal s = sum (map digitToInt (filter isHexDigit s))
+```
+
+</Step>
+
+<Step title="4. Check">
+
+F0a keeps all three characters and sums 15+0+10=25. G-9 keeps only 9. Empty text sums to zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (digitToInt, isHexDigit)
+
+hexTotal :: String -> Int
+hexTotal s = sum (map digitToInt (filter isHexDigit s))
+
+main :: IO ()
+main = do
+  print (hexTotal "F0a")
+  print (hexTotal "G-9")
+  print (hexTotal "")
+```
+
+```text
+25
+9
+0
+```
+
+</HaskellTryIt>
+
+The normal, mixed-validity and empty cases each have a different kept list.
+
+### Common errors
+
+Mapping digitToInt before applying the domain filter can evaluate invalid conversions (`not a digit`). Filtering with isAlphaNum is also too broad. Keep the predicate next to the input before conversion.
+
+### Further practice with answer
+
+What is the decimal-only version?
+
+<details>
+<summary>Answer</summary>
+
+Replace isHexDigit with isDigit. Then F0a contributes only zero.
+
+</details>
+
+### Exam question 5: Guarded encoding and case loss (5 marks)
+
+Write `renderHex :: [Int] -> String`, replacing values outside 0 through 15 by ?, and using uppercase hex digits for valid values.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write requires one output Char per input Int; preserve positions instead of dropping invalid values.
+
+</Step>
+
+<Step title="2. Plan">
+
+Build a guarded Int-to-Char helper, then map it over the list. Uppercase only successful digit conversions.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (intToDigit, toUpper)
+
+renderHex :: [Int] -> String
+renderHex = map encode
+  where
+    encode n
+      | 0 <= n && n <= 15 = toUpper (intToDigit n)
+      | otherwise = '?'
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The accepted list 0,10,15 becomes 0AF. Both invalid sides yield ?. Empty input remains empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (intToDigit, toUpper)
+
+renderHex :: [Int] -> String
+renderHex = map encode
+  where
+    encode n
+      | 0 <= n && n <= 15 = toUpper (intToDigit n)
+      | otherwise = '?'
+
+main :: IO ()
+main = do
+  print (renderHex [0,10,15])
+  print (renderHex [-1,16])
+  print (renderHex [])
+```
+
+```text
+"0AF"
+"??"
+""
+```
+
+</HaskellTryIt>
+
+The three outputs check normal hex letters, both out-of-domain values, and the empty list.
+
+### Common errors
+
+Using show would produce Strings for each element rather than Chars, yielding a type mismatch (`Couldn't match`) for this signature. Omitting the lower guard leaves negative conversion unsafe.
+
+### Further practice with answer
+
+Is this function an arbitrary decimal integer formatter?
+
+<details>
+<summary>Answer</summary>
+
+No. For example 12 becomes C, while 16 becomes ?. Use show for decimal text.
+
+</details>
+
+### Exam question 6: Exact escapes and numeric termination (5 marks)
+
+Predict the exact output of the three print calls below, and explain the role of the empty escape.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Predict asks for the readable representation produced by print, not the raw content layout.
+
+</Step>
+
+<Step title="2. Plan">
+
+First reduce the source escape into stored Chars; then escape those Chars for print. The empty escape ends the numeric code without adding a Char.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  print "A\n\t\\\""
+  print "\65\&7"
+  print (length "\65\&7")
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The first value contains A, newline, tab, backslash and double quote. The second has A and 7, so its length is two.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = do
+  print "A\n\t\\\""
+  print "\65\&7"
+  print (length "\65\&7")
+```
+
+```text
+"A\n\t\\\""
+"A7"
+2
+```
+
+</HaskellTryIt>
+
+The first output keeps escaped controls and the data quote on one readable line. The separator prevents 7 joining code 65.
+
+### Common errors
+
+Omitting the separator changes the value to code 657 and compiles successfully. Predicting actual line breaks for the first print confuses stored content with Show output.
+
+### Further practice with answer
+
+How many Chars are stored in the first string?
+
+<details>
+<summary>Answer</summary>
+
+`5`, despite the longer escaped source spelling.
+
+</details>
+
+### Exam question 7: Literal spaces versus all whitespace (5 marks)
+
+Write `spaceReport :: String -> (Int, Int, Int)`, counting ordinary spaces, all whitespace and tabs, in that order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write needs three separate counts. Whitespace includes tabs; these counts are not disjoint partitions.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use literal equality for the narrow cases and isSpace for the broad case; count each filtered result.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isSpace)
+
+spaceReport :: String -> (Int, Int, Int)
+spaceReport s = (length (filter (== ' ') s),
+                 length (filter isSpace s),
+                 length (filter (== '\t') s))
+```
+
+</Step>
+
+<Step title="4. Check">
+
+For " \t\n " there are two spaces, four whitespace characters and one tab. Nonwhitespace and empty input give all zeroes.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace)
+
+spaceReport :: String -> (Int, Int, Int)
+spaceReport s = (length (filter (== ' ') s),
+                 length (filter isSpace s),
+                 length (filter (== '\t') s))
+
+main :: IO ()
+main = do
+  print (spaceReport " \t\n ")
+  print (spaceReport "A0!")
+  print (spaceReport "")
+```
+
+```text
+(2,4,1)
+(0,0,0)
+(0,0,0)
+```
+
+</HaskellTryIt>
+
+The mixed case exposes the difference; the next two check nonwhitespace and absence.
+
+### Common errors
+
+Adding the three counts double-counts tabs and spaces. GHC cannot detect this interpretation mistake. Passing `" "` to a Char equality test instead causes `Couldn't match`.
+
+### Further practice with answer
+
+What is the report for a singleton non-breaking space?
+
+<details>
+<summary>Answer</summary>
+
+`(0,1,0)`; it is whitespace but neither ordinary space nor tab.
+
+</details>
+
+### Exam question 8: Unicode classification is not ASCII classification (5 marks)
+
+Write `profile :: Char -> (Bool, Bool, Bool, Bool)`, reporting ASCII, alphabetic, decimal-digit and alphanumeric tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write asks for four predicates. Do not use a character code as if it were a digit value.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply each named test without deriving one from the others; isAlphaNum includes Unicode numbers beyond isDigit.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isAscii, isAlpha, isDigit, isAlphaNum)
+
+profile :: Char -> (Bool, Bool, Bool, Bool)
+profile c = (isAscii c, isAlpha c, isDigit c, isAlphaNum c)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Accented e is non-ASCII but alphabetic; Arabic-Indic three is non-ASCII and numeric but fails ASCII isDigit; space is ASCII but none of the other categories.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAscii, isAlpha, isDigit, isAlphaNum)
+
+profile :: Char -> (Bool, Bool, Bool, Bool)
+profile c = (isAscii c, isAlpha c, isDigit c, isAlphaNum c)
+
+main :: IO ()
+main = do
+  print (profile '\xE9')
+  print (profile '\x0663')
+  print (profile ' ')
+```
+
+```text
+(False,True,False,True)
+(False,False,False,True)
+(True,False,False,False)
+```
+
+</HaskellTryIt>
+
+These checks separate a Unicode letter, a Unicode number and an ASCII nonletter.
+
+### Common errors
+
+Defining isAlphaNum as isAlpha or isDigit changes its Unicode-number behaviour. That compiles but is the wrong claim. Use the library predicate when the requirement names it.
+
+### Further practice with answer
+
+What is the profile for ASCII 7?
+
+<details>
+<summary>Answer</summary>
+
+`(True,False,True,True)`.
+
+</details>
+
+### Exam question 9: Case tests are not complements (5 marks)
+
+Write `caseLabel :: Char -> String`, giving upper, lower or neither using the case predicates.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write asks for classification, not case conversion. A nonletter must receive neither.
+
+</Step>
+
+<Step title="2. Plan">
+
+Test uppercase first, lowercase second, then use the fallback. Do not infer lowercase merely from not-uppercase.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isUpper, isLower)
+
+caseLabel :: Char -> String
+caseLabel c
+  | isUpper c = "upper"
+  | isLower c = "lower"
+  | otherwise = "neither"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+R takes the first branch, r the second, and 7 the fallback. The result type is String because the labels contain several Chars.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isUpper, isLower)
+
+caseLabel :: Char -> String
+caseLabel c
+  | isUpper c = "upper"
+  | isLower c = "lower"
+  | otherwise = "neither"
+
+main :: IO ()
+main = do
+  print (caseLabel 'R')
+  print (caseLabel 'r')
+  print (caseLabel '7')
+```
+
+```text
+"upper"
+"lower"
+"neither"
+```
+
+</HaskellTryIt>
+
+One test reaches each branch, including the nonletter branch.
+
+### Common errors
+
+Testing whether toUpper leaves a Char unchanged wrongly labels 7 as upper. Returning a Char in one branch and String in another gives a type mismatch (`Couldn't match`).
+
+### Further practice with answer
+
+Which branch handles question mark?
+
+<details>
+<summary>Answer</summary>
+
+The fallback: neither.
+
+</details>
+
+### Exam question 10: Two normalisation policies (5 marks)
+
+Write `replaceWhite` and `removeWhite`, both lowercasing; the first replaces whitespace by space and the second deletes it.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write names two different String policies. Only the replacement policy must preserve character count.
+
+</Step>
+
+<Step title="2. Plan">
+
+Map a replacement rule for the first function. For the second filter out whitespace, then map toLower. Keep punctuation in both.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+replaceWhite :: String -> String
+replaceWhite = map (\c -> if isSpace c then ' ' else toLower c)
+
+removeWhite :: String -> String
+removeWhite s = map toLower (filter (\c -> not (isSpace c)) s)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Two adjacent whitespace inputs yield two spaces for replacement, none for removal. Empty and punctuation-only inputs distinguish neither policy.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+replaceWhite :: String -> String
+replaceWhite = map (\c -> if isSpace c then ' ' else toLower c)
+
+removeWhite :: String -> String
+removeWhite s = map toLower (filter (\c -> not (isSpace c)) s)
+
+main :: IO ()
+main = do
+  print (replaceWhite "A\t B!", removeWhite "A\t B!")
+  print (replaceWhite "", removeWhite "")
+  print (replaceWhite "7?", removeWhite "7?")
+```
+
+```text
+("a  b!","ab!")
+("","")
+("7?","7?")
+```
+
+</HaskellTryIt>
+
+Tab and ordinary space remain two positions in the first output. Both policies leave nonletters intact.
+
+### Common errors
+
+Returning `""` from the Char replacement lambda causes a Char/String mismatch (`Couldn't match`). Deletion requires the surrounding String design, not an empty Char.
+
+### Further practice with answer
+
+Can replacement collapse a run by itself?
+
+<details>
+<summary>Answer</summary>
+
+No. A simple Char-to-Char map emits one result for each input.
+
+</details>
+
+### Exam question 11: Repair the list-of-String signature (5 marks)
+
+Repair `names :: [String] -> [String]; names = map toUpper` and preserve order, duplicates and empty entries.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Repair requires a definition with the stated signature. The outer elements are Strings; toUpper accepts Char.
+
+</Step>
+
+<Step title="2. Plan">
+
+Lift toUpper once for each inner String, then lift that String transformation over the outer list. Do not concatenate or sort.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (toUpper)
+
+names :: [String] -> [String]
+names = map (map toUpper)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+An outer empty list stays empty, an empty inner entry stays present, and repeated names remain repeated in their original order.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+
+names :: [String] -> [String]
+names = map (map toUpper)
+
+main :: IO ()
+main = do
+  print (names ["bo","Ada","bo"])
+  print (names ["","a1"])
+  print (names [])
+```
+
+```text
+["BO","ADA","BO"]
+["","A1"]
+[]
+```
+
+</HaskellTryIt>
+
+The first case checks order and duplicates; the second empty inner text and nonletters; the third the outer boundary.
+
+### Common errors
+
+The original signature has a type mismatch (`Couldn't match`) between Char and [Char]. Adding only parentheses around toUpper changes nothing. Add the inner map.
+
+### Further practice with answer
+
+Write the equivalent using a named String helper.
+
+<details>
+<summary>Answer</summary>
+
+`upperText = map toUpper`; `names = map upperText`, with signatures String-to-String and list-of-String-to-list-of-String respectively.
+
+</details>
+
+### Exam question 12: An integrated label cleaner (5 marks)
+
+Write `cleanLabels :: [String] -> [String]`: retain Unicode letters and numbers in each label, lowercase letters, and preserve outer positions including labels that become empty.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command write combines filtering, case conversion and two list levels. Empty cleaned labels must not be removed.
+
+</Step>
+
+<Step title="2. Plan">
+
+Build a String cleaner by filtering isAlphaNum then mapping toLower. Map that cleaner over the outer list. No sort, concatenation or outer filter is required.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isAlphaNum, toLower)
+
+cleanLabels :: [String] -> [String]
+cleanLabels = map clean
+  where
+    clean s = map toLower (filter isAlphaNum s)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+B-2 becomes b2; a label of punctuation becomes empty but stays in place. Existing empty labels and an empty outer list obey their respective boundaries.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Runnable variations: normal, changed and boundary inputs
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlphaNum, toLower)
+
+cleanLabels :: [String] -> [String]
+cleanLabels = map clean
+  where
+    clean s = map toLower (filter isAlphaNum s)
+
+main :: IO ()
+main = do
+  print (cleanLabels ["B-2","Ada!","B-2"])
+  print (cleanLabels ["?!","","A 1"])
+  print (cleanLabels [])
+```
+
+```text
+["b2","ada","b2"]
+["","","a1"]
+[]
+```
+
+</HaskellTryIt>
+
+The first preserves duplicate order. The second preserves entries that become empty and removes inner spaces. The third checks no outer entries.
+
+### Common errors
+
+Using an outer filter to drop empty results violates the preservation requirement but compiles. `filter toLower` instead has a type mismatch (`Couldn't match`) because its predicate must return Bool.
+
+### Further practice with answer
+
+What changes if only ASCII alphanumeric characters are allowed?
+
+<details>
+<summary>Answer</summary>
+
+Use an inner predicate combining isAscii and isAlphaNum; the outer map remains the same.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+State the domain before conversion and the policy before transformation. Code conversion, digit conversion and input actions are different operations. Derive exact output from the stored Chars and the chosen output operation. Select the alphabet precisely, preserve the required positions and order, and lift a Char rule through each list level it must reach.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What makes a guard adequate for a partial converter?">
+
+Every value passing the guard must belong to the converter's domain, and the guard must enforce any narrower alphabet named by the specification.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why check both an empty String and an empty list of Strings?">
+
+They are boundaries at different list levels. A singleton empty String is another distinct case that must retain its outer position when required.
+
+</CheckQuestion>
+
+<CheckQuestion question="What causes repeated spaces after whitespace replacement?">
+
+A Char-to-Char map emits one result for every input character, so each whitespace position becomes a space. It does not collapse runs.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can a correctly typed solution still fail the question?">
+
+It may use the wrong alphabet, drop required entries, sort an order that must be preserved, or count whitespace when only literal spaces were requested.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+Continue with [Recursion on Lists](/docs/sem3/csi243/06-lists-tuples/notes/list-recursion).
