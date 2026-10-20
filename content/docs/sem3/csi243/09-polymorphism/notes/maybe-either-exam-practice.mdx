@@ -1,0 +1,1897 @@
+---
+title: "Maybe and Either Exam Practice"
+description: "Solve fully worked questions on optional results, explained failures, Ordering, unit, tuples and Bool."
+---
+
+Try each question before opening its answer. Start by reading the command word, record the input and result types, choose the defining equations, then check ordinary and boundary inputs. The short standard-type review supplies the extra building blocks used in the final questions.
+
+<LearningObjectives items={["Write signatures and total definitions for expected failure", "Trace and rewrite Maybe and Either consumers", "Check collection and first-error behaviour", "Choose a result representation and justify information loss", "Explain Ordering, unit, tuple and Bool instances"]} />
+
+## 1. The method and standard-type templates
+
+For a **write** question, give a signature and every required branch. For a **trace** question, substitute one equation at a time. For **rewrite**, preserve the signature and test both constructors. For **justify**, name the information that the result must retain.
+
+For a consumer, specialise each type variable before calculating. In `maybe d f m`, `d` has the result type; in `either f g e`, both handlers have one common result type. For a chain, list each stage and stop at the first absent or left result.
+
+### Ordering: a three-way result
+
+`Ordering` is the type with constructors `LT`, `EQ` and `GT`, in that declaration order. It records less than, equal to or greater than. `compare :: Ord a => a -> a -> Ordering` compares two values of the **same** type.
+
+**Template:** `case compare first second of LT -> lessResult; EQ -> equalResult; GT -> greaterResult`. All three branch results share one type. For integer inputs, these equations describe `compare`:
+
+```haskell
+compareInt :: Int -> Int -> Ordering
+compareInt x y
+  | x < y = LT
+  | x == y = EQ
+  | otherwise = GT
+```
+
+### Variation: less than
+
+<HaskellTryIt>
+
+```haskell
+-- Predict compare (2 :: Int) 5.
+main :: IO ()
+main = print (compare (2 :: Int) 5)
+```
+
+```text
+LT
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The less-than test succeeds, so `compareInt` selects `LT`; standard `compare` agrees.
+
+### Variation: equal
+
+<HaskellTryIt>
+
+```haskell
+-- Predict compare (5 :: Int) 5.
+main :: IO ()
+main = print (compare (5 :: Int) 5)
+```
+
+```text
+EQ
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The less-than test fails; equality succeeds, so select `EQ`.
+
+### Variation: greater than
+
+<HaskellTryIt>
+
+```haskell
+-- Predict compare (8 :: Int) 5.
+main :: IO ()
+main = print (compare (8 :: Int) 5)
+```
+
+```text
+GT
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both earlier tests fail; the remaining ordering is `GT`.
+
+**Common error:** `compare` returns `Ordering`, not `Bool`; use a three-way match or an ordinary comparison test. Standard `Eq` distinguishes the three constructors, `Ord` uses `LT < EQ < GT`, and `Show` displays their names.
+
+### Unit: one result with no payload
+
+The unit type `()` has one ordinary, defined value, also written `()`. Like every Haskell type it can also have nontermination or undefined expressions; these are not extra ordinary constructors. `IO ()` describes an action whose result carries no interesting payload, not an action which does nothing.
+
+**Template:** `finish :: Input -> ()`; `finish _ = ()`. A unit consumer matches `()`; equality and ordering always yield `True` and `EQ` for defined unit inputs.
+
+```haskell
+unitResult :: a -> ()
+unitResult _ = ()
+```
+
+### Variation: unit display
+
+<HaskellTryIt>
+
+```haskell
+-- Predict ().
+main :: IO ()
+main = print (())
+```
+
+```text
+()
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The expression is already the unit value; `Show` writes `()`.
+
+### Variation: unit equality
+
+<HaskellTryIt>
+
+```haskell
+-- Predict () == ().
+main :: IO ()
+main = print (() == ())
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both sides are the same sole ordinary unit constructor, so equality holds.
+
+### Variation: unit ordering and shown text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (compare () (), show ()).
+main :: IO ()
+main = print ((compare () (), show ()))
+```
+
+```text
+(EQ,"()")
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Compare identical unit values to obtain `EQ`; `show ()` returns the string `"()"`. The tuple displays both results.
+
+**Common error:** `()` differs from `[]` and from `""`: their types and meanings differ. `print ()` displays a unit result and itself returns an `IO ()` action.
+
+### Tuples: products store every field
+
+A pair `(a,b)` holds an `a` **and** a `b`; this is a product type. A choice `Either a b` holds only one side. Tuple equality compares corresponding fields; ordering is lexicographic: the first unequal field decides. Derived display uses parentheses and commas.
+
+**Template:** `consumePair (first,second) = combine first second`. These definitions show pair equality and ordering:
+
+```haskell
+equalPair :: (Eq a, Eq b) => (a,b) -> (a,b) -> Bool
+equalPair (a,b) (c,d) = a == c && b == d
+comparePair :: (Ord a, Ord b) => (a,b) -> (a,b) -> Ordering
+comparePair (a,b) (c,d) = case compare a c of
+  LT -> LT
+  EQ -> compare b d
+  GT -> GT
+```
+
+### Variation: pair display
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (3 :: Int,"ok").
+main :: IO ()
+main = print ((3 :: Int,"ok"))
+```
+
+```text
+(3,"ok")
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The product retains both fields; display uses a comma with no space.
+
+### Variation: equality uses both
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (1 :: Int,False) == (1,True).
+main :: IO ()
+main = print ((1 :: Int,False) == (1,True))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first fields agree; the second fields differ, so `True && False = False`.
+
+### Variation: first field decides order
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (1 :: Int,99 :: Int) < (2,0).
+main :: IO ()
+main = print ((1 :: Int,99 :: Int) < (2,0))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Compare first fields 1 and 2: `LT`. The larger second field 99 is irrelevant.
+
+**Common error:** pair ordering is not the rule that both fields must be smaller. `(1,99) < (2,0)` is true for the annotated integer pair above.
+
+### Bool: a two-constructor type
+
+The Prelude declaration is `data Bool = False | True`. A Boolean is one of these two values; the constructors do not carry fields. Its `Eq` instance compares constructors, `Ord` puts `False` before `True`, and `Show` writes their names.
+
+**Template:** `case condition of False -> falseResult; True -> trueResult`. These equations consume every constructor:
+
+```haskell
+flagText :: Bool -> String
+flagText False = "no"
+flagText True = "yes"
+```
+
+### Variation: constructor display
+
+<HaskellTryIt>
+
+```haskell
+-- Predict False.
+main :: IO ()
+main = print (False)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The expression is the constructor `False`; display writes its name.
+
+### Variation: equality
+
+<HaskellTryIt>
+
+```haskell
+-- Predict True == False.
+main :: IO ()
+main = print (True == False)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Different constructors are unequal.
+
+### Variation: ordering and text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (compare False True, show True).
+main :: IO ()
+main = print ((compare False True, show True))
+```
+
+```text
+(LT,"True")
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Declaration order gives `LT`; showing `True` gives a string which the tuple display quotes.
+
+**Common error:** `True` is not the integer 1 in Haskell; guard conditions must have type `Bool`.
+
+## 2. Exam questions
+
+Each answer includes the decision that selects a template, a full solution and a check. Complete programs inside the answers can be run independently.
+
+### Exam question 1: declare and write a safe last (4 marks)
+
+Declare a polymorphic type and write `lastMaybe`, which returns the last element of a non-empty list and absence for an empty list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Declare" asks for the signature and "write" asks for equations. The input elements may have any type; the output must preserve possible absence.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate the empty list, singleton and longer-list cases. In a longer list, discard the head and search its tail.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict lastMaybe [4,7,9 :: Int].
+lastMaybe :: [a] -> Maybe a
+lastMaybe [] = Nothing
+lastMaybe [x] = Just x
+lastMaybe (_:xs) = lastMaybe xs
+
+main :: IO ()
+main = print (lastMaybe [4,7,9 :: Int])
+```
+
+```text
+Just 9
+```
+
+</HaskellTryIt>
+
+`lastMaybe [4,7,9] = lastMaybe [7,9] = lastMaybe [9] = Just 9`.
+
+</Step>
+
+<Step title="4. Check">
+
+`lastMaybe ([] :: [Int]) = Nothing`; `lastMaybe [4] = Just 4`. No equality constraint is needed because no elements are compared.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: trace the numeric eliminator (4 marks)
+
+State the type and trace `maybe 10 (\n -> n * n) (Just (-3) :: Maybe Int)`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" needs a type and "trace" needs reductions. The payload is explicitly `Int`, so multiplication and the default specialise to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `maybe _ f (Just x) = f x`, substitute the payload into the lambda, then multiply.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybe 10 (\n -> n * n) (Just (-3) :: Maybe Int).
+main :: IO ()
+main = print (maybe 10 (\n -> n * n) (Just (-3) :: Maybe Int))
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+The expression has type `Int`. `maybe 10 f (Just (-3)) = f (-3) = (-3) * (-3) = 9`.
+
+</Step>
+
+<Step title="4. Check">
+
+Replacing the argument by `Nothing :: Maybe Int` gives default 10. The answer 9 is a bare integer because `maybe` consumes the wrapper.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: an absent string result (4 marks)
+
+Trace `maybe "none" show (Nothing :: Maybe Int)` and state exactly what `print` displays.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" requires the constructor choice; "exactly" includes string quotation marks. The handler changes an `Int` payload into a `String`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Select the absent equation. It returns the default directly and never calls `show` on a payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybe "none" show (Nothing :: Maybe Int).
+main :: IO ()
+main = print (maybe "none" show (Nothing :: Maybe Int))
+```
+
+```text
+"none"
+```
+
+</HaskellTryIt>
+
+`maybe "none" show Nothing = "none"`. The expression has type `String`, and `print` displays `"none"`.
+
+</Step>
+
+<Step title="4. Check">
+
+For `Just 4`, the other equation gives `show (4 :: Int) = "4"`. Both branches return `String`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: trace either handlers (4 marks)
+
+Evaluate `either length negate (Left "oops" :: Either String Int)` and its right-side variation with `Right 7`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for results, but the answer must identify the selected handler. Both handlers return `Int`: length of text or negation of an integer.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply `either f _ (Left x) = f x` or `either _ g (Right y) = g y` according to the outer constructor.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (either length negate (Left "oops" :: Either String Int), either length negate (Right 7 :: Either String Int)).
+main :: IO ()
+main = print ((either length negate (Left "oops" :: Either String Int), either length negate (Right 7 :: Either String Int)))
+```
+
+```text
+(4,-7)
+```
+
+</HaskellTryIt>
+
+The left expression becomes `length "oops" = 4`; the right becomes `negate 7 = -7`. Each expression has type `Int`.
+
+</Step>
+
+<Step title="4. Check">
+
+The unselected handler is unused. The two results are returned as a tuple for this runnable check, so its type is `(Int,Int)`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: rewrite case with maybe (4 marks)
+
+Rewrite `case m of Nothing -> 0; Just n -> n + 2` as a function using `maybe`, where `m :: Maybe Int`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" means preserve the result for both constructors. The existing branches identify the default and transformation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the absent branch as the first argument and abstract the present branch as `(+2)`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map addTwoOrZero [Nothing,Just 3,Just (-2)].
+addTwoOrZero :: Maybe Int -> Int
+addTwoOrZero m = maybe 0 (+2) m
+
+main :: IO ()
+main = print (map addTwoOrZero [Nothing,Just 3,Just (-2)])
+```
+
+```text
+[0,5,0]
+```
+
+</HaskellTryIt>
+
+`Nothing` selects 0; `Just 3` applies `(+2)` to 3; `Just (-2)` gives 0. The two zero results have different origins.
+
+</Step>
+
+<Step title="4. Check">
+
+Check the two equations: `addTwoOrZero Nothing = 0` and `addTwoOrZero (Just n) = n + 2`. This establishes the rewrite for every constructor.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: rewrite maybe with case (4 marks)
+
+Rewrite `maybe "missing" reverse m` as a function using `case`, for `m :: Maybe String`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" preserves the absent default and the present transformation. Its result type is `String`, rather than `Maybe String`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Make one alternative per constructor; the `Just` pattern supplies a string to `reverse`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict reverseOrMissing (Just "cat").
+reverseOrMissing :: Maybe String -> String
+reverseOrMissing m = case m of
+  Nothing -> "missing"
+  Just s -> reverse s
+
+main :: IO ()
+main = print (reverseOrMissing (Just "cat"))
+```
+
+```text
+"tac"
+```
+
+</HaskellTryIt>
+
+The present pattern binds `s = "cat"`. `reverse "cat" = "tac"`.
+
+</Step>
+
+<Step title="4. Check">
+
+`reverseOrMissing Nothing = "missing"`; `reverseOrMissing (Just "") = ""`. A present empty string must not select the fallback.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: rewrite case with either (4 marks)
+
+Rewrite `case e of Left msg -> length msg; Right n -> n * 2` using `either`, for `e :: Either String Int`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" needs one handler per original alternative. Both branches return `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose `length` as the left handler and `(*2)` as the right handler.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map sizeOrDouble [Left "bad",Right 4].
+sizeOrDouble :: Either String Int -> Int
+sizeOrDouble e = either length (*2) e
+
+main :: IO ()
+main = print (map sizeOrDouble [Left "bad",Right 4])
+```
+
+```text
+[3,8]
+```
+
+</HaskellTryIt>
+
+`Left "bad"` selects `length "bad" = 3`; `Right 4` selects `4 * 2 = 8`.
+
+</Step>
+
+<Step title="4. Check">
+
+The left and right equations agree with the original case for arbitrary payloads; the two-constructor test covers both paths.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: rewrite either with case (4 marks)
+
+Rewrite `either (\s -> "problem: " ++ s) show e` using `case`, for `e :: Either String Int`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Rewrite" keeps both the reason prefix and the conversion of successful integers into text.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind a different payload variable in each constructor alternative. Both results must remain `String`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map report [Left "bad",Right 4].
+report :: Either String Int -> String
+report e = case e of
+  Left s -> "problem: " ++ s
+  Right n -> show n
+
+main :: IO ()
+main = print (map report [Left "bad",Right 4])
+```
+
+```text
+["problem: bad","4"]
+```
+
+</HaskellTryIt>
+
+The left branch appends the reason. The right branch uses `show (4 :: Int) = "4"`; list display quotes both strings.
+
+</Step>
+
+<Step title="4. Check">
+
+`report (Left "") = "problem: "` and `report (Right 0) = "0"` show that neither empty text nor zero needs a special constructor rule.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: three optional steps (4 marks)
+
+Write a chain that requires a positive integer, halves it only if even, then halves the result only if even. Trace inputs 8, 6 and 0.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" needs all three stages and their composition; "trace" asks where each path succeeds or fails.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `andThen` twice. Each stage returns an optional integer; no default should turn failure into success.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map pipeline [8,6,0].
+andThen :: Maybe a -> (a -> Maybe b) -> Maybe b
+andThen Nothing _ = Nothing
+andThen (Just x) f = f x
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+half :: Int -> Maybe Int
+half n | even n = Just (n `div` 2)
+       | otherwise = Nothing
+pipeline :: Int -> Maybe Int
+pipeline n = andThen (andThen (positive n) half) half
+
+main :: IO ()
+main = print (map pipeline [8,6,0])
+```
+
+```text
+[Just 2,Nothing,Nothing]
+```
+
+</HaskellTryIt>
+
+`8 -> Just 8 -> Just 4 -> Just 2`. For 6: `Just 6 -> Just 3 -> Nothing`. For 0, positivity returns `Nothing` and both halves are skipped.
+
+</Step>
+
+<Step title="4. Check">
+
+`pipeline 4 = Just 1`; `pipeline (-4) = Nothing`. Returning a plain `Int` from `half` would violate the continuation type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: three explained steps (4 marks)
+
+Repeat the preceding pipeline with `Either String Int`, keeping the first failure reason. Trace 8, 6 and 0.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Repeat" preserves the checks, while "keeping" adds a requirement to retain error information.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the same error type at every stage. Bind passes right payloads onwards and copies left values unchanged.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map pipelineE [8,6,0].
+positiveE :: Int -> Either String Int
+positiveE n | n > 0 = Right n
+            | otherwise = Left "not positive"
+halfE :: Int -> Either String Int
+halfE n | even n = Right (n `div` 2)
+        | otherwise = Left "not even"
+pipelineE :: Int -> Either String Int
+pipelineE n = positiveE n >>= halfE >>= halfE
+
+main :: IO ()
+main = print (map pipelineE [8,6,0])
+```
+
+```text
+[Right 2,Left "not even",Left "not positive"]
+```
+
+</HaskellTryIt>
+
+8 succeeds throughout. With 6, the first half gives 3 and the second reports oddness. With 0, positivity fails before any half is called.
+
+</Step>
+
+<Step title="4. Check">
+
+`pipelineE 3 = Left "not even"`; there is no `Right` around a left result. Bind does not collect multiple errors.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: collect optional lists (4 marks)
+
+State the result and type of `catMaybes [Just [], Nothing, Just [2,3]]`, with integer list payloads.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" needs the payload-list type and the exact nesting. Removing one Maybe wrapper does not flatten list payloads.
+
+</Step>
+
+<Step title="2. Plan">
+
+Instantiate `a = [Int]` in `catMaybes :: [Maybe a] -> [a]`. Keep the two present lists.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict catMaybes [Just [],Nothing,Just [2,3 :: Int]].
+import Data.Maybe (catMaybes)
+
+main :: IO ()
+main = print (catMaybes [Just [],Nothing,Just [2,3 :: Int]])
+```
+
+```text
+[[],[2,3]]
+```
+
+</HaskellTryIt>
+
+`catMaybes` emits `[]`, skips `Nothing`, emits `[2,3]`, then ends. The result has type `[[Int]]`.
+
+</Step>
+
+<Step title="4. Check">
+
+`catMaybes ([] :: [Maybe [Int]]) = []`. An empty present payload remains an element, so the result here has length 2.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: map a digit parser (4 marks)
+
+Using a hand-written safe digit parser, evaluate `mapMaybe digit "a0b37"` and give the result type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Using" requires a function returning optional digits. `mapMaybe` drops failed characters and unwraps successful integer results.
+
+</Step>
+
+<Step title="2. Plan">
+
+Validate the ASCII range, subtract the code of zero, then collect in encounter order.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict mapMaybe digit "a0b37".
+import Data.Maybe (mapMaybe)
+digit :: Char -> Maybe Int
+digit c
+  | c >= '0' && c <= '9' = Just (fromEnum c - fromEnum '0')
+  | otherwise = Nothing
+
+main :: IO ()
+main = print (mapMaybe digit "a0b37")
+```
+
+```text
+[0,3,7]
+```
+
+</HaskellTryIt>
+
+The intermediate results are `Nothing`, `Just 0`, `Nothing`, `Just 3`, `Just 7`. The result type is `[Int]`.
+
+</Step>
+
+<Step title="4. Check">
+
+`mapMaybe digit "" = []`; `mapMaybe digit "0" = [0]`. A zero digit is a success, not a failure.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: partition a batch (4 marks)
+
+Evaluate `partitionEithers [Right 8, Left "x", Right 3, Left "y"]` with type `[Either String Int]` and explain the order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for a pair of lists; "explain" asks which ordering is preserved.
+
+</Step>
+
+<Step title="2. Plan">
+
+Place left payloads into the first list and right payloads into the second. Within each list, keep encounter order.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict partitionEithers [Right 8,Left "x",Right 3,Left "y" :: Either String Int].
+import Data.Either (partitionEithers)
+
+main :: IO ()
+main = print (partitionEithers [Right 8,Left "x",Right 3,Left "y" :: Either String Int])
+```
+
+```text
+(["x","y"],[8,3])
+```
+
+</HaskellTryIt>
+
+Start with `([],[])` at the tail; prepend `"y"` left, 3 right, `"x"` left, then 8 right. The result type is `([String],[Int])`.
+
+</Step>
+
+<Step title="4. Check">
+
+`partitionEithers ([] :: [Either String Int]) = ([],[])`. It does not sort either list, nor preserve the original interleaving.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 14: find the wrapper arithmetic error (4 marks)
+
+Explain why `bad :: Maybe Int; bad = Just 3 + 1` is rejected, then repair it while retaining an optional result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks for the type conflict; "repair" must keep the specified `Maybe Int` result rather than silently changing it to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`(+)` would need numeric operations on `Maybe Int`. Instead, apply the numeric function to the payload with mapping.
+
+</Step>
+
+<Step title="3. Solution">
+
+The deliberately rejected definition is a plain block:
+
+```haskell
+-- Incorrect: the wrapper is not an instance of Num.
+bad :: Maybe Int
+bad = Just 3 + 1
+```
+
+The key diagnostic is `No instance for (Num (Maybe Int))`. A repair is:
+
+<HaskellTryIt>
+
+```haskell
+-- Predict repaired.
+repaired :: Maybe Int
+repaired = fmap (+1) (Just 3)
+
+main :: IO ()
+main = print (repaired)
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+The reduction is `fmap (+1) (Just 3) = Just (3 + 1) = Just 4`.
+
+</Step>
+
+<Step title="4. Check">
+
+`fmap (+1) (Nothing :: Maybe Int) = Nothing`; the repair preserves optional behaviour on absence.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 15: choose Maybe for an optional alias (4 marks)
+
+A contact may have no preferred display name. No explanation is needed for absence. Choose a result type and write a function that uses the preferred name or the required name.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Choose" asks which information is required, and "write" asks for the consumer. The missing value needs no reason, so `Maybe String` is sufficient.
+
+</Step>
+
+<Step title="2. Plan">
+
+Accept the required string and an optional preferred string. Match on the optional constructor before choosing.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map (displayName "Ada") [Nothing,Just "A",Just ""].
+displayName :: String -> Maybe String -> String
+displayName required Nothing = required
+displayName _ (Just preferred) = preferred
+
+main :: IO ()
+main = print (map (displayName "Ada") [Nothing,Just "A",Just ""])
+```
+
+```text
+["Ada","A",""]
+```
+
+</HaskellTryIt>
+
+`Nothing` uses the required name; `Just "A"` uses `"A"`; `Just ""` uses the present empty string.
+
+</Step>
+
+<Step title="4. Check">
+
+`displayName "Bo" Nothing = "Bo"`. Rejecting empty preferred names would be a separate validation rule, not a property of `Maybe`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 16: choose Either for a booking (4 marks)
+
+A booking request fails if its seat count is non-positive or exceeds the available seats. Choose a result type and write a validator returning the remaining seats on success. Assume availability is non-negative.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Choose" requires preserving two different reasons. `Either String Int` makes those reasons available alongside a successful remaining count.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check positive demand first, then availability. Return a reason from each rejection branch and a right count otherwise.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map (book 5) [2,0,6].
+book :: Int -> Int -> Either String Int
+book available wanted
+  | wanted <= 0 = Left "invalid seat count"
+  | wanted > available = Left "not enough seats"
+  | otherwise = Right (available - wanted)
+
+main :: IO ()
+main = print (map (book 5) [2,0,6])
+```
+
+```text
+[Right 3,Left "invalid seat count",Left "not enough seats"]
+```
+
+</HaskellTryIt>
+
+Request 2 passes both tests and leaves 3. Request 0 fails the first guard. Request 6 passes positivity but fails availability.
+
+</Step>
+
+<Step title="4. Check">
+
+`book 5 5 = Right 0`: using every seat is success. The signature states that reasons are text and the successful payload is a count.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 17: replace error with Maybe (4 marks)
+
+An old function finds the maximum of a list but calls `error "empty"` for `[]`. Write `maximumMaybe :: Ord a => [a] -> Maybe a` without exceptions.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" asks for a complete definition. The output may be absent, and comparing elements requires `Ord a`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Treat the empty list separately. On a non-empty list, carry a current maximum through the remaining list.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maximumMaybe [3,1,7,2 :: Int].
+maximumMaybe :: Ord a => [a] -> Maybe a
+maximumMaybe [] = Nothing
+maximumMaybe (x:xs) = Just (go x xs)
+  where
+    go best [] = best
+    go best (y:ys) = go (max best y) ys
+
+main :: IO ()
+main = print (maximumMaybe [3,1,7,2 :: Int])
+```
+
+```text
+Just 7
+```
+
+</HaskellTryIt>
+
+Start at best 3. Read 1, retain 3; read 7, update to 7; read 2, retain 7; the empty tail returns 7 and the outer equation wraps it.
+
+</Step>
+
+<Step title="4. Check">
+
+`maximumMaybe ([] :: [Int]) = Nothing`; `maximumMaybe [-5,-2] = Just (-2)`. A magic default zero would give the wrong answer on all-negative lists.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 18: reason loss in conversion (4 marks)
+
+Define `toOptional :: Either e a -> Maybe a`. Show why converting two different errors loses information.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Define" asks for both constructors. The output has no error payload parameter, so it cannot retain arbitrary `e` values.
+
+</Step>
+
+<Step title="2. Plan">
+
+Discard any left payload and preserve any right payload inside `Just`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (toOptional (Left "missing" :: Either String Int),toOptional (Left "invalid" :: Either String Int),toOptional (Right 0 :: Either String Int)).
+toOptional :: Either e a -> Maybe a
+toOptional (Left _) = Nothing
+toOptional (Right x) = Just x
+
+main :: IO ()
+main = print ((toOptional (Left "missing" :: Either String Int),toOptional (Left "invalid" :: Either String Int),toOptional (Right 0 :: Either String Int)))
+```
+
+```text
+(Nothing,Nothing,Just 0)
+```
+
+</HaskellTryIt>
+
+The two distinct left reasons both select the absent equation; the right zero selects `Just 0`.
+
+</Step>
+
+<Step title="4. Check">
+
+A conversion back with reason `"unknown"` would map both absent results to the same new reason. It cannot reconstruct `"missing"` versus `"invalid"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 19: case on compare (4 marks)
+
+Write `relation :: Int -> Int -> String` using `case compare a b of`, returning `"before"`, `"equal"` or `"after"`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" requests a three-way consumer. `compare` produces `Ordering`, so `LT`, `EQ` and `GT` are the required patterns.
+
+</Step>
+
+<Step title="2. Plan">
+
+Map each ordering constructor to the specified string. No Boolean guard is needed after `compare`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map (\(a,b) -> relation a b) [(2,5),(5,5),(8,5)].
+relation :: Int -> Int -> String
+relation a b = case compare a b of
+  LT -> "before"
+  EQ -> "equal"
+  GT -> "after"
+
+main :: IO ()
+main = print (map (\(a,b) -> relation a b) [(2,5),(5,5),(8,5)])
+```
+
+```text
+["before","equal","after"]
+```
+
+</HaskellTryIt>
+
+`compare 2 5 = LT`, `compare 5 5 = EQ`, `compare 8 5 = GT`; substitute each constructor into the case.
+
+</Step>
+
+<Step title="4. Check">
+
+`relation (-1) 0 = "before"`. Every `Ordering` constructor is covered, and all results are `String`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 20: unit is a result type (4 marks)
+
+Explain `IO ()`, and give the equality, ordering and displayed representation of the unit value.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" requires separating the performed action from the value it returns. The result type says nothing about whether the action prints or changes state.
+
+</Step>
+
+<Step title="2. Plan">
+
+Identify the only ordinary unit value, then use its `Eq`, `Ord` and `Show` behaviour.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (() == (), compare () (), show ()).
+main :: IO ()
+main = print ((() == (), compare () (), show ()))
+```
+
+```text
+(True,EQ,"()")
+```
+
+</HaskellTryIt>
+
+`() == ()` is `True`; identical unit values compare as `EQ`; `show ()` is the string `"()"`. An action of type `IO ()` may perform effects and then return unit.
+
+</Step>
+
+<Step title="4. Check">
+
+`main = print ()` has type `IO ()` and prints `()`. Thus an uninteresting result does not mean the action has no effect.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 21: tuples are products (4 marks)
+
+Explain why `(String,Int)` differs from `Either String Int`, then evaluate `(1,99) < (2,0)` for integer pairs.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks about stored information, and "evaluate" asks about the standard tuple order.
+
+</Step>
+
+<Step title="2. Plan">
+
+A tuple stores both fields. For ordering, compare the first fields; only equality there requires the second comparison.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (1 :: Int,99 :: Int) < (2,0).
+main :: IO ()
+main = print ((1 :: Int,99 :: Int) < (2,0))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The pair stores both an identifier and a number; an `Either` stores one side. The first fields compare as `1 < 2`, so the tuple comparison is `True` regardless of 99 and 0.
+
+</Step>
+
+<Step title="4. Check">
+
+`(1 :: Int,99 :: Int) < (1,0)` is `False` because equal first fields force comparison of the second fields. Tuple equality requires both fields to agree.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 22: Bool instances (4 marks)
+
+Treat `Bool` as `data Bool = False | True`. Give its ordinary values and the results of `True == False`, `False < True` and `show False`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" asks for the two constructors and three results. No numeric interpretation is involved.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use constructor equality, declaration order and constructor-name display.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (True == False, False < True, show False).
+main :: IO ()
+main = print ((True == False, False < True, show False))
+```
+
+```text
+(False,True,"False")
+```
+
+</HaskellTryIt>
+
+The ordinary values are `False` and `True`. Distinct constructors are unequal, `False` precedes `True`, and `show False` returns text.
+
+</Step>
+
+<Step title="4. Check">
+
+`compare True False = GT`; `True == True` is `True`. Using `1` as a Boolean condition would require an unavailable numeric instance for `Bool`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 23: side defaults (4 marks)
+
+Trace `fromLeft "none" (Right 5)` and `fromRight 0 (Left "bad")` with type `Either String Int`. Explain which payload is discarded.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" asks for constructor equations, and "explain" asks what information the default loses.
+
+</Step>
+
+<Step title="2. Plan">
+
+`fromLeft` keeps a left payload or its left-type default; `fromRight` keeps a right payload or its right-type default.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (fromLeft "none" (Right 5 :: Either String Int),fromRight 0 (Left "bad" :: Either String Int)).
+import Data.Either (fromLeft,fromRight)
+
+main :: IO ()
+main = print ((fromLeft "none" (Right 5 :: Either String Int),fromRight 0 (Left "bad" :: Either String Int)))
+```
+
+```text
+("none",0)
+```
+
+</HaskellTryIt>
+
+The first expression matches a right value, discards 5 and returns `"none"`. The second matches a left value, discards `"bad"` and returns 0.
+
+</Step>
+
+<Step title="4. Check">
+
+On matching sides, `fromLeft "none" (Left "bad" :: Either String Int) = "bad"` and `fromRight 0 (Right 5 :: Either String Int) = 5`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 24: list conversion round trips (4 marks)
+
+Evaluate `maybeToList (listToMaybe [4,5])` and `listToMaybe (maybeToList (Just 4))` at integer payloads. Which direction loses information?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" needs two results and "which" needs a reason based on cardinality. A list may hold many elements; a `Maybe` can hold at most one.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the inner conversion first. Converting a list to `Maybe` selects only its first element.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (maybeToList (listToMaybe [4,5 :: Int]),listToMaybe (maybeToList (Just 4 :: Maybe Int))).
+import Data.Maybe (listToMaybe,maybeToList)
+
+main :: IO ()
+main = print ((maybeToList (listToMaybe [4,5 :: Int]),listToMaybe (maybeToList (Just 4 :: Maybe Int))))
+```
+
+```text
+([4],Just 4)
+```
+
+</HaskellTryIt>
+
+`listToMaybe [4,5] = Just 4`, then `maybeToList` gives `[4]`. In the other direction, `Just 4 -> [4] -> Just 4`.
+
+</Step>
+
+<Step title="4. Check">
+
+The list-to-Maybe-to-list round trip discards 5. For absence, `Nothing -> [] -> Nothing` preserves the optional value too.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 25: mapping versus chaining (4 marks)
+
+Let `step n = if n > 0 then Just (n + 1) else Nothing` at `Int`. Compare `fmap step (Just 3)` and `Just 3 >>= step`, giving both result types.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" asks for both values and types, rather than merely the numerical payload. `step` already returns a `Maybe`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Mapping wraps the function result; bind returns the function result directly.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (fmap step (Just 3),(Just 3 >>= step)).
+step :: Int -> Maybe Int
+step n = if n > 0 then Just (n + 1) else Nothing
+
+main :: IO ()
+main = print ((fmap step (Just 3),(Just 3 >>= step)))
+```
+
+```text
+(Just (Just 4),Just 4)
+```
+
+</HaskellTryIt>
+
+`fmap step (Just 3) = Just (step 3) = Just (Just 4)`, with type `Maybe (Maybe Int)`. Bind gives `step 3 = Just 4`, with type `Maybe Int`.
+
+</Step>
+
+<Step title="4. Check">
+
+With payload 0, mapping yields `Just Nothing` while chaining yields `Nothing`. That boundary confirms the extra mapping layer.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 26: first error in a dependent chain (4 marks)
+
+Using a positive check followed by two even-only halves, explain why input -3 reports positivity rather than oddness.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain why" requires identifying evaluation order. Although -3 violates both checks, later dependent steps only run on a right payload.
+
+</Step>
+
+<Step title="2. Plan">
+
+Expand the first call before expanding bind. The left equation returns the existing error and ignores each continuation.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict pipelineE (-3).
+positiveE :: Int -> Either String Int
+positiveE n | n > 0 = Right n
+            | otherwise = Left "not positive"
+halfE :: Int -> Either String Int
+halfE n | even n = Right (n `div` 2)
+        | otherwise = Left "not even"
+pipelineE :: Int -> Either String Int
+pipelineE n = positiveE n >>= halfE >>= halfE
+
+main :: IO ()
+main = print (pipelineE (-3))
+```
+
+```text
+Left "not positive"
+```
+
+</HaskellTryIt>
+
+`positiveE (-3) = Left "not positive"`; then `Left e >>= halfE = Left e` twice. Neither half is called, so no oddness reason replaces the first one.
+
+</Step>
+
+<Step title="4. Check">
+
+For input 3, positivity succeeds and the first half gives `Left "not even"`. This changed input confirms that the reason depends on the first reached failure.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 27: parse then validate a boundary (4 marks)
+
+Write a mark parser for non-empty ASCII decimal digits and the inclusive range 0 through 100. Distinguish missing, malformed and out-of-range input. Check `""`, `"9x"`, `"101"`, `"100"`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" requires syntax checking before numerical validation. The inclusive endpoint means 100 is valid.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use an unbounded decimal parser to avoid overflow, then inspect absence or a parsed value. Handle the empty input before the general parser.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map mark ["","9x","101","100"].
+parseNatural :: String -> Maybe Integer
+parseNatural [] = Nothing
+parseNatural cs = digits 0 cs
+  where
+    digits acc [] = Just acc
+    digits acc (c:rest)
+      | c >= '0' && c <= '9' =
+          digits (10 * acc + toInteger (fromEnum c - fromEnum '0')) rest
+      | otherwise = Nothing
+mark :: String -> Either String Integer
+mark "" = Left "missing"
+mark s = case parseNatural s of
+  Nothing -> Left "malformed"
+  Just n | n > 100 -> Left "out of range"
+         | otherwise -> Right n
+
+main :: IO ()
+main = print (map mark ["","9x","101","100"])
+```
+
+```text
+[Left "missing",Left "malformed",Left "out of range",Right 100]
+```
+
+</HaskellTryIt>
+
+The empty input selects its equation. `"9x"` fails the character test. `"101"` parses but exceeds 100. `"100"` parses and passes the inclusive range test.
+
+</Step>
+
+<Step title="4. Check">
+
+`mark "0" = Right 0`; `mark "-1" = Left "malformed"` under this explicitly unsigned input grammar. A minus sign is not silently accepted.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 28: Either need not mean error (4 marks)
+
+A catalogue identifier is either a numeric code or a text name. Choose a type for a list of identifiers, write a display function, and explain why neither side must mean failure.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Choose" and "write" require a representation and a consumer. Each identifier holds one of two types, so a sum type fits.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `[Either Int String]` for the list and pattern-match each identifier. The validation convention does not constrain this domain.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+-- Predict map catalogueLabel [Left 12,Right "Atlas"].
+catalogueLabel :: Either Int String -> String
+catalogueLabel (Left n) = "code " ++ show n
+catalogueLabel (Right s) = "name " ++ s
+
+main :: IO ()
+main = print (map catalogueLabel [Left 12,Right "Atlas"])
+```
+
+```text
+["code 12","name Atlas"]
+```
+
+</HaskellTryIt>
+
+The left identifier binds numeric 12 and displays `"code 12"`; the right binds `"Atlas"` and displays `"name Atlas"`. Both are valid identifiers.
+
+</Step>
+
+<Step title="4. Check">
+
+A plain `[Int]` cannot retain names and a plain `[String]` loses the distinction unless separately encoded. A tuple would require both fields, which is not the requirement.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Read the command word, fix the types, select equations and check boundary cases. Optional absence, explained failure, a two-way choice and a product store different information. A mapping keeps context; a dependent chain stops at its first failure; a collector preserves the successful entries or separates the two sides. Standard instances follow constructor and field rules, not informal numerical guesses.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What must a trace of maybe or either identify first?">
+
+The outer constructor. It selects either a default or the appropriate handler before payload calculation.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can catMaybes return a nested list?">
+
+If its payload type is itself a list, removing the Maybe wrapper leaves a list of list payloads.
+
+</CheckQuestion>
+
+<CheckQuestion question="How do you verify a case-to-eliminator rewrite?">
+
+Specialise its types, then substitute both constructors and compare the resulting branch expressions.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is a product different from a choice?">
+
+A product retains both fields simultaneously; a choice retains one tagged alternative.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is the role of the final check?">
+
+It tests ordinary and boundary inputs, verifies the result type and confirms no constructor or priority rule was overlooked.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+

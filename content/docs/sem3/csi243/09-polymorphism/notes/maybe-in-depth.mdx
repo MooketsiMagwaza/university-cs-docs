@@ -1,0 +1,3945 @@
+---
+title: "Maybe in Depth"
+description: "Build, consume and chain optional results by defining and tracing safe functions and the standard Maybe tools."
+---
+
+A failed search, an empty list and an invalid calculation need a caller decision. This lesson extends the introductory Maybe lesson into a working method: design the failure cases, calculate with successful payloads, and choose how to consume or propagate absence.
+
+<LearningObjectives items={["Design safe functions with explicit failure cases", "Define and trace standard Maybe consumers", "Distinguish mapping, collecting and chaining", "Use optional fields and read Eq, Ord and Show behaviour"]} />
+
+## 1. The problem and the two constructors
+
+A missing key has no associated value; `head []` has no first element; integer division by zero has no quotient. Returning `-1` hides failure among valid numbers: a temperature or balance can really be negative. A default `0` also hides information. `error` raises an exception instead of returning an ordinary result. `Maybe` keeps absence separate from every valid payload.
+
+The Prelude declaration is shown for reading; do not redeclare it:
+
+```haskell
+data Maybe a = Nothing | Just a
+```
+
+`a` names the payload type. `Nothing :: Maybe a` carries no payload; `Just :: a -> Maybe a` carries exactly one. `Maybe Int` differs from `Int`. A present empty list `Just []` differs from `Nothing`. In `Just Nothing :: Maybe (Maybe Int)`, the outer result exists but the inner result is absent.
+
+**Template:** construct absence with `Nothing :: Maybe PayloadType` and presence with `Just payload`. Consume it with one alternative per constructor. The type exposes absence; it does not force exhaustive matching without suitable warning settings.
+
+### Variation: a negative payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Just (-3) :: Maybe Int.
+main :: IO ()
+main = print (Just (-3) :: Maybe Int)
+```
+
+```text
+Just (-3)
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The payload stays negative; constructor application shows parentheses around the negative number.
+
+### Variation: typed absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Nothing :: Maybe String.
+main :: IO ()
+main = print (Nothing :: Maybe String)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The annotation fixes the unseen payload type; there is no payload to display.
+
+### Variation: present empty list
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Just [] :: Maybe [Int].
+main :: IO ()
+main = print (Just [] :: Maybe [Int])
+```
+
+```text
+Just []
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The outer constructor is present; the payload is an empty list.
+
+This deliberately rejected program belongs outside a runnable block:
+
+```haskell
+-- Incorrect: arithmetic on the wrapper.
+main :: IO ()
+main = print ((Just 3 + 1) :: Maybe Int)
+```
+
+The key GHC diagnostic is `No instance for (Num (Maybe Int))`. Repair it by matching the constructors or mapping `(+1)` over the payload.
+
+**Producer template:**
+
+```haskell
+optional invalid calculate input
+  | invalid input = Nothing
+  | otherwise = Just (calculate input)
+```
+
+`invalid` is a Boolean test, `calculate` computes the payload, and `input` is checked before the calculation. For lists, use `[]` and cons patterns instead. The next eight sections vary the reason for failure, the payload type and the boundary conditions.
+
+## 2. `safeDiv`: a non-zero divisor
+
+Integer `div` rounds down; negative quotients are valid. Use unbounded `Integer` here so the only excluded divisor is zero.
+
+**Template:** `safeDiv numerator divisor`: reject a zero divisor before doing arithmetic.
+
+**Defining equations:**
+
+```haskell
+safeDiv :: Integer -> Integer -> Maybe Integer
+safeDiv _ 0 = Nothing
+safeDiv x y = Just (x `div` y)
+```
+
+### Variation: ordinary success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeDiv 17 5.
+safeDiv :: Integer -> Integer -> Maybe Integer
+safeDiv _ 0 = Nothing
+safeDiv x y = Just (x `div` y)
+
+main :: IO ()
+main = print (safeDiv 17 5)
+```
+
+```text
+Just 3
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeDiv 17 5 = Just (div 17 5) = Just 3`, by the non-zero equation.
+
+### Variation: zero divisor
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeDiv 0 0.
+safeDiv :: Integer -> Integer -> Maybe Integer
+safeDiv _ 0 = Nothing
+safeDiv x y = Just (x `div` y)
+
+main :: IO ()
+main = print (safeDiv 0 0)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeDiv 0 0 = Nothing` by the zero equation. No division is demanded.
+
+### Variation: negative dividend
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeDiv (-7) 2.
+safeDiv :: Integer -> Integer -> Maybe Integer
+safeDiv _ 0 = Nothing
+safeDiv x y = Just (x `div` y)
+
+main :: IO ()
+main = print (safeDiv (-7) 2)
+```
+
+```text
+Just (-4)
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeDiv (-7) 2 = Just (div (-7) 2) = Just (-4)`. Rounding down differs from truncation towards zero.
+
+**Common error and repair:** Testing the numerator rejects valid zero answers; test the divisor.
+
+**Practice with an answer:** Predict `safeDiv 17 5` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 3`. `safeDiv 17 5 = Just (div 17 5) = Just 3`, by the non-zero equation.
+
+</details>
+
+## 3. `safeHead`: select one element
+
+The element type remains polymorphic: selecting does not require arithmetic, equality or display.
+
+**Template:** `safeHead items`: distinguish an empty list from a cons before selecting.
+
+**Defining equations:**
+
+```haskell
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x:_) = Just x
+```
+
+### Variation: several elements
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeHead [8,9 :: Int].
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x:_) = Just x
+
+main :: IO ()
+main = print (safeHead [8,9 :: Int])
+```
+
+```text
+Just 8
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeHead (8:[9]) = Just 8`; ignore the tail.
+
+### Variation: empty boundary
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeHead ([] :: [Int]).
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x:_) = Just x
+
+main :: IO ()
+main = print (safeHead ([] :: [Int]))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The empty equation gives `safeHead [] = Nothing`.
+
+### Variation: string payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeHead ["", "later"].
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x:_) = Just x
+
+main :: IO ()
+main = print (safeHead ["", "later"])
+```
+
+```text
+Just ""
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first element is an empty string; the non-empty input list gives `Just ""`, not absence.
+
+**Common error and repair:** Returning `x` instead of `Just x` loses the optional result type.
+
+**Practice with an answer:** Predict `safeHead [8,9 :: Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 8`. `safeHead (8:[9]) = Just 8`; ignore the tail.
+
+</details>
+
+## 4. `safeTail`: a present empty list
+
+A singleton has an empty tail. Only an empty input has no tail at all.
+
+**Template:** `safeTail items`: the payload is a list, hence `Maybe [a]`.
+
+**Defining equations:**
+
+```haskell
+safeTail :: [a] -> Maybe [a]
+safeTail [] = Nothing
+safeTail (_:xs) = Just xs
+```
+
+### Variation: longer list
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeTail [4,5,6 :: Int].
+safeTail :: [a] -> Maybe [a]
+safeTail [] = Nothing
+safeTail (_:xs) = Just xs
+
+main :: IO ()
+main = print (safeTail [4,5,6 :: Int])
+```
+
+```text
+Just [5,6]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeTail (4:[5,6]) = Just [5,6]`, binding `xs = [5,6]`.
+
+### Variation: singleton
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeTail [4 :: Int].
+safeTail :: [a] -> Maybe [a]
+safeTail [] = Nothing
+safeTail (_:xs) = Just xs
+
+main :: IO ()
+main = print (safeTail [4 :: Int])
+```
+
+```text
+Just []
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeTail (4:[]) = Just []`; a cons exists even with an empty tail.
+
+### Variation: empty input
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeTail ([] :: [Char]).
+safeTail :: [a] -> Maybe [a]
+safeTail [] = Nothing
+safeTail (_:xs) = Just xs
+
+main :: IO ()
+main = print (safeTail ([] :: [Char]))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeTail [] = Nothing`; there is no cons to take apart.
+
+**Common error and repair:** Returning `Nothing` for a singleton incorrectly discards a successful empty tail.
+
+**Practice with an answer:** Predict `safeTail [4,5,6 :: Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just [5,6]`. `safeTail (4:[5,6]) = Just [5,6]`, binding `xs = [5,6]`.
+
+</details>
+
+## 5. `safeRoot`: check a real domain
+
+For finite real inputs, non-negative arguments have real square roots. This stated domain excludes NaN and infinities.
+
+**Template:** `safeRoot number`: test the domain restriction before applying `sqrt`.
+
+**Defining equations:**
+
+```haskell
+safeRoot :: Double -> Maybe Double
+safeRoot x
+  | x < 0 = Nothing
+  | otherwise = Just (sqrt x)
+```
+
+### Variation: positive square
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeRoot 16.
+safeRoot :: Double -> Maybe Double
+safeRoot x
+  | x < 0 = Nothing
+  | otherwise = Just (sqrt x)
+
+main :: IO ()
+main = print (safeRoot 16)
+```
+
+```text
+Just 4.0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `16 < 0` is `False`; `Just (sqrt 16) = Just 4.0`.
+
+### Variation: zero boundary
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeRoot 0.
+safeRoot :: Double -> Maybe Double
+safeRoot x
+  | x < 0 = Nothing
+  | otherwise = Just (sqrt x)
+
+main :: IO ()
+main = print (safeRoot 0)
+```
+
+```text
+Just 0.0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Zero is not negative; `Just (sqrt 0) = Just 0.0`.
+
+### Variation: negative argument
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeRoot (-9).
+safeRoot :: Double -> Maybe Double
+safeRoot x
+  | x < 0 = Nothing
+  | otherwise = Just (sqrt x)
+
+main :: IO ()
+main = print (safeRoot (-9))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The negative guard is `True`, returning absence before `sqrt`.
+
+**Common error and repair:** Rejecting zero with a less-than-or-equal test rejects a valid result.
+
+**Practice with an answer:** Predict `safeRoot 16` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 4.0`. `16 < 0` is `False`; `Just (sqrt 16) = Just 4.0`.
+
+</details>
+
+## 6. `safeIndex`: two boundaries
+
+Index from zero. Negative positions and running out of list are independent failure cases.
+
+**Template:** `safeIndex items position`: reject negatives, then discard one cons per decrement.
+
+**Defining equations:**
+
+```haskell
+safeIndex :: [a] -> Int -> Maybe a
+safeIndex _ n | n < 0 = Nothing
+safeIndex [] _ = Nothing
+safeIndex (x:_) 0 = Just x
+safeIndex (_:xs) n = safeIndex xs (n - 1)
+```
+
+### Variation: recursive selection
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeIndex "cat" 2.
+safeIndex :: [a] -> Int -> Maybe a
+safeIndex _ n | n < 0 = Nothing
+safeIndex [] _ = Nothing
+safeIndex (x:_) 0 = Just x
+safeIndex (_:xs) n = safeIndex xs (n - 1)
+
+main :: IO ()
+main = print (safeIndex "cat" 2)
+```
+
+```text
+Just 't'
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeIndex "cat" 2 = safeIndex "at" 1 = safeIndex "t" 0 = Just 't'`, by two recursive steps and the zero equation.
+
+### Variation: negative position
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeIndex [10,20 :: Int] (-1).
+safeIndex :: [a] -> Int -> Maybe a
+safeIndex _ n | n < 0 = Nothing
+safeIndex [] _ = Nothing
+safeIndex (x:_) 0 = Just x
+safeIndex (_:xs) n = safeIndex xs (n - 1)
+
+main :: IO ()
+main = print (safeIndex [10,20 :: Int] (-1))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first guard succeeds immediately, so no indexing is attempted.
+
+### Variation: exactly past the end
+
+<HaskellTryIt>
+
+```haskell
+-- Predict safeIndex [10,20 :: Int] 2.
+safeIndex :: [a] -> Int -> Maybe a
+safeIndex _ n | n < 0 = Nothing
+safeIndex [] _ = Nothing
+safeIndex (x:_) 0 = Just x
+safeIndex (_:xs) n = safeIndex xs (n - 1)
+
+main :: IO ()
+main = print (safeIndex [10,20 :: Int] 2)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `safeIndex [10,20] 2 = safeIndex [20] 1 = safeIndex [] 0 = Nothing`.
+
+**Common error and repair:** Calling `!!` before checking bounds can crash before the wrapper is constructed.
+
+**Practice with an answer:** Predict `safeIndex "cat" 2` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 't'`. `safeIndex "cat" 2 = safeIndex "at" 1 = safeIndex "t" 0 = Just 't'`, by two recursive steps and the zero equation.
+
+</details>
+
+## 7. `findValue`: table lookup
+
+Compare keys, stop at the first match, and fail only after exhausting the table. Duplicate keys therefore use the first value.
+
+**Template:** `findValue wanted pairs`: `Eq k` supplies key equality; no constraint on values is needed.
+
+**Defining equations:**
+
+```haskell
+findValue :: Eq k => k -> [(k,v)] -> Maybe v
+findValue _ [] = Nothing
+findValue key ((k,v):rest)
+  | key == k = Just v
+  | otherwise = findValue key rest
+```
+
+### Variation: skip then match
+
+<HaskellTryIt>
+
+```haskell
+-- Predict findValue "b" [("a",3),("b",7 :: Int)].
+findValue :: Eq k => k -> [(k,v)] -> Maybe v
+findValue _ [] = Nothing
+findValue key ((k,v):rest)
+  | key == k = Just v
+  | otherwise = findValue key rest
+
+main :: IO ()
+main = print (findValue "b" [("a",3),("b",7 :: Int)])
+```
+
+```text
+Just 7
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `"b" == "a"` is `False`; recurse. `"b" == "b"` is `True`, so return `Just 7`.
+
+### Variation: duplicate keys
+
+<HaskellTryIt>
+
+```haskell
+-- Predict findValue 1 [(1,"first"),(1,"later")].
+findValue :: Eq k => k -> [(k,v)] -> Maybe v
+findValue _ [] = Nothing
+findValue key ((k,v):rest)
+  | key == k = Just v
+  | otherwise = findValue key rest
+
+main :: IO ()
+main = print (findValue 1 [(1,"first"),(1,"later")])
+```
+
+```text
+Just "first"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The first equality succeeds, so the remaining duplicate is not searched.
+
+### Variation: missing key
+
+<HaskellTryIt>
+
+```haskell
+-- Predict findValue "z" [("a",3 :: Int)].
+findValue :: Eq k => k -> [(k,v)] -> Maybe v
+findValue _ [] = Nothing
+findValue key ((k,v):rest)
+  | key == k = Just v
+  | otherwise = findValue key rest
+
+main :: IO ()
+main = print (findValue "z" [("a",3 :: Int)])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The only key differs, leaving `findValue "z" [] = Nothing`.
+
+**Common error and repair:** Omitting `Eq k =>` makes the use of `==` incompatible with an unrestricted key type.
+
+**Practice with an answer:** Predict `findValue "b" [("a",3),("b",7 :: Int)]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 7`. `"b" == "a"` is `False`; recurse. `"b" == "b"` is `True`, so return `Just 7`.
+
+</details>
+
+## 8. `firstEven`: predicate search
+
+Searching may test a property instead of a key. Zero and negative even numbers are successes too.
+
+**Template:** `firstEven numbers`: skip a failed test and stop immediately when it succeeds.
+
+**Defining equations:**
+
+```haskell
+firstEven :: [Int] -> Maybe Int
+firstEven [] = Nothing
+firstEven (x:xs)
+  | even x = Just x
+  | otherwise = firstEven xs
+```
+
+### Variation: skip odd values
+
+<HaskellTryIt>
+
+```haskell
+-- Predict firstEven [1,3,8,10].
+firstEven :: [Int] -> Maybe Int
+firstEven [] = Nothing
+firstEven (x:xs)
+  | even x = Just x
+  | otherwise = firstEven xs
+
+main :: IO ()
+main = print (firstEven [1,3,8,10])
+```
+
+```text
+Just 8
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `even 1` and `even 3` are `False`; `even 8` is `True`, giving `Just 8`.
+
+### Variation: no match
+
+<HaskellTryIt>
+
+```haskell
+-- Predict firstEven [1,3].
+firstEven :: [Int] -> Maybe Int
+firstEven [] = Nothing
+firstEven (x:xs)
+  | even x = Just x
+  | otherwise = firstEven xs
+
+main :: IO ()
+main = print (firstEven [1,3])
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both tests fail, leaving `firstEven [] = Nothing`.
+
+### Variation: zero succeeds
+
+<HaskellTryIt>
+
+```haskell
+-- Predict firstEven [0,2].
+firstEven :: [Int] -> Maybe Int
+firstEven [] = Nothing
+firstEven (x:xs)
+  | even x = Just x
+  | otherwise = firstEven xs
+
+main :: IO ()
+main = print (firstEven [0,2])
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `even 0 = True`, so return `Just 0` and ignore the later `2`.
+
+**Common error and repair:** Searching beyond the first match can return the wrong even number.
+
+**Practice with an answer:** Predict `firstEven [1,3,8,10]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 8`. `even 1` and `even 3` are `False`; `even 8` is `True`, giving `Just 8`.
+
+</details>
+
+## 9. `parseDigit`: one ASCII character
+
+Accept one of the ten characters from zero to nine. This is not a parser for signed numbers or whole strings.
+
+**Template:** `parseDigit character`: check the range, then subtract the code of zero.
+
+**Defining equations:**
+
+```haskell
+parseDigit :: Char -> Maybe Int
+parseDigit c
+  | c >= '0' && c <= '9' = Just (fromEnum c - fromEnum '0')
+  | otherwise = Nothing
+```
+
+### Variation: middle digit
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseDigit '7'.
+parseDigit :: Char -> Maybe Int
+parseDigit c
+  | c >= '0' && c <= '9' = Just (fromEnum c - fromEnum '0')
+  | otherwise = Nothing
+
+main :: IO ()
+main = print (parseDigit '7')
+```
+
+```text
+Just 7
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The range test succeeds; `fromEnum '7' - fromEnum '0' = 55 - 48 = 7`, so wrap `7`.
+
+### Variation: zero digit
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseDigit '0'.
+parseDigit :: Char -> Maybe Int
+parseDigit c
+  | c >= '0' && c <= '9' = Just (fromEnum c - fromEnum '0')
+  | otherwise = Nothing
+
+main :: IO ()
+main = print (parseDigit '0')
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The endpoints are inclusive; `48 - 48 = 0`, giving `Just 0`.
+
+### Variation: non-digit
+
+<HaskellTryIt>
+
+```haskell
+-- Predict parseDigit 'x'.
+parseDigit :: Char -> Maybe Int
+parseDigit c
+  | c >= '0' && c <= '9' = Just (fromEnum c - fromEnum '0')
+  | otherwise = Nothing
+
+main :: IO ()
+main = print (parseDigit 'x')
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `'x' <= '9'` is `False`, so the failure guard returns `Nothing`.
+
+**Common error and repair:** Unvalidated `read [c]` turns an invalid character into an exception.
+
+**Practice with an answer:** Predict `parseDigit '7'` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 7`. The range test succeeds; `fromEnum '7' - fromEnum '0' = 55 - 48 = 7`, so wrap `7`.
+
+</details>
+
+## 10. Consuming by equations
+
+A consumer must return one common result type for both constructors. Calculate with a payload only after matching `Just`.
+
+**Template:** `consumer Nothing = absentResult`; `consumer (Just x) = presentResult x`. Both results have the same type.
+
+**Defining equations:**
+
+```haskell
+score :: Maybe Int -> Int
+score Nothing = 0
+score (Just n) = n * 2
+```
+
+### Variation: present positive
+
+<HaskellTryIt>
+
+```haskell
+-- Predict score (Just 4).
+score :: Maybe Int -> Int
+score Nothing = 0
+score (Just n) = n * 2
+
+main :: IO ()
+main = print (score (Just 4))
+```
+
+```text
+8
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `score (Just 4) = 4 * 2 = 8` by the present equation.
+
+### Variation: absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict score Nothing.
+score :: Maybe Int -> Int
+score Nothing = 0
+score (Just n) = n * 2
+
+main :: IO ()
+main = print (score Nothing)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `score Nothing = 0`; no payload is invented.
+
+### Variation: present negative
+
+<HaskellTryIt>
+
+```haskell
+-- Predict score (Just (-3)).
+score :: Maybe Int -> Int
+score Nothing = 0
+score (Just n) = n * 2
+
+main :: IO ()
+main = print (score (Just (-3)))
+```
+
+```text
+-6
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `score (Just (-3)) = (-3) * 2 = -6`.
+
+**Common error and repair:** A `Just`-only definition is partial; add the absent equation.
+
+**Practice with an answer:** Predict `score (Just 4)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`8`. `score (Just 4) = 4 * 2 = 8` by the present equation.
+
+</details>
+
+## 11. Consuming by guarded `case`
+
+After matching a constructor, guards can test its payload. Variables bound by the pattern are available only inside that alternative.
+
+**Template:** `case optional of Nothing -> fallback; Just x | test x -> firstResult | otherwise -> secondResult`. Try guards in order.
+
+**Defining equations:**
+
+```haskell
+describe :: Maybe Int -> String
+describe m = case m of
+  Nothing -> "missing"
+  Just n | n < 0 -> "negative"
+         | otherwise -> "non-negative"
+```
+
+### Variation: absent alternative
+
+<HaskellTryIt>
+
+```haskell
+-- Predict describe Nothing.
+describe :: Maybe Int -> String
+describe m = case m of
+  Nothing -> "missing"
+  Just n | n < 0 -> "negative"
+         | otherwise -> "non-negative"
+
+main :: IO ()
+main = print (describe Nothing)
+```
+
+```text
+"missing"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The `Nothing` pattern matches first; no numeric guard is examined.
+
+### Variation: first guard succeeds
+
+<HaskellTryIt>
+
+```haskell
+-- Predict describe (Just (-2)).
+describe :: Maybe Int -> String
+describe m = case m of
+  Nothing -> "missing"
+  Just n | n < 0 -> "negative"
+         | otherwise -> "non-negative"
+
+main :: IO ()
+main = print (describe (Just (-2)))
+```
+
+```text
+"negative"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `Just n` binds `n = -2`; `n < 0` is `True`, selecting `"negative"`.
+
+### Variation: guard falls through
+
+<HaskellTryIt>
+
+```haskell
+-- Predict describe (Just 0).
+describe :: Maybe Int -> String
+describe m = case m of
+  Nothing -> "missing"
+  Just n | n < 0 -> "negative"
+         | otherwise -> "non-negative"
+
+main :: IO ()
+main = print (describe (Just 0))
+```
+
+```text
+"non-negative"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The present pattern binds `n = 0`. The first guard is `False`; `otherwise` is `True`.
+
+**Common error and repair:** Using `=` instead of `->` in a case alternative gives a parse error.
+
+**Practice with an answer:** Predict `describe Nothing` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`"missing"`. The `Nothing` pattern matches first; no numeric guard is examined.
+
+</details>
+
+## 12. `maybe`: choose and transform
+
+The eliminator removes the outer wrapper: a default on absence, or a function applied to the payload. The result type may differ from the payload type.
+
+**Template:** `maybe fallback transform optional`: `fallback :: b`, `transform :: a -> b`, `optional :: Maybe a`.
+
+**Defining equations:**
+
+```haskell
+maybe :: b -> (a -> b) -> Maybe a -> b
+maybe d _ Nothing = d
+maybe _ f (Just x) = f x
+```
+
+### Variation: numeric transformation
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybe 0 (+1) (Just 3 :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (maybe 0 (+1) (Just 3 :: Maybe Int))
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `maybe 0 (+1) (Just 3) = (+1) 3 = 3 + 1 = 4`.
+
+### Variation: absent boundary
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybe 0 (+1) (Nothing :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (maybe 0 (+1) (Nothing :: Maybe Int))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `maybe 0 (+1) Nothing = 0`; the transform is ignored.
+
+### Variation: different result type
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybe "none" show (Just (-3) :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (maybe "none" show (Just (-3) :: Maybe Int))
+```
+
+```text
+"-3"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `maybe "none" show (Just (-3)) = show (-3) = "-3"`. Printing the resulting string adds quotes.
+
+**Common error and repair:** Do not swap a default value and a function.
+
+**Practice with an answer:** Predict `maybe 0 (+1) (Just 3 :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`4`. `maybe 0 (+1) (Just 3) = (+1) 3 = 3 + 1 = 4`.
+
+</details>
+
+## 13. `fromMaybe`: choose a default
+
+Use a default on absence and retain a present payload unchanged. The default must have the payload type.
+
+**Template:** `fromMaybe defaultPayload optional`: the default and any payload both have type `a`.
+
+**Defining equations:**
+
+```haskell
+fromMaybe :: a -> Maybe a -> a
+fromMaybe d Nothing = d
+fromMaybe _ (Just x) = x
+```
+
+### Variation: present zero
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromMaybe 99 (Just 0 :: Maybe Int).
+import Data.Maybe (fromMaybe)
+
+main :: IO ()
+main = print (fromMaybe 99 (Just 0 :: Maybe Int))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `fromMaybe 99 (Just 0) = 0`; zero is present.
+
+### Variation: numeric default
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromMaybe 99 (Nothing :: Maybe Int).
+import Data.Maybe (fromMaybe)
+
+main :: IO ()
+main = print (fromMaybe 99 (Nothing :: Maybe Int))
+```
+
+```text
+99
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `fromMaybe 99 Nothing = 99` by the absent equation.
+
+### Variation: text default
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromMaybe "unknown" (Nothing :: Maybe String).
+import Data.Maybe (fromMaybe)
+
+main :: IO ()
+main = print (fromMaybe "unknown" (Nothing :: Maybe String))
+```
+
+```text
+"unknown"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `fromMaybe "unknown" Nothing = "unknown"`, a string which `print` quotes.
+
+**Common error and repair:** Defaulting discards the distinction between missing and a present equal value; make that policy deliberate.
+
+**Practice with an answer:** Predict `fromMaybe 99 (Just 0 :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`0`. `fromMaybe 99 (Just 0) = 0`; zero is present.
+
+</details>
+
+## 14. `isJust`: test presence
+
+Return whether a payload exists, rather than the payload itself.
+
+**Template:** `isJust optional`: inspect only the constructor.
+
+**Defining equations:**
+
+```haskell
+isJust :: Maybe a -> Bool
+isJust Nothing = False
+isJust (Just _) = True
+```
+
+### Variation: absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isJust (Nothing :: Maybe Int).
+import Data.Maybe (isJust)
+
+main :: IO ()
+main = print (isJust (Nothing :: Maybe Int))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The absent equation returns `False`.
+
+### Variation: present zero
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isJust (Just 0 :: Maybe Int).
+import Data.Maybe (isJust)
+
+main :: IO ()
+main = print (isJust (Just 0 :: Maybe Int))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The `Just _` pattern matches even when the payload equals zero.
+
+### Variation: present empty list
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isJust (Just [] :: Maybe [Int]).
+import Data.Maybe (isJust)
+
+main :: IO ()
+main = print (isJust (Just [] :: Maybe [Int]))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The outer constructor is `Just`; the empty payload does not alter the result.
+
+**Common error and repair:** `isJust` returns a `Bool`, so it cannot be used as the integer payload.
+
+**Practice with an answer:** Predict `isJust (Nothing :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`False`. The absent equation returns `False`.
+
+</details>
+
+## 15. `isNothing`: test absence
+
+This complementary test examines the outer constructor. An inner absent value can be carried by an outer present result.
+
+**Template:** `isNothing optional`: return `True` only for outer absence.
+
+**Defining equations:**
+
+```haskell
+isNothing :: Maybe a -> Bool
+isNothing Nothing = True
+isNothing (Just _) = False
+```
+
+### Variation: absent text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isNothing (Nothing :: Maybe String).
+import Data.Maybe (isNothing)
+
+main :: IO ()
+main = print (isNothing (Nothing :: Maybe String))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The absent equation selects `True`.
+
+### Variation: empty but present text
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isNothing (Just "").
+import Data.Maybe (isNothing)
+
+main :: IO ()
+main = print (isNothing (Just ""))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `Just _` matches; the string length is irrelevant.
+
+### Variation: nested absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict isNothing (Just Nothing :: Maybe (Maybe Int)).
+import Data.Maybe (isNothing)
+
+main :: IO ()
+main = print (isNothing (Just Nothing :: Maybe (Maybe Int)))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The outer pattern is `Just _`; do not inspect its payload.
+
+**Common error and repair:** An empty or absent payload is not the same as an absent outer result.
+
+**Practice with an answer:** Predict `isNothing (Nothing :: Maybe String)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`True`. The absent equation selects `True`.
+
+</details>
+
+## 16. `fromJust`: a dangerous extraction
+
+This partial function extracts a present payload and raises an exception on absence. Prefer matching or `maybe` unless presence is established.
+
+**Template:** `fromJust knownPresent`: establish the `Just` precondition first. These equations describe the library behaviour; its diagnostic may include call-stack detail.
+
+**Defining equations:**
+
+```haskell
+fromJust :: Maybe a -> a
+fromJust (Just x) = x
+fromJust Nothing = error "Maybe.fromJust: Nothing"
+```
+
+### Variation: integer payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromJust (Just 3 :: Maybe Int).
+import Data.Maybe (fromJust)
+
+main :: IO ()
+main = print (fromJust (Just 3 :: Maybe Int))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `fromJust (Just 3) = 3` by the present equation.
+
+### Variation: negative payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromJust (Just (-3) :: Maybe Int).
+import Data.Maybe (fromJust)
+
+main :: IO ()
+main = print (fromJust (Just (-3) :: Maybe Int))
+```
+
+```text
+-3
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Removing the constructor leaves the integer `-3`, without constructor-argument parentheses.
+
+### Variation: list payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fromJust (Just [1,2 :: Int]).
+import Data.Maybe (fromJust)
+
+main :: IO ()
+main = print (fromJust (Just [1,2 :: Int]))
+```
+
+```text
+[1,2]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Bind `x = [1,2]`; the present equation returns that list.
+
+**Common error and repair:** `fromJust Nothing` crashes. An optional producer does not make a partial consumer safe.
+
+**Practice with an answer:** Predict `fromJust (Just 3 :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`3`. `fromJust (Just 3) = 3` by the present equation.
+
+</details>
+
+## 17. `catMaybes`: collect successes
+
+Walk optional results, discard absence and remove exactly one wrapper from each success, preserving order.
+
+**Template:** `catMaybes optionalResults`: keep present payloads in encounter order.
+
+**Defining equations:**
+
+```haskell
+catMaybes :: [Maybe a] -> [a]
+catMaybes [] = []
+catMaybes (Nothing:ms) = catMaybes ms
+catMaybes (Just x:ms) = x : catMaybes ms
+```
+
+### Variation: mixed results
+
+<HaskellTryIt>
+
+```haskell
+-- Predict catMaybes [Just 3,Nothing,Just (-2) :: Maybe Int].
+import Data.Maybe (catMaybes)
+
+main :: IO ()
+main = print (catMaybes [Just 3,Nothing,Just (-2) :: Maybe Int])
+```
+
+```text
+[3,-2]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `catMaybes [Just 3,Nothing,Just (-2)] = 3 : catMaybes [Nothing,Just (-2)] = 3 : catMaybes [Just (-2)] = 3 : (-2) : [] = [3,-2]`.
+
+### Variation: no successes
+
+<HaskellTryIt>
+
+```haskell
+-- Predict catMaybes [Nothing,Nothing :: Maybe Int].
+import Data.Maybe (catMaybes)
+
+main :: IO ()
+main = print (catMaybes [Nothing,Nothing :: Maybe Int])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Drop both absent entries, then apply the empty-list equation.
+
+### Variation: character payloads
+
+<HaskellTryIt>
+
+```haskell
+-- Predict catMaybes [Just 'a',Nothing,Just 'b'].
+import Data.Maybe (catMaybes)
+
+main :: IO ()
+main = print (catMaybes [Just 'a',Nothing,Just 'b'])
+```
+
+```text
+"ab"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Keep `'a'`, drop absence, keep `'b'`. The list `['a','b']` prints as the string `"ab"`.
+
+**Common error and repair:** `filter isJust` keeps wrappers and returns `[Maybe a]`; `catMaybes` returns `[a]`.
+
+**Practice with an answer:** Predict `catMaybes [Just 3,Nothing,Just (-2) :: Maybe Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`[3,-2]`. `catMaybes [Just 3,Nothing,Just (-2)] = 3 : catMaybes [Nothing,Just (-2)] = 3 : catMaybes [Just (-2)] = 3 : (-2) : [] = [3,-2]`.
+
+</details>
+
+## 18. `mapMaybe`: transform and collect
+
+Apply a possibly failing function to each input and keep only its successful payloads. The result may be shorter than the input.
+
+**Template:** `mapMaybe tryOne inputs`: `tryOne :: a -> Maybe b`; the final list has type `[b]`.
+
+**Defining equations:**
+
+```haskell
+mapMaybe :: (a -> Maybe b) -> [a] -> [b]
+mapMaybe _ [] = []
+mapMaybe f (x:xs) = case f x of
+  Nothing -> mapMaybe f xs
+  Just y -> y : mapMaybe f xs
+```
+
+### Variation: numeric selection
+
+<HaskellTryIt>
+
+```haskell
+-- Predict mapMaybe (\n -> if n > 0 then Just (n * 2) else Nothing) [-1,0,3 :: Int].
+import Data.Maybe (mapMaybe)
+
+main :: IO ()
+main = print (mapMaybe (\n -> if n > 0 then Just (n * 2) else Nothing) [-1,0,3 :: Int])
+```
+
+```text
+[6]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The calls return `Nothing`, `Nothing`, `Just 6`. Drop the first two; emit `6 : []`.
+
+### Variation: empty input
+
+<HaskellTryIt>
+
+```haskell
+-- Predict mapMaybe (\n -> Just (n + 1)) ([] :: [Int]).
+import Data.Maybe (mapMaybe)
+
+main :: IO ()
+main = print (mapMaybe (\n -> Just (n + 1)) ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The empty-list equation returns `[]` without calling the function.
+
+### Variation: change the payload type
+
+<HaskellTryIt>
+
+```haskell
+-- Predict mapMaybe (\s -> if null s then Nothing else Just (length s)) ["ab","","c"].
+import Data.Maybe (mapMaybe)
+
+main :: IO ()
+main = print (mapMaybe (\s -> if null s then Nothing else Just (length s)) ["ab","","c"])
+```
+
+```text
+[2,1]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The results are `Just 2`, `Nothing`, `Just 1`; collect the lengths `[2,1]`.
+
+**Common error and repair:** The supplied function must return `Maybe b`, rather than plain `b`.
+
+**Practice with an answer:** Predict `mapMaybe (\n -> if n > 0 then Just (n * 2) else Nothing) [-1,0,3 :: Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`[6]`. The calls return `Nothing`, `Nothing`, `Just 6`. Drop the first two; emit `6 : []`.
+
+</details>
+
+## 19. `listToMaybe`: keep only the first
+
+Convert zero or more possibilities to zero or one. Any elements after the first are discarded.
+
+**Template:** `listToMaybe possibilities`: the first cons supplies the payload.
+
+**Defining equations:**
+
+```haskell
+listToMaybe :: [a] -> Maybe a
+listToMaybe [] = Nothing
+listToMaybe (x:_) = Just x
+```
+
+### Variation: several possibilities
+
+<HaskellTryIt>
+
+```haskell
+-- Predict listToMaybe [8,9 :: Int].
+import Data.Maybe (listToMaybe)
+
+main :: IO ()
+main = print (listToMaybe [8,9 :: Int])
+```
+
+```text
+Just 8
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The cons equation binds `x = 8` and ignores `[9]`.
+
+### Variation: no possibility
+
+<HaskellTryIt>
+
+```haskell
+-- Predict listToMaybe ([] :: [Int]).
+import Data.Maybe (listToMaybe)
+
+main :: IO ()
+main = print (listToMaybe ([] :: [Int]))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The empty equation returns absence.
+
+### Variation: empty string element
+
+<HaskellTryIt>
+
+```haskell
+-- Predict listToMaybe ["","later"].
+import Data.Maybe (listToMaybe)
+
+main :: IO ()
+main = print (listToMaybe ["","later"])
+```
+
+```text
+Just ""
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The input list is non-empty, so its first empty string is present.
+
+**Common error and repair:** This conversion loses later elements; it is not invertible on arbitrary lists.
+
+**Practice with an answer:** Predict `listToMaybe [8,9 :: Int]` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 8`. The cons equation binds `x = 8` and ignores `[9]`.
+
+</details>
+
+## 20. `maybeToList`: zero or one element
+
+Represent absence by an empty list and presence by a singleton. Payload lists remain nested.
+
+**Template:** `maybeToList optional`: construct zero or one list cells.
+
+**Defining equations:**
+
+```haskell
+maybeToList :: Maybe a -> [a]
+maybeToList Nothing = []
+maybeToList (Just x) = [x]
+```
+
+### Variation: absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybeToList (Nothing :: Maybe Int).
+import Data.Maybe (maybeToList)
+
+main :: IO ()
+main = print (maybeToList (Nothing :: Maybe Int))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The absent equation returns `[]`.
+
+### Variation: negative payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybeToList (Just (-3) :: Maybe Int).
+import Data.Maybe (maybeToList)
+
+main :: IO ()
+main = print (maybeToList (Just (-3) :: Maybe Int))
+```
+
+```text
+[-3]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The present equation gives a singleton containing `-3`.
+
+### Variation: list payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict maybeToList (Just [1,2 :: Int]).
+import Data.Maybe (maybeToList)
+
+main :: IO ()
+main = print (maybeToList (Just [1,2 :: Int]))
+```
+
+```text
+[[1,2]]
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Bind `x = [1,2]`, then `[x] = [[1,2]]`.
+
+**Common error and repair:** Expecting `[1,2]` for the final variation removes one list layer too many.
+
+**Practice with an answer:** Predict `maybeToList (Nothing :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`[]`. The absent equation returns `[]`.
+
+</details>
+
+The deliberately crashing library call is a plain block:
+
+```haskell
+import Data.Maybe (fromJust)
+
+-- Incorrect: the precondition is false.
+main :: IO ()
+main = print (fromJust (Nothing :: Maybe Int))
+```
+
+The key exception text is `Maybe.fromJust: Nothing`. The surrounding location and call stack depend on how the program is run.
+
+The round trip `listToMaybe (maybeToList m) = m` preserves an optional result. The opposite direction keeps only `take 1 xs`; discarded list elements cannot be restored.
+
+## 21. Nested `case`: connect dependent steps
+
+The second computation needs the first payload. A failure returns absence immediately, without calling later steps.
+
+**Template:** `case first input of Nothing -> Nothing; Just x -> second x`: match again if more work depends on the second payload.
+
+**Defining equations:**
+
+```haskell
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+checkedHalf :: Int -> Maybe Int
+checkedHalf n = case positive n of
+  Nothing -> Nothing
+  Just x -> case halve x of
+    Nothing -> Nothing
+    Just y -> Just y
+```
+
+### Variation: both succeed
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkedHalf 8.
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+checkedHalf :: Int -> Maybe Int
+checkedHalf n = case positive n of
+  Nothing -> Nothing
+  Just x -> case halve x of
+    Nothing -> Nothing
+    Just y -> Just y
+
+main :: IO ()
+main = print (checkedHalf 8)
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `positive 8 = Just 8`; bind `x = 8`. `halve 8 = Just 4`; bind `y = 4` and return `Just 4`.
+
+### Variation: first step fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkedHalf (-2).
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+checkedHalf :: Int -> Maybe Int
+checkedHalf n = case positive n of
+  Nothing -> Nothing
+  Just x -> case halve x of
+    Nothing -> Nothing
+    Just y -> Just y
+
+main :: IO ()
+main = print (checkedHalf (-2))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `positive (-2) = Nothing`; the first alternative returns absence without evaluating `halve`.
+
+### Variation: second step fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict checkedHalf 3.
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+checkedHalf :: Int -> Maybe Int
+checkedHalf n = case positive n of
+  Nothing -> Nothing
+  Just x -> case halve x of
+    Nothing -> Nothing
+    Just y -> Just y
+
+main :: IO ()
+main = print (checkedHalf 3)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `positive 3 = Just 3`; then `halve 3 = Nothing`, so the inner failure alternative applies.
+
+**Common error and repair:** Passing `positive n` to `halve` confuses `Maybe Int` with `Int`.
+
+**Practice with an answer:** Predict `checkedHalf 8` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 4`. `positive 8 = Just 8`; bind `x = 8`. `halve 8 = Just 4`; bind `y = 4` and return `Just 4`.
+
+</details>
+
+## 22. `andThen`: abstract the chain
+
+This helper performs the same constructor decision once for any payload types. The continuation already returns `Maybe b`; do not add another wrapper.
+
+**Template:** `andThen firstResult nextStep`: `nextStep :: a -> Maybe b` receives only a successful payload.
+
+**Defining equations:**
+
+```haskell
+andThen :: Maybe a -> (a -> Maybe b) -> Maybe b
+andThen Nothing _ = Nothing
+andThen (Just x) f = f x
+```
+
+### Variation: successful continuation
+
+<HaskellTryIt>
+
+```haskell
+-- Predict andThen (Just 8) halve.
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+
+andThen :: Maybe a -> (a -> Maybe b) -> Maybe b
+andThen Nothing _ = Nothing
+andThen (Just x) f = f x
+
+main :: IO ()
+main = print (andThen (Just 8) halve)
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `andThen (Just 8) halve = halve 8 = Just 4`.
+
+### Variation: absent input
+
+<HaskellTryIt>
+
+```haskell
+-- Predict andThen (Nothing :: Maybe Int) halve.
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+
+andThen :: Maybe a -> (a -> Maybe b) -> Maybe b
+andThen Nothing _ = Nothing
+andThen (Just x) f = f x
+
+main :: IO ()
+main = print (andThen (Nothing :: Maybe Int) halve)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `andThen Nothing halve = Nothing`; ignore the continuation.
+
+### Variation: continuation fails
+
+<HaskellTryIt>
+
+```haskell
+-- Predict andThen (Just 3) halve.
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+
+andThen :: Maybe a -> (a -> Maybe b) -> Maybe b
+andThen Nothing _ = Nothing
+andThen (Just x) f = f x
+
+main :: IO ()
+main = print (andThen (Just 3) halve)
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `andThen (Just 3) halve = halve 3 = Nothing`; return the failure unchanged.
+
+**Common error and repair:** `Just (f x)` produces `Maybe (Maybe b)` here; return `f x` directly.
+
+**Practice with an answer:** Predict `andThen (Just 8) halve` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 4`. `andThen (Just 8) halve = halve 8 = Just 4`.
+
+</details>
+
+## 23. `>>=`: the library spelling
+
+For `Maybe`, bind uses exactly the equations of `andThen`. Prelude supplies the operator. These specialised equations are written under a fresh name so they can be read without defining an instance.
+
+**Template:** `firstResult >>= nextStep`: the Maybe specialisation is `Maybe a -> (a -> Maybe b) -> Maybe b`.
+
+**Defining equations:**
+
+```haskell
+bindMaybe :: Maybe a -> (a -> Maybe b) -> Maybe b
+bindMaybe Nothing _ = Nothing
+bindMaybe (Just x) f = f x
+```
+
+### Variation: success
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Just 8 :: Maybe Int) >>= (\n -> Just (n + 1)).
+import Prelude
+
+main :: IO ()
+main = print ((Just 8 :: Maybe Int) >>= (\n -> Just (n + 1)))
+```
+
+```text
+Just 9
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `Just 8 >>= f = f 8 = Just (8 + 1) = Just 9`.
+
+### Variation: absent input
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Nothing :: Maybe Int) >>= (\n -> Just (n + 1)).
+import Prelude
+
+main :: IO ()
+main = print ((Nothing :: Maybe Int) >>= (\n -> Just (n + 1)))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `Nothing >>= f = Nothing`; the lambda is not applied.
+
+### Variation: failing continuation
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Just 3 :: Maybe Int) >>= (\n -> if even n then Just n else Nothing).
+import Prelude
+
+main :: IO ()
+main = print ((Just 3 :: Maybe Int) >>= (\n -> if even n then Just n else Nothing))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The present equation substitutes `n = 3`; its evenness test fails and returns absence.
+
+**Common error and repair:** A continuation returning plain `b` belongs with `fmap`, rather than bind.
+
+**Practice with an answer:** Predict `(Just 8 :: Maybe Int) >>= (\n -> Just (n + 1))` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 9`. `Just 8 >>= f = f 8 = Just (8 + 1) = Just 9`.
+
+</details>
+
+## 24. `fmap`: transform in place
+
+Mapping preserves the optional context. It applies an ordinary function to a present payload and leaves absence alone.
+
+**Template:** `fmap transform optional`: `transform :: a -> b`. The displayed equations define its Maybe behaviour.
+
+**Defining equations:**
+
+```haskell
+mapOptional :: (a -> b) -> Maybe a -> Maybe b
+mapOptional _ Nothing = Nothing
+mapOptional f (Just x) = Just (f x)
+```
+
+### Variation: arithmetic mapping
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fmap (+1) (Just 3 :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (fmap (+1) (Just 3 :: Maybe Int))
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `fmap (+1) (Just 3) = Just ((+1) 3) = Just 4`.
+
+### Variation: absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fmap (+1) (Nothing :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (fmap (+1) (Nothing :: Maybe Int))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The absent equation returns `Nothing` without inventing a payload.
+
+### Variation: change type
+
+<HaskellTryIt>
+
+```haskell
+-- Predict fmap length (Just "cat").
+import Prelude
+
+main :: IO ()
+main = print (fmap length (Just "cat"))
+```
+
+```text
+Just 3
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `fmap length (Just "cat") = Just (length "cat") = Just 3`; payload type changes from `String` to `Int`.
+
+**Common error and repair:** Mapping a failing function produces nested wrappers. Bind returns the inner result directly.
+
+**Practice with an answer:** Predict `fmap (+1) (Just 3 :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just 4`. `fmap (+1) (Just 3) = Just ((+1) 3) = Just 4`.
+
+</details>
+
+## 25. `<$>`: infix mapping
+
+This operator is the infix spelling of `fmap`; put the function on the left and the optional value on the right.
+
+**Template:** `transform <$> optional = fmap transform optional`. Its specialised equations are those of `mapInfix`.
+
+**Defining equations:**
+
+```haskell
+mapInfix :: (a -> b) -> Maybe a -> Maybe b
+mapInfix _ Nothing = Nothing
+mapInfix f (Just x) = Just (f x)
+```
+
+### Variation: negation
+
+<HaskellTryIt>
+
+```haskell
+-- Predict negate <$> (Just 3 :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (negate <$> (Just 3 :: Maybe Int))
+```
+
+```text
+Just (-3)
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `negate <$> Just 3 = Just (negate 3) = Just (-3)`.
+
+### Variation: absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict length <$> (Nothing :: Maybe String).
+import Prelude
+
+main :: IO ()
+main = print (length <$> (Nothing :: Maybe String))
+```
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The absent mapping equation leaves `Nothing` unchanged.
+
+### Variation: nested optional result
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (\n -> Just (n + 1)) <$> (Just 3 :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print ((\n -> Just (n + 1)) <$> (Just 3 :: Maybe Int))
+```
+
+```text
+Just (Just 4)
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The lambda returns `Just 4`; mapping wraps that result to produce `Just (Just 4)`.
+
+**Common error and repair:** This operator does not flatten nested results; use `>>=` for an optional continuation.
+
+**Practice with an answer:** Predict `negate <$> (Just 3 :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`Just (-3)`. `negate <$> Just 3 = Just (negate 3) = Just (-3)`.
+
+</details>
+
+## 26. Optional fields in a record
+
+A record may exist even when one of its fields is absent. The field consumer decides when a default is appropriate.
+
+**Template:** `data Record = Constructor { required :: T, optional :: Maybe U }`: match the optional field at the point of use.
+
+**Defining equations:**
+
+```haskell
+data Student = Student { studentName :: String, nickname :: Maybe String }
+label :: Student -> String
+label s = case nickname s of
+  Nothing -> studentName s
+  Just n -> n
+```
+
+### Variation: nickname present
+
+<HaskellTryIt>
+
+```haskell
+-- Predict label (Student "Naledi" (Just "Nali")).
+data Student = Student { studentName :: String, nickname :: Maybe String }
+label :: Student -> String
+label s = case nickname s of
+  Nothing -> studentName s
+  Just n -> n
+
+main :: IO ()
+main = print (label (Student "Naledi" (Just "Nali")))
+```
+
+```text
+"Nali"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Select `nickname`, obtain `Just "Nali"`, and return its payload.
+
+### Variation: nickname absent
+
+<HaskellTryIt>
+
+```haskell
+-- Predict label (Student "Naledi" Nothing).
+data Student = Student { studentName :: String, nickname :: Maybe String }
+label :: Student -> String
+label s = case nickname s of
+  Nothing -> studentName s
+  Just n -> n
+
+main :: IO ()
+main = print (label (Student "Naledi" Nothing))
+```
+
+```text
+"Naledi"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Select `Nothing`, then use the required `studentName`.
+
+### Variation: empty nickname present
+
+<HaskellTryIt>
+
+```haskell
+-- Predict label (Student "Naledi" (Just "")).
+data Student = Student { studentName :: String, nickname :: Maybe String }
+label :: Student -> String
+label s = case nickname s of
+  Nothing -> studentName s
+  Just n -> n
+
+main :: IO ()
+main = print (label (Student "Naledi" (Just "")))
+```
+
+```text
+""
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `Just ""` takes the present branch; empty text is not absence.
+
+**Common error and repair:** Appending `nickname s` directly to a string mixes `Maybe String` with `String`.
+
+**Practice with an answer:** Predict `label (Student "Naledi" (Just "Nali"))` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`"Nali"`. Select `nickname`, obtain `Just "Nali"`, and return its payload.
+
+</details>
+
+## 27. `Eq` for optional results
+
+Two absent results are equal; two present results compare their payloads; unlike constructors differ. Payload equality requires `Eq a`.
+
+**Template:** `leftOptional == rightOptional`: compare constructor, then payload when both are present.
+
+**Defining equations:**
+
+```haskell
+sameOptional :: Eq a => Maybe a -> Maybe a -> Bool
+sameOptional Nothing Nothing = True
+sameOptional (Just x) (Just y) = x == y
+sameOptional _ _ = False
+```
+
+### Variation: same payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Just 3 :: Maybe Int) == Just 3.
+import Prelude
+
+main :: IO ()
+main = print ((Just 3 :: Maybe Int) == Just 3)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both constructors are `Just`; `3 == 3 = True`.
+
+### Variation: different constructors
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Nothing :: Maybe Int) == Just 0.
+import Prelude
+
+main :: IO ()
+main = print ((Nothing :: Maybe Int) == Just 0)
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The constructors differ, so there is no payload comparison.
+
+### Variation: both absent
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Nothing :: Maybe String) == Nothing.
+import Prelude
+
+main :: IO ()
+main = print ((Nothing :: Maybe String) == Nothing)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The two-absent equation returns `True`.
+
+**Common error and repair:** The instance still needs `Eq a`: an optional function does not acquire equality.
+
+**Practice with an answer:** Predict `(Just 3 :: Maybe Int) == Just 3` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`True`. Both constructors are `Just`; `3 == 3 = True`.
+
+</details>
+
+## 28. `Ord` for optional results
+
+Constructor order comes first: `Nothing` precedes every `Just`. Two `Just` values use payload order and require `Ord a`.
+
+**Template:** `compare leftOptional rightOptional`: inspect constructors first, then use `compare` on present payloads.
+
+**Defining equations:**
+
+```haskell
+compareOptional :: Ord a => Maybe a -> Maybe a -> Ordering
+compareOptional Nothing Nothing = EQ
+compareOptional Nothing (Just _) = LT
+compareOptional (Just _) Nothing = GT
+compareOptional (Just x) (Just y) = compare x y
+```
+
+### Variation: payload ordering
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Just 3 :: Maybe Int) < Just 4.
+import Prelude
+
+main :: IO ()
+main = print ((Just 3 :: Maybe Int) < Just 4)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** Both are present; `3 < 4 = True`.
+
+### Variation: constructor ordering
+
+<HaskellTryIt>
+
+```haskell
+-- Predict (Nothing :: Maybe Int) < Just 0.
+import Prelude
+
+main :: IO ()
+main = print ((Nothing :: Maybe Int) < Just 0)
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The absent constructor precedes every present constructor.
+
+### Variation: a negative payload does not reverse constructor order
+
+<HaskellTryIt>
+
+```haskell
+-- Predict compare (Just (-99) :: Maybe Int) Nothing.
+import Prelude
+
+main :: IO ()
+main = print (compare (Just (-99) :: Maybe Int) Nothing)
+```
+
+```text
+GT
+```
+
+</HaskellTryIt>
+
+**Hand trace:** The `Just`-versus-`Nothing` equation returns `GT`, regardless of `-99`.
+
+**Common error and repair:** Ordering `Nothing` before `Just` is the instance rule, not a claim that missing data numerically equals zero.
+
+**Practice with an answer:** Predict `(Just 3 :: Maybe Int) < Just 4` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`True`. Both are present; `3 < 4 = True`.
+
+</details>
+
+## 29. `Show` for optional results
+
+Display includes the constructor, so it preserves the difference between absence and presence. Showing a negative constructor argument uses parentheses. The library uses precedence-aware display; this simple equivalent covers optional `Int` results.
+
+**Template:** `show optional` returns a `String`; `print optional` displays that representation, while `print (show optional)` prints the quoted string.
+
+**Defining equations:**
+
+```haskell
+showOptionalInt :: Maybe Int -> String
+showOptionalInt Nothing = "Nothing"
+showOptionalInt (Just n)
+  | n < 0 = "Just (" ++ show n ++ ")"
+  | otherwise = "Just " ++ show n
+```
+
+### Variation: negative payload
+
+<HaskellTryIt>
+
+```haskell
+-- Predict show (Just (-3) :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (show (Just (-3) :: Maybe Int))
+```
+
+```text
+"Just (-3)"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `show` builds `Just (-3)` as text; `print` adds the outer string quotes.
+
+### Variation: absence
+
+<HaskellTryIt>
+
+```haskell
+-- Predict show (Nothing :: Maybe Int).
+import Prelude
+
+main :: IO ()
+main = print (show (Nothing :: Maybe Int))
+```
+
+```text
+"Nothing"
+```
+
+</HaskellTryIt>
+
+**Hand trace:** There is no payload; the representation is the string `"Nothing"`.
+
+### Variation: direct constructor display
+
+<HaskellTryIt>
+
+```haskell
+-- Predict Just 3 :: Maybe Int.
+import Prelude
+
+main :: IO ()
+main = print (Just 3 :: Maybe Int)
+```
+
+```text
+Just 3
+```
+
+</HaskellTryIt>
+
+**Hand trace:** `print` displays the constructor and payload directly, with no outer string quotes.
+
+**Common error and repair:** Confusing `print x` and `print (show x)` leads to missing or extra quotation marks.
+
+**Practice with an answer:** Predict `show (Just (-3) :: Maybe Int)` before opening the answer.
+
+<details>
+<summary>Answer</summary>
+
+`"Just (-3)"`. `show` builds `Just (-3)` as text; `print` adds the outer string quotes.
+
+</details>
+
+## 30. Choosing a representation and repairing errors
+
+| Representation | Information and decision |
+|---|---|
+| `Maybe a` | Zero or one payload; caller matches, defaults, transforms or propagates |
+| `error "message"` | That path returns no ordinary result; exception handling needs a suitable surrounding effectful layer |
+| A default `a` | Missing and present-default become indistinguishable |
+| `[a]` as optional | Permits many values; the at-most-one rule needs separate enforcement |
+
+A `Maybe` result type does not prove totality: a body can still loop, call `error` or omit a pattern. These definitions handle their stated failure domains explicitly.
+
+| Mistake | Key GHC diagnostic or consequence | Repair |
+|---|---|---|
+| `Just 3 + 1 :: Maybe Int` | `No instance for (Num (Maybe Int))` | Map or match |
+| `f :: Maybe Int; f = 3` | `No instance for (Num (Maybe Int))` | Return `Just 3` |
+| An `Int` branch and a `String` branch | `Couldn't match type` | Choose one result type |
+| Only a `Just` equation | `-Wincomplete-patterns`: `Pattern match(es) are non-exhaustive` | Add absence |
+| `print Nothing` | Unresolved payload `Show` constraint | Annotate `Nothing :: Maybe Int` |
+| `fromMaybe` without its import | `Variable not in scope` | Add `import Data.Maybe (fromMaybe)` inside the program |
+
+Choosing `fromMaybe 0` for an optional count is a policy decision: does unknown really mean zero? Keep the wrapper if that distinction still matters.
+
+## 31. Exam questions
+
+These questions restate their requirements so you can attempt them without reading the definitions first. For each answer, compare the choice of equations as well as the final value.
+
+### Exam question 1: absence versus emptiness (4 marks)
+
+Explain the difference between `Nothing :: Maybe [Int]` and `Just [] :: Maybe [Int]`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks for meanings. Both expressions have the same outer type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Read the constructor before its payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+`Nothing` contains no list; `Just []` contains a list with no elements.
+
+</Step>
+
+<Step title="4. Check">
+
+A consumer returning `-1` for absence and the length for presence gives `-1` versus `0`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: implement `safeDiv` (4 marks)
+
+Write `safeDiv :: Integer -> Integer -> Maybe Integer`. Return absence for a zero divisor; otherwise return the floor-divided quotient. Use unbounded integers.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Return absence for a zero divisor; otherwise return the floor-divided quotient. Use unbounded integers.
+
+</Step>
+
+<Step title="2. Plan">
+
+Integer `div` rounds down; negative quotients are valid. Use unbounded `Integer` here so the only excluded divisor is zero.
+
+Apply this template: `safeDiv numerator divisor`: reject a zero divisor before doing arithmetic.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+safeDiv :: Integer -> Integer -> Maybe Integer
+safeDiv _ 0 = Nothing
+safeDiv x y = Just (x `div` y)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`safeDiv (-7) 2 = Just (div (-7) 2) = Just (-4)`. Rounding down differs from truncation towards zero. As a separate check, `safeDiv 17 5 = Just (div 17 5) = Just 3`, by the non-zero equation. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: implement `safeHead` (4 marks)
+
+Write `safeHead :: [a] -> Maybe a`. Return absence on an empty list and the first element otherwise.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Return absence on an empty list and the first element otherwise.
+
+</Step>
+
+<Step title="2. Plan">
+
+The element type remains polymorphic: selecting does not require arithmetic, equality or display.
+
+Apply this template: `safeHead items`: distinguish an empty list from a cons before selecting.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x:_) = Just x
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The first element is an empty string; the non-empty input list gives `Just ""`, not absence. As a separate check, `safeHead (8:[9]) = Just 8`; ignore the tail. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: implement `safeTail` (4 marks)
+
+Write `safeTail :: [a] -> Maybe [a]`. Return absence on an empty list and its tail otherwise. A singleton must produce a present empty list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Return absence on an empty list and its tail otherwise. A singleton must produce a present empty list.
+
+</Step>
+
+<Step title="2. Plan">
+
+A singleton has an empty tail. Only an empty input has no tail at all.
+
+Apply this template: `safeTail items`: the payload is a list, hence `Maybe [a]`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+safeTail :: [a] -> Maybe [a]
+safeTail [] = Nothing
+safeTail (_:xs) = Just xs
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`safeTail [] = Nothing`; there is no cons to take apart. As a separate check, `safeTail (4:[5,6]) = Just [5,6]`, binding `xs = [5,6]`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: implement `safeRoot` (4 marks)
+
+Write `safeRoot :: Double -> Maybe Double`. For finite real inputs, reject negative values and return their square root otherwise.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. For finite real inputs, reject negative values and return their square root otherwise.
+
+</Step>
+
+<Step title="2. Plan">
+
+For finite real inputs, non-negative arguments have real square roots. This stated domain excludes NaN and infinities.
+
+Apply this template: `safeRoot number`: test the domain restriction before applying `sqrt`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+safeRoot :: Double -> Maybe Double
+safeRoot x
+  | x < 0 = Nothing
+  | otherwise = Just (sqrt x)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The negative guard is `True`, returning absence before `sqrt`. As a separate check, `16 < 0` is `False`; `Just (sqrt 16) = Just 4.0`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: implement `safeIndex` (4 marks)
+
+Write `safeIndex :: [a] -> Int -> Maybe a`. Use zero-based indexing. Return absence for negative positions or positions past the end, and the selected element otherwise.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Use zero-based indexing. Return absence for negative positions or positions past the end, and the selected element otherwise.
+
+</Step>
+
+<Step title="2. Plan">
+
+Index from zero. Negative positions and running out of list are independent failure cases.
+
+Apply this template: `safeIndex items position`: reject negatives, then discard one cons per decrement.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+safeIndex :: [a] -> Int -> Maybe a
+safeIndex _ n | n < 0 = Nothing
+safeIndex [] _ = Nothing
+safeIndex (x:_) 0 = Just x
+safeIndex (_:xs) n = safeIndex xs (n - 1)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`safeIndex [10,20] 2 = safeIndex [20] 1 = safeIndex [] 0 = Nothing`. As a separate check, `safeIndex "cat" 2 = safeIndex "at" 1 = safeIndex "t" 0 = Just 't'`, by two recursive steps and the zero equation. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: implement `findValue` (4 marks)
+
+Write `findValue :: Eq k => k -> [(k,v)] -> Maybe v`. Search key-value pairs, returning the first matching value or absence. State the necessary key constraint.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Search key-value pairs, returning the first matching value or absence. State the necessary key constraint.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare keys, stop at the first match, and fail only after exhausting the table. Duplicate keys therefore use the first value.
+
+Apply this template: `findValue wanted pairs`: `Eq k` supplies key equality; no constraint on values is needed.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+findValue :: Eq k => k -> [(k,v)] -> Maybe v
+findValue _ [] = Nothing
+findValue key ((k,v):rest)
+  | key == k = Just v
+  | otherwise = findValue key rest
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The only key differs, leaving `findValue "z" [] = Nothing`. As a separate check, `"b" == "a"` is `False`; recurse. `"b" == "b"` is `True`, so return `Just 7`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: implement `firstEven` (4 marks)
+
+Write `firstEven :: [Int] -> Maybe Int`. Return the first even integer in encounter order, or absence if no element matches.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Return the first even integer in encounter order, or absence if no element matches.
+
+</Step>
+
+<Step title="2. Plan">
+
+Searching may test a property instead of a key. Zero and negative even numbers are successes too.
+
+Apply this template: `firstEven numbers`: skip a failed test and stop immediately when it succeeds.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+firstEven :: [Int] -> Maybe Int
+firstEven [] = Nothing
+firstEven (x:xs)
+  | even x = Just x
+  | otherwise = firstEven xs
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`even 0 = True`, so return `Just 0` and ignore the later `2`. As a separate check, `even 1` and `even 3` are `False`; `even 8` is `True`, giving `Just 8`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: implement `parseDigit` (4 marks)
+
+Write `parseDigit :: Char -> Maybe Int`. Accept one ASCII digit character, including zero, and return its integer value; reject every other character.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Accept one ASCII digit character, including zero, and return its integer value; reject every other character.
+
+</Step>
+
+<Step title="2. Plan">
+
+Accept one of the ten characters from zero to nine. This is not a parser for signed numbers or whole strings.
+
+Apply this template: `parseDigit character`: check the range, then subtract the code of zero.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+parseDigit :: Char -> Maybe Int
+parseDigit c
+  | c >= '0' && c <= '9' = Just (fromEnum c - fromEnum '0')
+  | otherwise = Nothing
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'x' <= '9'` is `False`, so the failure guard returns `Nothing`. As a separate check, The range test succeeds; `fromEnum '7' - fromEnum '0' = 55 - 48 = 7`, so wrap `7`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: implement `score` (4 marks)
+
+Write `score :: Maybe Int -> Int`. Return zero for absence and twice the payload for presence.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Return zero for absence and twice the payload for presence.
+
+</Step>
+
+<Step title="2. Plan">
+
+A consumer must return one common result type for both constructors. Calculate with a payload only after matching `Just`.
+
+Apply this template: `consumer Nothing = absentResult`; `consumer (Just x) = presentResult x`. Both results have the same type.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+score :: Maybe Int -> Int
+score Nothing = 0
+score (Just n) = n * 2
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`score (Just (-3)) = (-3) * 2 = -6`. As a separate check, `score (Just 4) = 4 * 2 = 8` by the present equation. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: implement `describe` (4 marks)
+
+Write `describe :: Maybe Int -> String`. Return "missing" on absence, "negative" for a present negative integer, and "non-negative" for other present integers. Use guarded case alternatives.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Return "missing" on absence, "negative" for a present negative integer, and "non-negative" for other present integers. Use guarded case alternatives.
+
+</Step>
+
+<Step title="2. Plan">
+
+After matching a constructor, guards can test its payload. Variables bound by the pattern are available only inside that alternative.
+
+Apply this template: `case optional of Nothing -> fallback; Just x | test x -> firstResult | otherwise -> secondResult`. Try guards in order.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+describe :: Maybe Int -> String
+describe m = case m of
+  Nothing -> "missing"
+  Just n | n < 0 -> "negative"
+         | otherwise -> "non-negative"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The present pattern binds `n = 0`. The first guard is `False`; `otherwise` is `True`. As a separate check, The `Nothing` pattern matches first; no numeric guard is examined. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: trace `maybe` (4 marks)
+
+State the type and trace `maybe 0 (+1) (Just 3 :: Maybe Int)`, then trace the absent variation.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" requires the result type; "trace" requires substituting the selected equation. The payload is fixed as `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+For presence, substitute 3 into `(+1)`; for absence, choose the default before attempting any transformation.
+
+</Step>
+
+<Step title="3. Solution">
+
+The type is `Int`. `maybe 0 (+1) (Just 3) = (+1) 3 = 3 + 1 = 4`. With `Nothing :: Maybe Int`, `maybe 0 (+1) Nothing = 0`.
+
+</Step>
+
+<Step title="4. Check">
+
+Both results are `Int`, and neither retains a `Just`. A type-changing check is `maybe "none" show (Just 3 :: Maybe Int) = "3"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: defaulting loses a distinction (4 marks)
+
+Evaluate `fromMaybe 0 (Nothing :: Maybe Int)` and `fromMaybe 0 (Just 0 :: Maybe Int)`. Can the results reveal which input was absent?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for values; the second part asks whether the conversion preserves information.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the absent equation to the first input and the present equation to the second.
+
+</Step>
+
+<Step title="3. Solution">
+
+The first returns default 0; the second returns payload 0. The identical bare results cannot distinguish the original inputs.
+
+</Step>
+
+<Step title="4. Check">
+
+Using `Just 4` instead gives 4. Therefore defaulting preserves a non-default payload but merges absence with a present default.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 14: test presence without unwrapping (4 marks)
+
+Evaluate `isJust (Just [] :: Maybe [Int])` and state why it is not a test for a non-empty payload.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" needs a Boolean result; "why" requires identifying the level of the pattern match.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect only the outer constructor, not the list constructor in its payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+`isJust (Just []) = True` by `isJust (Just _) = True`. The ignored payload may be any list, empty or not.
+
+</Step>
+
+<Step title="4. Check">
+
+`isJust (Nothing :: Maybe [Int]) = False`. These checks separate optional presence from list length.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 15: nested absence (4 marks)
+
+Evaluate `isNothing (Just Nothing :: Maybe (Maybe Int))` and explain which constructor is inspected.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for one Boolean. The input has two optional layers, so identify the outer layer first.
+
+</Step>
+
+<Step title="2. Plan">
+
+The constructor test matches one wrapper and ignores any payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+`isNothing (Just Nothing) = False` by its `Just _` equation. The inner absence is just the payload of an outer success.
+
+</Step>
+
+<Step title="4. Check">
+
+`isNothing (Nothing :: Maybe (Maybe Int)) = True`; changing the outer constructor changes the result.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 16: the extraction precondition (4 marks)
+
+Explain why replacing every pattern match by `fromJust` defeats safe failure handling, even if the producer returns `Maybe Int`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" asks about the consumer contract, not a different producer type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect both equations of `fromJust` and identify the precondition of its successful one.
+
+</Step>
+
+<Step title="3. Solution">
+
+`fromJust (Just x) = x` works only when presence is established. The absent equation raises an exception, so an ordinary missing result can become a runtime failure again.
+
+</Step>
+
+<Step title="4. Check">
+
+`fromJust (Just 3 :: Maybe Int) = 3`; the plain crashing example above covers absence. A total alternative is `maybe 0 id`, if default zero is the specified policy.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 17: preserve payload nesting (4 marks)
+
+State the type and result of `catMaybes [Just [], Nothing, Just [2,3 :: Int]]`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" needs the type as well as the value. Here the payload itself is a list.
+
+</Step>
+
+<Step title="2. Plan">
+
+Instantiate `a = [Int]` in `[Maybe a] -> [a]`. Remove only the optional layer.
+
+</Step>
+
+<Step title="3. Solution">
+
+`catMaybes` emits `[]`, skips `Nothing`, emits `[2,3]` and stops. The result is `[[],[2,3]] :: [[Int]]`.
+
+</Step>
+
+<Step title="4. Check">
+
+There are two present inputs and two output elements. Returning `[2,3]` would incorrectly flatten the list payloads.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 18: mapping and collecting differ (4 marks)
+
+For `f n = if n > 0 then Just (2*n) else Nothing` at `Int`, compare `map f [-1,3]` and `mapMaybe f [-1,3]`, including types.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" asks for both operations and their result shapes. The supplied function already produces optional results.
+
+</Step>
+
+<Step title="2. Plan">
+
+First evaluate each call to `f`; then either retain each result or collect only successful payloads.
+
+</Step>
+
+<Step title="3. Solution">
+
+`f (-1) = Nothing` and `f 3 = Just 6`. `map f [-1,3] = [Nothing,Just 6] :: [Maybe Int]`; `mapMaybe f [-1,3] = [6] :: [Int]`.
+
+</Step>
+
+<Step title="4. Check">
+
+On `[]`, both return empty lists, but their element types still differ. On `[0]`, `map` keeps `[Nothing]` while `mapMaybe` returns `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 19: which conversion is lossy? (4 marks)
+
+Evaluate `listToMaybe [4,5 :: Int]` and explain whether converting that result back with `maybeToList` restores the input.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for the selected payload; "explain" asks about the discarded tail.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the cons equation, which ignores every element after the head.
+
+</Step>
+
+<Step title="3. Solution">
+
+`listToMaybe (4:[5]) = Just 4`. Converting back gives `maybeToList (Just 4) = [4]`, so the original 5 is lost.
+
+</Step>
+
+<Step title="4. Check">
+
+`listToMaybe [] = Nothing` after fixing a payload type. Only empty and singleton input lists survive the opposite conversion exactly.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 20: implement `maybeToList` (4 marks)
+
+Write `maybeToList :: Maybe a -> [a]`. Convert absence into an empty list and presence into a singleton, without flattening list payloads.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Convert absence into an empty list and presence into a singleton, without flattening list payloads.
+
+</Step>
+
+<Step title="2. Plan">
+
+Represent absence by an empty list and presence by a singleton. Payload lists remain nested.
+
+Apply this template: `maybeToList optional`: construct zero or one list cells.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+maybeToList :: Maybe a -> [a]
+maybeToList Nothing = []
+maybeToList (Just x) = [x]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Bind `x = [1,2]`, then `[x] = [[1,2]]`. As a separate check, The absent equation returns `[]`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 21: implement `checkedHalf` (4 marks)
+
+Write `checkedHalf :: Int -> Maybe Int`. First require a positive integer, then require an even integer and halve it. Return absence at the first failed check. Use nested case expressions.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. First require a positive integer, then require an even integer and halve it. Return absence at the first failed check. Use nested case expressions.
+
+</Step>
+
+<Step title="2. Plan">
+
+The second computation needs the first payload. A failure returns absence immediately, without calling later steps.
+
+Apply this template: `case first input of Nothing -> Nothing; Just x -> second x`: match again if more work depends on the second payload.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+checkedHalf :: Int -> Maybe Int
+checkedHalf n = case positive n of
+  Nothing -> Nothing
+  Just x -> case halve x of
+    Nothing -> Nothing
+    Just y -> Just y
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`positive 3 = Just 3`; then `halve 3 = Nothing`, so the inner failure alternative applies. As a separate check, `positive 8 = Just 8`; bind `x = 8`. `halve 8 = Just 4`; bind `y = 4` and return `Just 4`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 22: three stages (4 marks)
+
+Use `andThen` to check that 8 is positive, halve it, then halve the result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "use": two chains must connect three possibly failing calls.
+
+</Step>
+
+<Step title="2. Plan">
+
+Associate leftwards; each present payload becomes the next argument.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+positive :: Int -> Maybe Int
+positive n | n > 0 = Just n
+           | otherwise = Nothing
+halve :: Int -> Maybe Int
+halve n | even n = Just (n `div` 2)
+        | otherwise = Nothing
+
+andThen :: Maybe a -> (a -> Maybe b) -> Maybe b
+andThen Nothing _ = Nothing
+andThen (Just x) f = f x
+
+answer :: Maybe Int
+answer = andThen (andThen (positive 8) halve) halve
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`positive 8 = Just 8`, then `Just 4`, then `Just 2`. With 6, the first half gives `Just 3`, so the second half fails.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 23: mapping or bind? (4 marks)
+
+Given `next :: Int -> Maybe String`, state the types of `fmap next m` and `m >>= next` for `m :: Maybe Int`, and explain the difference.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" needs two result types. The function result already has a wrapper.
+
+</Step>
+
+<Step title="2. Plan">
+
+Specialise mapping to result payload `Maybe String`, but specialise bind to final payload `String`.
+
+</Step>
+
+<Step title="3. Solution">
+
+`fmap next m :: Maybe (Maybe String)` wraps the optional result. `m >>= next :: Maybe String` returns that optional result directly. For `Just n`, these reduce to `Just (next n)` and `next n`.
+
+</Step>
+
+<Step title="4. Check">
+
+For absent `m`, both have outer `Nothing`; for `next n = Nothing`, the present-input results differ as `Just Nothing` versus `Nothing`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 24: implement `mapOptional` (4 marks)
+
+Write `mapOptional :: (a -> b) -> Maybe a -> Maybe b`. Implement the specialised mapping behaviour: preserve absence, or transform a payload and wrap the transformed result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. Implement the specialised mapping behaviour: preserve absence, or transform a payload and wrap the transformed result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Mapping preserves the optional context. It applies an ordinary function to a present payload and leaves absence alone.
+
+Apply this template: `fmap transform optional`: `transform :: a -> b`. The displayed equations define its Maybe behaviour.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+mapOptional :: (a -> b) -> Maybe a -> Maybe b
+mapOptional _ Nothing = Nothing
+mapOptional f (Just x) = Just (f x)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`fmap length (Just "cat") = Just (length "cat") = Just 3`; payload type changes from `String` to `Int`. As a separate check, `fmap (+1) (Just 3) = Just ((+1) 3) = Just 4`. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 25: trace nested mapping (4 marks)
+
+State the type and trace `(\n -> Just (n + 1)) <$> (Just 3 :: Maybe Int)`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" asks for the full type, including both optional layers; "trace" asks for lambda substitution.
+
+</Step>
+
+<Step title="2. Plan">
+
+Treat `<$>` as `fmap`: apply the function to 3, then wrap its result.
+
+</Step>
+
+<Step title="3. Solution">
+
+The function returns `Just 4`, and mapping adds an outer constructor: `Just ((\n -> Just (n+1)) 3) = Just (Just 4)`. The type is `Maybe (Maybe Int)`.
+
+</Step>
+
+<Step title="4. Check">
+
+Using `>>=` with the same function returns `Just 4 :: Maybe Int`, confirming why the mapped version has an extra layer.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 26: implement `label` (4 marks)
+
+Write `label :: Student -> String`. For the displayed Student record, use the optional nickname if present and the required name otherwise. An empty present nickname must remain empty.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write": supply a definition with the stated signature and behaviour. For the displayed Student record, use the optional nickname if present and the required name otherwise. An empty present nickname must remain empty.
+
+</Step>
+
+<Step title="2. Plan">
+
+A record may exist even when one of its fields is absent. The field consumer decides when a default is appropriate.
+
+Apply this template: `data Record = Constructor { required :: T, optional :: Maybe U }`: match the optional field at the point of use.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Student = Student { studentName :: String, nickname :: Maybe String }
+label :: Student -> String
+label s = case nickname s of
+  Nothing -> studentName s
+  Just n -> n
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`Just ""` takes the present branch; empty text is not absence. As a separate check, Select `nickname`, obtain `Just "Nali"`, and return its payload. Check that all required branches return the declared result type.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 27: constraint from equality (4 marks)
+
+Give the type of a function comparing two optional payloads for equality. Explain why the key comparison cannot work for completely unrestricted payloads.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" requires a signature with its constraint; "explain" requires locating the operation which needs that constraint.
+
+</Step>
+
+<Step title="2. Plan">
+
+Only the two-present branch compares payloads, but the whole function must be usable for that branch.
+
+</Step>
+
+<Step title="3. Solution">
+
+`sameOptional :: Eq a => Maybe a -> Maybe a -> Bool`. Its two-present equation uses `x == y`, which requires `Eq a`; the absence-only branches do not remove that requirement.
+
+</Step>
+
+<Step title="4. Check">
+
+`Just 3 == (Just 3 :: Maybe Int)` is `True`; `Nothing == (Just 3 :: Maybe Int)` is `False`. An optional function payload does not gain an equality instance.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 28: constructor before payload (4 marks)
+
+Evaluate `(Nothing :: Maybe Int) < Just (-99)` and `(Just 3 :: Maybe Int) < Just 4`, explaining the comparison order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for Booleans, and the explanation must distinguish constructor and payload decisions.
+
+</Step>
+
+<Step title="2. Plan">
+
+Different constructors use declaration order; matching `Just` constructors compare payloads.
+
+</Step>
+
+<Step title="3. Solution">
+
+Both results are `True`. Absence precedes every present constructor, regardless of negative payload -99. The second comparison uses `3 < 4`.
+
+</Step>
+
+<Step title="4. Check">
+
+`compare (Just (-99) :: Maybe Int) Nothing = GT` confirms the constructor order is independent of numeric sign.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 29: display and quoted display (4 marks)
+
+State exactly what `print (Just (-3) :: Maybe Int)` and `print (show (Just (-3) :: Maybe Int))` display.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Exactly" includes parentheses and quotation marks. The second printed value is a string.
+
+</Step>
+
+<Step title="2. Plan">
+
+First form the constructor representation. The direct print uses it, while printing the returned string quotes it.
+
+</Step>
+
+<Step title="3. Solution">
+
+The direct print writes `Just (-3)`. The second writes `"Just (-3)"`, including the outer quotes. Each print ends with a newline.
+
+</Step>
+
+<Step title="4. Check">
+
+The parentheses belong around the negative constructor argument. `show (Nothing :: Maybe Int)` is the string `"Nothing"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Design the failure cases before calculating. Present zero and empty payloads remain `Just`. `maybe` transforms or defaults, `fromMaybe` defaults without transformation, and `catMaybes`/`mapMaybe` collect successes. Mapping preserves a wrapper; chaining passes a payload to a function already returning an optional result. Every consumer needs an absence policy.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does safeTail [4] return Just []?">
+
+A cons has a tail even when that tail is empty. Only an empty input has no tail to return.
+
+</CheckQuestion>
+
+<CheckQuestion question="How does maybe differ from fromMaybe?">
+
+`maybe d f` transforms a present payload with `f`; `fromMaybe d` returns that payload unchanged.
+
+</CheckQuestion>
+
+<CheckQuestion question="How does mapMaybe differ from map?">
+
+It requires optional results, drops failures and unwraps successes. `map` keeps one result per input.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can mapping produce nested Maybe?">
+
+Mapping adds a wrapper around a function result that may already be optional. Bind returns that optional result directly.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does Maybe force exhaustive matching?">
+
+No. It makes absence visible in the type. Cover both constructors and use incomplete-pattern warnings.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+
