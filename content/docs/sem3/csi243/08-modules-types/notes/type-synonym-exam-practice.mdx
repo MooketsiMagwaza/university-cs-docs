@@ -1,0 +1,1746 @@
+---
+title: "Type Synonym Exam Practice"
+description: "Solve expansion, signature, modelling, table and parser questions with narrated answers and runnable boundary variations."
+---
+
+These questions extend [Type Synonyms](/docs/sem3/csi243/08-modules-types/notes/type-synonyms) using the templates in [Type Synonyms in Depth](/docs/sem3/csi243/08-modules-types/notes/type-synonyms-in-depth). Attempt the question before opening its answer. Write types as well as values: the most common parser mistake is answering a question about the function with the type of its result list.
+
+<LearningObjectives items={[
+  'Answer expansion and signature questions with every alias substituted',
+  'Model domain fields and justify what the chosen representation enforces',
+  'Trace table duplicate policies and parser alternatives precisely',
+  'Repair declarations and distinguish type compatibility from name scope',
+]} />
+
+<Prerequisites items={[
+  'Type Synonyms in Depth, including the small Parser definitions',
+  'Data Types by Example for distinct constructors and wrappers',
+]} />
+
+Use this answer template: identify the command word; collect declarations; substitute each actual type consistently; preserve the structure; write the requested definition or judgement; check an ordinary and a boundary case. All executable checks here are self-contained. The plain solution fences may be copied into a file with a main of your own; deliberately invalid declarations are labelled and kept out of runnable components.
+
+## 1. Expand aliases inside aliases
+
+Nested aliases require substitution from the outside inward. A Pair contains two values of one type; an Assoc contains a list of key/value pairs. Do not flatten nested tuples merely because the expanded type looks long.
+
+**Template to use.**
+
+```haskell
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+-- Assoc K (Pair V) = [(K,(V,V))]
+```
+
+### Exam question 1: Expand aliases inside aliases
+
+Given `type Pos = (Int,Int)`, `type Board = [Pos]`, `type Pair a = (a,a)` and `type Assoc k v = [(k,v)]`, expand `Assoc String (Pair Board)` completely. Give one value containing a single key. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Expand completely" removes String, Pos, Board, Pair and Assoc. The value must have one association entry, not one position.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Expand Assoc, then Pair, then each Board and Pos, and finally String. Keep a pair of boards as one table value.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+`Assoc String (Pair Board) = [(String,(Board,Board))] = [(String,([Pos],[Pos]))] = [([Char],([(Int,Int)],[(Int,Int)]))]`. One value is `[("game", ([(0,0)], []))]`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The outer list has one element. Its key is game; its value is a pair containing a one-position board and an empty board.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: one populated and one empty board
+
+<HaskellTryIt>
+
+```haskell
+type Pos = (Int,Int)
+type Board = [Pos]
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+tables :: Assoc String (Pair Board)
+tables = [("game", ([(0,0)], []))]
+main :: IO ()
+main = print (tables)
+```
+
+```text
+[("game",([(0,0)],[]))]
+```
+
+</HaskellTryIt>
+
+Each table value has two board components. The second is empty without changing its type.
+
+### Worked variation 2: empty table with the same nested type
+
+<HaskellTryIt>
+
+```haskell
+type Pos = (Int,Int)
+type Board = [Pos]
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+tables :: Assoc String (Pair Board)
+tables = []
+main :: IO ()
+main = print (tables)
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There are no keys or values. The type annotation fixes the nested shape even though no elements display it.
+
+### Worked variation 3: two boards with several positions
+
+<HaskellTryIt>
+
+```haskell
+type Pos = (Int,Int)
+type Board = [Pos]
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+tables :: Assoc String (Pair Board)
+tables = [("round", ([(1,2),(3,4)], [(5,6)]))]
+main :: IO ()
+main = print (tables)
+```
+
+```text
+[("round",([(1,2),(3,4)],[(5,6)]))]
+```
+
+</HaskellTryIt>
+
+The left board has two positions and the right one has one. Pair requires the same type, not equal list lengths.
+
+</details>
+
+### Common errors
+
+Writing `(String,Board,Board)` replaces the inner pair with a triple and gives `Couldn't match` against the declared table type. Preserve the outer key/value pair and inner board pair.
+
+### Practice with answers
+
+Expand `Pair (Assoc Int Bool)`. **Answer:** `([(Int,Bool)],[(Int,Bool)])`; this is a pair of tables, not a table of pairs.
+
+## 2. Infer a client signature
+
+Infer the types demanded by the body before choosing aliases to display them. Projection does not compare fields, so no equality constraint is needed. A function parameter can transform one field type into another.
+
+**Template to use.**
+
+```haskell
+type Pair a = (a,a)
+-- mapBoth :: (a -> b) -> Pair a -> Pair b
+```
+
+### Exam question 2: Infer a client signature
+
+Infer the most general signature of `summarise f table = [(k,(f x,f y)) | (k,(x,y)) <- table]`. Write it using Pair and Assoc, then expand it. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Infer most general" means retain independent type variables unless the body forces them equal.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+The key k is passed through. x and y both enter the same f, so they share type a. The two results share type b. The input and output are tables.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+summarise :: (a -> b) -> Assoc k (Pair a) -> Assoc k (Pair b)
+summarise f table = [(k,(f x,f y)) | (k,(x,y)) <- table]
+```
+
+Expanded: `(a -> b) -> [(k,(a,a))] -> [(k,(b,b))]`.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Using length makes a a list type and b Int. Empty input produces empty output. The key type remains unchanged and needs no Eq.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: String fields become lengths
+
+<HaskellTryIt>
+
+```haskell
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+summarise :: (a -> b) -> Assoc k (Pair a) -> Assoc k (Pair b)
+summarise f table = [(k,(f x,f y)) | (k,(x,y)) <- table]
+main :: IO ()
+main = print (summarise length [("x",("a","four"))])
+```
+
+```text
+[("x",(1,4))]
+```
+
+</HaskellTryIt>
+
+length is applied separately to a and four. Keep the key x and return a pair of Ints.
+
+### Worked variation 2: Boolean fields remain Boolean
+
+<HaskellTryIt>
+
+```haskell
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+summarise :: (a -> b) -> Assoc k (Pair a) -> Assoc k (Pair b)
+summarise f table = [(k,(f x,f y)) | (k,(x,y)) <- table]
+main :: IO ()
+main = print (summarise not [(1,(True,False))])
+```
+
+```text
+[(1,(False,True))]
+```
+
+</HaskellTryIt>
+
+Set a and b to Bool. No equality constraint is introduced by not.
+
+### Worked variation 3: empty input still has a precise type
+
+<HaskellTryIt>
+
+```haskell
+type Pair a = (a,a)
+type Assoc k v = [(k,v)]
+summarise :: (a -> b) -> Assoc k (Pair a) -> Assoc k (Pair b)
+summarise f table = [(k,(f x,f y)) | (k,(x,y)) <- table]
+main :: IO ()
+main = print (summarise length ([] :: Assoc String (Pair String)))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No pair is visited. The annotation fixes the key and input types; the output value type is Pair Int.
+
+</details>
+
+### Common errors
+
+The signature `(a -> b) -> Assoc k (Pair a) -> Assoc k (Pair a)` wrongly insists the result still uses a; GHC reports `Couldn't match` for the general implementation. Use b in the output. Do not add Eq k when no comparison occurs.
+
+### Practice with answers
+
+What is the signature of `names t = map fst t` using Assoc? **Answer:** `names :: Assoc k v -> [k]`, with no constraint.
+
+## 3. Model a catalogue without inventing safety
+
+A modelling answer states field order, field types and validation policy. Choosing a descriptive alias does not create accessors, constructors or value restrictions automatically.
+
+**Template to use.**
+
+```haskell
+type Course = (String,String,Int)
+type Catalogue = [Course]
+-- validCourse (_,_,n) = n >= 0
+```
+
+### Exam question 3: Model a catalogue without inventing safety
+
+A catalogue stores course title, course code and credits. Declare aliases and write `eligibleCodes` returning codes for courses with at least 3 credits, in catalogue order. Explain whether your model rejects swapped title/code fields and negative credits. (7 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Declare" asks for type declarations, "write" for a function, and "explain" for the limits of type checking.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Represent three fields by a triple and a catalogue by a list. Pattern-match the code and credit fields; filter credits and preserve order.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Course = (String,String,Int)
+type Catalogue = [Course]
+eligibleCodes :: Catalogue -> [String]
+eligibleCodes cs = [code | (_,code,n) <- cs, n >= 3]
+```
+
+The alias rejects wrong field types but neither swapped String fields nor negative Int credits. A validation function can reject the latter; distinct field wrappers can distinguish title and code.
+
+  </Step>
+
+  <Step title="4. Check">
+
+At credits 2, 3 and 4, keep only the last two. Empty catalogue gives []. Negative values fail this filter but are still representable.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: boundary credit counts
+
+<HaskellTryIt>
+
+```haskell
+type Course = (String,String,Int)
+type Catalogue = [Course]
+eligibleCodes :: Catalogue -> [String]
+eligibleCodes cs = [code | (_,code,n) <- cs, n >= 3]
+main :: IO ()
+main = print (eligibleCodes [("A","A2",2),("B","B3",3),("C","C4",4)])
+```
+
+```text
+["B3","C4"]
+```
+
+</HaskellTryIt>
+
+The at-least boundary includes 3. Output order follows B then C.
+
+### Worked variation 2: empty catalogue
+
+<HaskellTryIt>
+
+```haskell
+type Course = (String,String,Int)
+type Catalogue = [Course]
+eligibleCodes :: Catalogue -> [String]
+eligibleCodes cs = [code | (_,code,n) <- cs, n >= 3]
+main :: IO ()
+main = print (eligibleCodes [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No tuples match the generator because there are none; no special error value is needed.
+
+### Worked variation 3: negative credits are representable
+
+<HaskellTryIt>
+
+```haskell
+type Course = (String,String,Int)
+validCourse :: Course -> Bool
+validCourse (_,_,n) = n >= 0
+main :: IO ()
+main = print (map validCourse [("A","A1",-1),("B","B0",0),("C","C3",3)])
+```
+
+```text
+[False,True,True]
+```
+
+</HaskellTryIt>
+
+All three triples type-check. Validation distinguishes the negative case; it is a separate predicate.
+
+</details>
+
+### Common errors
+
+`data Course = (title,code,credits)` causes a `parse error`; use type with field types for the tuple model. Choosing `n > 3` is a logical boundary error and excludes 3 without any compiler error.
+
+### Practice with answers
+
+If credit count is the first field instead, how must Course and the pattern change? **Answer:** `type Course = (Int,String,String)` and `(n,title,code)`; the declaration and all clients must agree on order.
+
+## 4. Parameter order and saturation repairs
+
+Read argument positions from the declaration, not the parameter letters. Every occurrence of an alias must receive its full declared number of arguments in ordinary Haskell. Introducing a new parameterised alias still requires a saturated right-hand side.
+
+**Template to use.**
+
+```haskell
+type Back v k = [(k,v)]
+-- Back V K = [(K,V)]
+type TextValues k = Back String k
+```
+
+### Exam question 4: Parameter order and saturation repairs
+
+Given `type Back v k = [(k,v)]`, expand `Back String Int`. Repair `type TextValues = Back String` and declare a value using the repaired alias. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The first task is positional substitution; the second is a missing-argument repair, not a request to change Back's field order.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Assign v = String and k = Int. The proposed alias has supplied v only; declare a parameter for k and supply it on the right.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Back v k = [(k,v)]
+-- Back String Int = [(Int,[Char])]
+type TextValues k = Back String k
+labels :: TextValues Int
+labels = [(1,"one")]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+TextValues Int expands to Back String Int and then `[(Int,String)]`. labels has the right pair order.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: first actual type is the value type
+
+<HaskellTryIt>
+
+```haskell
+type Back v k = [(k,v)]
+labels :: Back String Int
+labels = [(1,"one"),(2,"two")]
+main :: IO ()
+main = print (labels)
+```
+
+```text
+[(1,"one"),(2,"two")]
+```
+
+</HaskellTryIt>
+
+The declaration orders v before k, so String belongs in each second field.
+
+### Worked variation 2: the repaired alias accepts Bool keys
+
+<HaskellTryIt>
+
+```haskell
+type Back v k = [(k,v)]
+type TextValues k = Back String k
+labels :: TextValues Bool
+labels = [(False,"no"),(True,"yes")]
+main :: IO ()
+main = print (labels)
+```
+
+```text
+[(False,"no"),(True,"yes")]
+```
+
+</HaskellTryIt>
+
+The remaining parameter is key type k. Fully applying TextValues also fully applies Back.
+
+### Worked variation 3: structured keys are whole arguments
+
+<HaskellTryIt>
+
+```haskell
+type Back v k = [(k,v)]
+type TextValues k = Back String k
+labels :: TextValues (Int,Int)
+labels = [((1,2),"square")]
+main :: IO ()
+main = print (labels)
+```
+
+```text
+[((1,2),"square")]
+```
+
+</HaskellTryIt>
+
+Parentheses make `(Int,Int)` one supplied type. The key is itself a pair.
+
+</details>
+
+### Common errors
+
+The rejected `type TextValues = Back String` has the key diagnostic `should have 2 arguments` for Back. Do not repair by silently fixing the remaining key type unless the specification wants a concrete alias. A two-parameter alias need not correspond to the letter order used in Assoc.
+
+### Practice with answers
+
+Repair `type Paired = Pair` for `type Pair a = (a,a)`. **Answer:** `type Paired a = Pair a`, or choose a concrete argument such as `type Paired = Pair Int` if that is the intended domain.
+
+## 5. Project fields and distinguish them from entries
+
+Keys, values and entries have different result types. Projection preserves duplicates; selecting values that are lists does not flatten them. Use expanded signatures to decide whether length counts entries or stored items.
+
+**Template to use.**
+
+```haskell
+type Assoc k v = [(k,v)]
+-- keys :: Assoc k v -> [k]
+-- values :: Assoc k v -> [v]
+-- entryCount :: Assoc k v -> Int
+```
+
+### Exam question 5: Project fields and distinguish them from entries
+
+Write `keys`, `values` and `storedCount :: Assoc k [a] -> Int`, where storedCount counts all elements of the stored lists, not the number of entries. Give the most general projection signatures. (7 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command "write" requires three definitions. The contrast in the question fixes what the count measures.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use fst and snd for projection. For storedCount, select each list value, take its length and sum the lengths.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Assoc k v = [(k,v)]
+keys :: Assoc k v -> [k]
+keys = map fst
+values :: Assoc k v -> [v]
+values = map snd
+storedCount :: Assoc k [a] -> Int
+storedCount t = sum [length xs | (_,xs) <- t]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+For `[("A",[1,2]),("B",[]),("A",[3])]`, there are three entries and three stored elements, but these counts need not agree. No equality is used.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: duplicate keys and unequal payload sizes
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+keys :: Assoc k v -> [k]
+keys = map fst
+values :: Assoc k v -> [v]
+values = map snd
+table :: Assoc String [Int]
+table = [("A",[1,2,3]),("A",[])]
+main :: IO ()
+main = print ((keys table,values table))
+```
+
+```text
+(["A","A"],[[1,2,3],[]])
+```
+
+</HaskellTryIt>
+
+There are two keys and two whole list values. The empty stored list is retained as a value.
+
+### Worked variation 2: entry count differs from stored count
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+storedCount :: Assoc k [a] -> Int
+storedCount t = sum [length xs | (_,xs) <- t]
+table :: Assoc Int String
+table = [(1,"four"),(2,"a")]
+main :: IO ()
+main = print ((length table,storedCount table))
+```
+
+```text
+(2,5)
+```
+
+</HaskellTryIt>
+
+String is a list of Char, so storedCount can count the five characters across two table entries.
+
+### Worked variation 3: an empty payload table
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+storedCount :: Assoc k [a] -> Int
+storedCount t = sum [length xs | (_,xs) <- t]
+main :: IO ()
+main = print (storedCount ([] :: Assoc Bool [Int]))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The comprehension produces []; sum of the empty Int list is zero.
+
+</details>
+
+### Common errors
+
+`values = concatMap snd` flattens list values and has a different type; under the general `Assoc k v -> [v]` signature it produces `Couldn't match`. Use map snd. `length table` counts entries and is not storedCount.
+
+### Practice with answers
+
+Does keys require Eq when keys are lists? **Answer:** no; projection never compares keys, regardless of their structure.
+
+## 6. Trace lookup without discarding absence
+
+A lookup result is optional. Preserve Nothing until the caller chooses a default; defaults can make absence indistinguishable from a stored value. First-match lookup does not return every duplicate.
+
+**Template to use.**
+
+```haskell
+type Assoc k v = [(k,v)]
+-- lookup :: Eq k => k -> Assoc k v -> Maybe v
+```
+
+### Exam question 6: Trace lookup without discarding absence
+
+Given `[("A",0),("B",7),("A",9)] :: Assoc String Int`, state the results of looking up A, B and C. Write `scoreOrZero`, then explain what information it loses. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"State" needs three results with constructors; "write" needs a function; "explain" asks about the chosen default.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Scan keys from the front. For scoreOrZero, handle Nothing and Just explicitly. Compare the absent C case with present A.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Assoc k v = [(k,v)]
+scoreOrZero :: String -> Assoc String Int -> Int
+scoreOrZero key t = case lookup key t of
+  Nothing -> 0
+  Just n -> n
+```
+
+Lookups are `Just 0`, `Just 7` and `Nothing`. scoreOrZero gives 0 for both a stored zero and a missing key, losing that distinction.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The later A value 9 is ignored. A total case expression handles [] via lookup without head.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: the first duplicate wins
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+table :: Assoc String Int
+table = [("A",0),("B",7),("A",9)]
+main :: IO ()
+main = print (lookup "A" table)
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+Return the first matching binding. The stored zero is still a successful result.
+
+### Worked variation 2: missing key remains explicit
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+table :: Assoc String Int
+table = [("A",0),("B",7),("A",9)]
+main :: IO ()
+main = print ((lookup "B" table,lookup "C" table))
+```
+
+```text
+(Just 7,Nothing)
+```
+
+</HaskellTryIt>
+
+B succeeds on the second entry; C reaches the empty tail and fails.
+
+### Worked variation 3: a default hides absence
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+scoreOrZero :: String -> Assoc String Int -> Int
+scoreOrZero key t = case lookup key t of
+  Nothing -> 0
+  Just n -> n
+main :: IO ()
+main = print ((scoreOrZero "A" [("A",0)],scoreOrZero "C" []))
+```
+
+```text
+(0,0)
+```
+
+</HaskellTryIt>
+
+The original optional results differ, but mapping both to an Int makes them identical here.
+
+</details>
+
+### Common errors
+
+Returning 0 for Nothing under a signature returning Maybe Int gives `Couldn't match`; either retain Nothing or deliberately change the result type. Omitting Eq k from a generic lookup wrapper yields a diagnostic containing `Eq k`.
+
+### Practice with answers
+
+Would a missing Boolean key be best represented by Just False? **Answer:** not if absence matters; Nothing distinguishes it from a stored False.
+
+## 7. State an update and deletion contract
+
+A table operation is specified by both its type and its duplicate policy. Shadowing, replacing all and deleting only the first occurrence can all have valid types while behaving differently.
+
+**Template to use.**
+
+```haskell
+type Assoc k v = [(k,v)]
+-- put: remove all old keys, then prepend one binding
+-- remove: remove all matching keys
+```
+
+### Exam question 7: State an update and deletion contract
+
+Write put and remove for all-occurrences replacement/deletion. Trace `remove 1 (put 1 "new" [(1,"a"),(2,"b"),(1,"c")])`. State whether the original table is changed. (7 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The policy is given explicitly. "Trace" requires following the intermediate replacement table, not jumping to the final list.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use key inequality as a keep test. put first filters then conses; remove just filters. These return new lists.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Assoc k v = [(k,v)]
+put :: Eq k => k -> v -> Assoc k v -> Assoc k v
+put key value t = (key,value) : [(k,v) | (k,v) <- t, k /= key]
+remove :: Eq k => k -> Assoc k v -> Assoc k v
+remove key t = [(k,v) | (k,v) <- t, k /= key]
+```
+
+put gives `[(1,"new"),(2,"b")]`. remove then gives `[(2,"b")]`. The original value is unchanged.
+
+  </Step>
+
+  <Step title="4. Check">
+
+For an absent key, put adds a front binding while remove leaves the list equal. Both also handle [].
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: replace and then delete
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+put :: Eq k => k -> v -> Assoc k v -> Assoc k v
+put key value t = (key,value) : [(k,v) | (k,v) <- t, k /= key]
+remove :: Eq k => k -> Assoc k v -> Assoc k v
+remove key t = [(k,v) | (k,v) <- t, k /= key]
+main :: IO ()
+main = print (remove 1 (put 1 "new" [(1,"a"),(2,"b"),(1,"c")]))
+```
+
+```text
+[(2,"b")]
+```
+
+</HaskellTryIt>
+
+put drops both duplicate 1 bindings and inserts one; remove drops that one.
+
+### Worked variation 2: absent key on a nonempty table
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+put :: Eq k => k -> v -> Assoc k v -> Assoc k v
+put key value t = (key,value) : [(k,v) | (k,v) <- t, k /= key]
+remove :: Eq k => k -> Assoc k v -> Assoc k v
+remove key t = [(k,v) | (k,v) <- t, k /= key]
+main :: IO ()
+main = print ((put 3 "c" [(1,"a")],remove 3 [(1,"a")]))
+```
+
+```text
+([(3,"c"),(1,"a")],[(1,"a")])
+```
+
+</HaskellTryIt>
+
+Insertion adds the missing binding. Deletion keeps the original entry because its key is different.
+
+### Worked variation 3: empty table and immutability
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+put :: Eq k => k -> v -> Assoc k v -> Assoc k v
+put key value t = (key,value) : [(k,v) | (k,v) <- t, k /= key]
+table :: Assoc Int Bool
+table = []
+main :: IO ()
+main = print ((put 1 True table,table))
+```
+
+```text
+([(1,True)],[])
+```
+
+</HaskellTryIt>
+
+The returned singleton differs from table, which still denotes [].
+
+</details>
+
+### Common errors
+
+Using `(key,value) : t` is valid shadowing code, but does not meet the stated all-duplicates replacement contract. There is no compiler diagnostic for the policy error. Comparing values instead of keys conflicts with the general key/value types and yields `Couldn't match`.
+
+### Practice with answers
+
+After shadowing `(1,"old")` with `(1,"new")`, what happens if deletion removes only the first binding? **Answer:** the old binding becomes visible again to lookup. All-occurrences deletion would remove both.
+
+## 8. A character parser is a function first
+
+A parser type is an arrow type. A character-selection function can return a parser by accepting its expected character first. The next argument is input text. Failure has no pairs; success records both the consumed answer and remaining text.
+
+**Template to use.**
+
+```haskell
+type Parser a = String -> [(a,String)]
+-- char :: Char -> Parser Char
+--      = Char -> String -> [(Char,String)]
+```
+
+### Exam question 8: A character parser is a function first
+
+Define `char :: Char -> Parser Char` to recognise exactly the first input character when it equals the supplied character. Give the type of `char 'a'` and predict its calls on `"abc"`, `"xbc"` and `""`. (7 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Define" needs a function handling every input shape. "Give the type" refers to the partially applied function, before supplying text.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Handle [] as failure. In the nonempty case compare the head only; return one head/suffix pair on equality and [] otherwise.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Parser a = String -> [(a,String)]
+char :: Char -> Parser Char
+char wanted [] = []
+char wanted (c:cs)
+  | c == wanted = [(c,cs)]
+  | otherwise = []
+```
+
+`char 'a' :: Parser Char`, equivalently `String -> [(Char,String)]`. Results are `[('a',"bc")]`, [] and [] respectively.
+
+  </Step>
+
+  <Step title="4. Check">
+
+The matching input consumes one character, not all three. Neither failure skips characters or throws an exception.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: matching head and leftover text
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+char :: Char -> Parser Char
+char wanted [] = []
+char wanted (c:cs)
+  | c == wanted = [(c,cs)]
+  | otherwise = []
+main :: IO ()
+main = print (char 'a' "abc")
+```
+
+```text
+[('a',"bc")]
+```
+
+</HaskellTryIt>
+
+a equals the supplied character. The suffix bc is retained exactly.
+
+### Worked variation 2: wrong head even if a match appears later
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+char :: Char -> Parser Char
+char wanted [] = []
+char wanted (c:cs)
+  | c == wanted = [(c,cs)]
+  | otherwise = []
+main :: IO ()
+main = print (char 'a' "xba")
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+x does not equal a. The parser is not a search through the whole string, so the later a is irrelevant.
+
+### Worked variation 3: empty input
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+char :: Char -> Parser Char
+char wanted [] = []
+char wanted (c:cs)
+  | c == wanted = [(c,cs)]
+  | otherwise = []
+main :: IO ()
+main = print (char 'a' "")
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The empty equation applies. There is no empty Char to invent.
+
+</details>
+
+### Common errors
+
+`char "a"` supplies String instead of Char and produces `Couldn't match`; use single quotes. Returning `(c,cs)` instead of `[(c,cs)]` gives the same key phrase because a pair is not a list of pairs. `char 'a'` is a function and cannot be printed directly using an ordinary Show instance; apply input first.
+
+### Practice with answers
+
+What is the type and value of `char 'z' "z"`? **Answer:** `[(Char,String)]` and `[('z',"")]`. The empty suffix denotes complete consumption, not failure.
+
+## 9. Numeric answers and unconsumed digits
+
+The result parameter says the answer type, not the input type. Parser Int still accepts String. A one-digit parser can return an Int while leaving later digits untouched; parsing a whole number requires another definition.
+
+**Template to use.**
+
+```haskell
+type Parser a = String -> [(a,String)]
+-- digit :: String -> [(Int,String)]
+-- Replace one leading digit character by its numeric value.
+```
+
+### Exam question 9: Numeric answers and unconsumed digits
+
+Write a one-digit `digit :: Parser Int` that accepts only characters 0 to 9. Predict `digit "09x"`, `digit "x9"` and `digit ""`. Explain why the first answer is not 9. (7 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The restriction is one leading digit, not an arbitrary-length decimal numeral. Invalid first characters mean failure.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use a finite character-to-Int table. On success return that Int and the exact tail. On missing key or empty input return [].
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Parser a = String -> [(a,String)]
+digit :: Parser Int
+digit [] = []
+digit (c:cs) = case lookup c (zip "0123456789" [0..9]) of
+  Nothing -> []
+  Just n -> [(n,cs)]
+```
+
+Results: `[(0,"9x")]`, [] and []. The parser consumes only the leading 0; 9 remains in the suffix, so it contributes nothing to the current numeric answer.
+
+  </Step>
+
+  <Step title="4. Check">
+
+A zero answer is success, and nonempty leftover input is allowed by the type. A separate full-input policy can reject that suffix later.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: leading zero with leftover digits
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+digit :: Parser Int
+digit [] = []
+digit (c:cs) = case lookup c (zip "0123456789" [0..9]) of
+  Nothing -> []
+  Just n -> [(n,cs)]
+main :: IO ()
+main = print (digit "09x")
+```
+
+```text
+[(0,"9x")]
+```
+
+</HaskellTryIt>
+
+The table maps character 0 to Int 0. The suffix is exactly 9x.
+
+### Worked variation 2: wrong first character
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+digit :: Parser Int
+digit [] = []
+digit (c:cs) = case lookup c (zip "0123456789" [0..9]) of
+  Nothing -> []
+  Just n -> [(n,cs)]
+main :: IO ()
+main = print (digit "x9")
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+x is absent from the digit table. The parser does not silently skip it.
+
+### Worked variation 3: empty input compared with complete success
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+digit :: Parser Int
+digit [] = []
+digit (c:cs) = case lookup c (zip "0123456789" [0..9]) of
+  Nothing -> []
+  Just n -> [(n,cs)]
+results :: [[(Int,String)]]
+results = [digit "",digit "9"]
+main :: IO ()
+main = print (results)
+```
+
+```text
+[[],[(9,"")]]
+```
+
+</HaskellTryIt>
+
+The first call has no alternatives. The second has one answer and an empty suffix; these shapes must not be confused.
+
+</details>
+
+### Common errors
+
+Returning `[(c,cs)]` makes the answer Char, not Int, causing `Couldn't match` against Parser Int. Returning `[(read [c],cs)]` without validating the character can crash on nondigits; use the finite lookup. Returning suffix cs after consuming more than one character would be a logical consumption error even if the types fit.
+
+### Practice with answers
+
+Expand `Parser (Int,Int)`. **Answer:** `[Char] -> [((Int,Int),[Char])]`. Each answer is a pair of Ints; it still has its own String suffix.
+
+## 10. Several alternatives and full-input acceptance
+
+A list result permits alternatives, duplicates and successful parses that consume nothing. To accept a complete input, examine suffixes; counting result pairs or inspecting only the answer does not establish full consumption. Filtering answers is a client operation, not a new parser framework.
+
+**Template to use.**
+
+```haskell
+type Parser a = String -> [(a,String)]
+-- complete p input = [a | (a,rest) <- p input, null rest]
+```
+
+### Exam question 10: Several alternatives and full-input acceptance
+
+Let prefix return `[("",input),([c],cs)]` on nonempty input `c:cs`, and `[("","")]` on empty input. Define it and complete, which returns answers only from alternatives with empty suffixes. Predict both functions on `"a"`, `"ab"` and `""`. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The specification explicitly permits an empty answer without consumption. The question asks for both raw results and the complete subset.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Write both input equations. For complete, call the parser once conceptually and retain pairs whose suffix is empty, projecting just their answers.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Parser a = String -> [(a,String)]
+prefix :: Parser String
+prefix [] = [("","")]
+prefix (c:cs) = [("",c:cs),([c],cs)]
+complete :: Parser a -> String -> [a]
+complete p input = [answer | (answer,rest) <- p input, null rest]
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+On a: raw alternatives are `[("","a"),("a","")]`, complete gives `["a"]`. On ab: both suffixes are nonempty, so complete gives []. On empty input: raw result is `[("","")]`, complete gives `[""]`, one empty String answer.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: only one alternative consumes the entire input
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+prefix :: Parser String
+prefix [] = [("","")]
+prefix (c:cs) = [("",c:cs),([c],cs)]
+complete :: Parser a -> String -> [a]
+complete p input = [answer | (answer,rest) <- p input, null rest]
+main :: IO ()
+main = print ((prefix "a",complete prefix "a"))
+```
+
+```text
+([("","a"),("a","")],["a"])
+```
+
+</HaskellTryIt>
+
+The zero-consumption alternative leaves a, so it is filtered out. The one-character alternative leaves nothing and survives.
+
+### Worked variation 2: neither alternative completes the input
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+prefix :: Parser String
+prefix [] = [("","")]
+prefix (c:cs) = [("",c:cs),([c],cs)]
+complete :: Parser a -> String -> [a]
+complete p input = [answer | (answer,rest) <- p input, null rest]
+main :: IO ()
+main = print ((prefix "ab",complete prefix "ab"))
+```
+
+```text
+([("","ab"),("a","b")],[])
+```
+
+</HaskellTryIt>
+
+The suffixes ab and b are both nonempty. Two raw successes still yield no complete answers.
+
+### Worked variation 3: empty input can succeed without consumption
+
+<HaskellTryIt>
+
+```haskell
+type Parser a = String -> [(a,String)]
+prefix :: Parser String
+prefix [] = [("","")]
+prefix (c:cs) = [("",c:cs),([c],cs)]
+complete :: Parser a -> String -> [a]
+complete p input = [answer | (answer,rest) <- p input, null rest]
+main :: IO ()
+main = print ((prefix "",complete prefix ""))
+```
+
+```text
+([("","")],[""])
+```
+
+</HaskellTryIt>
+
+The explicit base equation returns one empty answer. It is complete because the input was already empty; `[""]` differs from [].
+
+</details>
+
+### Common errors
+
+Testing `null answer` instead of `null rest` implements the wrong policy. It can also introduce a wrong result-type assumption for a generic Parser a; `null answer` would force a to be a list and yields `Couldn't match` against the general signature. Using head discards alternatives and fails on []; filter the list instead.
+
+### Practice with answers
+
+If `p input = [(1,""),(2,"")]`, what is complete p input? **Answer:** `[1,2]`; complete preserves all complete alternatives in order, not just the first.
+
+## 11. Decide when types are genuinely distinct
+
+A type-checking decision should show expanded types for aliases or constructor boundaries for wrappers. Runtime validation and type identity are separate: a newtype can distinguish units without enforcing a positive value.
+
+**Template to use.**
+
+```haskell
+type Metres = Int
+type Seconds = Int
+newtype SafeMetres = SafeMetres Int
+-- Alias arguments interchange; SafeMetres must be constructed or extracted.
+```
+
+### Exam question 11: Decide when types are genuinely distinct
+
+For `type StudentId = Int` and `type CourseId = Int`, does a function expecting StudentId reject a CourseId? Redesign the two IDs so that the compiler distinguishes them, and write an explicit conversion to Int for each. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command "redesign" means the original aliases fail the desired separation. Explain their compatibility before replacing them.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Expand both aliases to Int. Use two separate newtype declarations and extract each Int through its own constructor pattern.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+newtype StudentId = StudentId Int
+newtype CourseId = CourseId Int
+studentNumber :: StudentId -> Int
+studentNumber (StudentId n) = n
+courseNumber :: CourseId -> Int
+courseNumber (CourseId n) = n
+```
+
+The original alias-based function accepts either Int alias. After this redesign, a CourseId cannot be supplied directly to a StudentId argument.
+
+  </Step>
+
+  <Step title="4. Check">
+
+Extracting both IDs deliberately gives two Ints that can mix again. The separation applies while values remain wrapped. Negative IDs remain possible unless validated.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: aliases allow mixing
+
+<HaskellTryIt>
+
+```haskell
+type StudentId = Int
+type CourseId = Int
+showStudent :: StudentId -> String
+showStudent n = "student " ++ show n
+course :: CourseId
+course = 243
+main :: IO ()
+main = print (showStudent course)
+```
+
+```text
+"student 243"
+```
+
+</HaskellTryIt>
+
+Both aliases expand to Int. The compiler cannot know the supplied identifier belongs to another domain.
+
+### Worked variation 2: separate wrappers and explicit extraction
+
+<HaskellTryIt>
+
+```haskell
+newtype StudentId = StudentId Int
+newtype CourseId = CourseId Int
+studentNumber :: StudentId -> Int
+studentNumber (StudentId n) = n
+courseNumber :: CourseId -> Int
+courseNumber (CourseId n) = n
+main :: IO ()
+main = print ((studentNumber (StudentId 7),courseNumber (CourseId 243)))
+```
+
+```text
+(7,243)
+```
+
+</HaskellTryIt>
+
+Each function accepts only its own wrapper. The extracted results are both Ints, intentionally.
+
+### Worked variation 3: wrapping does not validate
+
+<HaskellTryIt>
+
+```haskell
+newtype StudentId = StudentId Int
+validId :: StudentId -> Bool
+validId (StudentId n) = n > 0
+main :: IO ()
+main = print (map validId [StudentId (-1),StudentId 0,StudentId 1])
+```
+
+```text
+[False,False,True]
+```
+
+</HaskellTryIt>
+
+Every wrapped value is constructible, but the predicate accepts only positive numbers. A controlled construction interface could enforce that policy.
+
+</details>
+
+### Common errors
+
+Passing `CourseId 243` directly to studentNumber produces `Couldn't match`. Use the correct domain value; do not extract and rewrap merely to silence a meaningful domain error. A `data` wrapper also creates a distinct type, but its general constructor choices are taught in [Data Types by Example](/docs/sem3/csi243/08-modules-types/notes/data-types-by-example).
+
+### Practice with answers
+
+Would `type StudentId = CourseId` create separation if CourseId is already a newtype? **Answer:** no; the alias names that same CourseId type. Declare a distinct wrapper for a distinct identity.
+
+## 12. Repair malformed and recursive declarations
+
+Classify the desired representation before editing syntax. A tuple alias uses field types; a data declaration uses a constructor; a parameterised alias declares its variables; a recursive structure needs a representation with constructors rather than a synonym cycle.
+
+**Template to use.**
+
+```haskell
+-- Tuple alias: type Course = (String,String,Int)
+-- Table alias: type Assoc k v = [(k,v)]
+-- Recursive data: data Chain a = End | Link a (Chain a)
+```
+
+### Exam question 12: Repair malformed and recursive declarations
+
+Repair these three independent declarations: `data Course = (title,code,credits)`, `type Assoc = [(k,v)]`, `type Chain = [Chain]`. Use a tuple alias for Course, retain a general table, and use a recursive constructor representation for Chain. Write one observer for each. (9 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The requested repairs specify the intended representation, so do not replace every example with an unrelated fixed type.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Course needs concrete field types and type. Assoc needs both parameters declared. Chain needs an end constructor and a recursive link constructor. Match each representation in its observer.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+type Course = (String,String,Int)
+courseCredits :: Course -> Int
+courseCredits (_,_,n) = n
+
+type Assoc k v = [(k,v)]
+entryCount :: Assoc k v -> Int
+entryCount = length
+
+data Chain a = End | Link a (Chain a)
+chainLength :: Chain a -> Int
+chainLength End = 0
+chainLength (Link _ rest) = 1 + chainLength rest
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+A three-credit course returns 3; [] has zero entries; End has length zero and Link adds one. These observers exercise the repaired shapes rather than merely declaring unused names.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: tuple observer
+
+<HaskellTryIt>
+
+```haskell
+type Course = (String,String,Int)
+courseCredits :: Course -> Int
+courseCredits (_,_,n) = n
+main :: IO ()
+main = print (courseCredits ("Logic","L1",3))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The pattern is a triple because Course is an alias, not a constructor type.
+
+### Worked variation 2: general table observer
+
+<HaskellTryIt>
+
+```haskell
+type Assoc k v = [(k,v)]
+entryCount :: Assoc k v -> Int
+entryCount = length
+main :: IO ()
+main = print ((entryCount ([] :: Assoc String Bool),entryCount [(1,"x"),(2,"y")]))
+```
+
+```text
+(0,2)
+```
+
+</HaskellTryIt>
+
+Both instantiations use the same unconstrained entryCount. Empty and nonempty tables are handled by length.
+
+### Worked variation 3: recursive data observer
+
+<HaskellTryIt>
+
+```haskell
+data Chain a = End | Link a (Chain a)
+chainLength :: Chain a -> Int
+chainLength End = 0
+chainLength (Link _ rest) = 1 + chainLength rest
+main :: IO ()
+main = print ((chainLength (End :: Chain Int),chainLength (Link True (Link False End))))
+```
+
+```text
+(0,2)
+```
+
+</HaskellTryIt>
+
+The recursive case reaches a finite End. Instantiating a at Int or Bool changes stored values, not the count logic.
+
+</details>
+
+### Common errors
+
+The original Course gives `parse error`; undeclared k and v give `Not in scope: type variable`; Chain gives `Cycle in type synonym declarations`. These key phrases describe independent faults. Adding a parameter to `type Chain a = [Chain a]` leaves the cycle and does not repair it.
+
+### Practice with answers
+
+Repair an indirect cycle `type A = [B]`, `type B = (Int,A)` as recursive data. **Answer:** for example `data A = A [B]` and `data B = B Int A`. This is constructor-based recursion, not finite synonym expansion; finite values can use `A []`. Use the mutually recursive data lesson for processing both constructors.
+
+## 13. Scope of a name versus compatibility of its expansion
+
+A provider can export a function while omitting its private synonym name. A caller can still supply values with the expanded type. Conversely, qualification cannot grant access to a name that was never exported. These questions are about source-level names; no module system creates a new type identity for an alias.
+
+**Template to use.**
+
+```haskell
+-- Provider export policy: module Catalogue (credits) where
+-- type Course = (String,String,Int)
+-- credits :: Course -> Int
+-- Client signature may use (String,String,Int) -> Int.
+```
+
+### Exam question 13: Scope of a name versus compatibility of its expansion
+
+A module Catalogue exports only credits. Internally it defines Course as `(String,String,Int)` and credits as a third-field selector. Decide whether a client may call `credits ("Logic","L1",3)`, write `c :: Course`, or recover the unexported name by qualification. Then explain how an exported synonym could be hidden on import. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+There are three decisions about a private alias and a separate import policy question. Do not infer visibility from type compatibility.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Expand Course for the call. Check the export list before allowing the name in client source. Finally consider a different provider that explicitly exports Course.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+The call is valid and returns 3. The provider's Course name is not available to the client, either unqualified or qualified. If Catalogue instead exports Course, `import Catalogue hiding (Course)` hides the synonym name while retaining credits; `import Catalogue (credits)` selects just credits.
+
+  </Step>
+
+  <Step title="4. Check">
+
+A client can write `c :: (String,String,Int)` and pass it to credits in the original export policy. Qualification changes how visible exported names are written; it does not override exports.
+
+  </Step>
+
+</Steps>
+
+### Worked variation 1: expanded tuple accepted by the function
+
+<HaskellTryIt>
+
+```haskell
+type Course = (String,String,Int)
+credits :: Course -> Int
+credits (_,_,n) = n
+client :: (String,String,Int) -> Int
+client = credits
+main :: IO ()
+main = print (client ("Logic","L1",3))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+This single-file executable checks compatibility only. Under the stated provider/client arrangement, the client can write this expanded signature without access to the Course name.
+
+### Worked variation 2: a different compatible tuple
+
+<HaskellTryIt>
+
+```haskell
+type Course = (String,String,Int)
+credits :: Course -> Int
+credits (_,_,n) = n
+client :: (String,String,Int) -> Int
+client = credits
+main :: IO ()
+main = print (client ("Topics","T0",0))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Changing the values does not require naming the alias. Zero credits still has type Int.
+
+### Worked variation 3: a list client uses the expanded element type
+
+<HaskellTryIt>
+
+```haskell
+type Course = (String,String,Int)
+credits :: Course -> Int
+credits (_,_,n) = n
+total :: [(String,String,Int)] -> Int
+total cs = sum (map credits cs)
+main :: IO ()
+main = print ((total [],total [("A","A1",2),("B","B1",3)]))
+```
+
+```text
+(0,5)
+```
+
+</HaskellTryIt>
+
+The alias-compatible client handles empty and multi-course lists. The scope policy itself belongs to the multi-module examples in the module lesson.
+
+</details>
+
+### Common errors
+
+Writing an unavailable Course name in the client gives a diagnostic containing `Not in scope`. Repair the export/import lists when the name should be public, or write the expanded type. The claim "synonyms are always exported and cannot be hidden" is false. Full module mechanics are in [Modules and Abstraction Practice](/docs/sem3/csi243/08-modules-types/notes/modules-and-abstraction-practice).
+
+### Practice with answers
+
+If a provider exports `(Course,credits)`, does `import Catalogue (credits)` bring Course into source-level scope? **Answer:** no. The function can still be used with compatible tuple values.
+
+## Summary
+
+<Callout type="key" title="Remember">
+Use expansion to justify compatibility; use module scope rules to justify availability of a name. Keep the key/value parameter order and every tuple/list layer. State duplicate policies before tracing tables. A Parser is a function whose result list distinguishes failure from one empty answer and whose suffixes determine complete consumption. Choose constructors and distinct wrappers when the specification requires distinct types.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="What does the compiler learn from Assoc k v that enforces unique keys?">
+
+Nothing: it is a list of pairs and can contain duplicates. Operations and validation establish any uniqueness policy.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="What is the type of a Parser Int call after input has been supplied?">
+
+`[(Int,String)]`, a list of answer/suffix pairs. Before application the parser has type `String -> [(Int,String)]`.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="How can there be successful parses but no complete-input answer?">
+
+Every successful pair may have a nonempty suffix. Filtering for empty suffixes then produces [].
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Why is a recursive alias repair different from adding a missing parameter?">
+
+A missing parameter can be declared on the left and substituted on the right. A synonym cycle still has no finite expansion after parameters are supplied; use a finite alias shape or recursive data.
+
+  </CheckQuestion>
+
+  <CheckQuestion question="Does hiding an alias name make its representation a distinct type?">
+
+No. Hiding controls the name in source. Alias-compatible ordinary values can still be passed to functions whose expanded types accept them.
+
+  </CheckQuestion>
+
+</CheckQuestions>
