@@ -1,0 +1,1137 @@
+---
+title: "Where Exam Practice"
+description: "Fifteen fully answered exam questions on local definitions, scope, sharing, recursion, formulas and rewrites."
+---
+
+Try each question before opening its answer. Every solution explains the command word, chooses a binding template, traces demand, supplies a runnable check, and gives a rewrite without where.
+
+<LearningObjectives items={[
+  'Trace local values and helper applications precisely',
+  'Write guarded and recursive functions using local definitions',
+  'Convert binding forms while preserving scope and behaviour',
+  'Diagnose scope, shadowing and layout problems',
+  'Check formula answers at boundaries and small inputs',
+]} />
+
+<Prerequisites items={[
+  'Where and Local Definitions: templates, scope table and demand tracing',
+  'Basic recursion on numbers and lists for the recursive questions',
+]} />
+
+## 1. A method for every answer
+
+Read the command word: write, trace, rewrite, explain, predict or repair. Identify the inputs, output type, preconditions and required technique. Locate the equation owning each local name. Start the trace at the demanded result; compute only its dependencies, reuse a binding's value, and identify unused work. Check a boundary as well as an ordinary input.
+
+The fifteen questions practise the twelve uses taught in the companion lesson. Each answer's rewrite is an alternative definition to load separately. Keep that answer's main to run the rewrite; do not paste two same-named versions together. Intentionally rejected programs are plain fences, never runnable widgets.
+
+## 2. Questions and worked answers
+
+### Exam question: trace two dependent bindings (4 marks)
+
+State what the following definition prints when called as `report 6`. Show when each local binding is demanded.
+
+
+```haskell
+report :: Int -> (Int,Int)
+report n = (twice, twice + extra)
+  where
+    extra = n - 1
+    twice = 2 * n
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“State” asks for the printed tuple; “show” requires a trace of the local computations. The input is 6 and the result has type (Int,Int).
+
+</Step>
+
+<Step title="2. Plan">
+
+Printing a tuple demands its fields. Follow each field's dependencies and reuse twice for the second field.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+report :: Int -> (Int,Int)
+report n = (twice, twice + extra)
+  where
+    extra = n - 1
+    twice = 2 * n
+
+main :: IO ()
+main = print (report 6)
+```
+
+
+
+```text
+(12,17)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing the first component demands twice = 2 * 6 = 12. The second reuses twice and demands extra = 6 - 1 = 5; 12 + 5 = 17. Declaration order does not force extra first.
+
+**Rewrite without `where`:**
+
+```haskell
+report :: Int -> (Int,Int)
+report n = let extra = n - 1; twice = 2 * n in (twice, twice + extra)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At n = 0 the tuple is (0,-1). Each call owns its own twice and extra bindings.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: remove repeated arithmetic (5 marks)
+
+Rewrite `spread a b = ((a+b)*(a+b), (a+b)-1)` using `where` to name the repeated sum. Give its type for Int inputs.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Rewrite” requires the same pair, with one local name for a + b. Both inputs and both output components are Int.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the single-value template. Bind total once and refer to it in the square and decrement.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+spread :: Int -> Int -> (Int,Int)
+spread a b = (total * total, total - 1)
+  where
+    total = a + b
+
+main :: IO ()
+main = print (spread 2 3)
+```
+
+
+
+```text
+(25,4)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing the first field demands total = 5, reuses it for 5 * 5 = 25, and the second field reuses it again for 5 - 1 = 4.
+
+**Rewrite without `where`:**
+
+```haskell
+spread :: Int -> Int -> (Int,Int)
+spread a b = let total = a + b in (total * total, total - 1)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At 0 and 0 both versions give (0,-1). Merely inlining the formula restores the original expression, but the let rewrite preserves the named shared value.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: convert where to let without losing a guard name (5 marks)
+
+Rewrite the definition below without `where`. Preserve both decisions and the shared total.
+
+
+```haskell
+shipping :: Int -> Int -> Int
+shipping a b
+  | total <= 5 = total
+  | otherwise = total + 2
+  where
+    total = a + b
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Rewrite” asks for equivalent behaviour. total is used in a guard and in both results, so a let in only one result is insufficient.
+
+</Step>
+
+<Step title="2. Plan">
+
+Put total in a let enclosing an if expression that represents the complete guarded decision.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+shipping :: Int -> Int -> Int
+shipping a b = let total = a + b
+               in if total <= 5 then total else total + 2
+
+main :: IO ()
+main = print (shipping 3 4)
+```
+
+
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The if test demands total = 7. The comparison with 5 is False, so the else expression reuses 7 and returns 9. No second sum is needed.
+
+**Rewrite without `where`:**
+
+```haskell
+shipping :: Int -> Int -> Int
+shipping a b = if a + b <= 5 then a + b else a + b + 2
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At inputs 2 and 3 the total equals the boundary 5 and gives 5. The direct rewrite also has no where, but repeats syntax; prefer the let solution when asked to share.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: convert let to where (4 marks)
+
+Rewrite `balance opening spent = let remaining = opening - spent in (remaining, remaining >= 0)` using `where`, for Int inputs.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Rewrite” asks for a change in binding syntax while retaining the tuple's types: (Int,Bool).
+
+</Step>
+
+<Step title="2. Plan">
+
+Move the declaration after the equation and remove let and in. Keep the name visible to both fields.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+balance :: Int -> Int -> (Int,Bool)
+balance opening spent = (remaining, remaining >= 0)
+  where
+    remaining = opening - spent
+
+main :: IO ()
+main = print (balance 5 8)
+```
+
+
+
+```text
+(-3,False)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The first tuple field demands remaining = 5 - 8 = -3. The second reuses -3, and -3 >= 0 is False.
+
+**Rewrite without `where`:**
+
+```haskell
+balance :: Int -> Int -> (Int,Bool)
+balance opening spent = let remaining = opening - spent in (remaining, remaining >= 0)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Equal opening and spending give (0,True), checking the non-negative boundary.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: add a recursive local helper (6 marks)
+
+Write `countAbove :: Int -> [Int] -> Int`, using a recursive `where` helper. Count elements strictly greater than the limit. The empty list must give zero.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for a definition; “recursive where helper” fixes the method. Equality to the limit must not count.
+
+</Step>
+
+<Step title="2. Plan">
+
+Capture limit in helper go. Give go an empty case and a cons case; add one only when the head exceeds limit.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+countAbove :: Int -> [Int] -> Int
+countAbove limit xs = go xs
+  where
+    go [] = 0
+    go (y:ys)
+      | y > limit = 1 + go ys
+      | otherwise = go ys
+
+main :: IO ()
+main = print (countAbove 4 [2,4,6,8])
+```
+
+
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+**Demand trace:** go [2,4,6,8] tests 2 > 4 (False); then 4 > 4 (False); then 6 > 4 (True), contributing 1; then 8 > 4 (True), contributing 1. go [] supplies 0; unwinding gives 1 + 1 + 0 = 2. The helper captures limit, but each call has a new list argument.
+
+**Rewrite without `where`:**
+
+```haskell
+countAbove :: Int -> [Int] -> Int
+countAbove limit xs =
+  let { go [] = 0; go (y:ys) = if y > limit then 1 + go ys else go ys }
+  in go xs
+```
+
+</Step>
+
+<Step title="4. Check">
+
+countAbove 4 [] gives 0, and countAbove 4 [4] gives 0, checking both the base case and strict comparison.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: find a scope error between equations (5 marks)
+
+Explain why the following program is rejected. Repair it so the empty list returns zero, and a non-empty list returns its sum capped at ten.
+
+
+```haskell
+-- Rejected: total belongs only to the second equation.
+capped :: [Int] -> Int
+capped [] = total
+capped xs
+  | total > 10 = 10
+  | otherwise = total
+  where
+    total = sum xs
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” requires the owner of total; “repair” must implement the specified empty and non-empty behaviour.
+
+</Step>
+
+<Step title="2. Plan">
+
+total is local to the second equation. Give the first equation the independent result 0.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+capped :: [Int] -> Int
+capped [] = 0
+capped xs
+  | total > 10 = 10
+  | otherwise = total
+  where
+    total = sum xs
+
+main :: IO ()
+main = print ((capped [], capped [4,8]))
+```
+
+
+
+```text
+(0,10)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The first tuple field selects the empty equation and returns 0 without using total. The second selects the other equation and demands total = 12 in its first guard; the True guard returns 10.
+
+**Rewrite without `where`:**
+
+```haskell
+capped :: [Int] -> Int
+capped [] = 0
+capped xs = let total = sum xs in if total > 10 then 10 else total
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The key rejection message is `Variable not in scope: total`. capped [2,3] returns 5 after the first guard fails and otherwise reuses the demanded total.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: predict shadowing (4 marks)
+
+Predict `shadowed 100`. Does the local definition change the argument? State the relevant warning.
+
+
+```haskell
+shadowed :: Int -> Int
+shadowed amount = amount + 1
+  where
+    amount = 4
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Predict” needs the value; the remaining requests concern scope and a warning, not a type error.
+
+</Step>
+
+<Step title="2. Plan">
+
+Resolve the result's amount to its nearest binding before doing arithmetic.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+shadowed :: Int -> Int
+shadowed amount = amount + 1
+  where
+    amount = 4
+
+main :: IO ()
+main = print (shadowed 100)
+```
+
+
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Demand for the result resolves amount to the local 4, then returns 5. The argument 100 is unused, not reassigned.
+
+**Rewrite without `where`:**
+
+```haskell
+shadowed :: Int -> Int
+shadowed ignored = let amount = 4 in amount + 1
+```
+
+</Step>
+
+<Step title="4. Check">
+
+shadowed 0 also gives 5. With -Wname-shadowing, the key warning wording is `shadows the existing binding`. Rename the local value to avoid accidental hiding.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: grade bands from a specification (6 marks)
+
+Write `grade :: Int -> Int -> String`. Add exam and coursework marks; return `"distinction"` at totals of at least 80, `"pass"` at totals of at least 50, otherwise `"retry"`. Use one shared local total.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for a two-argument definition. The cut-offs include 80 and 50, and the method requires a local value shared by guards.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind total in where. Test the higher band first so it is not captured by the pass guard.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+grade :: Int -> Int -> String
+grade exam coursework
+  | total >= 80 = "distinction"
+  | total >= 50 = "pass"
+  | otherwise = "retry"
+  where
+    total = exam + coursework
+
+main :: IO ()
+main = print ((grade 60 20, grade 30 20, grade 20 10))
+```
+
+
+
+```text
+("distinction","pass","retry")
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The first call demands total = 80 and takes guard one. The second demands total = 50, fails guard one and reuses 50 for guard two. The third demands total = 30, fails both comparisons using that same value and selects otherwise. The calls have distinct total bindings.
+
+**Rewrite without `where`:**
+
+```haskell
+grade :: Int -> Int -> String
+grade exam coursework = let total = exam + coursework
+                        in if total >= 80 then "distinction"
+                           else if total >= 50 then "pass" else "retry"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The tuple tests both inclusive boundaries and a failing total. Negative marks are outside this grading model's intended input domain.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: marginal tax brackets (7 marks)
+
+For a toy tax system, write `tax :: Double -> Double` for non-negative income. The first 100 is tax-free; the next 100 is taxed at one quarter; income above 200 is taxed at one half. Use local bracket calculations and guards.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for a monetary function. The rates are marginal: a higher rate applies only to the portion above its threshold.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind middleTax and upperTax. Guard the tax-free band first, then the middle band, then the upper band; avoid applying a single rate to all income.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+tax :: Double -> Double
+tax income
+  | income <= 100 = 0
+  | income <= 200 = middleTax
+  | otherwise = 25 + upperTax
+  where
+    middleTax = (income - 100) / 4
+    upperTax = (income - 200) / 2
+
+main :: IO ()
+main = print ((tax 100, tax 150, tax 250))
+```
+
+
+
+```text
+(0.0,12.5,50.0)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** At 100, the first guard succeeds and neither local tax is demanded. At 150, guard one fails, guard two succeeds, and middleTax = 50 / 4 = 12.5; upperTax remains unused. At 250, both comparisons fail; upperTax = 50 / 2 = 25.0, so the result is 25 + 25 = 50.0. middleTax is not needed for that branch.
+
+**Rewrite without `where`:**
+
+```haskell
+tax :: Double -> Double
+tax income = if income <= 100 then 0
+             else if income <= 200 then (income - 100) / 4
+             else 25 + (income - 200) / 2
+```
+
+</Step>
+
+<Step title="4. Check">
+
+At 200 the middle branch gives 25.0. Just above that boundary only the excess would receive the half rate. Inputs below zero are excluded by the specification.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: simple interest (5 marks)
+
+Write `interest :: Double -> Double -> Double -> (Double,Double)` taking principal, annual rate as a fraction, and years. Return (interest earned, final balance), using a local binding for the interest.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” requests a triple-argument function returning a pair. The rate is already a fraction: do not divide it by 100 again.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use simple interest earned = principal * rate * years. Share earned between both tuple components.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+interest :: Double -> Double -> Double -> (Double,Double)
+interest principal rate years = (earned, principal + earned)
+  where
+    earned = principal * rate * years
+
+main :: IO ()
+main = print (interest 200 0.25 0.5)
+```
+
+
+
+```text
+(25.0,225.0)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The first printed field demands earned = 200 * 0.25 * 0.5 = 25.0. The second reuses earned and adds principal, giving 225.0. There is no compounding.
+
+**Rewrite without `where`:**
+
+```haskell
+interest :: Double -> Double -> Double -> (Double,Double)
+interest principal rate years = let earned = principal * rate * years
+                                in (earned, principal + earned)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Zero years gives (0.0,200.0) for principal 200; this confirms the base financial condition without introducing a special branch.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: decimal digits including zero and negatives (7 marks)
+
+Write `digits :: Integer -> [Integer]` returning decimal digits in reading order, ignoring a minus sign. Zero must give `[0]`. Use a local recursive helper and a divMod pattern binding.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for a list-producing function. The specified special cases are zero and negatives. Integer avoids the fixed-width minimum-bound issue with abs.
+
+</Step>
+
+<Step title="2. Plan">
+
+Pass abs n to a helper. A one-digit value returns a singleton. Otherwise divMod by 10 produces the prefix and final digit; recurse on the prefix and append the last digit.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+digits :: Integer -> [Integer]
+digits n = go (abs n)
+  where
+    go m
+      | m < 10 = [m]
+      | otherwise = go q ++ [r]
+      where
+        (q,r) = m `divMod` 10
+
+main :: IO ()
+main = print ((digits (-407), digits 0))
+```
+
+
+
+```text
+([4,0,7],[0])
+```
+
+</HaskellTryIt>
+
+**Demand trace:** The first call uses go 407. Its guard fails; demanding q and r obtains (40,7). go 40 obtains (4,0). go 4 takes the first guard and does not demand its own divMod binding. Unwind [4] ++ [0] ++ [7] to [4,0,7]. The second call uses go 0 and returns [0] without divMod.
+
+**Rewrite without `where`:**
+
+```haskell
+digits :: Integer -> [Integer]
+digits n = let go m = if m < 10 then [m]
+                     else let (q,r) = m `divMod` 10 in go q ++ [r]
+           in go (abs n)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+digits 9 gives [9], and digits 10 gives [1,0]. Checking 10 verifies both recursion and retention of a zero digit.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: quadratic roots with a shared discriminant (8 marks)
+
+Write `roots :: Double -> Double -> Double -> (Double,Double)` using local discriminant, square-root and denominator bindings. Assume a is non-zero and the discriminant is non-negative. Return the plus root first.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for a formula under explicit preconditions. The quadratic formula uses -b, not b. Both results share the square root and denominator.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind d = b*b - 4*a*c, rootD = sqrt d and denominator = 2*a. Use the plus and minus numerators separately.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+roots :: Double -> Double -> Double -> (Double,Double)
+roots a b c = ((-b + rootD) / denominator, (-b - rootD) / denominator)
+  where
+    d = b * b - 4 * a * c
+    rootD = sqrt d
+    denominator = 2 * a
+
+main :: IO ()
+main = print (roots 1 (-4) 3)
+```
+
+
+
+```text
+(3.0,1.0)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Printing the first root demands d = 16 - 12 = 4.0, rootD = 2.0 and denominator = 2.0. The plus numerator is 4 + 2 = 6, giving 3.0. The second root reuses rootD and denominator: (4 - 2) / 2 = 1.0.
+
+**Rewrite without `where`:**
+
+```haskell
+roots :: Double -> Double -> Double -> (Double,Double)
+roots a b c = let d = b * b - 4 * a * c; rootD = sqrt d; denominator = 2 * a
+              in ((-b + rootD) / denominator, (-b - rootD) / denominator)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Substitution into x*x - 4*x + 3 gives 0 at x = 3 and x = 1. For a = 1, b = -2, c = 1, d = 0.0 and both roots are 1.0. No output claim is made for inputs outside the stated domain.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: fix a layout error (4 marks)
+
+Repair this intended two-binding where group, then state the result at n = 3. Explain which declarations are siblings.
+
+
+```haskell
+-- Rejected: missing separator in an explicit binding group.
+layoutBroken n = a + b where { a = n + 1 b = n * 2 }
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Repair” concerns declaration boundaries; “state” asks for the result after fixing the syntax.
+
+</Step>
+
+<Step title="2. Plan">
+
+Either insert the missing semicolon or use two aligned lines beneath where. Use the latter to make the siblings visible.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+layoutFixed :: Int -> Int
+layoutFixed n = a + b
+  where
+    a = n + 1
+    b = n * 2
+
+main :: IO ()
+main = print (layoutFixed 3)
+```
+
+
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+**Demand trace:** Addition demands a = 3 + 1 = 4 and b = 3 * 2 = 6, giving 10. Their alignment makes them sibling declarations; it does not sequence evaluation.
+
+**Rewrite without `where`:**
+
+```haskell
+layoutFixed :: Int -> Int
+layoutFixed n = let { a = n + 1; b = n * 2 } in a + b
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The key GHC diagnostic for the broken group is `parse error on input`. An explicit repaired where group is `where { a = n + 1; b = n * 2 }`. Use spaces to avoid tab-related column confusion.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: explain why a binding is not evaluated (5 marks)
+
+Explain whether `safeHead []` terminates and why. Also state what it returns for `[9,8]`.
+
+
+```haskell
+safeHead :: [Int] -> Int
+safeHead xs
+  | null xs = 0
+  | otherwise = first
+  where
+    first = head xs
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” requires a demand argument for the potentially partial head operation; also give both results.
+
+</Step>
+
+<Step title="2. Plan">
+
+Try the null guard before considering first. Only the selected result may demand that binding.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+safeHead :: [Int] -> Int
+safeHead xs
+  | null xs = 0
+  | otherwise = first
+  where
+    first = head xs
+
+main :: IO ()
+main = print ((safeHead [], safeHead [9,8]))
+```
+
+
+
+```text
+(0,9)
+```
+
+</HaskellTryIt>
+
+**Demand trace:** At [], null is True and the result is 0: first is never demanded, so head [] is not evaluated. At [9,8], null is False, so otherwise selects first and forces head [9,8] = 9. The tail's values are unnecessary.
+
+**Rewrite without `where`:**
+
+```haskell
+safeHead :: [Int] -> Int
+safeHead xs = if null xs then 0 else head xs
+```
+
+</Step>
+
+<Step title="4. Check">
+
+A singleton [5] returns 5. Removing the empty guard would lose the protection; the where clause alone does not make head total.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question: promote a helper without losing captured inputs (6 marks)
+
+Rewrite the definition below using a top-level helper called `costTop`, with no where clause. State the helper's type and preserve the result for every Int fee and list of Int quantities.
+
+
+```haskell
+totalCost :: Int -> [Int] -> Int
+totalCost fee quantities = sum (map cost quantities)
+  where
+    cost quantity = 2 * quantity + fee
+```
+
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Rewrite” and “state” require a full top-level helper interface as well as its use. fee was captured by the local helper.
+
+</Step>
+
+<Step title="2. Plan">
+
+Make fee the first explicit parameter of costTop, then partially apply costTop fee when mapping over quantities.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+costTop :: Int -> Int -> Int
+costTop fee quantity = 2 * quantity + fee
+
+totalCost :: Int -> [Int] -> Int
+totalCost fee quantities = sum (map (costTop fee) quantities)
+
+main :: IO ()
+main = print (totalCost 3 [2,4])
+```
+
+
+
+```text
+18
+```
+
+</HaskellTryIt>
+
+**Demand trace:** In the original where version, sum demands cost 2 = 4 + 3 = 7, then cost 4 = 8 + 3 = 11. The promoted calls receive fee explicitly and produce the same 7 and 11; summing gives 18. No global fee binding is required.
+
+**Rewrite without `where`:**
+
+```haskell
+totalCost :: Int -> [Int] -> Int
+totalCost fee quantities = sum (map (\quantity -> 2 * quantity + fee) quantities)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+With an empty list the map is [] and the sum is 0. costTop 0 5 gives 10 as an independent helper test. Moving cost unchanged to the top level would leave fee out of scope.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Common errors to check before submitting
+
+| Error | What to look for | Repair |
+|---|---|---|
+| Local name used in another equation | Key message: Variable not in scope | Give that equation its own answer or use an enclosing helper |
+| Helper promoted without captured parameters | Key message: Variable not in scope | Add each captured input to the helper's parameters |
+| Missing declaration separator | Key message: parse error on input | Align siblings or insert a semicolon in an explicit group |
+| Accidental shadowing | With -Wname-shadowing: shadows the existing binding | Choose distinct parameter and local names |
+| Assuming every declaration is evaluated | A predicted crash in an unused binding | Follow demand from the selected result |
+| Treating a guard's result-local let as equation-wide | A guard cannot see the local name | Enclose the whole choice in let or use where |
+
+These are the key parts of diagnostics, not fabricated complete compiler transcripts. File paths, source locations and suggested repairs depend on the complete program.
+
+## Summary
+
+<Callout type="key" title="Remember">
+A correct answer includes the local environment and a demand trace, not just the final value. Each where belongs to one equation. Bind repeated values once, give helper functions their own parameters, preserve scope when rewriting, and expose captured inputs when promoting. Check zero, empty inputs and band boundaries when the specification includes them.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does the tax function not calculate both local taxes for every call?">
+Only the selected result demands its local tax expression. At the tax-free boundary neither local tax is needed.
+</CheckQuestion>
+
+<CheckQuestion question="Why does a let rewrite of guarded shipping enclose the complete if expression?">
+The shared total must be visible to the condition and both results. A let only inside a result would not provide that scope.
+</CheckQuestion>
+
+<CheckQuestion question="What makes the decimal digit helper stop?">
+Its argument is non-negative; integer division by ten reduces every argument at least ten. The one-digit guard returns a singleton, including [0].
+</CheckQuestion>
+
+<CheckQuestion question="What information should accompany a shadowing prediction?">
+Identify which binding each occurrence refers to, explain that the outer argument is unused rather than updated, and state the resulting arithmetic.
+</CheckQuestion>
+
+<CheckQuestion question="What changes when cost is promoted to costTop?">
+The formerly captured fee becomes an explicit parameter. Partial application supplies it while map supplies each quantity.
+</CheckQuestion>
+
+</CheckQuestions>
+
