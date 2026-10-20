@@ -252,3 +252,200 @@ Files: `content/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth.mdx`, `...
 `either-in-depth.mdx`: build `Either` from the problem `Maybe` cannot solve (saying **why** it failed). `data Either a b = Left a | Right b`, the convention (`Left` for the failure and its reason, `Right` for the success), read constructor by constructor, and `Either` as a plain choice between two types (a list of `Either Int String`). The **template for a validating function** and at least **eight worked functions** with a runnable block each: `safeDivE`, parsing an age with several distinct failure reasons, validating a password with several rules, a bank withdrawal that can fail for two reasons, a lookup that names the missing key, the square root of a negative number, checking a list is sorted and reporting the first bad position, reading a mark between 0 and 100. **Consuming** an `Either`: pattern matching, `case`, and the library functions with the definition written out, a template, a hand trace and at least three variations each: `either` (the eliminator: `either length negate`, `either show (map toUpper)`), `lefts`, `rights`, `partitionEithers`, `isLeft`/`isRight`, `fromLeft`/`fromRight`. **Chaining** failing steps: the nested `case`, a hand-written `andThenE`, the stop-at-the-first-error behaviour with a trace, and `>>=` named. Converting between `Maybe` and `Either` (`maybeToRight`, `rightToMaybe` written by hand). `Eq`, `Ord` and `Show` for `Either` (`Left 1 < Right 0`). When to choose `Maybe`, `Either` or an exception, as a table. Common errors with GHC's messages (mixing the two sides, a missing `Left`/`Right`, ambiguous types such as `Left 3` without a context). End with at least ten exam questions answered in full.
 
 `maybe-either-exam-practice.mdx`: at least twenty exam questions across both types and the standard types, in the layout above: declare a function's type and write it; trace `maybe` and `either` calls; rewrite a `case` using `maybe`/`either` and back; chain three failing steps; say what `catMaybes`/`mapMaybe`/`partitionEithers` return for a given list; find the type error; choose `Maybe` or `Either` for a specification and justify; convert a function that uses `error` to use `Maybe`; a question on the other standard types: `Ordering` (`compare`, and `case compare a b of`), the unit type `()`, tuples as product types, `Bool` as a two-constructor type, with their `Eq`/`Ord`/`Show` behaviour. Each answered in full.
+
+### Follow-on lanes V1 to V16 (from docs/plans/csi243-vault-gap-audit.md)
+
+These lanes came out of the vault gap audit. Each creates one or two lessons; the audit file holds the coverage rows for each (search it for the lane id). Every concept gets the full pattern of section 2, the variations of each construct and the sibling concepts beside it (section 3). Placement in the sidebar is decided by the lead when wiring; ignore any sidebar sentence below that contradicts the chapter as it stands.
+
+### Lane V1: arithmetic choices, numeric domains and conversions
+
+Files: `content/docs/sem3/csi243/02-expressions-types/notes/arithmetic-by-example.mdx` and `content/docs/sem3/csi243/02-expressions-types/notes/arithmetic-exam-practice.mdx`.
+
+Extend `expressions-types.mdx` and sit beside `values-text.mdx`, linking `09-polymorphism/notes/standard-classes.mdx`. Chapter 2 sidebar: after Expressions and Types, before Values, Names, Types, and Text; practice immediately after its lesson.
+
+Cover precedence and associativity with full arithmetic/Boolean traces; construct expressions from prose; `div`/`mod` against `quot`/`rem` on all sign combinations; `divMod`/`quotRem` and their identities; `^`, `^^`, `**` and their domains; repeated addition/multiplication and the non-negative precondition of `squareByAdding`; `negate`, `abs`, `signum`, `subtract`, `recip`; `fromIntegral`, `toInteger`, conversion before division; `floor`, `ceiling`, `truncate`, half-to-even `round`; numeric annotations, defaulting and Int limits; approximate equality, absolute/relative tolerance, Infinity and NaN; `sqrt`, `log`, `exp`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, radians and domain restrictions. Separate type errors from undefined mathematical inputs and floating results. Do not imply exponentiation by a fractional power is exact or that every zero division raises an exception.
+
+Minimum: three worked variations per operator/function/conversion, four per signed quotient/remainder operation and exponent family, including zero and negative cases; at least eighteen narrated exam questions, plus additional questions if needed to cover every concept. Repair the book/Test1 implication that `sum (replicate (fromIntegral n) n) == n*n` holds for negative n. Existing round and conversion examples should be referenced before adding genuinely different cases.
+
+### Lane V2: designing recursive numeric algorithms
+
+Files: `content/docs/sem3/csi243/05-recursion/notes/numeric-recursion-by-example.mdx` and `content/docs/sem3/csi243/05-recursion/notes/numeric-recursion-exam-practice.mdx`.
+
+Extend `writing-recursive-functions.mdx` and `dry-running.mdx`. Chapter 5 sidebar: after Writing Recursive Functions, before Dry Running; put the new practice after Dry Running. Existing Rec_ and Lab1_ downloads are prerequisites and must not be re-created.
+
+Cover the full specification-to-tests process for factorial variants, inclusive/exclusive sums, range sums with a stated reversed-bounds policy, `sumFac`, `cube`/`multTen` as simple starting specifications, signed multiplication by repeated addition, recursive power, exponentiation by squaring, Euclid `gcd` and derived `lcm`, decimal digit sum/count/reversal and Fibonacci with an accumulator. Distinguish one recursive call, changing both parameters, and repeated work in two branches. Keep domains and decreasing measures explicit; show equivalent if/guard/pattern definitions only where it helps a new algorithm, since conversion itself is covered. Cross-link V11 for the existing Either Fibonacci applicative expression, V12 for cost and existing proof pages for correctness.
+
+Minimum: four worked variations per algorithm family, including zero, negative-domain policy and another recurrence or bound; at least twelve narrated exam questions. Include repair-a-base-case, derive-a-recurrence, dry-run-a-new-function and choose-an-accumulator tasks. Do not write another factorial induction lesson.
+
+### Lane V3: designing recursive list functions and boundary cases
+
+Files: `content/docs/sem3/csi243/06-lists-tuples/notes/recursive-list-design.mdx` and `content/docs/sem3/csi243/06-lists-tuples/notes/recursive-list-exam-practice.mdx`.
+
+Extend `list-recursion.mdx`, `lab-03.mdx` and `lab-03a.mdx`. Chapter 6 sidebar: after List Recursion, before the Lab 03 lessons; practice immediately after the design lesson. Link existing List_ and Lab2_/Lab3_ downloads.
+
+Cover each Recursion Continued question (`atPosition`, `largerY`, `positiveNumbers`, descending `isSorted`) with its signature, base/step, narrated dry run and test design. Add the 2026 `sums`, `multList` and `has` tasks; recursive count/select/transform, `take`, `drop`, `splitAt`, `takeWhile`, append/interleave, accumulator reverse and safe extrema. Use no-library restrictions where specified. Teach empty, singleton, unequal-list and strict/non-strict sortedness cases; preserve the original index through a helper; reject index equal to length. Explain when `head`, `tail`, `last`, `init` and `!!` demand missing data. Safe-result consumption is already covered in Maybe/Either; concentrate on deriving the recursive algorithm. Sorting belongs to V9.
+
+Minimum: four worked variations per recursive shape and per original lab question, three per additional named function, at least fifteen narrated exam questions. Include negative/oversize take/drop counts, no matching elements, all matching elements and duplicate sorted values.
+
+### Lane V4: the exact fold and zip laboratory, designed from first principles
+
+Files: `content/docs/sem3/csi243/07-higher-order/notes/designing-folds-and-zips.mdx` and `content/docs/sem3/csi243/07-higher-order/notes/lab-04-folds-and-zips.mdx`.
+
+Extend `folds-and-composition.mdx` and sit beside `zip-and-zipwith.mdx`; use `applying-by-hand.mdx` for tracing prerequisites. Chapter 7 sidebar: design after Folds and Composition; lab after Zip and ZipWith and More Higher-Order Functions.
+
+Cover exact October Lab 4 Q1, Q2a-c and Q3, Lab 5 Q5, and textbook Appendix C. Derive the fold seed and combining function from recursive equations, including `sumsq` without `map`, product, length, conditional count, cube totals, `map` and `filter` as folds. Derive `ff`, `fmark`, the direct lambda formula and correct Int-to-Double conversion; generalise to three weights; dot product. Derive `zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]`, `fp`, the recursive case and all shortest-list stopping cases; contrast calling existing `zipWith3` with implementing the requested function. Include malformed arity, wrong operator argument, all-empty-only base case and partially printed output before a crash. State empty sums/products and negative n policy. Do not repeat the twenty already-covered higher-order tracing concepts.
+
+Minimum: four worked variations per design concept and original lab question/subpart, three for each Appendix C adaptation; at least twelve narrated exam questions plus every original lab part as a fully answered task. Use a commented complete lab program and a normal/boundary/invalid test grid.
+
+### Lane V5: type synonyms, parameter substitution and tiny parser values
+
+Files: `content/docs/sem3/csi243/08-modules-types/notes/type-synonyms-in-depth.mdx` and `content/docs/sem3/csi243/08-modules-types/notes/type-synonym-exam-practice.mdx`.
+
+Extend `type-synonyms.mdx`. Chapter 8 sidebar: immediately after Type Synonyms, before Custom Types; practice after the new lesson. Cross-link data examples already at exam depth.
+
+Cover `String`, `Pos`, `Board`, `Course`, `Assoc k v`, `Pair a` and `Parser a` through expansion, concrete instantiation, aliases built from aliases, parameter ordering, saturation and function signatures. Write keys/values/table operations and a few tiny character/digit parsers represented as functions returning a list of result/suffix pairs; show failure, one result, multiple results and leftover input. This is about reading/using the alias, not a new parser framework. Compare aliases with newtype/data through type-checking decisions; repair `data Course = (title, code, credits)`, undeclared parameters and recursive aliases. State correct import/export behaviour and defer its full module mechanics to V6.
+
+Minimum: four worked variations per synonym shape, three per parser result shape/error, at least ten narrated exam questions. Include expand-a-type, infer-a-client-signature, model-a-domain, explain-no-extra-type-safety and repair-a-declaration tasks.
+
+### Lane V6: modules, abstraction and real GHCi diagnostic sessions
+
+Files: `content/docs/sem3/csi243/08-modules-types/notes/modules-and-abstraction-practice.mdx` and `content/docs/sem3/csi243/08-modules-types/notes/module-debugging-exam-practice.mdx`.
+
+Extend `modules.mdx`, `imports.mdx` and the tool work in `02-expressions-types/notes/first-program.mdx` and `ghci.mdx`. Chapter 8 sidebar: after Importing, before Type Synonyms; debugging practice immediately after the new module lesson.
+
+Cover building and testing Geometry/MyCalculator-style core/client/test modules, filenames and hierarchical paths, `-i` search paths, `Main`, interpreted versus compiled execution and `.hi`/`.o` roles. Practise export lists, `T` versus `T(..)` versus selected constructors, explicit type-name scope, qualified/aliased imports, Prelude name clashes, cyclic dependencies and missing modules. Build an opaque stack or validated mark interface with representation invariants and smart constructors. Explicitly correct "types/synonyms cannot be hidden/are always exported": the importing module's source-level names are controlled by imports/exports, even when the compiler knows hidden types internally. Correct the implication that an unqualified import prevents qualified access. Explain the outline's parameterised module/functor term, distinguish it from Haskell `Functor`, and demonstrate Haskell's ordinary alternatives using function/type parameters rather than inventing module syntax.
+
+The debugging lesson supplies complete GHCi sessions for `:browse`, `:show modules`, `:show paths`, `:!`, load/reload, `:break`, `:trace`, `:history`, `:list`, `:print` and `:force`; distinguish observation from forcing a lazy binding. Tie each command to an actual failing small program. Include tool-role questions from Lecture 2 rather than a catalogue alone.
+
+Minimum: three worked variations per import/export/interface/tool concept and per debugger command, four distinct multi-file programs, at least twelve narrated exam questions. Flag the old module/type-synonym claims for the lead to correct in the existing lessons and their Q/R/CS; a new page must not leave contradictory review answers unreported.
+
+### Lane V7: characters, codes and whole-string transformations
+
+Files: `content/docs/sem3/csi243/06-lists-tuples/notes/characters-and-data-char.mdx` and `content/docs/sem3/csi243/06-lists-tuples/notes/character-exam-practice.mdx`.
+
+Extend `02-expressions-types/notes/values-text.mdx`, `04-making-choices/notes/lab-02.mdx` and `08-modules-types/notes/imports.mdx`. Chapter 6 sidebar: after Lists and before Tuples; character practice immediately after the new character lesson.
+
+Cover `ord`, `chr`, Unicode versus the ASCII subset, valid code-point domain, numeric escapes, newline/tab/backslash/quote escapes, `toUpper`, `toLower`, `isAscii`, `isUpper`, `isLower`, `isAlpha`, `isDigit`, `isAlphaNum`, `isSpace`, guarded `digitToInt`/`intToDigit` and predicate differences. Explain there is no empty Char; distinguish `' '` from `""`, space counting from whitespace counting, and the lecture's informal getCode/getChar operations from actual `ord`/`chr` and input action `getChar`. Build character and String normalisers, then `[String]` transformations with nested map. Repair the Currying slide's `map toUpper :: [String] -> [String]` mismatch. Do not repeat generic comprehension or safe Maybe design already covered.
+
+Minimum: three worked variations per named function/escape family, including nonletters and boundary cases, four for String versus [String] transformations; at least twelve narrated exam questions.
+
+### Lane V8: text and list library operations beyond the usual examples
+
+Files: `content/docs/sem3/csi243/06-lists-tuples/notes/text-and-list-library.mdx` and `content/docs/sem3/csi243/06-lists-tuples/notes/list-library-exam-practice.mdx`.
+
+Extend `lists.mdx` and sit beside the comprehension lessons; link the existing equality lesson for `nub`, `delete`, `group`, `isPrefixOf` and `lookup`. Chapter 6 sidebar: after List Comprehensions and its exam practice, before the lab lessons.
+
+Cover `words`, `unwords`, `lines`, `unlines`, `intersperse`, `intercalate`, `find`, `findIndex`, `elemIndex`, `isSuffixOf`, `isInfixOf`, `stripPrefix` and `Data.List.transpose`. For each teach exact types, order, empty input and failure form. Contrast literal spaces with arbitrary whitespace, empty lines and final newline behaviour; show why split/join round trips can normalise information. Explain substring as `take count . drop start` under a stated policy, and the lecture's informal cat as `(++)`, not a missing standard function. Show rectangular and ragged transpose, and contrasts with the already-covered nested comprehension. Safe Maybe results and general concat/comprehension rules are prerequisites, not duplicate topics.
+
+Minimum: three worked variations per function, four per split/join family including lost-information cases; at least fourteen narrated exam questions, including choosing a library operation, predicting exact text, composing two operations and repairing a type error.
+
+### Lane V9: ordering algorithms, maps and sets
+
+Files: `content/docs/sem3/csi243/07-higher-order/notes/sorting-and-merging.mdx` and `content/docs/sem3/csi243/08-modules-types/notes/maps-and-sets-by-example.mdx`.
+
+Extend the sorting examples in `08-modules-types/notes/imports.mdx` and sit beside `more-higher-order-functions.mdx`; extend existing List_InsertionSort/List_Merge downloads. Chapter 7 sidebar: Sorting and Merging after More Higher-Order Functions. Chapter 8 sidebar: Maps and Sets after Importing and the V6 module practice, before Type Synonyms.
+
+The sorting lesson covers `sort`, `sortBy`, `compare` with a projected key, ascending/descending/stable ties, insertion/insertion sort, merge/merge sort and grouping after sorting to make frequency tables. Trace the algorithms and use Ord versus a supplied comparator correctly; do not repeat the equality lesson's generic group/nub/delete teaching. State when sorting changes the original order a question asks you to preserve. Cross-link V12 for cost rather than trusting the old branching heuristic.
+
+The collections lesson covers qualified `Data.Map`/`Data.Set` from `containers`, association-list versus Map versus Set, immutable update, `empty`, `fromList`, `toList`, `lookup`, `member`, `insert`, `delete`, `size`, duplicate-key policy, Map keys/values and Set union/intersection/difference. Give concrete names and types for functions that share a name across modules. Correct the slides' unqualified "Map is unsorted" wording by distinguishing insertion order from ordered key traversal. Explain package availability without turning package installation into the lesson.
+
+Minimum: three worked variations per sorting algorithm, comparator shape and named collection operation; at least eight narrated sorting questions and ten collection questions. Every search/update example includes absent and existing elements; every merge includes empty/unequal lists and ties.
+
+### Lane V10: sequencing input/output and processing complete input
+
+Files: `content/docs/sem3/csi243/03-defining-functions/notes/io-sequencing-and-loops.mdx` and `content/docs/sem3/csi243/03-defining-functions/notes/text-and-file-io-practice.mdx`.
+
+Extend `input-processing.mdx`, `complete-program.mdx` and `output.mdx`; sit beside `lab-01.mdx`. Chapter 3 sidebar: after Input, Bindings, and Processing, before Where and Local Definitions; both new pages precede Lab 01.
+
+Cover action/result types, `getChar`/`putChar`, `getLine`/`readLn`, leftover newlines, `do` final-expression rules, `let`/`<-`, `pure`/`return` versus exit, `(>>)`/`(>>=)` operational sequencing, `when`/`unless`, prompt-until-valid recursion and sentinel loops. Teach `mapM`, `mapM_`, `sequence` and `sequence_`, distinguishing a list of actions from executing them. Reuse existing safe parsers instead of reteaching Maybe/Either. Add exact `printf` formatting used by Test1 11 and distinguish that formatting from rounding a numeric value.
+
+The second page covers `getContents`, `interact`, `readFile`, `writeFile`, `appendFile`, pure text processors composed with IO, and labelled success/error transcripts for two separate inputs. State newline/EOF behaviour, file overwrite/append behaviour and when lazy input is demanded. Provide tiny local input fixtures and deterministic pure checks. Include the suite's `sequence [IO Bool]`, `pure ()` and `exitFailure` use. All terminal examples need exact input and output; code requiring actual IO should be a plain fence if the site's interpreter cannot support it.
+
+Minimum: three worked variations per action/combinator/control form, four complete input-processing programs and four file/whole-input programs; at least fourteen narrated exam questions across both lessons.
+
+### Lane V11: the Functor, Applicative and Monad patterns behind existing code
+
+Files: `content/docs/sem3/csi243/09-polymorphism/notes/functor-and-applicative-patterns.mdx` and `content/docs/sem3/csi243/09-polymorphism/notes/dependent-computation-patterns.mdx`.
+
+Extend `maybe-and-instances.mdx` after the new Maybe/Either sequence. Chapter 9 sidebar: after Maybe/Either Exam Practice, before chapter revision. Link V6 for the unrelated module-functor terminology and V10 for effects.
+
+Cover type constructors versus concrete types; generic `fmap` and its identity/composition laws; list/Maybe/Either comparisons and a hand-written Tree Functor instance; `pure`, `<$>`, `<*>` and lifting binary/ternary functions; type derivation and first-failure behaviour of the exact `fibonacci` Either expression in Test1 09. Contrast independent arguments combined applicatively with a next computation chosen from the preceding result using `>>=`. Give list branching/Cartesian application and list bind, name the relevant class relationships and show small do desugarings. Teach the general pattern and custom instance; existing Maybe/Either eliminators, safe functions, mapping and chains remain covered prerequisites. Do not imply Haskell Functor is a parameterised module or that Either accumulates every error by default.
+
+Minimum: three worked variations per general operation/type context, four contrasts of independent versus dependent computation, at least twelve narrated exam questions, including type errors, missing wrappers, wrong sequencing and a custom-instance law check.
+
+### Lane V12: accurate time and space reasoning
+
+Files: `content/docs/sem3/csi243/10-reasoning-revision/notes/complexity-by-recurrence.mdx` and `content/docs/sem3/csi243/10-reasoning-revision/notes/complexity-exam-practice.mdx`.
+
+Extend `complexity.mdx`; use `lazy-evaluation.mdx` as an already-covered prerequisite. Chapter 10 sidebar: immediately after The Cost of a Definition and before final revision questions; practice after the new lesson.
+
+Cover operation counts, input-size definitions, base cases, linear/quadratic/logarithmic/exponential growth and two-input bounds. Derive factorial/length, naive and accumulator Fibonacci, slow/fast reverse, repeated factorial sums, insertion sort and merge sort. Include best/worst case, short-circuit searches, output-size lower bounds and the distinction between numeric arithmetic cost and a unit-cost assumption. Correct "one call means linear; two calls mean exponential": subproblem sizes and local work determine the recurrence. Use `T(n)=T(n-1)+c`, summation costs, halving and `2T(n/2)+O(n)` with worked solutions.
+
+Explain auxiliary space versus result space, stack versus pending thunks, retained inputs, sharing and demand. Correct the unconditional claim that `[x | x <- xs, length xs > 3]` necessarily recomputes an invariant length for each element: state source-level/no-sharing cost separately from sharing/optimisation, and use changing suffixes for an unambiguous quadratic example. Reuse seq/foldl' teaching rather than proposing another strictness lesson. Provide a correction list for existing complexity Q/R/CS for the lead.
+
+Minimum: four worked variations per recurrence family and per space-accounting pattern, at least fourteen narrated exam questions including "find the wrong complexity claim". No benchmark timing should substitute for a derivation.
+
+### Lane V13: specifications, predicate logic and ambiguous requirements
+
+Files: `content/docs/sem3/csi243/10-reasoning-revision/notes/contracts-and-predicate-logic.mdx` and `content/docs/sem3/csi243/10-reasoning-revision/notes/specification-exam-practice.mdx`.
+
+Extend `specification.mdx` and the design process in `03-defining-functions/notes/defining-functions.mdx`. Chapter 10 sidebar: immediately after Specification, before Equational Reasoning; practice after the contract lesson.
+
+Cover purpose/precondition/postcondition, domain/codomain versus valid/invalid subsets, partial versus total correctness and a decreasing termination measure. Translate "every", "some", "none", "only if", "if and only if", implication, XOR and De Morgan laws into Boolean predicates and `all`/`any`; include empty-domain/vacuous truth and quantified order. Compose contracts by checking the earlier postcondition against the next precondition. Use exact ambiguous lab requirements: invalid parity for an Int, divisor zero versus equality/order, index equal to length, square 0 specially defined as 1, negative range bounds and grade cut-offs. State assumptions before writing code and test each disjoint input partition. Add concrete comparison questions for functional/procedural/OO/declarative descriptions, markup versus programming and concurrency/optimisation benefits without promising automatic speed.
+
+Minimum: four worked variations per contract/logical form, three for each ambiguity policy, at least twelve narrated exam questions. Include the exact ho7 homework proof that the factorial implementation equals the specified mathematical product, with the zero case, inductive product identity and termination stated separately. Existing positivity proofs do not discharge this claim. Give three correctness-to-specification variations (factorial, range product and shifted/double factorial) using the existing proof template. Other proof machinery and counterexample technique already covered are linked, not rewritten.
+
+### Lane V14: an integrated grade-book practical and independent mock
+
+Files: `content/docs/sem3/csi243/10-reasoning-revision/notes/grade-book-capstone.mdx` and `content/docs/sem3/csi243/10-reasoning-revision/notes/integrated-mock-practical.mdx`.
+
+Sit beside `errors-and-testing.mdx`, using existing data, comprehension, Maybe/Either and module lessons as prerequisites. Chapter 10 sidebar: after all taught material and before Questions and Review; capstone before mock.
+
+Build the exact Test1 16 model/core/report/application shape. Work through `Student`, safe `average`, `outcome`, `summary` and `classAverage`; distinguish an average of student means from pooling all marks when class sizes differ. Address no students, no marks, invalid marks, duplicate names, explicit weighting and classification boundaries. Derive the existing constructor-pattern comprehension and error/report paths without reteaching their syntax. Include a module-and-test layout, supplied TestSupport-style `assertEqual`, `assertTrue`, `assertApprox`, labelled failures, test-suite runner/exit status and the exclusion of intentionally broken examples. Explain supplied PowerShell as a way to run tests, not as another language to learn. Show that passing cases is evidence, not proof.
+
+The mock supplies an unfamiliar but comparable dataset/domain, a timed practical and a written diagnostic component. Include a full mark scheme, independent starter, complete narrated answer, dry runs, tests, error repairs and a justified cost comparison. Existing chapter Q/R remain useful; the gap is integration under a single specification.
+
+Minimum: three worked variations per integration decision (missing data, averaging policy, validation, module boundary and test oracle), four complete datasets including unequal student mark counts; at least ten narrated capstone questions and twelve independently attemptable mock questions with full answers.
+
+### Lane V15: standard classes beyond recognising the class name
+
+Files: `content/docs/sem3/csi243/09-polymorphism/notes/standard-class-exam-patterns.mdx` and `content/docs/sem3/csi243/09-polymorphism/notes/standard-class-exam-practice.mdx`.
+
+Extend `standard-classes.mdx` and `type-classes.mdx`. Chapter 9 sidebar: after The Standard Type Classes, before the Maybe/Either sequence; the practice page follows the new class lesson.
+
+Cover general `Ord` laws, compare/min/max, lexicographic tie decisions and consistency with Eq; `Show`/`Read` round trips, annotations supplied by context and malformed/ambiguous input; `Enum` methods `succ`, `pred`, `toEnum`, `fromEnum` and endpoint errors; `Bounded` independent from `Enum`, with enumeration requiring both constraints; an accurate numeric superclass map including Real/RealFrac and Floating, with method-driven constraint choices. Separate properties the compiler checks from laws an instance should satisfy; qualify laws for partial values and floating NaN rather than claiming every derived instance is mathematically lawful for every payload. Numeric calculation practice belongs to V1. The existing Eq lesson and handwritten/derived data instances are exam depth and must not be recreated.
+
+Minimum: three worked variations per method/law/constraint decision, four contextual Read and enumeration-boundary cases, at least twelve narrated exam questions. Include a correction note for the existing simplified numeric class graph and unconditional equality/order law wording, for the lead to reconcile in Q/R/CS.
+
+### Lane V16: operators, identifiers and legacy pattern repairs
+
+Files: `content/docs/sem3/csi243/03-defining-functions/notes/operators-and-lexical-rules.mdx` and `content/docs/sem3/csi243/03-defining-functions/notes/operator-and-pattern-repairs.mdx`.
+
+Extend the naming rules in `defining-functions.mdx` and sit beside `07-higher-order/notes/currying-and-sections.mdx`; link the current case/pattern lessons. Chapter 3 sidebar: after Defining Functions and before A Complete Haskell Program; repair practice immediately after the operator lesson.
+
+Cover legal value/type/constructor/operator names, apostrophes and underscores, wildcard versus an underscore-prefixed binding, reserved words and source capitalisation mistakes. Define a symbolic operator with a signature, give `infixl`, `infixr` and non-associative `infix` declarations, parenthesise mixed operators and diagnose conflicting fixities. Use non-commutative examples so precedence and associativity change the result. Distinguish ordinary value operators from constructor operators beginning with a colon. Explain repeated variables cannot express equality inside one pattern and rewrite using a guard. Address ho7's legacy `n+k` syntax through the optional legacy extension and the recommended ordinary pattern/guard rewrite; arithmetic expressions are not general patterns. Point to existing section/lambda/negative-section teaching instead of repeating it.
+
+Minimum: three worked variations per naming, operator and repair concept, four per fixity form and legacy-pattern repair; at least ten narrated exam questions, including parse versus scope versus type failures and a fully parenthesised reduction.
+
+### Lane F4 to F9: Haskell file compilations for lanes V1 to V16
+
+File format, naming and checks are those of Lane F (and the exact format in the prompt of each F bot). The families to write for each lane are in this table; a bundle (V6, V14) is a uniquely named subdirectory in both folders with an entry file `Main.hs`.
+
+| Lane | New question-file name prefixes and concrete question families | Required paired practice / verification emphasis |
+| --- | --- | --- |
+| V1 | `Arith_SignedDivision_`, `Arith_DivisionPairs_`, `Arith_ExponentChoice_`, `Arith_Conversions_`, `Arith_FloatingDomain_`, `Arith_ExpressionTrace_` | All sign combinations; three power operators; conversions/ties; tolerance and non-finite results. Include the negative repeated-addition counterexample. |
+| V2 | `Rec_DesignRange_`, `Rec_DesignMultiply_`, `Rec_DesignPower_`, `Rec_DesignEuclid_`, `Rec_DesignDigits_`, `Rec_DesignSumFactorials_`, `Rec_DesignFibAcc_` | New specifications and boundary policies beside existing Rec_ examples; compare algorithms on finite valid inputs. |
+| V3 | `List_DesignIndex_`, `List_DesignThreshold_`, `List_DesignSorted_`, `List_DesignScale_`, `List_DesignTakeDrop_`, `List_DesignPrefix_`, `List_DesignInterleave_`, `List_DesignExtrema_` | Each lab question and every new list algorithm; explicit empty/singleton/negative-count/oversize cases; no duplicate Lab3 filenames. |
+| V4 | `Hof_DesignSumSq_`, `Hof_DesignFold_`, `Hof_WeightedMarks_`, `Hof_ThreeListZip_`, `Hof_DesignDotProduct_`, `Hof_Lab04Integrated_` | Exact October Lab 4 parts and Appendix C adaptations; test every shortest-list case and mixed element types; Lab 5 fold-filter implementation. |
+| V5 | `Alias_Expand_`, `Alias_Assoc_`, `Alias_Course_`, `Alias_ParserResult_`, `Alias_Repair_` | Alias expansion and instantiation, simple parser failures/suffixes, same underlying type versus distinct wrappers. |
+| V6 | `Module_Export_`, `Module_AbstractStack_`, `Module_ValidatedMark_`, `Module_ImportRepair_`, `Module_GhciSession_` | Real multi-module question bundles, not several module headers in one .hs file. Put each bundle in a uniquely named subdirectory with core/client/test files in both folders. The question at the top identifies the entry file, load/build command and expected scope failures. Debugger commands belong in comments beside executable definitions. |
+| V7 | `Char_CodePoint_`, `Char_Classify_`, `Char_DigitConversion_`, `Char_EscapeOutput_`, `Char_Normalise_`, `Char_CountWhitespace_` | Character versus String versus list of String, Unicode/ASCII boundary, spaces/tabs, guarded conversion and exact escaped output. |
+| V8 | `TextList_Words_`, `TextList_Lines_`, `TextList_Join_`, `TextList_Search_`, `TextList_PrefixSuffix_`, `TextList_Substring_`, `TextList_Transpose_` | Exact newline behaviour, empty and ragged structures, missing search result and normalising versus lossless round trips. |
+| V9 | `Sort_Comparator_`, `Sort_Insertion_`, `Sort_Merge_`, `Sort_Frequency_`, `Collections_Map_`, `Collections_Set_` | Stable ties and order, comparator types, duplicate map keys, immutable update and set algebra; record containers requirement and qualify shared names. |
+| V10 | `IO_Character_`, `IO_Sequence_`, `IO_PromptLoop_`, `IO_Sentinel_`, `IO_WholeInput_`, `IO_FilePipeline_`, `IO_FormattedReport_` | Fixed input transcripts in question comments; deterministic pure-core self-tests in main where useful. File exercises use named small fixtures and a temporary output path inside their exercise directory; never assume interactive stdin during an automated run. |
+| V11 | `Context_FunctorTree_`, `Context_Applicative_`, `Context_EitherFib_`, `Context_ListApplication_`, `Context_DependentBind_`, `Context_DoRewrite_` | General class patterns and custom instances; independent/dependent failure cases; compare rewritten definitions on the same inputs. Reuse, rather than replace, any Maybe/Either files from the concurrent lane. |
+| V12 | `Cost_Recurrence_`, `Cost_Sort_`, `Cost_Reverse_`, `Cost_Sharing_`, `Cost_Space_` | Counted/instrumented pure models with stated cost assumptions; formula and derivation in comments. Do not assert exact allocation, optimiser behaviour or wall-clock timing from printed values alone. |
+| V13 | `Spec_Domain_`, `Spec_Predicate_`, `Spec_Quantifier_`, `Spec_ContractComposition_`, `Spec_AmbiguousRequirement_`, `Spec_ParadigmComparison_`, `Proof_FactorialSpecification_` | Preconditions/postconditions and truth tables in question comments; executable Boolean checks including empty domains and contradictory requirements. Compare input partitions; do not turn an unsatisfied precondition into a fabricated result. |
+| V14 | `Capstone_GradeBook_`, `Capstone_AveragePolicy_`, `Capstone_Validation_`, `Capstone_TestHarness_`, `Capstone_Mock_` | Multi-module bundles with an entry program and tests, as for V6; fixtures for empty/unequal groups and invalid data. Include tiny assertion helpers and success/failure reporting; demonstrate the suite runner without making PowerShell a Haskell exercise. |
+| V15 | `Class_OrdLaw_`, `Class_ReadShow_`, `Class_EnumBoundary_`, `Class_BoundedEnum_`, `Class_NumericHierarchy_` | Generic class-method and law questions beside existing Poly_/Data_ files; avoid repeating already-covered Eq or handwritten data instances. Error questions leave invalid alternatives commented. |
+| V16 | `Operator_Fixity_`, `Operator_Definition_`, `Operator_NameRepair_`, `Operator_Constructor_`, `Operator_LegacyPattern_` | Fully parenthesised expected reductions; legal operator declarations; ordinary Haskell rewrites of legacy n+k syntax. Keep any optional extension example isolated from portable examples. |
