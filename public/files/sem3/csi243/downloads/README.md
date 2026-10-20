@@ -739,6 +739,35 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Operator_NameRepairIdentifiersV2.hs` | Repair a reserved word and discard a tuple component |
 | `Operator_NameRepairIdentifiersV3.hs` | Repair an underscore name and distinguish scope from type errors |
 
+## Modules and abstraction
+
+| File | Question |
+| --- | --- |
+| `Module_AbstractStack/` | Build and test an opaque stack of Int values |
+| `Module_AbstractStackV2/` | Build and test an opaque stack of String values |
+| `Module_AbstractStackV3/` | Build and test an opaque stack of Bool values |
+| `Module_ExportGeometry/` | Export a geometry function while hiding its type synonym |
+| `Module_ExportGeometryV2/` | Export a geometry function while hiding its type synonym |
+| `Module_ExportGeometryV3/` | Export a geometry function while hiding its type synonym |
+| `Module_ExportSignal/` | Use a signal interface with opaque |
+| `Module_ExportSignalV2/` | Use a signal interface with all constructors |
+| `Module_ExportSignalV3/` | Use a signal interface with only Go |
+| `Module_GhciSessionDemand/` | Inspect demand on a lazy prefix of successive positive integers |
+| `Module_GhciSessionDemandV2/` | Inspect demand on a lazy prefix of positive even integers |
+| `Module_GhciSessionDemandV3/` | Inspect demand on a lazy prefix of alternating Boolean values |
+| `Module_GhciSessionTrace/` | Trace a recursive integers total through separate modules |
+| `Module_GhciSessionTraceV2/` | Trace a recursive squares total through separate modules |
+| `Module_GhciSessionTraceV3/` | Trace a recursive cubes total through separate modules |
+| `Module_ImportRepairCycle/` | Remove a module cycle by passing a transformation function |
+| `Module_ImportRepairCycleV2/` | Remove a module cycle by passing a transformation function |
+| `Module_ImportRepairCycleV3/` | Remove a module cycle by passing a transformation function |
+| `Module_ImportRepairPrelude/` | Repair a Prelude clash and retain qualified access |
+| `Module_ImportRepairPreludeV2/` | Repair a Prelude clash and retain qualified access |
+| `Module_ImportRepairPreludeV3/` | Repair a Prelude clash and retain qualified access |
+| `Module_ValidatedMark/` | Validate opaque marks from zero to 100 |
+| `Module_ValidatedMarkV2/` | Validate opaque marks from zero to 20 |
+| `Module_ValidatedMarkV3/` | Validate opaque marks from zero to 10 |
+
 ## First programs and the first lab
 
 | File | Note |

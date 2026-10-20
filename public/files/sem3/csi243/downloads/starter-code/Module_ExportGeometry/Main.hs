@@ -1,0 +1,32 @@
+-- Title: Export a geometry function while hiding its type synonym
+{-
+QUESTION
+Write Geometry.area for rectangle area on nonnegative Int dimensions.
+Define the private synonym Length = Int; export only area.
+Client.measure must use the ordinary explicit import, but call the function
+with its Geometry qualifier. Tests.checks checks zero and a 2-by-3 rectangle.
+Explain why a client annotation mentioning Geometry.Length is out of scope,
+yet measure may have an Int signature. Explain why exporting a synonym is
+optional. Renaming Geometry.hs breaks lookup; a hierarchical name A.Geometry
+would require A/Geometry.hs (this exercise uses only flat module names).
+Implement the signatures in Geometry.hs, Client.hs, Tests.hs; keep the stated exports.
+Main.hs is the entry file. From the parent directory of this bundle:
+  runghc -iModule_ExportGeometry Module_ExportGeometry/Main.hs
+  ghci -iModule_ExportGeometry Module_ExportGeometry/Main.hs
+  ghc -iModule_ExportGeometry Module_ExportGeometry/Main.hs -o Module_ExportGeometry/demo
+For starters, type check without running: replace ghc's -o option with -fno-code.
+Keep deliberately invalid scope examples in comments; explain their failures.
+Use the separate Tests module for finite checks, not a universal proof.
+-}
+
+import qualified Client
+import qualified Tests
+
+main :: IO ()
+main = do
+  print (Client.measure 0 0)  -- expected: 0
+  print (Client.measure 2 3)  -- expected: 6
+  print (Client.measure 2 2)  -- expected: 4
+  print (Client.measure 1 5)  -- expected: 5
+  print (Client.measure 3 4)  -- expected: 12
+  print Tests.checks  -- expected: True
