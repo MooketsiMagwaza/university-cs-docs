@@ -1,0 +1,23 @@
+-- Title: Recognise ASCII digits with an explicit invalid subset
+{-
+QUESTION
+Write digitValue :: Char -> Maybe Int. Purpose: convert an ASCII
+decimal digit to its numeric value. Domain: all Char values; codomain:
+Maybe Int. Valid subset: '0' through '9'. Return Just d with 0<=d<=9
+and the corresponding decimal value for valid input, Nothing otherwise.
+This is total on Char. A character outside ASCII '0'..'9' is invalid
+for this contract even if a broader Unicode predicate calls it numeric.
+Check the adjacent boundary characters '/' and ':'.
+-}
+
+digitValue :: Char -> Maybe Int
+digitValue = undefined -- Your answer here
+
+main :: IO ()
+main = do
+  print (digitValue '0')  -- expected: Just 0
+  print (digitValue '9')  -- expected: Just 9
+  print (digitValue '5')  -- expected: Just 5
+  print (digitValue '/')  -- expected: Nothing
+  print (digitValue ':')  -- expected: Nothing
+  print (digitValue 'a')  -- expected: Nothing

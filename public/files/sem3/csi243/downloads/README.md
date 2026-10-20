@@ -447,6 +447,9 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Proof_AppendMeasure.hs` | Prove that append preserves length combination |
 | `Proof_AppendMeasureV2.hs` | Prove that append preserves sum combination |
 | `Proof_AppendMeasureV3.hs` | Prove that append preserves product combination |
+| `Proof_FactorialSpecification.hs` | Prove factorial equals its mathematical product specification |
+| `Proof_FactorialSpecificationV2.hs` | Prove an inclusive range product including reversed bounds |
+| `Proof_FactorialSpecificationV3.hs` | Prove double factorial against its descending product |
 | `Proof_MapLaw.hs` | Prove mapping id leaves a list unchanged |
 | `Proof_MapLawV2.hs` | Prove the map composition law |
 | `Proof_MapLawV3.hs` | Prove mapping preserves list length |
@@ -617,6 +620,72 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `IO_WholeInputTransform.hs` | Count complete input and report normalised words |
 | `IO_WholeInputTransformV2.hs` | Transform every input line with interact |
 | `IO_WholeInputTransformV3.hs` | Report the length of every line using a pure core |
+
+## Functor, Applicative and dependent computation
+
+| File | Question |
+| --- | --- |
+| `Context_Applicative.hs` | Lift addition over two independent Maybe values |
+| `Context_ApplicativeV2.hs` | Lift a ternary total over independent Either values |
+| `Context_ApplicativeV3.hs` | Compare fmap in list, Maybe and Either contexts |
+| `Context_DependentBind.hs` | Choose a second Maybe calculation from the first result |
+| `Context_DependentBindV2.hs` | Sequence dependent Either validation failures |
+| `Context_DependentBindV3.hs` | Use list bind for dependent branching |
+| `Context_DoRewrite.hs` | Compare do notation with its bind rewrite |
+| `Context_DoRewriteV2.hs` | Compare do notation with its bind rewrite |
+| `Context_DoRewriteV3.hs` | Compare do notation with its bind rewrite |
+| `Context_EitherFib.hs` | Evaluate a checked Fibonacci recurrence |
+| `Context_EitherFibV2.hs` | Evaluate a checked Lucas recurrence |
+| `Context_EitherFibV3.hs` | Evaluate a checked shifted Fibonacci recurrence |
+| `Context_FunctorTree.hs` | Map a custom Tree and check the Functor laws |
+| `Context_FunctorTreeV2.hs` | Map a custom Tree and check the Functor laws |
+| `Context_FunctorTreeV3.hs` | Map a custom Tree and check the Functor laws |
+| `Context_ListApplication.hs` | Apply a list of functions in function-major order |
+| `Context_ListApplicationV2.hs` | Form all differences with list Applicative |
+| `Context_ListApplicationV3.hs` | Lift a ternary function over three lists |
+
+## Complexity and recurrences
+
+| File | Question |
+| --- | --- |
+| `Cost_Recurrence.hs` | Count unit-cost multiplications in recursive factorial |
+| `Cost_RecurrenceV2.hs` | Compare naive Fibonacci calls with accumulator steps |
+| `Cost_RecurrenceV3.hs` | Contrast decrementing, halving and split recurrences |
+| `Cost_Reverse.hs` | Count copied cells in append-based reverse |
+| `Cost_ReverseV2.hs` | Count cons operations in accumulator reverse |
+| `Cost_ReverseV3.hs` | Compare reverse algorithms on lists of words |
+| `Cost_Sharing.hs` | Model repeated versus shared invariant length work |
+| `Cost_SharingV2.hs` | Count traversals of changing suffixes |
+| `Cost_SharingV3.hs` | Compare repeated and incremental factorial sums |
+| `Cost_Sort.hs` | Instrument insertion sort's key comparisons |
+| `Cost_SortV2.hs` | Count comparisons when merging two sorted inputs |
+| `Cost_SortV3.hs` | Count merge-sort comparisons with uneven splitting |
+| `Cost_Space.hs` | Model stack depth, pending sums and output cells |
+| `Cost_SpaceV2.hs` | Model retained input roots after a prefix is consumed |
+| `Cost_SpaceV3.hs` | Count short-circuit search demand and result size |
+
+## Contracts and specifications
+
+| File | Question |
+| --- | --- |
+| `Spec_AmbiguousRequirement.hs` | Resolve zero divisor and ordering before implementing divisibility |
+| `Spec_AmbiguousRequirementV2.hs` | Implement literal special-square and safe-index policies |
+| `Spec_AmbiguousRequirementV3.hs` | State negative-range and exact pass-boundary policies |
+| `Spec_ContractComposition.hs` | Compose mark validation with a narrower pass contract |
+| `Spec_ContractCompositionV2.hs` | Check a nonzero precondition after squaring |
+| `Spec_ContractCompositionV3.hs` | Check a digit contract after safe indexing |
+| `Spec_Domain.hs` | Specify parity on the entire Integer domain |
+| `Spec_DomainV2.hs` | Recognise ASCII digits with an explicit invalid subset |
+| `Spec_DomainV3.hs` | Specify valid marks and disjoint grade boundaries |
+| `Spec_ParadigmComparison.hs` | Compare a functional formula with an explicit state model |
+| `Spec_ParadigmComparisonV2.hs` | Check reordering of independent pure calculations |
+| `Spec_ParadigmComparisonV3.hs` | Classify concrete programming and markup descriptions |
+| `Spec_Predicate.hs` | Translate only-if, equivalence and XOR truth tables |
+| `Spec_PredicateV2.hs` | Check both De Morgan translations on Boolean lists |
+| `Spec_PredicateV3.hs` | Distinguish implications about positivity and evenness |
+| `Spec_Quantifier.hs` | Translate every, some and none over an integer domain |
+| `Spec_QuantifierV2.hs` | Show that swapping universal and existential changes meaning |
+| `Spec_QuantifierV3.hs` | Quantify over words including an empty word |
 
 ## First programs and the first lab
 
