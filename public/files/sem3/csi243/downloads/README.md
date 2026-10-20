@@ -328,6 +328,18 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Hof_Composition.hs` | Compose filtering and summation |
 | `Hof_CompositionV2.hs` | Compose mapping and a product |
 | `Hof_CompositionV3.hs` | Compose word lengths and a sum |
+| `Hof_DesignDotProduct.hs` | Combine paired values and fold their total |
+| `Hof_DesignDotProductV2.hs` | Combine paired values and fold their total |
+| `Hof_DesignDotProductV3.hs` | Combine paired values and fold their total |
+| `Hof_DesignDotProductV4.hs` | Combine paired values and fold their total |
+| `Hof_DesignFold.hs` | Design product, length, count and mapping folds |
+| `Hof_DesignFoldV2.hs` | Design product, length, count and mapping folds |
+| `Hof_DesignFoldV3.hs` | Design product, length, count and mapping folds |
+| `Hof_DesignFoldV4.hs` | Design product, length, count and mapping folds |
+| `Hof_DesignSumSq.hs` | Use foldr to total squares |
+| `Hof_DesignSumSqV2.hs` | Use foldr to total cubes |
+| `Hof_DesignSumSqV3.hs` | Use foldr to total fourth powers |
+| `Hof_DesignSumSqV4.hs` | Use foldr to total doubled values |
 | `Hof_Filter.hs` | Use filter to retain marks at least 50 |
 | `Hof_FilterV2.hs` | Use filter to retain multiples of three |
 | `Hof_FilterV3.hs` | Use filter to retain strings of length at least three |
@@ -337,6 +349,10 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Hof_Foldr.hs` | Compute right-associated subtraction |
 | `Hof_FoldrV2.hs` | Compute a weighted right fold |
 | `Hof_FoldrV3.hs` | Compute a product by right fold |
+| `Hof_Lab04Integrated.hs` | Build a selection fold and a three-weight mark function |
+| `Hof_Lab04IntegratedV2.hs` | Build a selection fold and a three-weight mark function |
+| `Hof_Lab04IntegratedV3.hs` | Build a selection fold and a three-weight mark function |
+| `Hof_Lab04IntegratedV4.hs` | Build a selection fold and a three-weight mark function |
 | `Hof_Map.hs` | Use map to add three |
 | `Hof_MapV2.hs` | Use map to square each value |
 | `Hof_MapV3.hs` | Use map to subtract each value from ten |
@@ -346,6 +362,14 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Hof_TakeWhile.hs` | Take the initial run of values below four |
 | `Hof_TakeWhileV2.hs` | Take the initial run of even values |
 | `Hof_TakeWhileV3.hs` | Take the initial run of non-negative values |
+| `Hof_ThreeListZip.hs` | Implement a recursive zip over three lists |
+| `Hof_ThreeListZipV2.hs` | Implement a recursive zip over three lists |
+| `Hof_ThreeListZipV3.hs` | Implement a recursive zip over three lists |
+| `Hof_ThreeListZipV4.hs` | Implement a recursive zip over three lists |
+| `Hof_WeightedMarks.hs` | Calculate weighted marks in the ratio 1:2 |
+| `Hof_WeightedMarksV2.hs` | Calculate weighted marks in the ratio 2:1 |
+| `Hof_WeightedMarksV3.hs` | Calculate weighted marks in the ratio 1:1 |
+| `Hof_WeightedMarksV4.hs` | Calculate weighted marks in the ratio 1:3 |
 | `Hof_ZipWith.hs` | Calculate pairwise sums using zipWith |
 | `Hof_ZipWithV2.hs` | Calculate pairwise products using zipWith |
 | `Hof_ZipWithV3.hs` | Calculate pairwise differences using zipWith |
@@ -461,6 +485,55 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Arith_SignedDivisionV2.hs` | Apply mod to signed integers |
 | `Arith_SignedDivisionV3.hs` | Apply quot to signed integers |
 | `Arith_SignedDivisionV4.hs` | Apply rem to signed integers |
+
+## Type synonyms and aliases
+
+| File | Question |
+| --- | --- |
+| `Alias_Assoc.hs` | Use a parameterised association-table alias |
+| `Alias_AssocV2.hs` | Use a parameterised association-table alias |
+| `Alias_AssocV3.hs` | Use a parameterised association-table alias |
+| `Alias_AssocV4.hs` | Use a parameterised association-table alias |
+| `Alias_Course.hs` | Model courses with a tuple synonym |
+| `Alias_CourseV2.hs` | Model courses with a tuple synonym |
+| `Alias_CourseV3.hs` | Model courses with a tuple synonym |
+| `Alias_CourseV4.hs` | Model courses with a tuple synonym |
+| `Alias_Expand.hs` | Expand aliases and implement a client function |
+| `Alias_ExpandV2.hs` | Expand aliases and implement a client function |
+| `Alias_ExpandV3.hs` | Expand aliases and implement a client function |
+| `Alias_ExpandV4.hs` | Expand aliases and implement a client function |
+| `Alias_ParserResult.hs` | Read parser results and preserve unconsumed input |
+| `Alias_ParserResultV2.hs` | Read parser results and preserve unconsumed input |
+| `Alias_ParserResultV3.hs` | Read parser results and preserve unconsumed input |
+| `Alias_ParserResultV4.hs` | Read parser results and preserve unconsumed input |
+| `Alias_Repair.hs` | Repair a type declaration and use its representation |
+| `Alias_RepairV2.hs` | Repair a type declaration and use its representation |
+| `Alias_RepairV3.hs` | Repair a type declaration and use its representation |
+| `Alias_RepairV4.hs` | Repair a type declaration and use its representation |
+
+## Characters and Data.Char
+
+| File | Question |
+| --- | --- |
+| `Char_Classify.hs` | Compare character predicates |
+| `Char_ClassifyV2.hs` | Compare character predicates |
+| `Char_ClassifyV3.hs` | Compare character predicates |
+| `Char_CodePoint.hs` | Convert characters to their Unicode code points |
+| `Char_CodePointV2.hs` | Decode only ASCII code points |
+| `Char_CodePointV3.hs` | Check chr bounds before testing ASCII membership |
+| `Char_CountWhitespace.hs` | Count spaces or whitespace at the correct list level |
+| `Char_CountWhitespaceV2.hs` | Count spaces or whitespace at the correct list level |
+| `Char_CountWhitespaceV3.hs` | Count spaces or whitespace at the correct list level |
+| `Char_DigitConversion.hs` | Convert a decimal digit only after validating it |
+| `Char_DigitConversionV2.hs` | Convert decimal and hexadecimal digit characters |
+| `Char_DigitConversionV3.hs` | Convert a bounded integer to a hexadecimal digit |
+| `Char_EscapeOutput.hs` | Inspect escape sequences as character codes |
+| `Char_EscapeOutputV2.hs` | Replace control characters with visible punctuation |
+| `Char_EscapeOutputV3.hs` | Construct strings containing escapes from integer codes |
+| `Char_Normalise.hs` | Normalise characters across text values |
+| `Char_NormaliseV2.hs` | Normalise characters across text values |
+| `Char_NormaliseV3.hs` | Normalise characters across text values |
+| `Char_NormaliseV4.hs` | Normalise characters across text values |
 
 ## First programs and the first lab
 

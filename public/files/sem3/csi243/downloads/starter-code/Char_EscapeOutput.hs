@@ -1,0 +1,22 @@
+-- Title: Inspect escape sequences as character codes
+{-
+QUESTION
+Write escapeCodes :: String -> [Int] using ord. For each test, state how
+many actual characters the escaped literal contains. The escape sequences
+for newline, tab, backslash and quotation mark each represent one Char.
+Print the code list so every test prints exactly one line. (5 marks)
+-}
+
+import Data.Char (ord)
+
+escapeCodes :: String -> [Int]
+escapeCodes = undefined -- Your answer here
+
+main :: IO ()
+main = do
+  print (escapeCodes "")  -- expected: []
+  print (escapeCodes "\n")  -- expected: [10]
+  print (escapeCodes "\t")  -- expected: [9]
+  print (escapeCodes "\\")  -- expected: [92]
+  print (escapeCodes "\"")  -- expected: [34]
+  print (escapeCodes "a\nb\tc")  -- expected: [97,10,98,9,99]
