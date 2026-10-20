@@ -167,6 +167,34 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 
 | File | Question |
 | --- | --- |
+| `Rec_DesignDigits.hs` | Sum decimal digits after sign normalisation |
+| `Rec_DesignDigitsV2.hs` | Count decimal digits with a zero convention |
+| `Rec_DesignDigitsV3.hs` | Reverse decimal digits with an accumulator |
+| `Rec_DesignDigitsV4.hs` | Multiply decimal digits recursively |
+| `Rec_DesignEuclid.hs` | Normalise signs in Euclid gcd |
+| `Rec_DesignEuclidV2.hs` | Derive a safe least common multiple |
+| `Rec_DesignEuclidV3.hs` | Recognise coprime signed integers |
+| `Rec_DesignEuclidV4.hs` | Compare remainder and subtraction gcd |
+| `Rec_DesignFibAcc.hs` | Compute Fibonacci numbers with two accumulators |
+| `Rec_DesignFibAccV2.hs` | Change the accumulator seeds to Lucas numbers |
+| `Rec_DesignFibAccV3.hs` | Change the recurrence to Pell numbers |
+| `Rec_DesignFibAccV4.hs` | Return adjacent Fibonacci values together |
+| `Rec_DesignMultiply.hs` | Multiply signed integers by repeated addition |
+| `Rec_DesignMultiplyV2.hs` | Multiply with a signed accumulator |
+| `Rec_DesignMultiplyV3.hs` | Build a signed cube from repeated addition |
+| `Rec_DesignMultiplyV4.hs` | Compare repeated addition with multiplication |
+| `Rec_DesignPower.hs` | Repair the zero case of recursive power |
+| `Rec_DesignPowerV2.hs` | Design power by exponentiation by squaring |
+| `Rec_DesignPowerV3.hs` | Extend recursive power to negative exponents |
+| `Rec_DesignPowerV4.hs` | Compare linear and halving power algorithms |
+| `Rec_DesignRange.hs` | Sum an inclusive range with reversed bounds empty |
+| `Rec_DesignRangeV2.hs` | Sum a half-open range recursively |
+| `Rec_DesignRangeV3.hs` | Sum squares over an inclusive signed range |
+| `Rec_DesignRangeV4.hs` | Sum every second value in a signed range |
+| `Rec_DesignSumFactorials.hs` | Sum factorials with an explicit invalid-input policy |
+| `Rec_DesignSumFactorialsV2.hs` | Sum factorials below an exclusive bound |
+| `Rec_DesignSumFactorialsV3.hs` | Sum factorials at even indices |
+| `Rec_DesignSumFactorialsV4.hs` | Compare factorial sum with a running-factorial algorithm |
 | `Rec_Digits.hs` | Sum decimal digits recursively |
 | `Rec_DigitsV2.hs` | Count decimal digits recursively |
 | `Rec_DigitsV3.hs` | Convert a non-negative integer to binary digits |
@@ -193,6 +221,38 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `List_Append.hs` | Append two lists recursively |
 | `List_AppendV2.hs` | Flatten nested lists with recursive append |
 | `List_AppendV3.hs` | Interleave two lists recursively |
+| `List_DesignExtrema.hs` | Find a safe maximum without a fabricated initial value |
+| `List_DesignExtremaV2.hs` | Find a safe minimum of negative and positive integers |
+| `List_DesignExtremaV3.hs` | Find the lexicographically greatest string safely |
+| `List_DesignExtremaV4.hs` | Compute both extrema in one recursive traversal |
+| `List_DesignIndex.hs` | Preserve an index when looking up integers |
+| `List_DesignIndexV2.hs` | Preserve an index when looking up strings |
+| `List_DesignIndexV3.hs` | Preserve an index when looking up Booleans |
+| `List_DesignIndexV4.hs` | Find the penultimate element without partial functions |
+| `List_DesignInterleave.hs` | Alternate two integer lists and retain the remainder |
+| `List_DesignInterleaveV2.hs` | Append two lists using only cons |
+| `List_DesignInterleaveV3.hs` | Add corresponding list values and stop at the shorter list |
+| `List_DesignInterleaveV4.hs` | Interleave strings while retaining an unmatched suffix |
+| `List_DesignPrefix.hs` | Take only the initial even run |
+| `List_DesignPrefixV2.hs` | Drop only the initial negative run |
+| `List_DesignPrefixV3.hs` | Split at the first value below a threshold |
+| `List_DesignPrefixV4.hs` | Safely remove the last element recursively |
+| `List_DesignScale.hs` | Scale every integer recursively |
+| `List_DesignScaleV2.hs` | Sum even values using explicit recursion |
+| `List_DesignScaleV3.hs` | Transform each string into its length recursively |
+| `List_DesignScaleV4.hs` | Reverse integers with a growing accumulator |
+| `List_DesignSorted.hs` | Check non-increasing order with duplicates allowed |
+| `List_DesignSortedV2.hs` | Check strictly decreasing order |
+| `List_DesignSortedV3.hs` | Check non-decreasing order |
+| `List_DesignSortedV4.hs` | Check strictly increasing characters |
+| `List_DesignTakeDrop.hs` | Take a bounded prefix with a negative-count policy |
+| `List_DesignTakeDropV2.hs` | Drop a bounded prefix with a negative-count policy |
+| `List_DesignTakeDropV3.hs` | Split once at a bounded position |
+| `List_DesignTakeDropV4.hs` | Take a prefix from a list of strings |
+| `List_DesignThreshold.hs` | Select values strictly above a threshold |
+| `List_DesignThresholdV2.hs` | Select positive values while preserving order |
+| `List_DesignThresholdV3.hs` | Count values at least a threshold |
+| `List_DesignThresholdV4.hs` | Test recursive membership with short-circuiting |
 | `List_InsertionSort.hs` | Implement ascending insertion sort |
 | `List_InsertionSortV2.hs` | Implement descending insertion sort |
 | `List_InsertionSortV3.hs` | Implement lexicographically ascending insertion sort |
@@ -372,6 +432,35 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Proof_TreeMirror.hs` | Prove mirroring preserves tree size |
 | `Proof_TreeMirrorV2.hs` | Prove mirroring preserves tree height |
 | `Proof_TreeMirrorV3.hs` | Prove mirroring a tree twice restores it |
+
+## Arithmetic and numeric operators
+
+| File | Question |
+| --- | --- |
+| `Arith_Conversions.hs` | Convert before dividing |
+| `Arith_ConversionsV2.hs` | Compare rounding rules on signed inputs |
+| `Arith_ConversionsV3.hs` | Widen an Int before squaring |
+| `Arith_ConversionsV4.hs` | Compare truncation before and after division |
+| `Arith_DivisionPairs.hs` | Check the divMod reconstruction identity |
+| `Arith_DivisionPairsV2.hs` | Check the quotRem reconstruction identity |
+| `Arith_DivisionPairsV3.hs` | Check the divMod reconstruction identity |
+| `Arith_DivisionPairsV4.hs` | Check the quotRem reconstruction identity |
+| `Arith_ExponentChoice.hs` | Use integral exponents with ^ |
+| `Arith_ExponentChoiceV2.hs` | Use signed integral exponents with ^^ |
+| `Arith_ExponentChoiceV3.hs` | Check floating powers with a tolerance |
+| `Arith_ExponentChoiceV4.hs` | Compare non-negative power operators |
+| `Arith_ExpressionTrace.hs` | Trace arithmetic and Boolean precedence |
+| `Arith_ExpressionTraceV2.hs` | Construct an expression from a price specification |
+| `Arith_ExpressionTraceV3.hs` | Expose the negative repeated-addition counterexample |
+| `Arith_ExpressionTraceV4.hs` | Distinguish subtract from negation |
+| `Arith_FloatingDomain.hs` | Test absolute tolerance |
+| `Arith_FloatingDomainV2.hs` | Test combined relative and absolute tolerance |
+| `Arith_FloatingDomainV3.hs` | Classify floating domain results |
+| `Arith_FloatingDomainV4.hs` | Check elementary functions at exact reference points |
+| `Arith_SignedDivision.hs` | Apply div to signed integers |
+| `Arith_SignedDivisionV2.hs` | Apply mod to signed integers |
+| `Arith_SignedDivisionV3.hs` | Apply quot to signed integers |
+| `Arith_SignedDivisionV4.hs` | Apply rem to signed integers |
 
 ## First programs and the first lab
 
