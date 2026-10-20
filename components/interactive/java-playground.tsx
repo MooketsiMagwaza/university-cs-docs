@@ -29,6 +29,8 @@ export function JavaPlayground({
   const [result, setResult] = useState<JavaRunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState('');
+  const [stdin, setStdin] = useState('');
+  const readsInput = /\b(?:Scanner|BufferedReader)\b|\bSystem\.in\b/.test(code);
 
   const loadExample = (id: string) => {
     const next = getJavaPlaygroundExample(id === 'lesson' ? initialExampleId : id);
@@ -43,7 +45,7 @@ export function JavaPlayground({
     setResult(null);
     setStatus('Preparing Java…');
     try {
-      setResult(await runJava(code, setStatus));
+      setResult(await runJava(code, setStatus, { stdin }));
     } finally {
       setRunning(false);
       setStatus('');
@@ -124,6 +126,27 @@ export function JavaPlayground({
             wrap="off"
             className="min-h-[28rem] w-full resize-y whitespace-pre bg-zinc-950 p-4 font-mono text-[13px] leading-6 text-zinc-100 outline-none [tab-size:4] focus:ring-2 focus:ring-inset focus:ring-fd-primary"
           />
+          {readsInput && (
+            <label className="block border-t border-fd-border bg-fd-muted/20 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-fd-muted-foreground">
+              Input
+              <textarea
+                aria-label="Text the program reads as input, one line per line"
+                value={stdin}
+                onChange={(event) => { setStdin(event.target.value); setResult(null); }}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                    event.preventDefault();
+                    void run();
+                  }
+                }}
+                rows={3}
+                spellCheck={false}
+                wrap="off"
+                placeholder="What the program reads, one line per line"
+                className="mt-2 w-full resize-y rounded-lg border border-fd-border bg-zinc-950 p-3 font-mono text-[13px] font-normal normal-case leading-6 tracking-normal text-zinc-100 outline-none focus:ring-2 focus:ring-fd-primary"
+              />
+            </label>
+          )}
           <div className="flex flex-wrap items-center gap-2 border-t border-fd-border bg-fd-muted/20 px-4 py-3">
             <button
               type="button"
@@ -177,6 +200,13 @@ export function JavaPlayground({
                   {result.diagnostics.join('\n')}
                 </pre>
               )}
+              {result.notes && result.notes.length > 0 && (
+                <ul className="m-0 list-disc space-y-1 pl-5 text-xs leading-5 text-zinc-300">
+                  {result.notes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              )}
               {result.lines.length > 0 && (
                 <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[13px] leading-6">
                   {result.lines.map((line, index) => (
@@ -204,7 +234,7 @@ export function JavaPlayground({
       </div>
 
       <div className="border-t border-fd-border bg-fd-muted/20 px-4 py-3 text-xs leading-5 text-fd-muted-foreground sm:px-6">
-        Compiles and runs locally in Web Workers with TeaVM; source code is not uploaded. The first run loads about 6.7 MB and may take longer. Use one public class named Main. Console programs are supported; files, networking, threads, reflection-heavy code, and multiple source files are not.
+        Compiles and runs locally in Web Workers with TeaVM; source code is not uploaded. The first run loads about 6.7 MB and may take longer. Use one file with the main method in a class named Main (a single public class with another name is renamed). Console programs, printf, Scanner on the Input box and a seeded Random work like the JDK. Files, networking, threads, getClass and getCause are not available, recursion is limited to a few thousand calls, and a null-pointer, array-index or divide-by-zero error stops the program instead of being caught.
       </div>
     </section>
   );

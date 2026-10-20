@@ -56,9 +56,10 @@ async function execute(
   }
 
   if (language === 'java') {
-    const result = await runJava(code, onStatus);
+    const result = await runJava(code, onStatus, { stdin: options.stdin });
     const lines: Line[] = [...result.lines.map((line) => ({ stream: line.stream, text: line.text })), ...result.diagnostics.map(err)];
     if (result.error) lines.push(err(result.error));
+    for (const note of result.notes ?? []) lines.push(info(note));
     if (result.timedOut) lines.push(info('Stopped: the program ran for too long.'));
     return { ok: result.ok, lines, tables: [], elapsedMs: result.elapsedMs };
   }
@@ -70,10 +71,11 @@ async function execute(
   return { ok: result.ok, lines, tables: result.tables, elapsedMs: result.elapsedMs };
 }
 
-/** Programs that read what the reader types: Haskell's getLine and friends, and Python's input(). */
+/** Programs that read what the reader types: Haskell's getLine and friends, Python's input(), Java's Scanner. */
 function readsInput(language: RunnableLanguage, code: string): boolean {
   if (language === 'haskell') return /\b(getLine|readLn|getContents|interact)\b/.test(code);
   if (language === 'python') return /\binput\s*\(/.test(code);
+  if (language === 'java') return /\b(Scanner|BufferedReader)\b|\bSystem\.in\b/.test(code);
   return false;
 }
 

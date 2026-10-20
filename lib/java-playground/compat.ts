@@ -1,4 +1,4 @@
-import { EXIT_SHIM, FORMAT_SHIM, MESSAGE_SHIM, STDIN_SHIM, stdinConstant } from './shim';
+import { EXIT_SHIM, FORMAT_SHIM, JOINER_SHIM, MATH_SHIM, MESSAGE_SHIM, NUMBER_SHIM, RANDOM_SHIM, STDIN_SHIM, stdinConstant } from './shim';
 
 /**
  * The in-browser Java compiler (TeaVM) has a smaller class library than a JDK, and a few of its parts crash.
@@ -95,6 +95,36 @@ export function prepareJava(source: string, stdin = ''): PreparedJava {
   }
   if (usesSys) parts.push(EXIT_SHIM);
 
+  // Rounding that matches the JDK (TeaVM rounds -2.5 to -3 and log10(1000) comes out as 2.9999999999999996).
+  if (/\bMath\.(?:round|rint|log10)\s*\(/.test(code)) {
+    code = code.replace(/\bMath\.(round|rint|log10)\s*\(/g, '__Math.$1(');
+    parts.push(MATH_SHIM);
+  }
+
+  // A seeded Random must print what it prints on a real JVM, so it is the JDK's generator.
+  if (/\bRandom\b/.test(code) && !/\b(?:class|interface|enum|record)\s+Random\b/.test(code)) {
+    code = code.replace(/^\s*import\s+java\.util\.Random\s*;[^\n]*$/gm, '');
+    code = code.replace(/\bjava\.util\.Random\b/g, 'Random');
+    code = code.replace(/\b(?:java\.util\.)?Collections\.shuffle\(\s*([^,()]+?)\s*\)/g, '__Util.shuffle($1, new Random())');
+    code = code.replace(/\b(?:java\.util\.)?Collections\.shuffle\(/g, '__Util.shuffle(');
+    parts.push(RANDOM_SHIM);
+  }
+
+  // The JDK's message for a number that does not parse.
+  if (/\b(?:Integer\.parseInt|Long\.parseLong)\s*\(/.test(code)) {
+    code = code.replace(/\bInteger\.parseInt\s*\(/g, '__Num.parseInt(').replace(/\bLong\.parseLong\s*\(/g, '__Num.parseLong(');
+    parts.push(NUMBER_SHIM);
+  }
+
+  // StringJoiner is missing from the compile-time class library.
+  if (/\bStringJoiner\b/.test(code) && !/\b(?:class|interface|enum|record)\s+StringJoiner\b/.test(code)) {
+    code = code.replace(/^\s*import\s+java\.util\.StringJoiner\s*;[^\n]*$/gm, '').replace(/\bjava\.util\.StringJoiner\b/g, 'StringJoiner');
+    parts.push(JOINER_SHIM);
+  }
+
+  // for (Map.Entry<K, V> e : map.entrySet()) names a type the compile-time class library lacks; var does not.
+  code = rewriteEntryLoops(code);
+
   // Small things the class library lacks.
   code = code.replace(/\bSystem\.lineSeparator\s*\(\s*\)/g, '"\\n"');
   code = code.replace(/\bInteger::sum\b/g, '(__a, __b) -> __a + __b');
@@ -104,6 +134,28 @@ export function prepareJava(source: string, stdin = ''): PreparedJava {
   code = code.replace(/\bInteger::min\b/g, '(__a, __b) -> Math.min(__a, __b)');
 
   return { code: parts.length ? `${code.replace(/\s*$/, '')}\n${parts.join('')}` : code, notes };
+}
+
+/** Turns `for (Map.Entry<K, V> e : x)` into `for (var e : x)`, counting the angle brackets of nested generics. */
+export function rewriteEntryLoops(source: string): string {
+  const header = /\bfor\s*\(\s*(?:final\s+)?(?:java\.util\.)?(?:Map\.)?Entry\s*</g;
+  let out = '';
+  let from = 0;
+  for (let match = header.exec(source); match; match = header.exec(source)) {
+    let depth = 1;
+    let index = match.index + match[0].length;
+    while (index < source.length && depth > 0) {
+      if (source[index] === '<') depth += 1;
+      else if (source[index] === '>') depth -= 1;
+      index += 1;
+    }
+    const after = /^\s+([A-Za-z_]\w*)\s*:/.exec(source.slice(index));
+    if (depth !== 0 || !after) continue;
+    out += source.slice(from, match.index) + 'for (var ' + after[1] + ' :';
+    from = index + after[0].length;
+    header.lastIndex = from;
+  }
+  return out + source.slice(from);
 }
 
 /** The names of the top-level types in a program, to notice when the next program no longer has one the last had. */
