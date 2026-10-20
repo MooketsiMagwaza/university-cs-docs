@@ -1,0 +1,2967 @@
+---
+title: "Applying higher-order functions by hand"
+description: "Reduce higher-order calls one equation at a time, track fold and scan accumulators, and justify exam answers with complete traces and types."
+---
+
+A higher-order function receives or returns a function. To evaluate its call on paper, keep that function as an argument until the defining equation tells you where to apply it. This lesson makes each replacement visible: a final value alone is not a trace.
+
+<LearningObjectives items={[
+  'Substitute arguments into labelled equations and lambda bodies one step at a time',
+  'Trace mapping, filtering, zipping and prefix operations including stopping cases',
+  'Distinguish left and right folds and scans with accumulator tables',
+  'Reduce flip, curry, uncurry, composition and dollar application',
+  'State the expression type and check each exam result',
+]} />
+
+<Prerequisites items={[
+  'Lists, tuples, curried application, lambdas and operator sections',
+  'Reading function types and matching [] or x:xs',
+]} />
+
+## 1. The tracing template
+
+First identify the function, its arguments and the result type. A **substitution** replaces a parameter by the argument supplied for it. Match the input to a defining equation, replace only that call, then evaluate one smaller application or one primitive operation. Preserve everything around the chosen call. For an if-expression, calculate the test before selecting its branch.
+
+```text
+original call -- given call
+= defining body with arguments inserted -- named equation; list substitutions
+= one application with its body inserted -- lambda substitution or function equation
+= one smaller expression -- arithmetic, test or constructor rule
+= final value -- last named reduction
+```
+
+Read the placeholders as the actual function, arguments and body from your question. Repeat the middle two steps as often as necessary; never replace several independent arithmetic operations in one line.
+
+`[a,b]` abbreviates `a : b : []`, and a `String` is `[Char]`. A line labelled "list notation" or "string notation" changes only the spelling. `(:)` constructs one list cell. The following elementary equations are used throughout:
+
+```text
+(\x -> body) argument = body[x := argument] -- LAM
+(op) x y = x op y -- OP
+(op k) x = x op k -- SEC-R
+(k op) x = k op x -- SEC-L
+id x = x -- ID
+if True then a else b = a -- IF-T
+if False then a else b = b -- IF-F
+```
+
+These are notation templates: substitute the actual operator or body. The minus exception matters: `(-k)` means a negative literal, so use `subtract k` for subtraction of `k`. EVEN and ODD name the tests for divisibility by two. Arithmetic, comparisons, equality and MAX name their primitive rules. Multi-argument lambdas are curried: substitute one separate argument at a time. A pair-pattern lambda matches both fields in one pattern match.
+
+These are equational traces of finite, defined values. They calculate results rather than specify GHC's internal evaluation order. Unused branches and tails need not be reduced.
+
+### A lambda: substitute before calculating
+
+```text
+(\x -> x + 2) 3 -- given call
+= 3 + 2 -- LAM: x := 3
+= 5 -- addition
+```
+
+The body gets the argument in place of every free occurrence of the parameter.
+
+### An operator: preserve operand order
+
+```text
+(-) 8 3 -- given call
+= 8 - 3 -- OP: left := 8, right := 3
+= 5 -- subtraction
+```
+
+Subtraction uses the first argument as its left operand.
+
+### A section: identify the missing operand
+
+```text
+(10 -) 4 -- given call
+= 10 - 4 -- SEC-L: argument := 4
+= 6 -- subtraction
+```
+
+The fixed operand is 10. In contrast, `subtract 10 4` is `4 - 10`.
+
+**Common error.** Jumping from a call straight to a value omits the requested method. GHC cannot diagnose missing written reasoning. Show the defining equation, argument substitutions and primitive reductions.
+
+**Practice with answer.** `(\x -> x * x) (4 :: Int)` has type `Int`: substitute `x := 4` (LAM) to get `4 * 4`, then `16` (multiplication).
+
+## 2. Mapping with `map`
+
+`map` transforms each element independently. It preserves the number and order of the elements; the supplied function consumes one element at a time.
+
+**Template:** `map transform inputList`. Replace `transform` by a one-argument function and `inputList` by its inputs.
+
+Labelled equations for paper traces:
+
+```text
+map :: (a -> b) -> [a] -> [b]
+map f [] = [] -- M0
+map f (x:xs) = f x : map f xs -- M1
+```
+
+### A section on two numbers
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map (+2) [1,3])
+```
+
+```text
+[3,5]
+```
+
+</HaskellTryIt>
+
+```text
+map (+2) [1,3] -- given call
+= (+2) 1 : map (+2) [3] -- M1: f := (+2), x := 1, xs := [3]
+= (1 + 2) : map (+2) [3] -- SEC-R: argument := 1
+= 3 : map (+2) [3] -- addition
+= 3 : ((+2) 3 : map (+2) []) -- M1: x := 3, xs := []
+= 3 : ((3 + 2) : map (+2) []) -- SEC-R: argument := 3
+= 3 : (5 : map (+2) []) -- addition
+= 3 : (5 : []) -- M0
+= [3,5] -- list notation
+```
+
+The section receives each element afresh.
+
+### A lambda on a singleton
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map (\x -> x * x) [4])
+```
+
+```text
+[16]
+```
+
+</HaskellTryIt>
+
+```text
+map (\x -> x * x) [4] -- given call
+= (\x -> x * x) 4 : map (\x -> x * x) [] -- M1
+= (4 * 4) : map (\x -> x * x) [] -- LAM: x := 4
+= 16 : map (\x -> x * x) [] -- multiplication
+= 16 : [] -- M0
+= [16] -- list notation
+```
+
+Both occurrences of the parameter receive the same input.
+
+### An empty Boolean list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (map not [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+map not [] -- given call
+= [] -- M0: f := not
+```
+
+No application of `not` is needed.
+
+**Common error.** `map (+) [1,2]` produces functions waiting for another number. Printing it gives a missing `Show` instance diagnostic for a function type. Supply the other operand, as in `map (+2) [1,2]`.
+
+**Practice with answer.** `map not [True]` gives `[False]`: M1, `not True = False`, M0, list notation.
+
+## 3. Selecting with `filter`
+
+`filter` keeps elements passing a predicate, which is a function returning `Bool`. A failed test removes that element but does not stop the search.
+
+**Template:** `filter predicate inputList`. The predicate tests each element; the elements themselves remain unchanged.
+
+Labelled equations for paper traces:
+
+```text
+filter :: (a -> Bool) -> [a] -> [a]
+filter p [] = [] -- F0
+filter p (x:xs) = if p x then x : filter p xs else filter p xs -- F1
+```
+
+### A comparison section
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (filter (>2) [1,3])
+```
+
+```text
+[3]
+```
+
+</HaskellTryIt>
+
+```text
+filter (>2) [1,3] -- given call
+= if (>2) 1 then 1 : filter (>2) [3] else filter (>2) [3] -- F1
+= if 1 > 2 then 1 : filter (>2) [3] else filter (>2) [3] -- SEC-R
+= if False then 1 : filter (>2) [3] else filter (>2) [3] -- comparison
+= filter (>2) [3] -- IF-F
+= if (>2) 3 then 3 : filter (>2) [] else filter (>2) [] -- F1
+= if 3 > 2 then 3 : filter (>2) [] else filter (>2) [] -- SEC-R
+= if True then 3 : filter (>2) [] else filter (>2) [] -- comparison
+= 3 : filter (>2) [] -- IF-T
+= 3 : [] -- F0
+= [3] -- list notation
+```
+
+Only the second element passes.
+
+### A lambda predicate
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (filter (\x -> x == 0) [0])
+```
+
+```text
+[0]
+```
+
+</HaskellTryIt>
+
+```text
+filter (\x -> x == 0) [0] -- given call
+= if (\x -> x == 0) 0 then 0 : filter (\x -> x == 0) [] else filter (\x -> x == 0) [] -- F1
+= if 0 == 0 then 0 : filter (\x -> x == 0) [] else filter (\x -> x == 0) [] -- LAM: x := 0
+= if True then 0 : filter (\x -> x == 0) [] else filter (\x -> x == 0) [] -- equality
+= 0 : filter (\x -> x == 0) [] -- IF-T
+= 0 : [] -- F0
+= [0] -- list notation
+```
+
+The test returns a Boolean; the retained element is still zero.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (filter even [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+filter even [] -- given call
+= [] -- F0
+```
+
+There is nothing to test.
+
+**Common error.** `filter (+1) [1,2]` does not supply a Boolean test. GHC reports a type mismatch or a missing numeric instance for `Bool`, depending on inferred types. Repair it with `filter (>1) [1,2]`.
+
+**Practice with answer.** `filter odd [2]` gives `[]`: F1, `odd 2 = False`, IF-F, F0.
+
+## 4. Folding from the right with `foldr`
+
+A fold reduces a list to one result. `foldr` gives its combining function the element first and the result for the remaining suffix second. The seed replaces the empty tail.
+
+**Template:** `foldr combine seed inputList`. `combine` has an element argument and a result argument; `seed` is the empty-list result.
+
+Labelled equations for paper traces:
+
+```text
+foldr :: (a -> b -> b) -> b -> [a] -> b
+foldr f z [] = z -- R0
+foldr f z (x:xs) = f x (foldr f z xs) -- R1
+```
+
+### A lambda with a weighted accumulator
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldr (\x acc -> x + 2 * acc) 0 [1,2,3])
+```
+
+```text
+17
+```
+
+</HaskellTryIt>
+
+```text
+foldr (\x acc -> x + 2 * acc) 0 [1,2,3] -- given call
+= (\x acc -> x + 2 * acc) 1 (foldr (\x acc -> x + 2 * acc) 0 [2,3]) -- R1
+= (\acc -> 1 + 2 * acc) (foldr (\x acc -> x + 2 * acc) 0 [2,3]) -- LAM: x := 1
+= 1 + 2 * foldr (\x acc -> x + 2 * acc) 0 [2,3] -- LAM: acc := recursive result
+= 1 + 2 * ((\x acc -> x + 2 * acc) 2 (foldr (\x acc -> x + 2 * acc) 0 [3])) -- R1
+= 1 + 2 * ((\acc -> 2 + 2 * acc) (foldr (\x acc -> x + 2 * acc) 0 [3])) -- LAM: x := 2
+= 1 + 2 * (2 + 2 * foldr (\x acc -> x + 2 * acc) 0 [3]) -- LAM: acc := recursive result
+= 1 + 2 * (2 + 2 * ((\x acc -> x + 2 * acc) 3 (foldr (\x acc -> x + 2 * acc) 0 []))) -- R1
+= 1 + 2 * (2 + 2 * ((\acc -> 3 + 2 * acc) (foldr (\x acc -> x + 2 * acc) 0 []))) -- LAM: x := 3
+= 1 + 2 * (2 + 2 * (3 + 2 * foldr (\x acc -> x + 2 * acc) 0 [])) -- LAM: acc := recursive result
+= 1 + 2 * (2 + 2 * (3 + 2 * 0)) -- R0
+= 1 + 2 * (2 + 2 * (3 + 0)) -- multiplication
+= 1 + 2 * (2 + 2 * 3) -- addition
+= 1 + 2 * (2 + 6) -- multiplication
+= 1 + 2 * 8 -- addition
+= 1 + 16 -- multiplication
+= 17 -- addition
+```
+
+Independent check: expanding the weights gives `1 + 2 * 2 + 4 * 3 = 17`.
+
+### Subtraction reveals the nesting
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldr (-) 0 [1,2,3])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+```text
+foldr (-) 0 [1,2,3] -- given call
+= (-) 1 (foldr (-) 0 [2,3]) -- R1
+= 1 - foldr (-) 0 [2,3] -- OP: left := 1, right := recursive result
+= 1 - ((-) 2 (foldr (-) 0 [3])) -- R1
+= 1 - (2 - foldr (-) 0 [3]) -- OP
+= 1 - (2 - ((-) 3 (foldr (-) 0 []))) -- R1
+= 1 - (2 - (3 - foldr (-) 0 [])) -- OP
+= 1 - (2 - (3 - 0)) -- R0
+= 1 - (2 - 3) -- subtraction
+= 1 - (-1) -- subtraction
+= 2 -- subtraction
+```
+
+This is right-nested subtraction, not successive subtraction from zero.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldr (+) 10 [])
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+```text
+foldr (+) 10 [] -- given call
+= 10 -- R0: z := 10
+```
+
+No combining call occurs.
+
+**Common error.** Swapping `f x recursiveResult` to `f recursiveResult x` silently changes subtraction. GHC accepts both when the types agree. Keep the element first.
+
+**Practice with answer.** `foldr (-) 0 [4]` gives `4`: R1 gives `(-) 4 (foldr (-) 0 [])`, OP gives `4 - foldr (-) 0 []`, R0 gives `4 - 0`, subtraction gives `4`.
+
+| Suffix processed | Element | Accumulator from right | New result |
+|---|---|---|---|
+| `[]` | none | seed | `0` |
+| `[3]` | `3` | `0` | `3` |
+| `[2,3]` | `2` | `3` | `8` |
+| `[1,2,3]` | `1` | `8` | `17` |
+
+## 5. Folding from the left with `foldl`
+
+`foldl` carries an accumulator from left to right. Its function takes the accumulator first and the next element second. The following arithmetic reductions calculate the value; ordinary `foldl` need not force each accumulator immediately.
+
+**Template:** `foldl combine seed inputList`. Start at `seed`; after each element use `combine oldAccumulator element`.
+
+Labelled equations for paper traces:
+
+```text
+foldl :: (b -> a -> b) -> b -> [a] -> b
+foldl f z [] = z -- L0
+foldl f z (x:xs) = foldl f (f z x) xs -- L1
+```
+
+### The same subtraction arguments
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl (-) 0 [1,2,3])
+```
+
+```text
+-6
+```
+
+</HaskellTryIt>
+
+```text
+foldl (-) 0 [1,2,3] -- given call
+= foldl (-) ((-) 0 1) [2,3] -- L1: z := 0, x := 1
+= foldl (-) (0 - 1) [2,3] -- OP
+= foldl (-) (-1) [2,3] -- subtraction
+= foldl (-) ((-) (-1) 2) [3] -- L1: z := -1, x := 2
+= foldl (-) ((-1) - 2) [3] -- OP
+= foldl (-) (-3) [3] -- subtraction
+= foldl (-) ((-) (-3) 3) [] -- L1: z := -3, x := 3
+= foldl (-) ((-3) - 3) [] -- OP
+= foldl (-) (-6) [] -- subtraction
+= -6 -- L0
+```
+
+The grouping is `((0 - 1) - 2) - 3`. The matching right-fold call gave `2`.
+
+### A lambda on one element
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl (\acc x -> acc * 10 + x) 0 [7])
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+```text
+foldl (\acc x -> acc * 10 + x) 0 [7] -- given call
+= foldl (\acc x -> acc * 10 + x) ((\acc x -> acc * 10 + x) 0 7) [] -- L1
+= foldl (\acc x -> acc * 10 + x) ((\x -> 0 * 10 + x) 7) [] -- LAM: acc := 0
+= foldl (\acc x -> acc * 10 + x) (0 * 10 + 7) [] -- LAM: x := 7
+= foldl (\acc x -> acc * 10 + x) (0 + 7) [] -- multiplication
+= foldl (\acc x -> acc * 10 + x) 7 [] -- addition
+= 7 -- L0
+```
+
+The accumulator is the first parameter.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl (*) 5 [])
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+```text
+foldl (*) 5 [] -- given call
+= 5 -- L0
+```
+
+The chosen seed is returned unchanged.
+
+**Common error.** `foldl (:) [] [1,2]` has incompatible list and element roles; GHC reports a type mismatch containing `Couldn't match`. Use `foldl (flip (:)) [] [1,2]` to prepend each new element.
+
+**Practice with answer.** `foldl (-) 10 [3]` gives `7`: L1, OP, subtraction, L0.
+
+| Call | Seed | First update | Second update | Third update |
+|---|---|---|---|---|
+| `foldl (-) 0 [1,2,3]` | `0` | `-1` | `-3` | `-6` |
+| `foldr (-) 0 [1,2,3]`, working from the right | `0` | `3` | `-1` | `2` |
+
+Subtraction is non-commutative: swapping operands changes the answer. Its grouping also matters: the right fold yields `1 - (2 - (3 - 0))`; the left fold yields `((0 - 1) - 2) - 3`. The rows process opposite ends of the list.
+
+## 6. Using the last element as seed: `foldr1`
+
+`foldr1` folds a non-empty list from the right, using its last element as the starting result. No separate seed is inserted. Elements and intermediate results have the same type.
+
+**Template:** `foldr1 combine nonEmptyList`. There must be a last element to start from.
+
+Labelled equations for paper traces:
+
+```text
+foldr1 :: (a -> a -> a) -> [a] -> a
+foldr1 f [x] = x -- R10
+foldr1 f (x:y:xs) = f x (foldr1 f (y:xs)) -- R11
+foldr1 f [] = error "Prelude.foldr1: empty list" -- R1E
+```
+
+### Subtraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldr1 (-) [8,3])
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+```text
+foldr1 (-) [8,3] -- given call
+= (-) 8 (foldr1 (-) [3]) -- R11
+= 8 - foldr1 (-) [3] -- OP
+= 8 - 3 -- R10
+= 5 -- subtraction
+```
+
+A singleton tail supplies the seed.
+
+### A lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldr1 (\x y -> x + 2 * y) [1,2])
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+```text
+foldr1 (\x y -> x + 2 * y) [1,2] -- given call
+= (\x y -> x + 2 * y) 1 (foldr1 (\x y -> x + 2 * y) [2]) -- R11
+= (\y -> 1 + 2 * y) (foldr1 (\x y -> x + 2 * y) [2]) -- LAM: x := 1
+= 1 + 2 * foldr1 (\x y -> x + 2 * y) [2] -- LAM: y := recursive result
+= 1 + 2 * 2 -- R10
+= 1 + 4 -- multiplication
+= 5 -- addition
+```
+
+The final element is not combined with an extra zero.
+
+### A singleton string list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldr1 (++) ["hi"])
+```
+
+```text
+"hi"
+```
+
+</HaskellTryIt>
+
+```text
+foldr1 (++) ["hi"] -- given call
+= "hi" -- R10: x := "hi"
+```
+
+Append is never called.
+
+**Common error.** `foldr1 (+) []` raises an exception with message `Prelude.foldr1: empty list`. Use `foldr (+) 0` when empty input should mean zero. The failing call is deliberately outside a runnable block.
+
+**Practice with answer.** `foldr1 max [2,9]` gives `9`: R11, R10, then `max 2 9 = 9`.
+
+## 7. Using the first element as seed: `foldl1`
+
+`foldl1` starts at the first element and left-folds the remaining list. It requires a non-empty list.
+
+**Template:** `foldl1 combine nonEmptyList`. Use the first element as the accumulator, not as the first value to subtract from zero.
+
+Labelled equations for paper traces:
+
+```text
+foldl1 :: (a -> a -> a) -> [a] -> a
+foldl1 f (x:xs) = foldl f x xs -- L10
+foldl1 f [] = error "Prelude.foldl1: empty list" -- L1E
+```
+
+### Three subtractions
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl1 (-) [8,3,1])
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+```text
+foldl1 (-) [8,3,1] -- given call
+= foldl (-) 8 [3,1] -- L10
+= foldl (-) ((-) 8 3) [1] -- L1
+= foldl (-) (8 - 3) [1] -- OP
+= foldl (-) 5 [1] -- subtraction
+= foldl (-) ((-) 5 1) [] -- L1
+= foldl (-) (5 - 1) [] -- OP
+= foldl (-) 4 [] -- subtraction
+= 4 -- L0
+```
+
+Start from 8, then subtract 3 and 1.
+
+### A digit-building lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl1 (\a x -> a * 10 + x) [2,3])
+```
+
+```text
+23
+```
+
+</HaskellTryIt>
+
+```text
+foldl1 (\a x -> a * 10 + x) [2,3] -- given call
+= foldl (\a x -> a * 10 + x) 2 [3] -- L10
+= foldl (\a x -> a * 10 + x) ((\a x -> a * 10 + x) 2 3) [] -- L1
+= foldl (\a x -> a * 10 + x) ((\x -> 2 * 10 + x) 3) [] -- LAM: a := 2
+= foldl (\a x -> a * 10 + x) (2 * 10 + 3) [] -- LAM: x := 3
+= foldl (\a x -> a * 10 + x) (20 + 3) [] -- multiplication
+= foldl (\a x -> a * 10 + x) 23 [] -- addition
+= 23 -- L0
+```
+
+The initial digit is already present in the accumulator.
+
+### A singleton
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl1 max [4])
+```
+
+```text
+4
+```
+
+</HaskellTryIt>
+
+```text
+foldl1 max [4] -- given call
+= foldl max 4 [] -- L10
+= 4 -- L0
+```
+
+No comparison is required.
+
+**Common error.** `foldl1 (+) []` raises an exception with message `Prelude.foldl1: empty list`. Supply a seed with `foldl (+) 0` to permit empty input.
+
+**Practice with answer.** `foldl1 (-) [8]` is `8`, not `-8`: L10 followed by L0.
+
+## 8. Keeping left accumulators with `scanl`
+
+`scanl` uses the left-fold recurrence but returns the seed and every new accumulator. For `n` input elements it returns `n + 1` values.
+
+**Template:** `scanl combine seed inputList`. Each output entry records a prefix result.
+
+Labelled equations for paper traces:
+
+```text
+scanl :: (b -> a -> b) -> b -> [a] -> [b]
+scanl f z [] = [z] -- SL0
+scanl f z (x:xs) = z : scanl f (f z x) xs -- SL1
+flip f x y = f y x -- FLIP
+```
+
+### Running subtraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl (-) 0 [1,2])
+```
+
+```text
+[0,-1,-3]
+```
+
+</HaskellTryIt>
+
+```text
+scanl (-) 0 [1,2] -- given call
+= 0 : scanl (-) ((-) 0 1) [2] -- SL1
+= 0 : scanl (-) (0 - 1) [2] -- OP
+= 0 : scanl (-) (-1) [2] -- subtraction
+= 0 : ((-1) : scanl (-) ((-) (-1) 2) []) -- SL1
+= 0 : ((-1) : scanl (-) ((-1) - 2) []) -- OP
+= 0 : ((-1) : scanl (-) (-3) []) -- subtraction
+= 0 : ((-1) : [-3]) -- SL0
+= [0,-1,-3] -- list notation
+```
+
+The first entry is the state before using any input.
+
+### Building reversed prefixes
+
+The runnable version spells the empty character-list seed as `""`, equal to `[] :: String`. The paper trace below retains the original `[]` spelling. Both have the same Haskell value and type; the string literal also supplies the site interpreter with a string representation for the empty accumulator.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl (flip (:)) "" "abc")
+```
+
+```text
+["","a","ba","cba"]
+```
+
+</HaskellTryIt>
+
+```text
+scanl (flip (:)) [] "abc" -- given call
+= [] : scanl (flip (:)) (flip (:) [] 'a') "bc" -- SL1
+= [] : scanl (flip (:)) ((:) 'a' []) "bc" -- FLIP: x := [], y := 'a'
+= [] : scanl (flip (:)) ('a' : []) "bc" -- OP
+= [] : scanl (flip (:)) "a" "bc" -- string notation
+= [] : ("a" : scanl (flip (:)) (flip (:) "a" 'b') "c") -- SL1
+= [] : ("a" : scanl (flip (:)) ((:) 'b' "a") "c") -- FLIP
+= [] : ("a" : scanl (flip (:)) ('b' : "a") "c") -- OP
+= [] : ("a" : scanl (flip (:)) "ba" "c") -- string notation
+= [] : ("a" : ("ba" : scanl (flip (:)) (flip (:) "ba" 'c') "")) -- SL1
+= [] : ("a" : ("ba" : scanl (flip (:)) ((:) 'c' "ba") "")) -- FLIP
+= [] : ("a" : ("ba" : scanl (flip (:)) ('c' : "ba") "")) -- OP
+= [] : ("a" : ("ba" : scanl (flip (:)) "cba" "")) -- string notation
+= [] : ("a" : ("ba" : ["cba"])) -- SL0
+= ["","a","ba","cba"] -- list/string notation
+```
+
+Independent check: reverse the prefixes `""`, `"a"`, `"ab"`, `"abc"`. The seed has type `String`; the full result has type `[String]`.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl (+) 7 [])
+```
+
+```text
+[7]
+```
+
+</HaskellTryIt>
+
+```text
+scanl (+) 7 [] -- given call
+= [7] -- SL0
+```
+
+Even without input there is one accumulator.
+
+**Common error.** Predicting `[]` for the empty input loses the seed. There is no GHC diagnostic for a wrong prediction; the actual result is `[7]`.
+
+**Practice with answer.** `scanl (+) 0 [5]` is `[0,5]`: SL1, OP, addition, SL0, list notation.
+
+| Next character | Old accumulator | New cons application | New accumulator |
+|---|---|---|---|
+| none | seed | none | `""` |
+| `'a'` | `""` | `'a' : ""` | `"a"` |
+| `'b'` | `"a"` | `'b' : "a"` | `"ba"` |
+| `'c'` | `"ba"` | `'c' : "ba"` | `"cba"` |
+
+Printing a list of strings includes the double quotes, and prints an empty string as `""`.
+
+## 9. Keeping right accumulators with `scanr`
+
+`scanr` returns the right-fold result of every suffix, followed by the seed for the empty suffix. Work arithmetic from the right, but write the output in the original suffix order.
+
+**Template:** `scanr combine seed inputList`. Use the first result of the tail scan as the next right accumulator.
+
+Labelled equations for paper traces:
+
+```text
+scanr :: (a -> b -> b) -> b -> [a] -> [b]
+scanr f z [] = [z] -- SR0
+scanr f z (x:xs) = let qs = scanr f z xs in f x (head qs) : qs -- SR1
+head (q:qs) = q -- HEAD
+```
+
+### Subtraction over suffixes
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanr (-) 0 [1,2])
+```
+
+```text
+[-1,2,0]
+```
+
+</HaskellTryIt>
+
+```text
+scanr (-) 0 [1,2] -- given call
+= let qs = scanr (-) 0 [2] in (-) 1 (head qs) : qs -- SR1
+= let qs = (let rs = scanr (-) 0 [] in (-) 2 (head rs) : rs) in (-) 1 (head qs) : qs -- SR1
+= let qs = (let rs = [0] in (-) 2 (head rs) : rs) in (-) 1 (head qs) : qs -- SR0
+= let qs = (-) 2 (head [0]) : [0] in (-) 1 (head qs) : qs -- let substitution: rs := [0]
+= let qs = (-) 2 0 : [0] in (-) 1 (head qs) : qs -- HEAD
+= let qs = (2 - 0) : [0] in (-) 1 (head qs) : qs -- OP
+= let qs = 2 : [0] in (-) 1 (head qs) : qs -- subtraction
+= (-) 1 (head (2 : [0])) : (2 : [0]) -- let substitution: qs := 2 : [0]
+= (-) 1 2 : (2 : [0]) -- HEAD
+= (1 - 2) : (2 : [0]) -- OP
+= (-1) : (2 : [0]) -- subtraction
+= [-1,2,0] -- list notation
+```
+
+The suffix results are -1 for `[1,2]`, 2 for `[2]`, and 0 for `[]`.
+
+### A character and a string accumulator
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanr (:) "" "a")
+```
+
+```text
+["a",""]
+```
+
+</HaskellTryIt>
+
+```text
+scanr (:) "" "a" -- given call
+= let qs = scanr (:) "" "" in (:) 'a' (head qs) : qs -- SR1
+= let qs = [""] in (:) 'a' (head qs) : qs -- SR0
+= (:) 'a' (head [""]) : [""] -- let substitution
+= (:) 'a' "" : [""] -- HEAD
+= ('a' : "") : [""] -- OP
+= "a" : [""] -- string notation
+= ["a",""] -- list notation
+```
+
+The last output entry remains the empty-string seed.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanr (+) 7 [])
+```
+
+```text
+[7]
+```
+
+</HaskellTryIt>
+
+```text
+scanr (+) 7 [] -- given call
+= [7] -- SR0
+```
+
+Both scan directions retain the seed on an empty input.
+
+**Common error.** Reversing the output of `scanr` is a value error that type-checks. Keep suffixes in their original order, with the empty suffix last.
+
+**Practice with answer.** `scanr max 0 [4]` is `[4,0]`: SR1, SR0, substitute `qs`, HEAD, MAX, list notation.
+
+| Suffix | Its right-fold result |
+|---|---|
+| `[1,2]` | `-1` |
+| `[2]` | `2` |
+| `[]` | `0` |
+
+Read downwards to get `scanr (-) 0 [1,2]`. A left scan instead begins with the empty-prefix result.
+
+## 10. Combining matching positions with `zipWith`
+
+`zipWith` applies a two-argument rule to corresponding elements of two lists. It stops as soon as either input ends.
+
+**Template:** `zipWith combine firstList secondList`. The first list supplies the first function argument.
+
+Labelled equations for paper traces:
+
+```text
+zipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+zipWith f [] ys = [] -- ZW0
+zipWith f xs [] = [] -- ZW1
+zipWith f (x:xs) (y:ys) = f x y : zipWith f xs ys -- ZW2
+```
+
+### An operator and unequal lengths
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zipWith (-) [8,4] [3])
+```
+
+```text
+[5]
+```
+
+</HaskellTryIt>
+
+```text
+zipWith (-) [8,4] [3] -- given call
+= (-) 8 3 : zipWith (-) [4] [] -- ZW2: x := 8, y := 3
+= (8 - 3) : zipWith (-) [4] [] -- OP
+= 5 : zipWith (-) [4] [] -- subtraction
+= 5 : [] -- ZW1
+= [5] -- list notation
+```
+
+The unpaired 4 is unused.
+
+### A lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zipWith (\x y -> x * 10 + y) [2] [3])
+```
+
+```text
+[23]
+```
+
+</HaskellTryIt>
+
+```text
+zipWith (\x y -> x * 10 + y) [2] [3] -- given call
+= (\x y -> x * 10 + y) 2 3 : zipWith (\x y -> x * 10 + y) [] [] -- ZW2
+= (\y -> 2 * 10 + y) 3 : zipWith (\x y -> x * 10 + y) [] [] -- LAM: x := 2
+= (2 * 10 + 3) : zipWith (\x y -> x * 10 + y) [] [] -- LAM: y := 3
+= (20 + 3) : zipWith (\x y -> x * 10 + y) [] [] -- multiplication
+= 23 : zipWith (\x y -> x * 10 + y) [] [] -- addition
+= 23 : [] -- ZW0
+= [23] -- list notation
+```
+
+Positions are combined independently.
+
+### An empty first list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zipWith (+) [] [1,2])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+zipWith (+) [] [1,2] -- given call
+= [] -- ZW0
+```
+
+There are no complete pairs.
+
+**Common error.** Printing `zipWith (+) [1]` tries to print a function waiting for another list. GHC reports a missing `Show` instance for a function type. Supply both lists.
+
+**Practice with answer.** `zipWith (*) [2] [4,5]` is `[8]`: ZW2, OP, multiplication, ZW0, list notation.
+
+## 11. Pairing positions with `zip`
+
+`zip` retains both corresponding values as a tuple. The fields may have different types, and unmatched elements are discarded.
+
+**Template:** `zip firstList secondList`. Each output element is a pair, not a two-element list.
+
+Labelled equations for paper traces:
+
+```text
+zip :: [a] -> [b] -> [(a,b)]
+zip [] ys = [] -- Z0
+zip xs [] = [] -- Z1
+zip (x:xs) (y:ys) = (x,y) : zip xs ys -- Z2
+```
+
+### Different element types
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip [1,2] "a")
+```
+
+```text
+[(1,'a')]
+```
+
+</HaskellTryIt>
+
+```text
+zip [1,2] "a" -- given call
+= (1,'a') : zip [2] "" -- Z2: x := 1, y := 'a'
+= (1,'a') : [] -- Z1
+= [(1,'a')] -- list notation
+```
+
+Only the first position has two elements.
+
+### An empty left input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip ([] :: [Int]) "ab")
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+zip ([] :: [Int]) "ab" -- given call
+= [] -- Z0
+```
+
+The annotation fixes the empty list's element type.
+
+### An empty right input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip [True] ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+zip [True] ([] :: [Int]) -- given call
+= [] -- Z1
+```
+
+Either input can cause stopping.
+
+**Common error.** Expecting padding from `zip [1,2] "a"` is a value error, with no diagnostic. It stops at the shorter list; no partner is invented.
+
+**Practice with answer.** `zip [False] "x"` is `[(False,'x')]`: Z2, Z0, list notation.
+
+## 12. Stopping at the first failure: `takeWhile`
+
+`takeWhile` keeps the initial run of elements passing a predicate. It stops testing at the first failure, even if later elements would pass.
+
+**Template:** `takeWhile predicate inputList`. A prefix means a consecutive run starting at the beginning.
+
+Labelled equations for paper traces:
+
+```text
+takeWhile :: (a -> Bool) -> [a] -> [a]
+takeWhile p [] = [] -- TW0
+takeWhile p (x:xs) = if p x then x : takeWhile p xs else [] -- TW1
+```
+
+### A failure before a later success
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (takeWhile (<3) [1,4,2])
+```
+
+```text
+[1]
+```
+
+</HaskellTryIt>
+
+```text
+takeWhile (<3) [1,4,2] -- given call
+= if (<3) 1 then 1 : takeWhile (<3) [4,2] else [] -- TW1
+= if 1 < 3 then 1 : takeWhile (<3) [4,2] else [] -- SEC-R
+= if True then 1 : takeWhile (<3) [4,2] else [] -- comparison
+= 1 : takeWhile (<3) [4,2] -- IF-T
+= 1 : (if (<3) 4 then 4 : takeWhile (<3) [2] else []) -- TW1
+= 1 : (if 4 < 3 then 4 : takeWhile (<3) [2] else []) -- SEC-R
+= 1 : (if False then 4 : takeWhile (<3) [2] else []) -- comparison
+= 1 : [] -- IF-F
+= [1] -- list notation
+```
+
+The later 2 cannot re-enter the output.
+
+### A lambda on a singleton
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (takeWhile (\x -> x == 0) [0])
+```
+
+```text
+[0]
+```
+
+</HaskellTryIt>
+
+```text
+takeWhile (\x -> x == 0) [0] -- given call
+= if (\x -> x == 0) 0 then 0 : takeWhile (\x -> x == 0) [] else [] -- TW1
+= if 0 == 0 then 0 : takeWhile (\x -> x == 0) [] else [] -- LAM: x := 0
+= if True then 0 : takeWhile (\x -> x == 0) [] else [] -- equality
+= 0 : takeWhile (\x -> x == 0) [] -- IF-T
+= 0 : [] -- TW0
+= [0] -- list notation
+```
+
+The entire singleton passes the test.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (takeWhile even [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+takeWhile even [] -- given call
+= [] -- TW0
+```
+
+There is no prefix to test.
+
+**Common error.** Treating this as `filter` changes the result without a type error. GHC gives no diagnostic. Stop testing at the first failed predicate.
+
+**Practice with answer.** `takeWhile (<3) [4,1]` is `[]`: TW1, SEC-R, comparison, IF-F.
+
+## 13. Stopping at the first failure: `dropWhile`
+
+`dropWhile` removes the initial run of elements passing a predicate. It stops testing at the first failure, even if later elements would pass.
+
+**Template:** `dropWhile predicate inputList`. A prefix means a consecutive run starting at the beginning.
+
+Labelled equations for paper traces:
+
+```text
+dropWhile :: (a -> Bool) -> [a] -> [a]
+dropWhile p [] = [] -- DW0
+dropWhile p (x:xs) = if p x then dropWhile p xs else x:xs -- DW1
+```
+
+### A failure before a later success
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (dropWhile (<3) [1,4,2])
+```
+
+```text
+[4,2]
+```
+
+</HaskellTryIt>
+
+```text
+dropWhile (<3) [1,4,2] -- given call
+= if (<3) 1 then dropWhile (<3) [4,2] else [1,4,2] -- DW1
+= if 1 < 3 then dropWhile (<3) [4,2] else [1,4,2] -- SEC-R
+= if True then dropWhile (<3) [4,2] else [1,4,2] -- comparison
+= dropWhile (<3) [4,2] -- IF-T
+= if (<3) 4 then dropWhile (<3) [2] else [4,2] -- DW1
+= if 4 < 3 then dropWhile (<3) [2] else [4,2] -- SEC-R
+= if False then dropWhile (<3) [2] else [4,2] -- comparison
+= [4,2] -- IF-F
+```
+
+The first failing element 4 stays, along with the whole tail.
+
+### A lambda on a singleton
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (dropWhile (\x -> x == 0) [0])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+dropWhile (\x -> x == 0) [0] -- given call
+= if (\x -> x == 0) 0 then dropWhile (\x -> x == 0) [] else [0] -- DW1
+= if 0 == 0 then dropWhile (\x -> x == 0) [] else [0] -- LAM: x := 0
+= if True then dropWhile (\x -> x == 0) [] else [0] -- equality
+= dropWhile (\x -> x == 0) [] -- IF-T
+= [] -- DW0
+```
+
+The entire singleton passes the test.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (dropWhile even [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+dropWhile even [] -- given call
+= [] -- DW0
+```
+
+There is no prefix to test.
+
+**Common error.** Treating this as `filter` changes the result without a type error. GHC gives no diagnostic. Stop testing at the first failed predicate.
+
+**Practice with answer.** `dropWhile (<3) [4,1]` is `[4,1]`: DW1, SEC-R, comparison, IF-F.
+
+## 14. Testing a list with `all`
+
+`all` asks whether every element passes a predicate. Boolean equations allow it to stop once the result is decided.
+
+**Template:** `all predicate inputList`. The result is one Boolean, not a list of tests.
+
+Labelled equations for paper traces:
+
+```text
+all :: (a -> Bool) -> [a] -> Bool
+all p [] = True -- ALL0
+all p (x:xs) = p x && all p xs -- ALL1
+True && b = b -- AND-T
+False && b = False -- AND-F
+```
+
+### A named predicate
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all even [1,2])
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+```text
+all even [1,2] -- given call
+= even 1 && all even [2] -- ALL1
+= False && all even [2] -- EVEN: 1 is not divisible by 2
+= False -- AND-F
+```
+
+The Boolean rule determines whether the tail is inspected.
+
+### A lambda on a singleton
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all (\x -> x > 0) [2])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+```text
+all (\x -> x > 0) [2] -- given call
+= (\x -> x > 0) 2 && all (\x -> x > 0) [] -- ALL1
+= (2 > 0) && all (\x -> x > 0) [] -- LAM: x := 2
+= True && all (\x -> x > 0) [] -- comparison
+= all (\x -> x > 0) [] -- AND-T
+= True -- ALL0
+```
+
+A successful singleton makes both tests true.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all even [])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+```text
+all even [] -- given call
+= True -- ALL0
+```
+
+This is the identity value of the Boolean combining operator.
+
+**Common error.** Reversing the empty-list results is a prediction error, not a type error: `all p []` is `True`, and `any p []` is `False`. Quote the empty equation.
+
+**Practice with answer.** `all odd [2]` is `False`: ALL1, ODD, AND-F.
+
+## 15. Testing a list with `any`
+
+`any` asks whether at least one element passes a predicate. Boolean equations allow it to stop once the result is decided.
+
+**Template:** `any predicate inputList`. The result is one Boolean, not a list of tests.
+
+Labelled equations for paper traces:
+
+```text
+any :: (a -> Bool) -> [a] -> Bool
+any p [] = False -- ANY0
+any p (x:xs) = p x || any p xs -- ANY1
+True || b = True -- OR-T
+False || b = b -- OR-F
+```
+
+### A named predicate
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (any even [1,2])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+```text
+any even [1,2] -- given call
+= even 1 || any even [2] -- ANY1
+= False || any even [2] -- EVEN
+= any even [2] -- OR-F
+= even 2 || any even [] -- ANY1
+= True || any even [] -- EVEN
+= True -- OR-T
+```
+
+The Boolean rule determines whether the tail is inspected.
+
+### A lambda on a singleton
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (any (\x -> x > 0) [2])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+```text
+any (\x -> x > 0) [2] -- given call
+= (\x -> x > 0) 2 || any (\x -> x > 0) [] -- ANY1
+= (2 > 0) || any (\x -> x > 0) [] -- LAM: x := 2
+= True || any (\x -> x > 0) [] -- comparison
+= True -- OR-T
+```
+
+A successful singleton makes both tests true.
+
+### An empty input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (any even [])
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+```text
+any even [] -- given call
+= False -- ANY0
+```
+
+This is the identity value of the Boolean combining operator.
+
+**Common error.** Reversing the empty-list results is a prediction error, not a type error: `all p []` is `True`, and `any p []` is `False`. Quote the empty equation.
+
+**Practice with answer.** `any odd [2]` is `False`: ANY1, ODD, OR-F, ANY0.
+
+## 16. Exchanging arguments with `flip`
+
+`flip` exchanges the next two arguments supplied to a function. It does not reverse lists or change the function body.
+
+**Template:** `flip twoArgumentFunction secondArgument firstArgument`. The first supplied argument becomes the second argument of the original function.
+
+Labelled equations for paper traces:
+
+```text
+flip :: (a -> b -> c) -> b -> a -> c
+flip f x y = f y x -- FLIP
+```
+
+### Subtraction
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (flip (-) 10 3)
+```
+
+```text
+-7
+```
+
+</HaskellTryIt>
+
+```text
+flip (-) 10 3 -- given call
+= (-) 3 10 -- FLIP: f := (-), x := 10, y := 3
+= 3 - 10 -- OP
+= -7 -- subtraction
+```
+
+Compare the operand order with ordinary subtraction.
+
+### Cons
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (flip (:) [2,3] 1)
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+```text
+flip (:) [2,3] 1 -- given call
+= (:) 1 [2,3] -- FLIP: x := [2,3], y := 1
+= 1 : [2,3] -- OP
+= [1,2,3] -- list notation
+```
+
+This order fits a left-fold accumulator followed by an element.
+
+### A lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (flip (\x y -> x * 10 + y) 2 3)
+```
+
+```text
+32
+```
+
+</HaskellTryIt>
+
+```text
+flip (\x y -> x * 10 + y) 2 3 -- given call
+= (\x y -> x * 10 + y) 3 2 -- FLIP
+= (\y -> 3 * 10 + y) 2 -- LAM: x := 3
+= 3 * 10 + 2 -- LAM: y := 2
+= 30 + 2 -- multiplication
+= 32 -- addition
+```
+
+The body is unchanged; its bindings change.
+
+**Common error.** `flip not` needs a two-argument function, but `not` returns `Bool` after one argument. GHC reports `Couldn't match` types. Use a two-argument function such as `(-)`.
+
+**Practice with answer.** `flip (-) 4 9` is `5`: FLIP gives `(-) 9 4`, OP gives `9 - 4`, subtraction gives `5`.
+
+## 17. Separating pair fields with `curry`
+
+`curry` converts a function expecting one pair into a function expecting two separate arguments.
+
+**Template:** `curry pairFunction first second`. `first` and `second` are packed into one tuple before calling the original function.
+
+Labelled equations for paper traces:
+
+```text
+curry :: ((a,b) -> c) -> a -> b -> c
+curry f x y = f (x,y) -- CUR
+fst (x,y) = x -- FST
+snd (x,y) = y -- SND
+```
+
+### Selecting the first field
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (curry fst 2 True)
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+```text
+curry fst 2 True -- given call
+= fst (2,True) -- CUR: f := fst, x := 2, y := True
+= 2 -- FST
+```
+
+The separate inputs become the tuple fields.
+
+### Selecting a string
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (curry snd 2 "ok")
+```
+
+```text
+"ok"
+```
+
+</HaskellTryIt>
+
+```text
+curry snd 2 "ok" -- given call
+= snd (2,"ok") -- CUR
+= "ok" -- SND
+```
+
+The second argument determines the output type here.
+
+### A pair-pattern lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (curry (\(x,y) -> x - y) 8 3)
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+```text
+curry (\(x,y) -> x - y) 8 3 -- given call
+= (\(x,y) -> x - y) (8,3) -- CUR
+= 8 - 3 -- LAM pair match: x := 8, y := 3
+= 5 -- subtraction
+```
+
+One pattern match binds both fields.
+
+**Common error.** `curry not True False` supplies a function taking `Bool` where a pair-taking function is required. GHC reports a mismatch containing `Couldn't match`. Use `curry` with a pair-taking function such as `fst` or a pair-pattern lambda.
+
+**Practice with answer.** `curry fst 'a' False` gives `'a'`: CUR constructs the tuple and FST selects its first field.
+
+## 18. Packaging arguments with `uncurry`
+
+`uncurry` makes a function of two separate arguments accept one pair instead. This is useful when mapping a binary function over pairs.
+
+**Template:** `uncurry twoArgumentFunction pair`. The first tuple field supplies the first function argument.
+
+Labelled equations for paper traces:
+
+```text
+uncurry :: (a -> b -> c) -> (a,b) -> c
+uncurry f (x,y) = f x y -- UNC
+```
+
+### Subtraction on a pair
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (uncurry (-) (8,3))
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+```text
+uncurry (-) (8,3) -- given call
+= (-) 8 3 -- UNC: x := 8, y := 3
+= 8 - 3 -- OP
+= 5 -- subtraction
+```
+
+Tuple order becomes operand order.
+
+### Cons on a pair
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (uncurry (:) ('a',"bc"))
+```
+
+```text
+"abc"
+```
+
+</HaskellTryIt>
+
+```text
+uncurry (:) ('a',"bc") -- given call
+= (:) 'a' "bc" -- UNC
+= 'a' : "bc" -- OP
+= "abc" -- string notation
+```
+
+The two tuple fields need not share a type.
+
+### A lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (uncurry (\x y -> x * 10 + y) (2,3))
+```
+
+```text
+23
+```
+
+</HaskellTryIt>
+
+```text
+uncurry (\x y -> x * 10 + y) (2,3) -- given call
+= (\x y -> x * 10 + y) 2 3 -- UNC
+= (\y -> 2 * 10 + y) 3 -- LAM: x := 2
+= 2 * 10 + 3 -- LAM: y := 3
+= 20 + 3 -- multiplication
+= 23 -- addition
+```
+
+Unpacking and lambda applications are separate steps.
+
+**Common error.** `uncurry not (True,False)` supplies a one-argument Boolean function where a two-argument function is required. GHC reports a mismatch containing `Couldn't match`: after one argument, `not` returns `Bool`, not another function. Use a binary function, such as `uncurry (&&) (True,False)`.
+
+**Practice with answer.** `uncurry (++) ("a","b")` gives `"ab"`: UNC, OP, append.
+
+## 19. Building a function with `(.)`
+
+Composition passes the result of the right function to the left function. `f . g` is itself a function waiting for an input.
+
+**Template:** `(outer . inner) input`. The output type of `inner` must match the input type of `outer`.
+
+Labelled equations for paper traces:
+
+```text
+(.) :: (b -> c) -> (a -> b) -> a -> c
+(f . g) x = f (g x) -- COMP
+```
+
+### Two sections
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((+1) . (*2)) 3)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+```text
+((+1) . (*2)) 3 -- given call
+= (+1) ((*2) 3) -- COMP: f := (+1), g := (*2), x := 3
+= (+1) (3 * 2) -- SEC-R
+= (+1) 6 -- multiplication
+= 6 + 1 -- SEC-R
+= 7 -- addition
+```
+
+Double first, then increment.
+
+### A lambda after a section
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (((\x -> x * x) . (+1)) 2)
+```
+
+```text
+9
+```
+
+</HaskellTryIt>
+
+```text
+((\x -> x * x) . (+1)) 2 -- given call
+= (\x -> x * x) ((+1) 2) -- COMP
+= (\x -> x * x) (2 + 1) -- SEC-R
+= (\x -> x * x) 3 -- addition
+= 3 * 3 -- LAM: x := 3
+= 9 -- multiplication
+```
+
+The whole inner result becomes the outer argument.
+
+### Identity on an empty list
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((id . id) ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+```text
+(id . id) ([] :: [Int]) -- given call
+= id (id ([] :: [Int])) -- COMP
+= id ([] :: [Int]) -- ID: inner argument := []
+= [] -- ID: outer argument := []
+```
+
+Composition also works on lists.
+
+**Common error.** Printing `(+1) . (*2)` without an input attempts to print a function; GHC reports a missing `Show` instance for a function type. Apply it to a value.
+
+**Practice with answer.** `((*2) . (+1)) 3` is `8`: COMP, SEC-R, addition, SEC-R, multiplication. The order differs from the first variation.
+
+## 20. Applying with `($)`
+
+`($)` applies a function to an argument. Its very low precedence allows a large argument without parentheses. It associates to the right.
+
+**Template:** `function $ argument`. The left operand must be a function; the right operand is its input.
+
+Labelled equations for paper traces:
+
+```text
+($) :: (a -> b) -> a -> b
+f $ x = f x -- APP
+```
+
+### A section with a compound argument
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((+1) $ 2 * 3)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+```text
+(+1) $ 2 * 3 -- given call
+= (+1) (2 * 3) -- APP: f := (+1), x := 2 * 3
+= (+1) 6 -- multiplication
+= 6 + 1 -- SEC-R
+= 7 -- addition
+```
+
+Multiplication belongs to the argument because it binds more tightly.
+
+### A lambda
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((\x -> x * x) $ 4)
+```
+
+```text
+16
+```
+
+</HaskellTryIt>
+
+```text
+(\x -> x * x) $ 4 -- given call
+= (\x -> x * x) 4 -- APP
+= 4 * 4 -- LAM: x := 4
+= 16 -- multiplication
+```
+
+Application comes before substitution.
+
+### A right-associated chain
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((+1) $ (*2) $ 3)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+```text
+(+1) $ (*2) $ 3 -- given call
+= (+1) $ ((*2) 3) -- APP: inner f := (*2), x := 3
+= (+1) $ (3 * 2) -- SEC-R
+= (+1) $ 6 -- multiplication
+= (+1) 6 -- APP
+= 6 + 1 -- SEC-R
+= 7 -- addition
+```
+
+Parse the original as `(+1) $ ((*2) $ 3)`.
+
+**Common error.** `3 $ (+1)` puts a number where a function is required. GHC reports a function-type or numeric-instance mismatch. Put the function on the left.
+
+**Practice with answer.** `id $ True` is `True`: APP gives `id True`, then ID returns its argument.
+
+## Exam questions
+
+A command to **trace** asks for intermediate substitutions as well as the final value. An annotation fixes the whole expression's result type. Where that determines the numeric input type, literals are specialised rather than left to defaulting. A Boolean result annotation alone does not fix the integral input type of `even`. Error messages mentioned above are diagnostic excerpts, not complete compiler transcripts; details vary with GHC version and inferred types.
+
+### Exam question 1: Mapping with map (5 marks)
+
+Trace `(map (+2) [1,3]) :: [Int]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `map (+2) [1,3]`. The annotation fixes the whole expression's type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `map transform inputList`, matching each input to the labelled equations above. Replace `transform` by a one-argument function and `inputList` by its inputs. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[3,5]`.
+
+`(+2)` is specialised to `Int -> Int`; `map` therefore sends `[Int]` to `[Int]`.
+
+```text
+map (+2) [1,3] -- given call
+= (+2) 1 : map (+2) [3] -- M1: f := (+2), x := 1, xs := [3]
+= (1 + 2) : map (+2) [3] -- SEC-R: argument := 1
+= 3 : map (+2) [3] -- addition
+= 3 : ((+2) 3 : map (+2) []) -- M1: x := 3, xs := []
+= 3 : ((3 + 2) : map (+2) []) -- SEC-R: argument := 3
+= 3 : (5 : map (+2) []) -- addition
+= 3 : (5 : []) -- M0
+= [3,5] -- list notation
+```
+
+The section receives each element afresh.
+
+</Step>
+
+<Step title="4. Check">
+
+`map not [True]` gives `[False]`: M1, `not True = False`, M0, list notation. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: Selecting with filter (5 marks)
+
+Trace `(filter (>2) [1,3]) :: [Int]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `filter (>2) [1,3]`. The annotation fixes the whole expression's type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `filter predicate inputList`, matching each input to the labelled equations above. The predicate tests each element; the elements themselves remain unchanged. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[3]`.
+
+`(>2)` is specialised to `Int -> Bool`; `filter` retains the input element type `Int`.
+
+```text
+filter (>2) [1,3] -- given call
+= if (>2) 1 then 1 : filter (>2) [3] else filter (>2) [3] -- F1
+= if 1 > 2 then 1 : filter (>2) [3] else filter (>2) [3] -- SEC-R
+= if False then 1 : filter (>2) [3] else filter (>2) [3] -- comparison
+= filter (>2) [3] -- IF-F
+= if (>2) 3 then 3 : filter (>2) [] else filter (>2) [] -- F1
+= if 3 > 2 then 3 : filter (>2) [] else filter (>2) [] -- SEC-R
+= if True then 3 : filter (>2) [] else filter (>2) [] -- comparison
+= 3 : filter (>2) [] -- IF-T
+= 3 : [] -- F0
+= [3] -- list notation
+```
+
+Only the second element passes.
+
+</Step>
+
+<Step title="4. Check">
+
+`filter odd [2]` gives `[]`: F1, `odd 2 = False`, IF-F, F0. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: Folding from the right with foldr (5 marks)
+
+Trace `(foldr (\x acc -> x + 2 * acc) 0 [1,2,3]) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `foldr (\x acc -> x + 2 * acc) 0 [1,2,3]`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `foldr combine seed inputList`, matching each input to the labelled equations above. `combine` has an element argument and a result argument; `seed` is the empty-list result. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `17`.
+
+The lambda receives an `Int` element and an `Int` accumulator, returning `Int`. The seed and complete fold result are consequently `Int`.
+
+```text
+foldr (\x acc -> x + 2 * acc) 0 [1,2,3] -- given call
+= (\x acc -> x + 2 * acc) 1 (foldr (\x acc -> x + 2 * acc) 0 [2,3]) -- R1
+= (\acc -> 1 + 2 * acc) (foldr (\x acc -> x + 2 * acc) 0 [2,3]) -- LAM: x := 1
+= 1 + 2 * foldr (\x acc -> x + 2 * acc) 0 [2,3] -- LAM: acc := recursive result
+= 1 + 2 * ((\x acc -> x + 2 * acc) 2 (foldr (\x acc -> x + 2 * acc) 0 [3])) -- R1
+= 1 + 2 * ((\acc -> 2 + 2 * acc) (foldr (\x acc -> x + 2 * acc) 0 [3])) -- LAM: x := 2
+= 1 + 2 * (2 + 2 * foldr (\x acc -> x + 2 * acc) 0 [3]) -- LAM: acc := recursive result
+= 1 + 2 * (2 + 2 * ((\x acc -> x + 2 * acc) 3 (foldr (\x acc -> x + 2 * acc) 0 []))) -- R1
+= 1 + 2 * (2 + 2 * ((\acc -> 3 + 2 * acc) (foldr (\x acc -> x + 2 * acc) 0 []))) -- LAM: x := 3
+= 1 + 2 * (2 + 2 * (3 + 2 * foldr (\x acc -> x + 2 * acc) 0 [])) -- LAM: acc := recursive result
+= 1 + 2 * (2 + 2 * (3 + 2 * 0)) -- R0
+= 1 + 2 * (2 + 2 * (3 + 0)) -- multiplication
+= 1 + 2 * (2 + 2 * 3) -- addition
+= 1 + 2 * (2 + 6) -- multiplication
+= 1 + 2 * 8 -- addition
+= 1 + 16 -- multiplication
+= 17 -- addition
+```
+
+Independent check: expanding the weights gives `1 + 2 * 2 + 4 * 3 = 17`.
+
+</Step>
+
+<Step title="4. Check">
+
+`foldr (-) 0 [4]` gives `4`: R1 gives `(-) 4 (foldr (-) 0 [])`, OP gives `4 - foldr (-) 0 []`, R0 gives `4 - 0`, subtraction gives `4`. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: Folding from the left with foldl (5 marks)
+
+Trace `(foldl (-) 0 [1,2,3]) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `foldl (-) 0 [1,2,3]`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `foldl combine seed inputList`, matching each input to the labelled equations above. Start at `seed`; after each element use `combine oldAccumulator element`. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `-6`.
+
+Both arguments of `(-)` and the accumulator are specialised to `Int`. A left fold returns that accumulator type.
+
+```text
+foldl (-) 0 [1,2,3] -- given call
+= foldl (-) ((-) 0 1) [2,3] -- L1: z := 0, x := 1
+= foldl (-) (0 - 1) [2,3] -- OP
+= foldl (-) (-1) [2,3] -- subtraction
+= foldl (-) ((-) (-1) 2) [3] -- L1: z := -1, x := 2
+= foldl (-) ((-1) - 2) [3] -- OP
+= foldl (-) (-3) [3] -- subtraction
+= foldl (-) ((-) (-3) 3) [] -- L1: z := -3, x := 3
+= foldl (-) ((-3) - 3) [] -- OP
+= foldl (-) (-6) [] -- subtraction
+= -6 -- L0
+```
+
+The grouping is `((0 - 1) - 2) - 3`. The matching right-fold call gave `2`.
+
+</Step>
+
+<Step title="4. Check">
+
+`foldl (-) 10 [3]` gives `7`: L1, OP, subtraction, L0. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: Using the last element as seed: foldr1 (5 marks)
+
+Trace `(foldr1 (-) [8,3]) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `foldr1 (-) [8,3]`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `foldr1 combine nonEmptyList`, matching each input to the labelled equations above. There must be a last element to start from. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `5`.
+
+`foldr1` returns the same type as the list elements; the annotation specialises subtraction and those elements to `Int`.
+
+```text
+foldr1 (-) [8,3] -- given call
+= (-) 8 (foldr1 (-) [3]) -- R11
+= 8 - foldr1 (-) [3] -- OP
+= 8 - 3 -- R10
+= 5 -- subtraction
+```
+
+A singleton tail supplies the seed.
+
+</Step>
+
+<Step title="4. Check">
+
+`foldr1 max [2,9]` gives `9`: R11, R10, then `max 2 9 = 9`. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: Using the first element as seed: foldl1 (5 marks)
+
+Trace `(foldl1 (-) [8,3,1]) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `foldl1 (-) [8,3,1]`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `foldl1 combine nonEmptyList`, matching each input to the labelled equations above. Use the first element as the accumulator, not as the first value to subtract from zero. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `4`.
+
+`foldl1` returns the same type as the list elements, specialised here to `Int`.
+
+```text
+foldl1 (-) [8,3,1] -- given call
+= foldl (-) 8 [3,1] -- L10
+= foldl (-) ((-) 8 3) [1] -- L1
+= foldl (-) (8 - 3) [1] -- OP
+= foldl (-) 5 [1] -- subtraction
+= foldl (-) ((-) 5 1) [] -- L1
+= foldl (-) (5 - 1) [] -- OP
+= foldl (-) 4 [] -- subtraction
+= 4 -- L0
+```
+
+Start from 8, then subtract 3 and 1.
+
+</Step>
+
+<Step title="4. Check">
+
+`foldl1 (-) [8]` is `8`, not `-8`: L10 followed by L0. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: Keeping left accumulators with scanl (5 marks)
+
+Trace `(scanl (flip (:)) [] "abc") :: [String]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `scanl (flip (:)) [] "abc"`. The annotation fixes the whole expression's type to `[String]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `scanl combine seed inputList`, matching each input to the labelled equations above. Each output entry records a prefix result. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[String]`. Result: `["","a","ba","cba"]`.
+
+Each input element is `Char`. `flip (:) :: String -> Char -> String` makes the accumulator a `String`, so the scan returns `[String]`.
+
+```text
+scanl (flip (:)) [] "abc" -- given call
+= [] : scanl (flip (:)) (flip (:) [] 'a') "bc" -- SL1
+= [] : scanl (flip (:)) ((:) 'a' []) "bc" -- FLIP: x := [], y := 'a'
+= [] : scanl (flip (:)) ('a' : []) "bc" -- OP
+= [] : scanl (flip (:)) "a" "bc" -- string notation
+= [] : ("a" : scanl (flip (:)) (flip (:) "a" 'b') "c") -- SL1
+= [] : ("a" : scanl (flip (:)) ((:) 'b' "a") "c") -- FLIP
+= [] : ("a" : scanl (flip (:)) ('b' : "a") "c") -- OP
+= [] : ("a" : scanl (flip (:)) "ba" "c") -- string notation
+= [] : ("a" : ("ba" : scanl (flip (:)) (flip (:) "ba" 'c') "")) -- SL1
+= [] : ("a" : ("ba" : scanl (flip (:)) ((:) 'c' "ba") "")) -- FLIP
+= [] : ("a" : ("ba" : scanl (flip (:)) ('c' : "ba") "")) -- OP
+= [] : ("a" : ("ba" : scanl (flip (:)) "cba" "")) -- string notation
+= [] : ("a" : ("ba" : ["cba"])) -- SL0
+= ["","a","ba","cba"] -- list/string notation
+```
+
+Independent check: reverse the prefixes `""`, `"a"`, `"ab"`, `"abc"`. The seed has type `String`; the full result has type `[String]`.
+
+</Step>
+
+<Step title="4. Check">
+
+`scanl (+) 0 [5]` is `[0,5]`: SL1, OP, addition, SL0, list notation. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: Keeping right accumulators with scanr (5 marks)
+
+Trace `(scanr (-) 0 [1,2]) :: [Int]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `scanr (-) 0 [1,2]`. The annotation fixes the whole expression's type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `scanr combine seed inputList`, matching each input to the labelled equations above. Use the first result of the tail scan as the next right accumulator. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[-1,2,0]`.
+
+Each element and the seed are `Int`; `scanr` returns a list of the accumulator type, hence `[Int]`.
+
+```text
+scanr (-) 0 [1,2] -- given call
+= let qs = scanr (-) 0 [2] in (-) 1 (head qs) : qs -- SR1
+= let qs = (let rs = scanr (-) 0 [] in (-) 2 (head rs) : rs) in (-) 1 (head qs) : qs -- SR1
+= let qs = (let rs = [0] in (-) 2 (head rs) : rs) in (-) 1 (head qs) : qs -- SR0
+= let qs = (-) 2 (head [0]) : [0] in (-) 1 (head qs) : qs -- let substitution: rs := [0]
+= let qs = (-) 2 0 : [0] in (-) 1 (head qs) : qs -- HEAD
+= let qs = (2 - 0) : [0] in (-) 1 (head qs) : qs -- OP
+= let qs = 2 : [0] in (-) 1 (head qs) : qs -- subtraction
+= (-) 1 (head (2 : [0])) : (2 : [0]) -- let substitution: qs := 2 : [0]
+= (-) 1 2 : (2 : [0]) -- HEAD
+= (1 - 2) : (2 : [0]) -- OP
+= (-1) : (2 : [0]) -- subtraction
+= [-1,2,0] -- list notation
+```
+
+The suffix results are -1 for `[1,2]`, 2 for `[2]`, and 0 for `[]`.
+
+</Step>
+
+<Step title="4. Check">
+
+`scanr max 0 [4]` is `[4,0]`: SR1, SR0, substitute `qs`, HEAD, MAX, list notation. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: Combining matching positions with zipWith (5 marks)
+
+Trace `(zipWith (-) [8,4] [3]) :: [Int]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `zipWith (-) [8,4] [3]`. The annotation fixes the whole expression's type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `zipWith combine firstList secondList`, matching each input to the labelled equations above. The first list supplies the first function argument. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[5]`.
+
+`(-) :: Int -> Int -> Int` combines each matching pair into an `Int`, giving `[Int]`.
+
+```text
+zipWith (-) [8,4] [3] -- given call
+= (-) 8 3 : zipWith (-) [4] [] -- ZW2: x := 8, y := 3
+= (8 - 3) : zipWith (-) [4] [] -- OP
+= 5 : zipWith (-) [4] [] -- subtraction
+= 5 : [] -- ZW1
+= [5] -- list notation
+```
+
+The unpaired 4 is unused.
+
+</Step>
+
+<Step title="4. Check">
+
+`zipWith (*) [2] [4,5]` is `[8]`: ZW2, OP, multiplication, ZW0, list notation. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: Pairing positions with zip (5 marks)
+
+Trace `(zip [1,2] "a") :: [(Int,Char)]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `zip [1,2] "a"`. The annotation fixes the whole expression's type to `[(Int,Char)]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `zip firstList secondList`, matching each input to the labelled equations above. Each output element is a pair, not a two-element list. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[(Int,Char)]`. Result: `[(1,'a')]`.
+
+The first list is specialised to `[Int]` and the second is `String`, or `[Char]`; `zip` returns `[(Int,Char)]`.
+
+```text
+zip [1,2] "a" -- given call
+= (1,'a') : zip [2] "" -- Z2: x := 1, y := 'a'
+= (1,'a') : [] -- Z1
+= [(1,'a')] -- list notation
+```
+
+Only the first position has two elements.
+
+</Step>
+
+<Step title="4. Check">
+
+`zip [False] "x"` is `[(False,'x')]`: Z2, Z0, list notation. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: Stopping at the first failure: takeWhile (5 marks)
+
+Trace `(takeWhile (<3) [1,4,2]) :: [Int]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `takeWhile (<3) [1,4,2]`. The annotation fixes the whole expression's type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `takeWhile predicate inputList`, matching each input to the labelled equations above. A prefix means a consecutive run starting at the beginning. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[1]`.
+
+The predicate has type `Int -> Bool`; `takeWhile` keeps a prefix of the original `[Int]`.
+
+```text
+takeWhile (<3) [1,4,2] -- given call
+= if (<3) 1 then 1 : takeWhile (<3) [4,2] else [] -- TW1
+= if 1 < 3 then 1 : takeWhile (<3) [4,2] else [] -- SEC-R
+= if True then 1 : takeWhile (<3) [4,2] else [] -- comparison
+= 1 : takeWhile (<3) [4,2] -- IF-T
+= 1 : (if (<3) 4 then 4 : takeWhile (<3) [2] else []) -- TW1
+= 1 : (if 4 < 3 then 4 : takeWhile (<3) [2] else []) -- SEC-R
+= 1 : (if False then 4 : takeWhile (<3) [2] else []) -- comparison
+= 1 : [] -- IF-F
+= [1] -- list notation
+```
+
+The later 2 cannot re-enter the output.
+
+</Step>
+
+<Step title="4. Check">
+
+`takeWhile (<3) [4,1]` is `[]`: TW1, SEC-R, comparison, IF-F. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 12: Stopping at the first failure: dropWhile (5 marks)
+
+Trace `(dropWhile (<3) [1,4,2]) :: [Int]`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `dropWhile (<3) [1,4,2]`. The annotation fixes the whole expression's type to `[Int]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `dropWhile predicate inputList`, matching each input to the labelled equations above. A prefix means a consecutive run starting at the beginning. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `[Int]`. Result: `[4,2]`.
+
+The predicate has type `Int -> Bool`; `dropWhile` returns a suffix of the original `[Int]`.
+
+```text
+dropWhile (<3) [1,4,2] -- given call
+= if (<3) 1 then dropWhile (<3) [4,2] else [1,4,2] -- DW1
+= if 1 < 3 then dropWhile (<3) [4,2] else [1,4,2] -- SEC-R
+= if True then dropWhile (<3) [4,2] else [1,4,2] -- comparison
+= dropWhile (<3) [4,2] -- IF-T
+= if (<3) 4 then dropWhile (<3) [2] else [4,2] -- DW1
+= if 4 < 3 then dropWhile (<3) [2] else [4,2] -- SEC-R
+= if False then dropWhile (<3) [2] else [4,2] -- comparison
+= [4,2] -- IF-F
+```
+
+The first failing element 4 stays, along with the whole tail.
+
+</Step>
+
+<Step title="4. Check">
+
+`dropWhile (<3) [4,1]` is `[4,1]`: DW1, SEC-R, comparison, IF-F. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 13: Testing a list with all (5 marks)
+
+Trace `(all even [1,2]) :: Bool`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `all even [1,2]`. The annotation fixes the whole expression's type to `Bool`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `all predicate inputList`, matching each input to the labelled equations above. The result is one Boolean, not a list of tests. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Bool`. Result: `False`.
+
+`even` needs integral elements, but `all` always returns `Bool`. This result annotation does not itself fix the integral input type.
+
+```text
+all even [1,2] -- given call
+= even 1 && all even [2] -- ALL1
+= False && all even [2] -- EVEN: 1 is not divisible by 2
+= False -- AND-F
+```
+
+The Boolean rule determines whether the tail is inspected.
+
+</Step>
+
+<Step title="4. Check">
+
+`all odd [2]` is `False`: ALL1, ODD, AND-F. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 14: Testing a list with any (5 marks)
+
+Trace `(any even [1,2]) :: Bool`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `any even [1,2]`. The annotation fixes the whole expression's type to `Bool`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `any predicate inputList`, matching each input to the labelled equations above. The result is one Boolean, not a list of tests. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Bool`. Result: `True`.
+
+`even` needs integral elements, but `any` always returns `Bool`. This result annotation does not itself fix the integral input type.
+
+```text
+any even [1,2] -- given call
+= even 1 || any even [2] -- ANY1
+= False || any even [2] -- EVEN
+= any even [2] -- OR-F
+= even 2 || any even [] -- ANY1
+= True || any even [] -- EVEN
+= True -- OR-T
+```
+
+The Boolean rule determines whether the tail is inspected.
+
+</Step>
+
+<Step title="4. Check">
+
+`any odd [2]` is `False`: ANY1, ODD, OR-F, ANY0. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 15: Exchanging arguments with flip (5 marks)
+
+Trace `(flip (-) 10 3) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `flip (-) 10 3`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `flip twoArgumentFunction secondArgument firstArgument`, matching each input to the labelled equations above. The first supplied argument becomes the second argument of the original function. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `-7`.
+
+Subtraction is specialised to `Int -> Int -> Int`; swapping its two arguments leaves the result type `Int`.
+
+```text
+flip (-) 10 3 -- given call
+= (-) 3 10 -- FLIP: f := (-), x := 10, y := 3
+= 3 - 10 -- OP
+= -7 -- subtraction
+```
+
+Compare the operand order with ordinary subtraction.
+
+</Step>
+
+<Step title="4. Check">
+
+`flip (-) 4 9` is `5`: FLIP gives `(-) 9 4`, OP gives `9 - 4`, subtraction gives `5`. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 16: Separating pair fields with curry (5 marks)
+
+Trace `(curry fst 2 True) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `curry fst 2 True`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `curry pairFunction first second`, matching each input to the labelled equations above. `first` and `second` are packed into one tuple before calling the original function. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `2`.
+
+`fst` selects the first field of `(Int,Bool)`, so currying and applying it returns `Int`.
+
+```text
+curry fst 2 True -- given call
+= fst (2,True) -- CUR: f := fst, x := 2, y := True
+= 2 -- FST
+```
+
+The separate inputs become the tuple fields.
+
+</Step>
+
+<Step title="4. Check">
+
+`curry fst 'a' False` gives `'a'`: CUR constructs the tuple and FST selects its first field. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 17: Packaging arguments with uncurry (5 marks)
+
+Trace `(uncurry (-) (8,3)) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `uncurry (-) (8,3)`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `uncurry twoArgumentFunction pair`, matching each input to the labelled equations above. The first tuple field supplies the first function argument. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `5`.
+
+`uncurry (-) :: (Int,Int) -> Int` consumes the numeric pair and returns `Int`.
+
+```text
+uncurry (-) (8,3) -- given call
+= (-) 8 3 -- UNC: x := 8, y := 3
+= 8 - 3 -- OP
+= 5 -- subtraction
+```
+
+Tuple order becomes operand order.
+
+</Step>
+
+<Step title="4. Check">
+
+`uncurry (++) ("a","b")` gives `"ab"`: UNC, OP, append. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 18: Building a function with (.) (5 marks)
+
+Trace `(((+1) . (*2)) 3) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `((+1) . (*2)) 3`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `(outer . inner) input`, matching each input to the labelled equations above. The output type of `inner` must match the input type of `outer`. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `7`.
+
+Each section is specialised to `Int -> Int`; their composition also has type `Int -> Int`, and applying it gives `Int`.
+
+```text
+((+1) . (*2)) 3 -- given call
+= (+1) ((*2) 3) -- COMP: f := (+1), g := (*2), x := 3
+= (+1) (3 * 2) -- SEC-R
+= (+1) 6 -- multiplication
+= 6 + 1 -- SEC-R
+= 7 -- addition
+```
+
+Double first, then increment.
+
+</Step>
+
+<Step title="4. Check">
+
+`((*2) . (+1)) 3` is `8`: COMP, SEC-R, addition, SEC-R, multiplication. The order differs from the first variation. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 19: Applying with ($) (5 marks)
+
+Trace `((+1) $ 2 * 3) :: Int`. State its type and result, showing the defining equations used.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "trace", so intermediate replacements are required. The given call is `(+1) $ 2 * 3`. The annotation fixes the whole expression's type to `Int`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use `function $ argument`, matching each input to the labelled equations above. The left operand must be a function; the right operand is its input. Keep operand order and reduce only one application or primitive operation on each line.
+
+</Step>
+
+<Step title="3. Solution">
+
+Type: `Int`. Result: `7`.
+
+The section is specialised to `Int -> Int`, and the argument `2 * 3` has type `Int`; dollar application returns `Int`.
+
+```text
+(+1) $ 2 * 3 -- given call
+= (+1) (2 * 3) -- APP: f := (+1), x := 2 * 3
+= (+1) 6 -- multiplication
+= 6 + 1 -- SEC-R
+= 7 -- addition
+```
+
+Multiplication belongs to the argument because it binds more tightly.
+
+</Step>
+
+<Step title="4. Check">
+
+`id $ True` is `True`: APP gives `id True`, then ID returns its argument. This smaller input checks the same argument roles or stopping case before accepting the longer trace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Use one labelled equation per line and show substitutions before arithmetic. `map` transforms, `filter` selects anywhere, and prefix operations stop at the first failure. A right fold combines an element with a suffix result; a left fold combines an accumulator with the next element. Scans keep the seed and intermediate values. The `1` folds require non-empty input. Zips stop at the shortest list. `flip` exchanges arguments, `curry` and `uncurry` change tuple packaging, composition builds a function, and dollar applies one.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can subtraction distinguish left and right folds when addition often cannot?">
+
+Subtraction depends on order and grouping. `foldr (-) 0 [1,2,3]` is `2`; `foldl (-) 0 [1,2,3]` is `-6`.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does an empty input contribute to a scan?">
+
+Both `scanl f z []` and `scanr f z []` give `[z]`. A scan with an explicit seed has one more output than input elements.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does scanl (flip (:)) [] build reversed prefixes?">
+
+The scan supplies the accumulator first. FLIP turns `flip (:) acc x` into `(:) x acc`, which prepends each new element.
+
+</CheckQuestion>
+
+<CheckQuestion question="How do composition and dollar differ?">
+
+`f . g` is a function waiting for input. `f $ x` applies `f` to `x`. Both `(f . g) x` and `f $ g x` reduce to `f (g x)`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which functions here require a non-empty input?">
+
+`foldr1` and `foldl1`. Use folds with an explicit seed when empty input should have a result.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
