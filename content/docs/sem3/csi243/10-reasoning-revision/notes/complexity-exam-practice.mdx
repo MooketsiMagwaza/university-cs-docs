@@ -1,0 +1,815 @@
+---
+title: "Complexity Exam Practice"
+description: "Account for sharing, result storage, continuations, accumulator thunks and retained inputs through worked exam problems."
+---
+
+Use [Complexity by Recurrence](/docs/sem3/csi243/10-reasoning-revision/notes/complexity-by-recurrence) for time derivations and [Lazy Evaluation](/docs/sem3/csi243/10-reasoning-revision/notes/lazy-evaluation) for the already-taught sharing, WHNF, seq and strict folds. Here we apply those ideas to space questions. [The Cost of a Definition](/docs/sem3/csi243/10-reasoning-revision/notes/complexity) supplies the original algorithms; the assumptions below refine its broad shortcuts.
+
+<LearningObjectives items={[
+  'Separate invariant sharing from repeated changing computations',
+  'Distinguish auxiliary, input and result storage from total allocation',
+  'Account for continuations, accumulator thunks and retained roots',
+  'State demand and arithmetic assumptions when comparing space bounds',
+  'Repair unsupported complexity claims with derivations and small checks',
+]} />
+
+<Prerequisites items={['Complexity by Recurrence', 'Lazy Evaluation']} />
+
+Attempt each exam answer before opening the solution. Numbering follows the recurrence lesson. Space figures describe stated source models or bounds, not exact GHC bytes, frames or optimiser behaviour. Assume fixed-size element payloads unless stated otherwise. Count an existing input separately; do not count one shared cell twice.
+
+```text
+Space-answer template
+1. Demand: what does the consumer need, and in what sequence?
+2. Roots: which names or suspended consumers still reference data?
+3. Result: is output retained, streamed, or shared with input?
+4. Auxiliary: continuations, accumulator thunks and other live work
+5. Peak live storage: maximum reachable data at one moment
+6. Total allocation: all objects created over time; a different metric
+7. Caveats: payload sizes, runtime/optimiser and evaluation assumptions
+```
+
+## 1. Sharing invariant work
+
+An invariant expression does not depend on the current loop element. An explicitly shared call-by-need binding is evaluated at most once when needed. Separately written equal expressions are not automatically one binding. Optimisation can introduce sharing or remove work; appearance alone does not prove an actual machine count.
+
+**Template:** compare `let k = expensive xs in use k k` with separately entered computations. If expensive costs E and there are r uses, explicit demanded sharing charges E plus use overhead; a stipulated no-sharing model charges r*E. Neither answer measures machine executions.
+
+For `[x | x <- xs, length xs > 3]`, a no-sharing translation can charge a length traversal per tested element, giving quadratic full-demand work. An invariant test can instead be floated and shared, giving linear work. Do not promise either optimiser outcome. `let large = length xs > 3 in [x | x <- xs, large]` states sharing explicitly. `if length xs > 3 then xs else []` also returns the original spine when true, whereas filtering normally constructs output cells. Their value specifications agree on finite defined spines. Testing only whether four cells exist can use `not (null (drop 3 xs))`, which inspects a bounded prefix. This replacement changes termination on some infinite or partial inputs and needs a stated specification.
+
+### Variation: explicit shared predicate
+
+Give the invariant Boolean one name.
+
+<HaskellTryIt>
+
+```haskell
+keepLarge :: [Int] -> [Int]
+keepLarge xs = let large = length xs > 3 in [x | x <- xs, large]
+main :: IO ()
+main = print (keepLarge [8,6,4,2], keepLarge [8,6])
+```
+
+```text
+([8,6,4,2],[])
+```
+
+</HaskellTryIt>
+
+On four cells large becomes True and every guard reuses it. On two it becomes False. In the source sharing model length is evaluated once per demanded non-empty call, rather than per x. Filtering still visits n cells.
+
+### Variation: empty generator
+
+Change the boundary: a binding may remain unused.
+
+<HaskellTryIt>
+
+```haskell
+keepLarge :: [Int] -> [Int]
+keepLarge xs = let large = length xs > 3 in [x | x <- xs, large]
+main :: IO ()
+main = print (keepLarge [], [x | x <- ([] :: [Int]), undefined])
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+An empty generator returns [] without entering the guard, even if it is undefined. Once means at most once when demanded, not once at declaration.
+
+### Variation: explicit cost models
+
+Print hypothetical charges instead of pretending to instrument optimisation.
+
+<HaskellTryIt>
+
+```haskell
+charges :: Int -> (Int, Int)
+charges n = (n * n,n)
+main :: IO ()
+main = print (charges 0, charges 1, charges 5)
+```
+
+```text
+((0,0),(1,1),(25,5))
+```
+
+</HaskellTryIt>
+
+The first field charges n length walks of n cells; the second charges one walk. At five these selected visits are 25 versus 5. Outer iteration is additional. The function calculates models, not GHC traversal counts.
+
+### Variation: shared cells, changing lengths
+
+Change the argument each time, removing the invariant.
+
+<HaskellTryIt>
+
+```haskell
+suffixVisits :: [a] -> Int
+suffixVisits [] = 0
+suffixVisits xs@(_:rest) = length xs + suffixVisits rest
+main :: IO ()
+main = print (suffixVisits ([] :: [Int]), suffixVisits [9,8,7,6,5])
+```
+
+```text
+(0,15)
+```
+
+</HaskellTryIt>
+
+Five different suffix lengths cost `5+4+3+2+1=15` cons visits. The cells may be shared, but their lengths are not memoised just by sharing cells. The source traversal cost is quadratic; see Complexity by Recurrence for its solution.
+
+### Exam question 10: repair invariant-length certainty (6 marks)
+
+Find the wrong claim: “The invariant guard must be recomputed n times by GHC, so the comprehension is necessarily quadratic.” Give a safer explanation and an unambiguous quadratic example.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Find” asks which certainty is unsupported, not whether values agree.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate no-sharing accounting, explicit binding and possible optimisation.
+
+</Step>
+
+<Step title="3. Solution">
+
+The mandatory machine count is unsupported. A no-sharing source model charges n*n visits, whereas sharing costs one n-cell traversal plus linear iteration. Explicitly bind the guard for reuse. Computing length on every changing suffix sums n+(n-1)+...+1 and is quadratic under ordinary list traversal assumptions.
+
+</Step>
+
+<Step title="4. Check">
+
+At five cells the models charge 25 invariant no-sharing visits, 5 explicitly shared visits, or 15 changing-suffix visits.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** False complexity comments cause no GHC diagnostic. State the model. Identical printed results do not prove sharing. Empty input can avoid the guard altogether.
+
+**Practice with answer.** How many guard computations for an empty generator? None. For one explicitly shared demanded guard with five uses? One computation and reuse.
+
+## 2. Auxiliary versus result and input space
+
+Auxiliary space is live working storage beyond input and required result. Existing input cells belong to input space; new answer cells belong to result space. Total live memory includes their reachable union. **Total allocation** counts every object created over time and can exceed peak live memory because unreachable objects can be collected.
+
+**Template:** `peakLive = reachable union of input, output, auxiliary objects`. Count shared objects once. Retaining n fresh output cells needs Omega(n) result storage. A consumer discarding cells as it proceeds may need a much smaller live prefix. An auxiliary-space answer must say whether output is excluded. Returning a scalar size does not retain all intermediate list cells automatically: for example, `length (map f xs)` needs the mapped spine but not f applied to every head, and a compiler may eliminate the intermediate list. Source-level list construction and optimised allocation are separate claims.
+
+### Variation: reverse result storage
+
+Model accumulator lengths by displaying snapshots.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (scanl (flip (:)) [] [3,5,7])
+```
+
+```text
+[[],[3],[5,3],[7,5,3]]
+```
+
+</HaskellTryIt>
+
+The final reversed list has three cells. Ideal tail-call accumulator reverse needs constant control storage beyond input and result; its growing accumulator is result storage. This widget deliberately keeps snapshots, so its memory is not a measurement of reverse.
+
+### Variation: mapped output prefix
+
+Demand three cells from a larger producer.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 (map (+10) [1..100]), length (take 3 (map (+10) [1..100])))
+```
+
+```text
+([11,12,13],3)
+```
+
+</HaskellTryIt>
+
+Three outputs are demanded: 11,12,13. A producer-consumer model discarding prefixes need not retain 100 mapped cells. Keeping the entire output instead requires n result cells.
+
+### Variation: append shares a suffix
+
+Separate fresh copying from complete result length.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = let xs = [1,2]; ys = [3,4,5] in print (xs ++ ys, length xs, length ys)
+```
+
+```text
+([1,2,3,4,5],2,3)
+```
+
+</HaskellTryIt>
+
+Standard append copies two left cells and reuses the three-cell right suffix. The result reaches five cells, only two fresh. If original inputs remain rooted, the original left cells also stay live; count shared right cells once.
+
+### Variation: output can dominate
+
+Change a Cartesian dimension through zero.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length [(x,y) | x <- [1,2], y <- [3,4,5]], length [(x,y) | x <- ([] :: [Int]), y <- [3,4,5]])
+```
+
+```text
+(6,0)
+```
+
+</HaskellTryIt>
+
+The first result contains six pair-bearing cells if retained; the second none. Retaining a product uses Theta(m*n) result-cell space for positive dimensions even with small generation control. Computing length may stream cells; printing 6 does not establish allocation.
+
+### Exam question 11: constant space with a list answer? (6 marks)
+
+Assess “Accumulator reverse uses O(1) space” when its whole n-cell result is retained.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Assess” requires exposing the hidden memory category.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the auxiliary/result template with an explicit implementation model.
+
+</Step>
+
+<Step title="3. Solution">
+
+An ideal tail-call model can give O(1) auxiliary control space beyond input and result. The n fresh result cells need Theta(n) result space, so total live memory is at least linear. Actual runtime control and allocation require separate verification.
+
+</Step>
+
+<Step title="4. Check">
+
+Reversing [3,5,7] retains three cells in [7,5,3] even if control is small.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** Calling result cells auxiliary halfway through an answer changes the metric. GHC does not diagnose ambiguous space comments. State exclusions and separate allocation from peak residency.
+
+**Practice with answer.** Append at m=2,n=3 creates two fresh spine cells and reaches five. Rooting the original left adds its two old cells; shared right cells are counted once.
+
+## 3. Continuations and stack depth
+
+A continuation is work waiting to resume after a recursive result. Direct `n * fac (n-1)` leaves multiplication pending. Tail position means the recursive call is the final returned operation, with no combining work afterwards. An implementation with tail calls can reduce control storage, but suspended accumulator expressions can still grow on the heap.
+
+**Template:** abstract pending depth satisfies `D(0)=baseDepth`, `D(n)=1+D(smaller)` for non-tail nesting. With two sequential child computations, peak depth uses `1+max(D(left),D(right))`, not the sum. Time counts both children; peak depth follows the deepest active path. These counters do not report GHC stack frames. Lazy evaluation can represent pending work through heap closures instead.
+
+### Variation: direct factorial depth
+
+Model pending multiplications, excluding the base.
+
+<HaskellTryIt>
+
+```haskell
+pending :: Int -> Int
+pending 0 = 0
+pending n = 1 + pending (n - 1)
+main :: IO ()
+main = print (pending 0, pending 4)
+```
+
+```text
+(0,4)
+```
+
+</HaskellTryIt>
+
+At factorial 4, multiplications by 4,3,2,1 await the base. The source reduction model has four pending operations, generally n. This is not a physical stack measurement.
+
+### Variation: direct list sum depth
+
+Use list cells instead of numeric magnitude.
+
+<HaskellTryIt>
+
+```haskell
+pendingSum :: [Int] -> Int
+pendingSum [] = 0
+pendingSum (_:xs) = 1 + pendingSum xs
+main :: IO ()
+main = print (sum [2,4,6], pendingSum [2,4,6])
+```
+
+```text
+(12,3)
+```
+
+</HaskellTryIt>
+
+The direct equation `sumD (x:xs)=x+sumD xs` leaves three additions pending. The counter models that direct definition; Prelude sum may use another implementation. The value 12 alone cannot identify depth.
+
+### Variation: Fibonacci depth differs from work
+
+Use maximum depth rather than adding branch costs.
+
+<HaskellTryIt>
+
+```haskell
+depth :: Int -> Int
+depth 0 = 0
+depth 1 = 0
+depth n = 1 + max (depth (n - 1)) (depth (n - 2))
+main :: IO ()
+main = print (map depth [0,1,2,3,4,5])
+```
+
+```text
+[0,0,1,2,3,4]
+```
+
+</HaskellTryIt>
+
+The longest path from 5 is 5,4,3,2,1, with four non-base levels. Abstract depth is linear despite exponential invocation count. The counter itself explores both model branches and is not a memory profiler.
+
+### Variation: balanced depth
+
+Change child sizes to balanced halves.
+
+<HaskellTryIt>
+
+```haskell
+depth :: Int -> Int
+depth n
+  | n <= 1 = 0
+  | otherwise = let a = n `div` 2 in 1 + max (depth a) (depth (n - a))
+main :: IO ()
+main = print (map depth [0,1,2,3,4,8])
+```
+
+```text
+[0,0,1,2,2,3]
+```
+
+</HaskellTryIt>
+
+Eight follows 8,4,2,1: three non-base levels. Three splits into 1 and 2 and needs depth two. Balanced control depth is logarithmic; sublists and result buffers add storage, so merge sort does not thereby have logarithmic total space.
+
+### Exam question 12: total work versus peak depth (6 marks)
+
+Naive Fibonacci has two child calls. Must peak stack usage be exponential? Compare source continuation depth with balanced merge-sort depth.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Must” asks whether exponential work forces an exponential simultaneous path.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use max for depth and addition for total call work.
+
+</Step>
+
+<Step title="3. Solution">
+
+A sequential source model gives fib depth `1+max(D(n-1),D(n-2))` with zero bases: n-1 for positive n, linear. Balanced split depth is logarithmic. Lazy runtime storage can include heap closures; these depth bounds alone do not establish total residency.
+
+</Step>
+
+<Step title="4. Check">
+
+Fib 5 has model depth 4 but 15 invocations. Balanced size 8 has depth 3.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** Adding all calls and calling them simultaneous frames confuses time with space. GHC does not diagnose it. Also include stored lists and output when discussing merge-sort memory.
+
+**Practice with answer.** Direct factorial 6 has six pending multiplications. An ideal strict tail loop can avoid growing control storage, though Integer payloads still grow.
+
+## 4. Accumulator thunks are separate from control
+
+A tail call may pass an unevaluated expression as its next accumulator. In the unoptimised source model, ordinary numeric `foldl` can build a chain such as `((0+x1)+x2)+x3`. This pending arithmetic occupies space even when control is tail recursive. The strict-fold tools and their WHNF limits are already explained in [Lazy Evaluation](/docs/sem3/csi243/10-reasoning-revision/notes/lazy-evaluation); use them here as cost assumptions, not a fresh syntax lesson.
+
+**Template:** for a lazy numeric update, model `H(0)=0`, `H(k+1)=H(k)+1` pending updates until final demand. For a strict scalar update, force before the next tail call, leaving a bounded number of numeric accumulator objects. The O(1) scalar-state bound assumes fixed-size values, no other retained roots, appropriate tail-call execution and a streaming input. Unbounded Integer payloads and list results are not constant-size. Forcing a pair to WHNF does not force its fields, so a strict fold over a pair need not remove arithmetic chains inside it.
+
+### Variation: ordinary numeric left fold
+
+Use new values and display computed prefixes, while reasoning separately about pending expressions.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl (+) 0 [5,7,9], scanl (+) 0 [5,7,9])
+```
+
+```text
+(21,[0,5,12,21])
+```
+
+</HaskellTryIt>
+
+The source fold carries `(0+5)`, then `((0+5)+7)`, then `(((0+5)+7)+9)` before final demand, potentially three pending updates. The printed numbers force the arithmetic; they do not reveal the earlier chain. The scan output deliberately retains history and has different space requirements.
+
+### Variation: strict scalar accumulator
+
+Change the fold strategy, keeping a fixed-size numeric accumulator.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (foldl')
+main :: IO ()
+main = print (foldl' (+) (0 :: Int) [5,7,9])
+```
+
+```text
+21
+```
+
+</HaskellTryIt>
+
+In the strict scalar model, each update is evaluated before continuing: 5,12,21. Only bounded scalar state need remain between steps if the source streams and no roots retain earlier input. Both folds agree on this finite total input; the derivation explains their potential space difference. Restrict inputs to avoid Int overflow.
+
+### Variation: pair forcing is shallow
+
+Use a tuple accumulator, whose fields can still be suspended.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (foldl')
+main :: IO ()
+main = print (foldl' (\(s,n) x -> (s + x,n + 1)) (0,0) [5,7,9] :: (Int,Int))
+```
+
+```text
+(21,3)
+```
+
+</HaskellTryIt>
+
+Each update exposes a pair constructor, enough for `foldl'` to satisfy WHNF. Its s+x and n+1 fields may remain thunks; over many inputs they can form linear chains. Printing forces them eventually. A repair forces both new fields before constructing the next pair, rather than relying on pair WHNF.
+
+### Variation: strict Fibonacci state
+
+Force both next numeric fields instead of assuming tail recursion is enough.
+
+<HaskellTryIt>
+
+```haskell
+fibStrict :: Int -> Integer
+fibStrict n = go n 0 1
+  where
+    go 0 a _ = a
+    go k a b = let c = a + b
+               in b `seq` c `seq` go (k - 1) b c
+main :: IO ()
+main = print (map fibStrict [0,1,2,7])
+```
+
+```text
+[0,1,1,13]
+```
+
+</HaskellTryIt>
+
+The adjacent states become (0,1),(1,1),(1,2),...,(13,21). Forcing b and c prevents a growing chain in these two state fields in the source model. This keeps a bounded number of Integer objects, not a bounded number of bytes: Fibonacci values have growing bit lengths. The function may force a next value not needed by the final answer; the model should allow that constant extra update.
+
+### Exam question 13: tail recursion is not a space proof (6 marks)
+
+Explain why ordinary left-fold sum can retain linear pending work. Does changing to a strict fold guarantee constant total space for a pair of running sum and count?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” needs an accumulator trace; “guarantee” asks about the limit of forcing.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate tail-call control from heap thunks, then apply WHNF to the accumulator type.
+
+</Step>
+
+<Step title="3. Solution">
+
+A lazy numeric fold passes nested additions without forcing them, giving up to n pending updates. Strict scalar updates can remove this chain under the stated streaming and fixed-size assumptions. A strict fold forcing a pair only reaches its constructor: field thunks can still accumulate. Force the scalar fields for that repair. Total memory can still grow through retained input or large Integer values.
+
+</Step>
+
+<Step title="4. Check">
+
+At [5,7,9], the lazy expression is `((0+5)+7)+9`; strict scalar intermediate values are 5,12,21. A pair constructor alone says nothing about its two arithmetic fields.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** The code can compile and return correct values while having poor space behaviour: no GHC type error is implied. Replacing a lazy fold can also change termination on partial values; consult Lazy Evaluation before claiming semantic equivalence.
+
+**Practice with answer.** A strict fold accumulating a list via cons still returns n list cells. Strictness does not make result storage constant.
+
+## 5. Retained inputs, sharing and demand
+
+An object remains live while a reachable root refers to it, directly or through a thunk. A consumer that only holds the current suffix can release earlier cells in a streaming model. A second consumer still holding the original head can retain the whole produced prefix. Sharing can save recomputation while increasing residency. Collection becomes possible after references disappear; this is not a promise of exactly when a garbage collector will run.
+
+**Template:** draw `root -> cell -> next` and references from pending consumers. After each consumption step, remove finished references and count the union still reachable. If a lagging consumer keeps the head while another advances k cells, a growing shared prefix can remain live. Model live storage as produced-but-still-reachable data, not all data ever produced. A root at a suffix retains that suffix, not the discarded prefix of a singly linked list.
+
+### Variation: two consumers with a lagging root
+
+Print a total and later request the original first element.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = let xs = map (+1) [1..5] in print (sum xs, head xs)
+```
+
+```text
+(20,2)
+```
+
+</HaskellTryIt>
+
+The mapped values are 2,3,4,5,6 and sum to 20. In an unoptimised model where the pending head consumer keeps xs rooted while the sum is evaluated, the original root can retain the produced spine. An optimiser might simplify or reschedule the computation; the output does not prove a particular peak.
+
+### Variation: full traversal followed by printing
+
+The second consumer now demands every element.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = let xs = map (*3) [1..4] in print (length xs, xs)
+```
+
+```text
+(4,[3,6,9,12])
+```
+
+</HaskellTryIt>
+
+Length demands four spine cells, not their mapped heads. The pending second field keeps the root for later printing, so those cells can stay live. When printing proceeds, heads become 3,6,9,12. Retaining a shared spine can retain suspended element computations too.
+
+### Variation: only a suffix remains rooted
+
+Discard the original head in the conceptual caller.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = let rest = drop 3 [10,20,30,40,50] in print (rest, length rest)
+```
+
+```text
+([40,50],2)
+```
+
+</HaskellTryIt>
+
+After drop, rest points to the suffix [40,50]. In an ordinary singly linked representation without other roots, it does not point backwards to [10,20,30], so those prefix cells are eligible for collection. The program displays suffix structure, not collection events or exact allocation.
+
+### Variation: bounded demand from an infinite source
+
+Change a whole-list consumer to finite observations.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 (map (+1) [1..]), sum (take 4 (map (+1) [1..])))
+```
+
+```text
+([2,3,4,5],14)
+```
+
+</HaskellTryIt>
+
+Only four mapped elements are needed for either answer. A pipeline discarding old cells with strict scalar aggregation can use bounded live working state as its bound grows, while retaining a requested k-cell list uses Theta(k) result storage. Asking length or reverse of the entire increasing infinite list would not finish. A shared top-level infinite stream held by another root can retain an ever-growing prefix even when one consumer streams.
+
+### Exam question 14: why sharing may retain memory (6 marks)
+
+In a source model, one consumer traverses a generated list while another keeps its original head for later printing. Explain possible retention and give a contrasting suffix-only case.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Explain” asks which reference prevents collection, not how many bytes GHC allocates.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the roots template while the leading consumer advances.
+
+</Step>
+
+<Step title="3. Solution">
+
+The later consumer keeps the original root reachable; the chain from it reaches the produced prefix, so advancing the first consumer cannot alone free that prefix. If the sole remaining root is `drop k xs` and the old root is gone, the old prefix is not reachable backwards from that suffix and can be collected. Sharing trades saved work for possible retention.
+
+</Step>
+
+<Step title="4. Check">
+
+For five cells with k=3, a suffix root reaches two cells; an original-head root still reaches all five produced cells.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** “Lazy means constant memory” and “shared means free” are type-correct but false generalisations; GHC has no diagnostic for them. Analyse roots and consumer scheduling. Do not promise immediate collection or optimiser behaviour.
+
+**Practice with answer.** If an output list of k cells is retained, can a constant-space producer make total memory independent of k? No: the retained result alone requires linear cell storage.
+
+## 6. Independent mixed exam questions
+
+Use the same size/unit/demand template as in Complexity by Recurrence and the space template at the top of this lesson. These questions combine the already-worked patterns; a mark for a bound requires its assumptions and derivation.
+
+### Exam question 15: find the wrong complexity claims (10 marks)
+
+Assess each statement. Repair every unsupported claim and supply a small check or counterexample.
+
+1. One recursive call always means linear time.
+2. Two recursive calls always mean exponential time.
+3. A logarithmic number of calls guarantees logarithmic time.
+4. A tail-recursive function always uses constant total space.
+5. The invariant length comprehension necessarily repeats length for every element in compiled GHC code.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Assess” requires a decision on all five statements. “Repair” means give useful conditions, not just say false. The quantifier “always” or “necessarily” makes a counterexample decisive.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each time claim, write actual subproblem sizes and local work. For space, separate control, thunks and output. For sharing, separate source cost models from optimiser outcomes.
+
+</Step>
+
+<Step title="3. Solution">
+
+1. False. Slow reverse has one recursive call and an append over a growing left argument. Its cost sums `0+1+...+(n-1)` plus linear overhead, giving quadratic time. One size n-1 call with constant local work is linear.
+2. False. Merge sort makes two half-sized calls and does linear local work, giving Theta(n log n). Two size n-1 branches can give exponential work, but branch count alone is insufficient.
+3. False. `U(n)=U(floor(n/2))+n` has logarithmic depth but sums `n+n/2+n/4+...`, giving linear time. Constant local work is the missing condition for logarithmic time.
+4. False. A tail call can carry pending arithmetic thunks, and a reversed result still has n cells. Constant auxiliary scalar-state space needs strict enough updates, fixed-size values, suitable tail-call execution and no retained roots; output and input are separate.
+5. Unsupported. A no-sharing model charges repeated length walks, but the invariant can be shared or floated. Bind it explicitly to state sharing. Lengths of different suffixes give a quadratic traversal example without relying on repeated invariant computation.
+
+</Step>
+
+<Step title="4. Check">
+
+At n=4, slow reverse copies 6 append cells, balanced level work is 8 units, and the halving-scan model costs 7. None fits the proposed universal shortcut. At four output cells, reverse result space cannot be zero regardless of tail position. A shared guard on an empty generator is never demanded.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** Replacing one slogan with another does not earn the derivation marks. These statements may be written beside compiling code; GHC has no complexity-comment error message. Give the recurrence, model and countercheck instead.
+
+**Practice with answer.** Which claim becomes valid after adding “size decreases by one, bounded local work, unit-cost arithmetic, complete finite demand”? The first time claim becomes linear. This says nothing by itself about total space.
+
+### Exam question 16: one specification, three independent costs (10 marks)
+
+A program reverses a finite n-cell list, then computes its length, while the caller retains both the original input and the complete reversed result. Compare slow append-based reverse with accumulator reverse. State time, result space and a justified limit on what follows about peak memory.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Compare” asks for both algorithms. The result is completely retained, the old input remains rooted, and length demands the result spine. Payloads are assumed fixed-size and may be shared between the two lists.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use summation versus constant-work decrementing for time. Count old and new spines separately, then distinguish final reachable space, auxiliary pending work and cumulative allocation.
+
+</Step>
+
+<Step title="3. Solution">
+
+Slow reverse uses `T(n)=T(n-1)+Theta(n)` and therefore quadratic time. Accumulator reverse uses `U(n)=U(n-1)+Theta(1)` and therefore linear time. The additional length traversal is linear and does not change either classification. Both complete results have n fresh spine cells in the standard list models. At the point where both spines are available and retained, input plus result has 2n cons cells, with payload references potentially shared. Thus total space is at least linear. Accumulator reverse can have constant auxiliary control beyond input/result in the ideal tail-call model. Slow reverse has pending work and cumulative append copying, but quadratic copying does not alone prove quadratic peak residency. Exact GHC peaks require runtime evidence; output values and operation counts do not establish them.
+
+</Step>
+
+<Step title="4. Check">
+
+For [1,2,3], both return [3,2,1] and length 3. Slow reverse copies `0+1+2=3` append-left cells in addition to its singleton cells; accumulator reverse makes three cons steps. Three original and three final result cells can be retained, but that final count is not a measurement of all intermediate allocation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** Multiplying total work by a guessed cell size gives cumulative work, not peak live space. No GHC error diagnoses that inference. Draw reachable roots at a moment in time and keep allocation, residency and result size separate.
+
+**Practice with answer.** If the original input is no longer rooted, may consumed original prefix cells become collectible during accumulator reverse? Yes, provided no other references retain them. The growing result still needs n cells when fully retained; collection timing is not guaranteed.
+
+## Summary
+
+<Callout type="key" title="Remember">
+Specify the model before giving a bound. Sharing can save work and retain data. Auxiliary storage excludes the required result only when stated. Peak live space is not cumulative allocation. Tail position does not remove accumulator thunks. Strict scalar updates do not bound unbounded numeric payloads, pair fields or list results. Demand and reachable roots decide which portions of a lazy structure remain live. Use recurrences and graph reasoning rather than timing or output values as proof.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is invariant length not an unconditional quadratic example?">
+
+It can be shared explicitly or by optimisation. A no-sharing cost model is quadratic, but it is not a mandatory GHC execution count. Changing suffix lengths avoids this ambiguity in a source traversal example.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does quadratic allocation prove quadratic peak memory?">
+
+No. Objects allocated earlier may become unreachable before later objects are created. Peak live space counts simultaneous reachable objects.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is missing from a constant-space claim about tail recursion?">
+
+A description of accumulator evaluation, payload sizes, output retention, input roots and the runtime model for control.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does forcing a pair force its arithmetic fields?">
+
+No. WHNF exposes the pair constructor. Its field computations can remain suspended and retain chains.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can a root at a list suffix retain its discarded prefix?">
+
+Not through ordinary forward-only list links alone. Another root or closure may still retain the original head, so inspect all references.
+
+</CheckQuestion>
+
+</CheckQuestions>

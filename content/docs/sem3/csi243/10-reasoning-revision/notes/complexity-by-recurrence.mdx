@@ -1,0 +1,1350 @@
+---
+title: "Complexity by Recurrence"
+description: "Derive operation counts from subproblem sizes, local work, demand and explicit arithmetic assumptions."
+---
+
+Read [The Cost of a Definition](/docs/sem3/csi243/10-reasoning-revision/notes/complexity) for list-operation vocabulary and [Lazy Evaluation](/docs/sem3/csi243/10-reasoning-revision/notes/lazy-evaluation) for demand and sharing. Here we turn definitions into equations for cost rather than inferring speed from printed values or a stopwatch.
+
+<LearningObjectives items={[
+  'Define size, counted operations, demand and base cost before deriving a bound',
+  'Solve decrementing, summation, halving, branching and balanced recurrences',
+  'Compare reverse, Fibonacci, factorial sums and sorting through derivations',
+  'Separate best and worst cases, two input sizes and output lower bounds',
+  'Distinguish arithmetic operation counts from bit complexity',
+]} />
+
+<Prerequisites items={['The Cost of a Definition', 'Lazy Evaluation', 'Recursive lists and numeric recursion']} />
+
+The runnable counters are pure mathematical models. They count the operations named in prose, not GHC instructions, bytes, elapsed time or optimiser choices. Unless stated otherwise, lists are finite with existing spines, comparisons and arithmetic have unit cost, the complete result is demanded, and instrumentation and printing costs are excluded. Numeric recursion takes non-negative arguments; negative inputs are outside its contract.
+
+`O(g(n))` is an asymptotic upper bound; `Omega(g(n))` is a lower bound; `Theta(g(n))` gives both. A linear function is also `O(n^2)`, but `Theta(n)` is its tight classification. Bounds describe sufficiently large inputs; check zero separately.
+
+Use this answer template:
+
+```text
+Size: n = ..., or m = ... and n = ...
+Demand: spine / all elements / first match / numeric result
+Unit: one call / multiplication / comparison / copied cons cell
+Base: C(0) = ... (and C(1) = ... if needed)
+Step: sum of costs at actual smaller sizes + local cost
+Solve: expand, sum a series, or count levels
+Conclude: exact count where justified; tight growth; assumptions
+```
+
+## 1. Choose the size and the unit
+
+A list has a cell count; two lists have two counts; an integer has both a magnitude and a representation length. A count needs a named unit. Counting calls includes a base invocation; counting multiplications need not.
+
+**Template:** `cost = numberOfUnits`, with size measured in cells, magnitude, or binary digits as appropriate. With b binary digits the largest non-negative value is `2^b-1`. A loop taking n steps in magnitude n can take exponentially many steps in b.
+
+Fixed-width `Int` can overflow and invalidate a mathematical answer. `Integer` avoids that overflow but arithmetic on growing operands is not constant-cost. Adding b-bit numbers normally takes work proportional to b; multiplication depends on its algorithm. An arithmetic-operation count remains useful when explicitly labelled **unit-cost arithmetic**.
+
+### Variation: empty invocation
+
+Count calls instead of returned length.
+
+<HaskellTryIt>
+
+```haskell
+calls :: [a] -> Int
+calls [] = 1
+calls (_:xs) = 1 + calls xs
+main :: IO ()
+main = print (calls ([] :: [Int]), calls [7], calls [7,8,9])
+```
+
+```text
+(1,2,4)
+```
+
+</HaskellTryIt>
+
+The empty equation contributes one. Each cons adds one, so `C(n)=n+1`. Element values do not affect the count.
+
+### Variation: multiplications instead
+
+Change the unit; the factorial base contributes no multiplication.
+
+<HaskellTryIt>
+
+```haskell
+mults :: Int -> Int
+mults 0 = 0
+mults n = 1 + mults (n - 1)
+main :: IO ()
+main = print (mults 0, mults 1, mults 4)
+```
+
+```text
+(0,1,4)
+```
+
+</HaskellTryIt>
+
+Direct factorial multiplies once at each positive argument: `M(0)=0`, `M(n)=1+M(n-1)=n`. Its invocation count is n+1.
+
+### Variation: magnitude versus digits
+
+Count binary digits, representing zero by one digit.
+
+<HaskellTryIt>
+
+```haskell
+bits :: Integer -> Int
+bits n
+  | n < 2 = 1
+  | otherwise = 1 + bits (n `div` 2)
+main :: IO ()
+main = print (bits 0, bits 7, bits 8, bits 15)
+```
+
+```text
+(1,3,4,4)
+```
+
+</HaskellTryIt>
+
+Seven is binary 111; eight is 1000; fifteen is 1111. A 15-step loop is linear in magnitude but not in its four-digit representation length.
+
+### Variation: growing result
+
+Use Integer for an exact value and inspect decimal length separately.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (product [1..10] :: Integer, length (show (product [1..10] :: Integer)))
+```
+
+```text
+(3628800,7)
+```
+
+</HaskellTryIt>
+
+Ten factors produce a seven-digit result. This checks value and representation length, not multiplication time. Larger operands require a bit-cost analysis.
+
+### Exam question 1: what is linear? (6 marks)
+
+A loop increments an Integer accumulator n times. Give a unit-cost bound in magnitude n and explain why this need not be linear in encoded input length.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Give” asks for a bound; “explain” requires naming its assumptions.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose one addition as the unit, then relate magnitude to binary length.
+
+</Step>
+
+<Step title="3. Solution">
+
+`C(0)=0`, `C(n)=C(n-1)+1`, giving n additions and Theta(n) unit-cost time. A b-bit input can represent `2^b-1`, so the operation count can be exponential in b. Actual addition also depends on operand lengths.
+
+</Step>
+
+<Step title="4. Check">
+
+Seven increments use seven additions although 7 has only three binary digits.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** GHC accepts false complexity comments: there is no diagnostic for a wrong size measure. Name size and unit. Choosing Int to avoid bit costs introduces overflow rather than proving a mathematical bound.
+
+**Practice with answer.** Factorial at n=0 and n=5 makes zero and five multiplications, but one and six invocations.
+
+## 2. Decrementing with constant local work
+
+A decrementing computation removes one item and does bounded extra work. Both facts matter.
+
+**Template:** `T(0)=b`, `T(n)=T(n-1)+c`. Expansion gives `T(n)=T(n-k)+kc`; choose k=n to obtain `b+nc`, hence Theta(n) for positive c. Four algorithms share this family while differing in result and space behaviour.
+
+### Variation: counted factorial
+
+Return result and multiplication count.
+
+<HaskellTryIt>
+
+```haskell
+facCount :: Integer -> (Integer, Int)
+facCount 0 = (1,0)
+facCount n = let (v,c) = facCount (n - 1) in (n * v,c + 1)
+main :: IO ()
+main = print (facCount 0, facCount 4)
+```
+
+```text
+((1,0),(24,4))
+```
+
+</HaskellTryIt>
+
+At four the count reduces to `1+1+1+1+0=4`; the result is `4*3*2*1*1=24`. Linear time here assumes unit-cost multiplication.
+
+### Variation: length without head demand
+
+The smaller problem is a tail, even when heads are undefined.
+
+<HaskellTryIt>
+
+```haskell
+lenCount :: [a] -> (Int, Int)
+lenCount [] = (0,1)
+lenCount (_:xs) = let (v,c) = lenCount xs in (v + 1,c + 1)
+main :: IO ()
+main = print (lenCount [undefined,undefined,undefined])
+```
+
+```text
+(3,4)
+```
+
+</HaskellTryIt>
+
+Three cons equations increment both fields, then `(0,1)` ends the recursion. No equation needs a head value. Length is 3 and calls are 4.
+
+### Variation: accumulator reverse
+
+Count cons steps without traversing the accumulator.
+
+<HaskellTryIt>
+
+```haskell
+revCount :: [a] -> ([a], Int)
+revCount xs = go xs [] 0
+  where
+    go [] acc c = (acc,c)
+    go (y:ys) acc c = go ys (y:acc) (c + 1)
+main :: IO ()
+main = print (revCount [4,1,8])
+```
+
+```text
+([8,1,4],3)
+```
+
+</HaskellTryIt>
+
+Accumulator states are `[]`, `[4]`, `[1,4]`, `[8,1,4]`. Three constant-cost cons steps give the decrementing recurrence. The growing list is result storage, not evidence of constant total memory.
+
+### Variation: accumulator Fibonacci
+
+Carry adjacent values instead of revisiting subproblems.
+
+<HaskellTryIt>
+
+```haskell
+fibCount :: Int -> (Integer, Int)
+fibCount n = go n 0 1 0
+  where
+    go 0 a _ c = (a,c)
+    go k a b c = go (k - 1) b (a + b) (c + 1)
+main :: IO ()
+main = print (fibCount 0, fibCount 1, fibCount 6)
+```
+
+```text
+((0,0),(1,1),(8,6))
+```
+
+</HaskellTryIt>
+
+Each transition changes `(a,b)` to `(b,a+b)`. Six transitions reach Fibonacci 6, which is 8. The count is transitions, not demanded additions: the last next-value expression may remain unused. Unit-cost time is linear; lazy accumulators need a separate space argument.
+
+### Exam question 2: derive before classifying (6 marks)
+
+Derive full-demand time for accumulator reverse and compare its recurrence with direct factorial.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Derive” requires equations. The complete reversed spine is needed.
+
+</Step>
+
+<Step title="2. Plan">
+
+Find the smaller tail, constant-cost cons and base cost.
+
+</Step>
+
+<Step title="3. Solution">
+
+`T(0)=b`, `T(n)=T(n-1)+c`, so `T(n)=b+nc=Theta(n)`. Factorial has the same family under unit-cost multiplication. Its units are multiplications rather than cons steps. Neither recurrence alone establishes constant auxiliary space.
+
+</Step>
+
+<Step title="4. Check">
+
+Three reverse steps produce [8,1,4]. Factorial zero has value 1 with no multiplication.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** One call can be quadratic if local work grows. Missing a zero base may cause endless descent; GHC need not diagnose non-termination. Repair domain and base first. Counting n calls omits the base invocation.
+
+**Practice with answer.** `T(0)=2`, `T(n)=T(n-1)+3` solves to `2+3n`; at n=2 it is 8.
+
+## 3. Summation costs and repeated factorials
+
+An inner traversal may run over a different size at every recursive step. Add those sizes.
+
+**Template:** `T(0)=b`, `T(n)=T(n-1)+an+d` expands to `b+a(1+...+n)+dn`. Pairing first and last terms gives `1+...+n=n(n+1)/2`. Positive linear local work gives Theta(n squared). A local charge n-1 instead sums to `n(n-1)/2`.
+
+### Variation: slow reverse copies
+
+Count left cells copied by repeated append.
+
+<HaskellTryIt>
+
+```haskell
+slow :: [a] -> ([a], Int)
+slow [] = ([],0)
+slow (x:xs) = let (ys,c) = slow xs in (ys ++ [x],c + length ys)
+main :: IO ()
+main = print (slow [1,2,3,4])
+```
+
+```text
+([4,3,2,1],6)
+```
+
+</HaskellTryIt>
+
+Append left lengths are 0,1,2,3, totalling 6, generally `n(n-1)/2`. Singleton construction and recursion add linear overhead. Counter length traversals are instrumentation excluded from the original reverse cost.
+
+### Variation: independent factorial sums
+
+Start each factorial again in the inclusive sum.
+
+<HaskellTryIt>
+
+```haskell
+fac :: Integer -> Integer
+fac 0 = 1
+fac n = n * fac (n - 1)
+main :: IO ()
+main = print (sum (map fac [0..4]), sum [0..4] :: Integer)
+```
+
+```text
+(34,10)
+```
+
+</HaskellTryIt>
+
+Result: `1+1+2+6+24=34`. The second field models multiplications: `0+1+2+3+4=10`. General count `n(n+1)/2` gives quadratic unit-cost work, with linear sum overhead. Writing `sum [fac k | k <- [0..n]]` instead of `sum (map fac [0..n])` changes the notation, not the independent factorial computations.
+
+### Variation: extend a saved factorial
+
+Reuse the previous factorial and total.
+
+<HaskellTryIt>
+
+```haskell
+sumFac :: Integer -> (Integer, Int)
+sumFac n = go 1 1 1 0
+  where
+    go k f total c
+      | k > n = (total,c)
+      | otherwise = let next = k * f
+                    in go (k + 1) next (total + next) (c + 1)
+main :: IO ()
+main = print (sumFac 0, sumFac 4)
+```
+
+```text
+((1,0),(34,4))
+```
+
+</HaskellTryIt>
+
+Start with `0!=1` in the total. Four extensions yield factorials 1,2,6,24 and totals 2,4,10,34. There are n multiplications and n additions, linear unit-cost work. The derivation establishes the improvement; equal printed results alone do not.
+
+### Variation: changing suffix lengths
+
+Use different length arguments rather than an invariant expression.
+
+<HaskellTryIt>
+
+```haskell
+suffixLengths :: [a] -> [Int]
+suffixLengths [] = []
+suffixLengths xs@(_:rest) = length xs : suffixLengths rest
+main :: IO ()
+main = print (suffixLengths [8,6,4,2], sum (suffixLengths [8,6,4,2]))
+```
+
+```text
+([4,3,2,1],10)
+```
+
+</HaskellTryIt>
+
+Fully demanding every length traverses suffixes of lengths 4,3,2,1. These length computations make 10 cons visits, generally `n(n+1)/2`. Sharing input cells does not itself memoise every suffix length. This is quadratic in the source traversal model.
+
+### Exam question 3: repeated factorial work (6 marks)
+
+Derive multiplication counts and unit-cost time bounds for the two inclusive factorial-sum algorithms.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Derive” asks how often factorials are built; inclusive includes zero.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use a triangular sum for independent calls and one extension per new factorial for reuse.
+
+</Step>
+
+<Step title="3. Solution">
+
+Independent calls use `n(n+1)/2` multiplications, giving quadratic unit-cost time. Reuse uses n multiplications and n additions, giving linear time. Zero factorial contributes 1 to the total but no multiplication. Neither bound automatically describes bit complexity.
+
+</Step>
+
+<Step title="4. Check">
+
+At n=4 both totals are 34; counts are 10 versus 4. At n=0 both totals are 1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** A total of 33 omits zero factorial. GHC accepts this type-correct specification error; initialise the total to 1. Calling suffix traversal linear ignores its inner work.
+
+**Practice with answer.** At five cells, slow reverse copies `0+1+2+3+4=10` append cells; suffix lengths visit `5+4+3+2+1=15`. Both grow quadratically.
+
+## 4. Halving: depth needs cheap local work
+
+Halving reaches a fixed base after logarithmically many steps. `log2 n` measures how many halvings reach 1. Logarithmic calls imply logarithmic time only if local work is bounded.
+
+**Template:** `T(1)=b`, `T(n)=T(floor(n/2))+c`. After k steps size is roughly `n/2^k`; stopping near 1 gives `k=floor(log2 n)`, hence Theta(log n) time for n at least 2. To include zero use a bound such as `Theta(1+log(n+1))`. Binary search needs cheap random access or explicitly charged traversal: a linked list has no constant-time midpoint indexing.
+
+### Variation: halving to zero
+
+Change the base to zero, including a final one-to-zero step.
+
+<HaskellTryIt>
+
+```haskell
+halves :: Int -> Int
+halves 0 = 0
+halves n = 1 + halves (n `div` 2)
+main :: IO ()
+main = print (halves 0, halves 1, halves 8, halves 9)
+```
+
+```text
+(0,1,4,4)
+```
+
+</HaskellTryIt>
+
+Eight follows 8,4,2,1,0: four steps. Nine follows 9,4,2,1,0, also four. For positive n the exact count is `floor(log2 n)+1`, not always exactly log2 n.
+
+### Variation: power by squaring
+
+Share one recursive power and square it; odd exponents need an extra multiplication.
+
+<HaskellTryIt>
+
+```haskell
+powerCount :: Integer -> Int -> (Integer, Int)
+powerCount _ 0 = (1,0)
+powerCount x n =
+  let (p,c) = powerCount x (n `div` 2)
+  in if even n then (p * p,c + 1) else (x * p * p,c + 2)
+main :: IO ()
+main = print (powerCount 3 0, powerCount 3 4, powerCount 3 5)
+```
+
+```text
+((1,0),(81,4),(243,5))
+```
+
+</HaskellTryIt>
+
+Exponent 4 follows 4,2,1,0, charging 1,1,2,0 multiplications: four. Exponent 5 charges two at the outer level: five. One or two multiplications per level gives logarithmic operation count, not necessarily logarithmic bit time.
+
+### Variation: binary-search interval model
+
+Model worst-case decisions with constant-time midpoint access.
+
+<HaskellTryIt>
+
+```haskell
+decisions :: Int -> Int
+decisions 0 = 0
+decisions n = 1 + decisions (n `div` 2)
+main :: IO ()
+main = print (map decisions [0,1,2,3,7,8])
+```
+
+```text
+[0,1,2,2,3,4]
+```
+
+</HaskellTryIt>
+
+Seven candidates can follow 7,3,1,0: three decisions. Eight can follow 8,4,2,1,0: four. This models an abstract random-access search, not binary search implemented with list indexing.
+
+### Variation: scan at each halving level
+
+Keep one recursive call but charge traversal to find or split the middle.
+
+<HaskellTryIt>
+
+```haskell
+scanCost :: Int -> Int
+scanCost 0 = 0
+scanCost n = n + scanCost (n `div` 2)
+main :: IO ()
+main = print (scanCost 1, scanCost 8, scanCost 9)
+```
+
+```text
+(1,15,16)
+```
+
+</HaskellTryIt>
+
+For eight, `8+4+2+1=15`; for nine, `9+4+2+1=16`. The series is at least n and below 2n for positive n, so time is linear although depth is logarithmic.
+
+### Exam question 4: depth is not time (6 marks)
+
+Compare `T(n)=T(floor(n/2))+1` and `U(n)=U(floor(n/2))+n`, both zero at n=0.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Compare” requires solving both equations.
+
+</Step>
+
+<Step title="2. Plan">
+
+Count levels for T and sum a geometric series for U.
+
+</Step>
+
+<Step title="3. Solution">
+
+T is `floor(log2 n)+1` for positive n, logarithmic. U sums `n+floor(n/2)+...+1`, at least n and below 2n, hence linear. Both have logarithmic depth. Replacing cheap midpoint access with list traversal changes the equation.
+
+</Step>
+
+<Step title="4. Check">
+
+At n=8, T=4 and U=15; at zero both are zero.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** GHC accepts list indexing but `xs !! middle` is not constant-time. Repair the model or data structure. Separately written recursive powers may create duplicate work; a shared binding specifies reuse.
+
+**Practice with answer.** With `V(0)=0`, `V(n)=V(floor(n/2))+2`, V(8)=8 and growth remains logarithmic.
+
+## 5. Branching with overlapping subproblems
+
+Naive Fibonacci repeatedly solves sizes n-1 and n-2. Its tree differs from a perfect doubling tree because branches reach their bases at different depths.
+
+**Template:** invocation counts satisfy `C(0)=C(1)=1`, `C(n)=1+C(n-1)+C(n-2)`. With `F(0)=0`, `F(1)=1`, the exact solution is `C(n)=2*F(n+1)-1`: substitute it into both bases and the step to verify it. To see the growth rate, set `A(n)=C(n)+1`; then `A(n)=A(n-1)+A(n-2)`. A trial solution `r^n` gives `r^2=r+1`, whose larger root is phi. Both base cases select a positive contribution from this root, giving tight growth `Theta(phi^n)`, where `phi=(1+sqrt 5)/2`, about 1.618. The ratio approaches phi, not 2. `O(2^n)` is a valid loose upper bound.
+
+A sibling recurrence with two independent size n-1 branches is `D(0)=1`, `D(n)=1+2D(n-1)=2^(n+1)-1`. These models assume no memoisation or transformation eliminating repeated subproblems. An accumulator Fibonacci uses the linear transition model in section 2 instead.
+
+### Variation: two base cases
+
+Count both base invocations as one.
+
+<HaskellTryIt>
+
+```haskell
+fibCalls :: Int -> Int
+fibCalls 0 = 1
+fibCalls 1 = 1
+fibCalls n = 1 + fibCalls (n - 1) + fibCalls (n - 2)
+main :: IO ()
+main = print (fibCalls 0, fibCalls 1, fibCalls 2)
+```
+
+```text
+(1,1,3)
+```
+
+</HaskellTryIt>
+
+At 2, one root and two base calls give `1+1+1=3`. Setting base costs to zero would count additions rather than invocations; the conventions cannot be mixed.
+
+### Variation: a small Fibonacci tree
+
+Increase n while keeping the unit fixed.
+
+<HaskellTryIt>
+
+```haskell
+fibCalls :: Int -> Int
+fibCalls 0 = 1
+fibCalls 1 = 1
+fibCalls n = 1 + fibCalls (n - 1) + fibCalls (n - 2)
+main :: IO ()
+main = print (map fibCalls [3,4,5,6])
+```
+
+```text
+[5,9,15,25]
+```
+
+</HaskellTryIt>
+
+Previous counts give 5, then `1+5+3=9`, then `1+9+5=15`, then `1+15+9=25`. These counts do not double at each increment.
+
+### Variation: full decrementing branches
+
+Change both child sizes to n-1.
+
+<HaskellTryIt>
+
+```haskell
+doubleCalls :: Int -> Int
+doubleCalls 0 = 1
+doubleCalls n = 1 + 2 * doubleCalls (n - 1)
+main :: IO ()
+main = print (map doubleCalls [0,1,2,3,4])
+```
+
+```text
+[1,3,7,15,31]
+```
+
+</HaskellTryIt>
+
+A full binary tree has level widths 1,2,4,8,16 and total 31 through depth 4. The model computes a hypothetical call count using multiplication; the model itself does not execute all those calls.
+
+### Variation: check the closed formula
+
+Verify a finite instance of the Fibonacci call identity.
+
+<HaskellTryIt>
+
+```haskell
+fibCalls :: Int -> Int
+fibCalls 0 = 1
+fibCalls 1 = 1
+fibCalls n = 1 + fibCalls (n - 1) + fibCalls (n - 2)
+fib :: Int -> Int
+fib 0 = 0
+fib 1 = 1
+fib n = fib (n - 1) + fib (n - 2)
+main :: IO ()
+main = print (fibCalls 10, 2 * fib 11 - 1)
+```
+
+```text
+(177,177)
+```
+
+</HaskellTryIt>
+
+Fibonacci 11 is 89, so `2*89-1=177`. This checks n=10. The general justification is substitution into the recurrence and its bases, rather than this one test.
+
+### Exam question 5: repair the doubling claim (6 marks)
+
+Find and repair: “fib has two calls, so its exact invocation count is `2^n` and it doubles at every increment of n.”
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Find and repair” needs a countercheck and a replacement derivation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the actual smaller sizes and both base counts.
+
+</Step>
+
+<Step title="3. Solution">
+
+`C(0)=C(1)=1`, `C(n)=1+C(n-1)+C(n-2)`. C(5)=15, not 32; C(6)=25, not 30. Exact count is `2F(n+1)-1`, with tight exponential growth Theta(phi^n). O(2^n) remains a loose upper bound, not an assertion of exact doubling.
+
+</Step>
+
+<Step title="4. Check">
+
+At n=2 the root and leaves give 3, not 4; both bases satisfy the corrected formula.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** GHC cannot diagnose this mathematical error. Do not replace it with “all two-branch recursions are exponential”: balanced merge sort is a counterexample.
+
+**Practice with answer.** Naive fib 5 makes 7 additions: base additions are zero, each internal node adds once. Its full binary call tree has 7 internal nodes and 15 total nodes.
+
+## 6. Balanced divide and conquer: merge sort
+
+Merge sort sorts two halves and merges them. Child sizes add to n. With linear split and merge work, each level does linear total work. For ordering behaviour and comparators, see [Sorting and Merging](/docs/sem3/csi243/07-higher-order/notes/sorting-and-merging); this section derives cost.
+
+**Template:** for powers of two, `T(1)=b`, `T(n)=2T(n/2)+an`. Level j has `2^j` nodes of size `n/2^j`, together costing an. There are log2 n non-leaf levels and n leaves: `T(n)=bn+an log2 n=Theta(n log n)`. Other sizes use floor and ceiling halves. Empty and singleton bases stop recursion. Linked-list splitting with length and take/drop is linear, not free.
+
+Merging non-empty sorted lists of lengths m,n needs at most m+n-1 comparisons: once one side empties, the remainder is attached without comparisons. Worst merge-sort comparison count therefore has a local n-1 term, different from the convenient n-units level-work model.
+
+### Variation: balanced level work
+
+Charge n units per non-leaf split and zero at a leaf.
+
+<HaskellTryIt>
+
+```haskell
+levelWork :: Int -> Int
+levelWork n
+  | n <= 1 = 0
+  | otherwise = let a = n `div` 2 in levelWork a + levelWork (n - a) + n
+main :: IO ()
+main = print (map levelWork [0,1,2,4,8])
+```
+
+```text
+[0,0,2,8,24]
+```
+
+</HaskellTryIt>
+
+Eight has three non-leaf levels each charging 8: total 24. Four has two levels costing 8. Empty/singleton sizes have no non-leaf work. This is not an exact comparison count.
+
+### Variation: unequal halves
+
+Use floor and ceiling for non-powers of two.
+
+<HaskellTryIt>
+
+```haskell
+work :: Int -> Int
+work n
+  | n <= 1 = 0
+  | otherwise = let a = n `div` 2 in n + work a + work (n - a)
+main :: IO ()
+main = print (work 3, work 5, work 6)
+```
+
+```text
+(5,12,16)
+```
+
+</HaskellTryIt>
+
+For 3: `3+0+2=5`. For 5: `5+2+5=12`. For 6: `6+5+5=16`. Rounding changes exact counts, not n log n growth.
+
+### Variation: merge comparisons
+
+Count only head-to-head comparisons.
+
+<HaskellTryIt>
+
+```haskell
+mergeC :: [Int] -> [Int] -> ([Int], Int)
+mergeC [] ys = (ys,0)
+mergeC xs [] = (xs,0)
+mergeC xs@(x:xt) ys@(y:yt)
+  | x <= y = let (zs,c) = mergeC xt ys in (x:zs,c + 1)
+  | otherwise = let (zs,c) = mergeC xs yt in (y:zs,c + 1)
+main :: IO ()
+main = print (mergeC [1,3] [2,4], mergeC [] [2,4])
+```
+
+```text
+(([1,2,3,4],3),([2,4],0))
+```
+
+</HaskellTryIt>
+
+Compare 1 with 2, 3 with 2, then 3 with 4. Attach the remaining 4. Three attains m+n-1 when m=n=2. An empty side needs zero, so the upper formula needs its non-empty precondition.
+
+### Variation: complete counted merge sort
+
+Include sorting and charge only its comparisons in the printed counter.
+
+<HaskellTryIt>
+
+```haskell
+mergeC :: [Int] -> [Int] -> ([Int], Int)
+mergeC [] ys = (ys,0)
+mergeC xs [] = (xs,0)
+mergeC xs@(x:xt) ys@(y:yt)
+  | x <= y = let (zs,c) = mergeC xt ys in (x:zs,c + 1)
+  | otherwise = let (zs,c) = mergeC xs yt in (y:zs,c + 1)
+sortC :: [Int] -> ([Int], Int)
+sortC [] = ([],0)
+sortC [x] = ([x],0)
+sortC xs =
+  let k = length xs `div` 2
+      (a,ca) = sortC (take k xs)
+      (b,cb) = sortC (drop k xs)
+      (zs,cm) = mergeC a b
+  in (zs,ca + cb + cm)
+main :: IO ()
+main = print (sortC [4,1,3,2], sortC [2,2,1])
+```
+
+```text
+(([1,2,3,4],5),([1,2,2],3))
+```
+
+</HaskellTryIt>
+
+For four, the pair sorts need one comparison each and the final merge three: total five. For [2,2,1], the right pair needs one and the final merge two: total three. The `<=` test selects a left tie first. Full time also includes linear splitting and construction, giving n log n in this implementation. Its splitting traversals impose this full-demand bound even in the best case.
+
+### Exam question 6: two branches without exponential growth (6 marks)
+
+Derive full-demand time for the displayed merge sort. Explain why two calls do not imply exponential growth, and solve the n-unit level model at n=8.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Derive” needs sizes, local work and a solution.
+
+</Step>
+
+<Step title="2. Plan">
+
+Add both half costs and the split/merge work.
+
+</Step>
+
+<Step title="3. Solution">
+
+`T(n)=T(floor(n/2))+T(ceil(n/2))+Theta(n)` with constant bases. Each balanced level costs Theta(n); there are Theta(log n) levels, giving Theta(n log n). In the n-unit model three levels at size 8 cost 24. Half-sized branches differ from two branches of size n-1.
+
+</Step>
+
+<Step title="4. Check">
+
+At size 1 no non-leaf work occurs; at size 2 one level contributes 2 units. Comparisons are a separate metric.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** GHC does not check recurrence comments. Missing the singleton base with split index zero repeats that singleton forever; add both stopping shapes. Do not call level-work units exact comparisons.
+
+**Practice with answer.** For powers of two, `C(1)=0`, `C(n)=2C(n/2)+n-1` solves to `n*log2 n-n+1`, giving 17 at n=8.
+
+## 7. Insertion sort: best and worst inputs
+
+Insertion sort sorts the tail, then inserts the head into the sorted tail. Insertion may stop immediately or traverse every tail cell. Input order therefore affects comparisons.
+
+**Template:** insertion into k sorted cells uses between 1 and k comparisons for positive k, and zero for k=0. For this ascending, tail-first algorithm, ascending input gives `B(n)=B(n-1)+1` for n at least 2: n-1 comparisons. Descending distinct input gives `W(n)=W(n-1)+(n-1)=n(n-1)/2`. Full-demand best time is Theta(n), worst time Theta(n squared), with unit-cost comparisons. Duplicates stop at `<=` and can behave like the best case. An average-case claim requires an input distribution.
+
+### Variation: empty and singleton
+
+Begin where no comparison is possible.
+
+<HaskellTryIt>
+
+```haskell
+insertC :: Int -> [Int] -> ([Int], Int)
+insertC x [] = ([x],0)
+insertC x ys@(y:rest)
+  | x <= y = (x:ys,1)
+  | otherwise = let (zs,c) = insertC x rest in (y:zs,c + 1)
+isortC :: [Int] -> ([Int], Int)
+isortC [] = ([],0)
+isortC (x:xs) =
+  let (ys,a) = isortC xs
+      (zs,b) = insertC x ys
+  in (zs,a + b)
+main :: IO ()
+main = print (isortC [], isortC [5])
+```
+
+```text
+(([],0),([5],0))
+```
+
+</HaskellTryIt>
+
+Sorting [] does nothing. Inserting 5 into [] constructs a cell without comparison. Zero comparisons still permits constant construction and control work.
+
+### Variation: ascending input
+
+Every head inserts before the sorted tail.
+
+<HaskellTryIt>
+
+```haskell
+insertC :: Int -> [Int] -> ([Int], Int)
+insertC x [] = ([x],0)
+insertC x ys@(y:rest)
+  | x <= y = (x:ys,1)
+  | otherwise = let (zs,c) = insertC x rest in (y:zs,c + 1)
+isortC :: [Int] -> ([Int], Int)
+isortC [] = ([],0)
+isortC (x:xs) =
+  let (ys,a) = isortC xs
+      (zs,b) = insertC x ys
+  in (zs,a + b)
+main :: IO ()
+main = print (isortC [1,2,3,4])
+```
+
+```text
+([1,2,3,4],3)
+```
+
+</HaskellTryIt>
+
+Compare 3 with 4, then 2 with 3, then 1 with 2. Each stops on its first comparison: three, or n-1.
+
+### Variation: descending distinct input
+
+Every head is larger than its sorted tail.
+
+<HaskellTryIt>
+
+```haskell
+insertC :: Int -> [Int] -> ([Int], Int)
+insertC x [] = ([x],0)
+insertC x ys@(y:rest)
+  | x <= y = (x:ys,1)
+  | otherwise = let (zs,c) = insertC x rest in (y:zs,c + 1)
+isortC :: [Int] -> ([Int], Int)
+isortC [] = ([],0)
+isortC (x:xs) =
+  let (ys,a) = isortC xs
+      (zs,b) = insertC x ys
+  in (zs,a + b)
+main :: IO ()
+main = print (isortC [4,3,2,1])
+```
+
+```text
+([1,2,3,4],6)
+```
+
+</HaskellTryIt>
+
+Inserting 2 needs one comparison, 3 needs two, 4 needs three: total six. The output matches the preceding variation but work differs.
+
+### Variation: duplicates and mixed order
+
+Equal values stop at `<=`; mixed order falls between extremes.
+
+<HaskellTryIt>
+
+```haskell
+insertC :: Int -> [Int] -> ([Int], Int)
+insertC x [] = ([x],0)
+insertC x ys@(y:rest)
+  | x <= y = (x:ys,1)
+  | otherwise = let (zs,c) = insertC x rest in (y:zs,c + 1)
+isortC :: [Int] -> ([Int], Int)
+isortC [] = ([],0)
+isortC (x:xs) =
+  let (ys,a) = isortC xs
+      (zs,b) = insertC x ys
+  in (zs,a + b)
+main :: IO ()
+main = print (isortC [2,2,2,2], isortC [3,1,4,2])
+```
+
+```text
+(([2,2,2,2],3),([1,2,3,4],5))
+```
+
+</HaskellTryIt>
+
+Equal values need three first-position insertions. In the mixed case, inserting 4 into [2] costs one, 1 into [2,4] costs one, and 3 into [1,2,4] costs three: total five.
+
+### Exam question 7: justify the case (6 marks)
+
+Derive best and worst comparison counts for the displayed insertion sort on n distinct elements. Supply length-four witnesses.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Best and worst” ranges over inputs of one fixed length.
+
+</Step>
+
+<Step title="2. Plan">
+
+Read the `<=` stopping test and tail-first recursion before choosing orders.
+
+</Step>
+
+<Step title="3. Solution">
+
+Ascending input stops each non-empty insertion after one comparison: best n-1 for positive n, zero for empty. Descending input traverses every sorted tail: worst `sum [1..n-1]=n(n-1)/2`. Full time is linear versus quadratic.
+
+</Step>
+
+<Step title="4. Check">
+
+[1,2,3,4] needs 3 comparisons; [4,3,2,1] needs 6.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** A different insertion direction can swap the best-case witness. GHC accepts a wrong case explanation. Repair it by tracing three values. Changing `<=` to < changes duplicate paths.
+
+**Practice with answer.** For [1,1,1], `<=` insertion needs two comparisons; otherwise identical `<` insertion needs three.
+
+## 8. Two inputs and output lower bounds
+
+Do not call both lengths n unless they are equal. With sizes m,n, zip stops at the shorter list, append traverses only the first, and a Cartesian product may produce m*n pairs. Materialising k distinct result cells requires at least k constructions; returning a pointer to existing cells is different.
+
+**Template:** name `m=length xs`, `n=length ys`; identify how both change and add callback costs. Zip satisfies `Z(0,n)=Z(m,0)=0`, `Z(m,n)=1+Z(m-1,n-1)`, hence min(m,n) produced cells. Time includes constant overhead: Theta(1+min(m,n)). Append copies m cells, but printing its entire result visits m+n. On positive dimensions, normal full Cartesian materialisation costs Theta(m*n). With empty dimensions, account for control and outer iteration rather than claiming every implementation takes exactly zero time.
+
+### Variation: unequal zip
+
+Use output length as a cell-count model.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip [1,2,3,4] [8,9], length (zip [1,2,3,4] [8,9]))
+```
+
+```text
+([(1,8),(2,9)],2)
+```
+
+</HaskellTryIt>
+
+Only two aligned pairs exist. Both m=4,n=2 matter. A non-constant zipWith callback adds its cost at each demanded position. A dot product written `sum (zipWith (*) xs ys)` likewise processes the shorter length, under unit-cost multiplication and addition; equal-length validation, if required, adds its own traversal.
+
+### Variation: asymmetric append
+
+Copying an empty left side differs from observing the right side.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (([] ++ [5,6]) :: [Int], length ([] :: [Int]), length ([1,2,3] :: [Int]))
+```
+
+```text
+([5,6],0,3)
+```
+
+</HaskellTryIt>
+
+Appending [] returns the right list with zero copied cells. Appending a left [1,2,3] copies three cells regardless of right length. Printing [5,6] still visits its two cells.
+
+### Variation: Cartesian output
+
+Each left choice pairs with every right choice.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ([(x,y) | x <- [1,2], y <- [7,8,9]], length [(x,y) | x <- [1,2], y <- [7,8,9]])
+```
+
+```text
+([(1,7),(1,8),(1,9),(2,7),(2,8),(2,9)],6)
+```
+
+</HaskellTryIt>
+
+Two outer choices times three inner choices produce six cells. Materialisation imposes at least six constructions. One size parameter conceals unequal-input behaviour.
+
+### Variation: nested membership searches
+
+Absence forces the entire right list for every query.
+
+<HaskellTryIt>
+
+```haskell
+memberC :: Int -> [Int] -> Int
+memberC _ [] = 0
+memberC x (y:ys)
+  | x == y = 1
+  | otherwise = 1 + memberC x ys
+main :: IO ()
+main = print (map (\x -> memberC x [7,8,9]) [1,2], sum (map (\x -> memberC x [7,8,9]) [1,2]))
+```
+
+```text
+([3,3],6)
+```
+
+</HaskellTryIt>
+
+Two searches each make three comparisons: six total. Worst comparisons are m*n. If every query matches the first right element, positive n permits only m comparisons; values determine the case.
+
+### Exam question 8: keep both sizes (6 marks)
+
+For lengths m,n, compare zip output, append copying and Cartesian pairs. State an output-size lower bound.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Compare” needs one bound per operation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate fresh construction from observation of shared cells.
+
+</Step>
+
+<Step title="3. Solution">
+
+Zip constructs min(m,n) cells. Append copies m and shares the right suffix. The product has m*n pairs, imposing Omega(m*n) cell-construction work for full materialisation. Printing append visits m+n even though copying depends on m. Empty cases retain control overhead.
+
+</Step>
+
+<Step title="4. Check">
+
+At m=2,n=3, zip has 2 cells, append copies 2, and the product has 6.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** An O(m+n) claim for writing m*n independent pair cells contradicts output size. GHC checks types rather than the bound. Do not charge copied right cells to append.
+
+**Practice with answer.** With m=0,n=100, zip and product are empty; append returns the right pointer. Printing the append output still visits 100 cells.
+
+## 9. Short-circuit demand and prefixes
+
+A consumer may stop early. State whether it needs a Boolean, a first match, a prefix, or all output. A search finding the first match at zero-based position k makes k+1 tests. Failure on n cells makes n tests; entering [] adds control overhead, not a predicate test.
+
+**Template:** `P([])=0`; on `x:xs`, return 1 if the stopping test succeeds, otherwise `1+P(xs)`. Best comparisons on a non-empty input: 1; worst: n. `all` stops at failure; `any` stops at success. Full finite filter output needs all predicate tests; its first cell may need only a prefix. An infinite search without success need not terminate.
+
+### Variation: first-position match
+
+Count equalities rather than invocations.
+
+<HaskellTryIt>
+
+```haskell
+tests :: Int -> [Int] -> Int
+tests _ [] = 0
+tests t (x:xs)
+  | t == x = 1
+  | otherwise = 1 + tests t xs
+main :: IO ()
+main = print (tests 4 [4,8,9], tests 4 [])
+```
+
+```text
+(1,0)
+```
+
+</HaskellTryIt>
+
+The first test succeeds, leaving the tail unvisited. Empty has zero tests but still enters its equation. Non-empty best search is constant.
+
+### Variation: last or missing match
+
+Change target location while keeping length fixed.
+
+<HaskellTryIt>
+
+```haskell
+tests :: Int -> [Int] -> Int
+tests _ [] = 0
+tests t (x:xs)
+  | t == x = 1
+  | otherwise = 1 + tests t xs
+main :: IO ()
+main = print (tests 9 [4,8,9], tests 7 [4,8,9])
+```
+
+```text
+(3,3)
+```
+
+</HaskellTryIt>
+
+Both paths compare three heads. Absence also enters [], so equal comparison counts need not mean equal invocation counts. Both are worst-case linear.
+
+### Variation: universal and existential stopping
+
+Change the event that makes the answer known.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (all even [2,3,undefined], any even [1,2,undefined])
+```
+
+```text
+(False,True)
+```
+
+</HaskellTryIt>
+
+For all, even 2 is True then even 3 is False. For any, even 1 is False then even 2 is True. Each makes two tests and avoids the final bottom.
+
+### Variation: rejected inputs before output
+
+Demand a prefix of an infinite filtered source.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 (filter even [1..]), take 0 (filter even [1..]))
+```
+
+```text
+([2,4,6],[])
+```
+
+</HaskellTryIt>
+
+Finding 2,4,6 tests six source values; zero output demand tests none. Producing k cells requires Omega(k) construction, but rejected inputs can make source work arbitrarily larger. Without match-location assumptions k cannot bound all work.
+
+### Exam question 9: follow the consumer (6 marks)
+
+Compare first-cell and complete-result filter demand on a finite list. Give best and worst membership comparisons at length n.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Compare” asks what is forced, not just selected values.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the stopping recurrence, distinguishing tests from output cells.
+
+</Step>
+
+<Step title="3. Solution">
+
+First filtered output needs tests through the first success, if any. Complete output requires n tests. Non-empty membership has best 1 and worst n comparisons; empty has zero. An infinite source without success may never provide even one cell.
+
+</Step>
+
+<Step title="4. Check">
+
+For [1,2,3,4], first even needs two tests; all evens need four. Membership of 1 needs one equality; absence of 9 needs four.
+
+</Step>
+
+</Steps>
+
+</details>
+
+**Common errors and repairs.** Calling every elem Theta(n) loses its constant best case. O(n) is a valid worst upper bound when stated. GHC cannot diagnose a wrong case or guarantee termination of infinite search.
+
+**Practice with answer.** `take 2 (filter (>3) [1..])` tests five values to produce [4,5]; take 0 tests none.
+
+## Summary
+
+<Callout type="key" title="Remember">
+Name size, demand, units and bases. Constant-work decrementing is linear; linear-work decrementing is quadratic; cheap halving is logarithmic; balanced half recursion with linear local work is n log n. Fibonacci has overlapping unequal branches and exponential growth. Cases, two sizes and output demand affect bounds. Arithmetic counts do not establish Integer bit complexity. Values do not measure runtime.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Can one recursive call give quadratic time?">
+
+Yes: tail recursion plus each suffix traversal sums n+(n-1)+...+1.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why do two merge-sort calls differ from two size n-1 calls?">
+
+Their half sizes sum to n. Balanced levels have linear total work; a decrementing tree can double its nodes through n levels.
+
+</CheckQuestion>
+
+<CheckQuestion question="Is O(2^n) false for naive Fibonacci?">
+
+No; it is a loose upper bound. Exact doubling is false; tight invocation growth is Theta(phi^n).
+
+</CheckQuestion>
+
+<CheckQuestion question="Does append copy both inputs?">
+
+It copies the left spine and shares the right. Traversing all output is a different boundary.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can logarithmic depth give linear time?">
+
+Yes: scans at n,n/2,n/4,... form a geometric series of linear total work.
+
+</CheckQuestion>
+
+</CheckQuestions>
