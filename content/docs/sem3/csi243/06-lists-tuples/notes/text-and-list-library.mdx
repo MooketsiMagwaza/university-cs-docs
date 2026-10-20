@@ -1,0 +1,2593 @@
+---
+title: "Text and List Library"
+description: "Split, join, search and reshape text and lists with exact whitespace, boundary and missing-result behaviour."
+---
+
+Library questions often turn on one character: a tab, an empty line, a separator or a final newline. This lesson extends [Lists](/docs/sem3/csi243/06-lists-tuples/notes/lists) with operations whose exact behaviour matters in an exam. Read [List Comprehensions](/docs/sem3/csi243/06-lists-tuples/notes/list-comprehensions), [Comprehension Templates](/docs/sem3/csi243/06-lists-tuples/notes/comprehension-templates) and [Comprehension Exam Practice](/docs/sem3/csi243/06-lists-tuples/notes/comprehension-exam-practice) for generation and flattening; here we choose a library operation instead of teaching those rules again.
+
+<LearningObjectives items={[
+  'Predict split and join results including whitespace loss and final newlines',
+  'Distinguish element separators from separators that are whole lists',
+  'Choose first-value, first-index or every-index searches',
+  'Distinguish prefix removal, suffix testing and contiguous infix testing',
+  'State a substring policy and trace rectangular and ragged transpose',
+  'Explain types, empty inputs and the precise form of missing results',
+]} />
+
+<Prerequisites items={[
+  'Lists: String is [Char], indexing starts at zero, take and drop',
+  'Comprehension Templates: nested lists and the indexed rectangular transpose',
+  'Maybe in Depth: consuming Just and Nothing safely',
+]} />
+
+[Eq and Class Constraints](/docs/sem3/csi243/09-polymorphism/notes/eq-and-class-constraints) already teaches `nub`, `delete`, `group`, `isPrefixOf` and `lookup`. Use it for equality constraints and their operations. [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth) supplies the safe-result machinery used by searches below.
+
+All examples here use finite, fully defined inputs. The four word/line functions are in Prelude. The other named library functions below come from `Data.List`; every runnable block includes its own import. Type signatures in template fences describe the library and are not definitions to paste over it. `print` shows strings with quotes and escaped control characters, so a visible `\n` in an output fence represents a newline inside a string. It is not an extra terminal line.
+
+## 1. words: split arbitrary whitespace
+
+`words` separates text into nonempty runs of characters that are not whitespace. Whitespace includes spaces, tabs and newlines, so it is wider than the literal space character. Words retain encounter order; punctuation and letter case are unchanged. Empty or all-whitespace input gives `[]`, with no missing-result constructor or exception.
+
+### Template and type
+
+```haskell
+words :: String -> [String]
+```
+
+```text
+words text
+```
+
+`text` is one string; the answer is a list of whole strings. Whitespace runs disappear rather than becoming empty fields.
+
+### Worked variation: repeated spaces
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (words "  red   blue ")
+```
+
+```text
+["red","blue"]
+```
+
+</HaskellTryIt>
+
+Skip leading spaces, collect red, skip the gap, collect blue and discard the last space. The gap lengths are lost.
+
+### Worked variation: tabs and newlines
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (words "a\tb\nc")
+```
+
+```text
+["a","b","c"]
+```
+
+</HaskellTryIt>
+
+The tab ends a and the newline ends b. The three non-whitespace runs remain in order.
+
+### Worked variation: empty and whitespace-only input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((words "", words " \t\n"))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+Neither input contains a non-whitespace run. Neither produces a singleton empty string.
+
+### Worked variation: normalising a round trip
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (unwords (words "  one\ttwo  "))
+```
+
+```text
+"one two"
+```
+
+</HaskellTryIt>
+
+Splitting retains one and two only. Joining supplies one ordinary space and cannot recover the tab or outer spaces.
+
+### Exam question 1: words (4 marks)
+
+Predict `words " a,b  c! "` and explain whether the comma is a separator.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Predict asks for an exact `[String]`, together with the rule used. The input contains spaces and punctuation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use whitespace boundaries, not punctuation boundaries. Discard the leading and final gaps.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (words " a,b  c! ")
+```
+
+```text
+["a,b","c!"]
+```
+
+</HaskellTryIt>
+
+The comma belongs inside the first run; the exclamation mark belongs inside the second.
+
+</Step>
+
+<Step title="4. Check">
+
+`words "a,b"` has one word; `words " "` has none. These checks distinguish punctuation from whitespace.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Expecting `words "a  b"` to retain an empty field is a logic error; GHC accepts it and gives two words. `words ["a","b"]` is a type error with the key phrase `Couldn't match type`: supply one string, or use `map words` on several strings.
+
+### Practice with an answer
+
+Predict `words "x,y	z"` (the escape denotes a tab).
+
+<details>
+
+<summary>Answer</summary>
+
+`["x,y","z"]`; comma remains, tab separates.
+
+</details>
+
+## 2. unwords: join with ordinary spaces
+
+`unwords` joins a list of strings in their existing order, putting exactly one ordinary space between adjacent elements. It does not inspect, trim or split an element. An empty list gives the empty string. An empty element still occupies a position, so it can create leading, trailing or repeated spaces. There is no failure result.
+
+### Template and type
+
+```haskell
+unwords :: [String] -> String
+```
+
+```text
+unwords pieces
+```
+
+`pieces` contains strings, not characters. For finite inputs, the alternative `intercalate " " pieces` gives the same text.
+
+### Worked variation: ordinary word list
+
+<HaskellTryIt>
+
+```haskell
+normaliseWords :: String -> String
+normaliseWords = unwords . words
+
+main :: IO ()
+main = print (unwords ["red","blue"])
+```
+
+```text
+"red blue"
+```
+
+</HaskellTryIt>
+
+There is one boundary between two strings, so one space is inserted and neither end receives a separator.
+
+### Worked variation: empty list and singleton
+
+<HaskellTryIt>
+
+```haskell
+normaliseWords :: String -> String
+normaliseWords = unwords . words
+
+main :: IO ()
+main = print ((unwords [], unwords ["solo"]))
+```
+
+```text
+("","solo")
+```
+
+</HaskellTryIt>
+
+Zero pieces have no content; one piece has no boundary. No space is added in either case.
+
+### Worked variation: empty elements
+
+<HaskellTryIt>
+
+```haskell
+normaliseWords :: String -> String
+normaliseWords = unwords . words
+
+main :: IO ()
+main = print (unwords ["","a",""])
+```
+
+```text
+" a "
+```
+
+</HaskellTryIt>
+
+There are three pieces and two boundaries. Both boundaries receive a space even though the first and last pieces are empty.
+
+### Worked variation: the reverse round trip can lose elements
+
+<HaskellTryIt>
+
+```haskell
+normaliseWords :: String -> String
+normaliseWords = unwords . words
+
+main :: IO ()
+main = print (words (unwords ["a b",""]))
+```
+
+```text
+["a","b"]
+```
+
+</HaskellTryIt>
+
+Joining gives a b followed by a space. Splitting again breaks the first piece into two words and forgets the empty final piece.
+
+### Exam question 2: unwords (4 marks)
+
+Write `normaliseWords :: String -> String` replacing each whitespace run by one space and removing outer whitespace.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a definition, and the result is one string. The specification permits loss of original layout.
+
+</Step>
+
+<Step title="2. Plan">
+
+Split by arbitrary whitespace, then join the surviving runs with one space.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+normaliseWords :: String -> String
+normaliseWords = unwords . words
+
+main :: IO ()
+main = print (normaliseWords "  A\tB\n ")
+```
+
+```text
+"A B"
+```
+
+</HaskellTryIt>
+
+Composition reads right to left: first words, then unwords. This is also `normaliseWords s = unwords (words s)`.
+
+</Step>
+
+<Step title="4. Check">
+
+`normaliseWords ""` is `""`; a whitespace-only input also becomes `""`. Already normalised text stays the same.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`unwords "ab"` supplies characters where strings are required, producing `Couldn't match type`. Use `unwords ["a","b"]` to join two words. The accepted expression `unwords ["a ","b"]` contains two spaces: existing spaces are not trimmed.
+
+### Practice with an answer
+
+Predict `unwords ["",""]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`" "`: two empty pieces still have one boundary.
+
+</details>
+
+## 3. lines: split at newline characters
+
+`lines` splits only at newline characters, not at every whitespace character. It removes each newline delimiter but preserves spaces, tabs and empty lines. An empty input gives `[]`. A final newline terminates the preceding line; it does not add an extra final empty element. Consecutive newlines can nevertheless encode empty lines. No newline is an error and no search can fail here.
+
+### Template and type
+
+```haskell
+lines :: String -> [String]
+```
+
+```text
+lines text
+```
+
+`text` is a whole string. Each result element is a line without its newline. A carriage return is an ordinary retained character for this pure function.
+
+### Worked variation: text without a final newline
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (lines "a\nb")
+```
+
+```text
+["a","b"]
+```
+
+</HaskellTryIt>
+
+The first newline finishes a; the remaining b is the final line even without a terminating newline.
+
+### Worked variation: blank lines and a final delimiter
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (lines "a\n\nb\n")
+```
+
+```text
+["a","","b"]
+```
+
+</HaskellTryIt>
+
+The first delimiter ends a, the next ends an empty line, and the final delimiter ends b without creating another element.
+
+### Worked variation: three empty boundaries
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((lines "", lines "\n", lines "\n\n"))
+```
+
+```text
+([],[""],["",""])
+```
+
+</HaskellTryIt>
+
+No characters mean no lines. Each newline can terminate an empty line, so one and two newlines give one and two empty strings.
+
+### Worked variation: whitespace is preserved
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (lines "a b\tc\r\n")
+```
+
+```text
+["a b\tc\r"]
+```
+
+</HaskellTryIt>
+
+Only the newline splits. The space, tab and carriage return stay inside the single line; print displays the last two with escapes.
+
+### Exam question 3: lines (4 marks)
+
+Predict `lines "
+A
+
+"`, explaining both the first empty string and the final newline.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Predict asks for the exact list, not a word count. The input starts with a newline and ends with two.
+
+</Step>
+
+<Step title="2. Plan">
+
+End one line at each newline. Start-of-input has empty content, then A, then an empty line.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (lines "\nA\n\n")
+```
+
+```text
+["","A",""]
+```
+
+</HaskellTryIt>
+
+Three delimiters terminate three lines. No fourth empty string is invented after the final delimiter.
+
+</Step>
+
+<Step title="4. Check">
+
+`lines "A
+"` is `["A"]`, whereas `lines "A
+
+"` is `["A",""]`. This verifies the extra blank-line rule.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using `words` to preserve blank lines is accepted Haskell but loses the blank lines. Use `lines`. `lines ["a"]` has the wrong list depth and produces `Couldn't match type`; supply `"a"`. Do not assume `lines` removes a carriage return from an in-memory string.
+
+### Practice with an answer
+
+Compare `lines "a b"` and `words "a b"`.
+
+<details>
+
+<summary>Answer</summary>
+
+`["a b"]` versus `["a","b"]`: spaces do not delimit lines.
+
+</details>
+
+## 4. unlines: terminate every supplied line
+
+`unlines` concatenates the given strings in order, adding a newline after every element, including the last and any empty element. Empty input gives `""`; a singleton empty line gives a one-newline string. It does not reject embedded newlines, but those make later splitting produce more lines. There is no failure form.
+
+For finite text, `unlines (lines text)` recovers it exactly when it is empty or already ends in a newline. Otherwise the join adds the missing final terminator. This condition concerns this direction only; the reverse direction also needs each supplied line to contain no newline.
+
+### Template and type
+
+```haskell
+unlines :: [String] -> String
+```
+
+```text
+unlines lineTexts
+```
+
+`lineTexts` is a list of strings. Unlike `intercalate "\n"`, unlines adds a terminator after the final element as well. The finite-list alternative is `concatMap (++ "\n") lineTexts`.
+
+### Worked variation: two lines
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (unlines ["a","b"])
+```
+
+```text
+"a\nb\n"
+```
+
+</HaskellTryIt>
+
+Append a newline to a, append one to b, then concatenate. The last newline belongs to the result string.
+
+### Worked variation: no lines versus an empty line
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((unlines [], unlines [""]))
+```
+
+```text
+("","\n")
+```
+
+</HaskellTryIt>
+
+No elements generate no terminators. One empty element generates a newline, so these inputs remain distinguishable.
+
+### Worked variation: missing terminator in a round trip
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((unlines (lines "a\nb"), unlines (lines "a\nb\n")))
+```
+
+```text
+("a\nb\n","a\nb\n")
+```
+
+</HaskellTryIt>
+
+Both inputs split to the same two lines. Joining supplies a final newline, losing the distinction between terminated and unterminated text.
+
+### Worked variation: embedded delimiter changes the reverse round trip
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (lines (unlines ["a\nb",""]))
+```
+
+```text
+["a","b",""]
+```
+
+</HaskellTryIt>
+
+The joined text is a newline b newline newline. Splitting produces three lines, not the original two elements.
+
+### Exam question 4: unlines (4 marks)
+
+State a condition under which `lines (unlines xs) == xs`, and give a counterexample without that condition.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+State asks for a condition; give asks for evidence. Restrict to finite lists of fully defined strings.
+
+</Step>
+
+<Step title="2. Plan">
+
+Each supplied element must be newline-free. Otherwise an internal newline becomes an extra delimiter.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((lines (unlines ["a",""]), lines (unlines ["a\nb"])))
+```
+
+```text
+(["a",""],["a","b"])
+```
+
+</HaskellTryIt>
+
+Newline-free elements survive, including the empty line. The second case changes a single element into two, refuting an unconditional inverse law.
+
+</Step>
+
+<Step title="4. Check">
+
+`xs = []` also satisfies the condition and the law. The counterexample contains one element before joining and two after splitting.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Expecting `unlines ["a","b"]` to omit the final newline is a logic error. Use `intercalate "\n"` for separators only. Passing a `String` directly to `unlines` produces `Couldn't match type`; it needs `[String]`.
+
+### Practice with an answer
+
+Predict `unlines ["","x",""]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`"\nx\n\n"`: every one of the three supplied lines is terminated.
+
+</details>
+
+## 5. intersperse: insert one element
+
+`intersperse` inserts one separator element between each pair of adjacent input elements. It preserves order and duplicates, adds nothing at either end, and returns `[]` for empty input. The separator must have the same type as one element. There is no missing-result form. A string therefore needs a `Char` separator, while a list of strings needs a `String` separator.
+
+### Template and type
+
+```haskell
+intersperse :: a -> [a] -> [a]
+```
+
+```text
+intersperse separator elements
+```
+
+`separator` is one value of type `a`; `elements` is a list of those values. A list of length n has n minus one boundaries when n is positive.
+
+### Worked variation: characters in a string
+
+The elements are a, b and c. Insert a hyphen in each of the two gaps; the output is still a String.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intersperse)
+
+main :: IO ()
+main = print (intersperse '-' "abc")
+```
+
+```text
+"a-b-c"
+```
+
+</HaskellTryIt>
+
+### Worked variation: whole strings as elements
+
+Here each element is a whole string. A slash string becomes an extra list element; the output has not been flattened.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intersperse)
+
+main :: IO ()
+main = print (intersperse "/" ["a","b","c"])
+```
+
+```text
+["a","/","b","/","c"]
+```
+
+</HaskellTryIt>
+
+### Worked variation: empty and singleton lists
+
+Neither zero nor one input element has a gap. No separator is emitted in either case.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intersperse)
+
+main :: IO ()
+main = print ((intersperse 0 ([] :: [Int]), intersperse 0 [7]))
+```
+
+```text
+([],[7])
+```
+
+</HaskellTryIt>
+
+### Exam question 5: intersperse (4 marks)
+
+Predict the different result types of `intersperse ',' "ab"` and `intersperse "," ["a","b"]`.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Predict asks for exact values and types. The separators differ by one level: Char versus String.
+
+</Step>
+
+<Step title="2. Plan">
+
+Insert one value between adjacent elements without removing a list layer.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intersperse)
+
+main :: IO ()
+main = print ((intersperse ',' "ab", intersperse "," ["a","b"]))
+```
+
+```text
+("a,b",["a",",","b"])
+```
+
+</HaskellTryIt>
+
+The pair contains a String and a `[String]`. Inserting separators does not concatenate the second result.
+
+</Step>
+
+<Step title="4. Check">
+
+With a singleton source, each function returns that singleton unchanged. This checks that separators belong between elements only.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`intersperse "," "ab"` mixes a String separator with Char elements. GHC reports `Couldn't match type`; use a character separator or a list of strings. Expecting a trailing separator is an accepted-program logic error.
+
+### Practice with an answer
+
+Predict `intersperse False [True,True]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`[True,False,True]`: insert one Boolean between the two existing ones.
+
+</details>
+
+## 6. intercalate: insert lists and flatten
+
+`intercalate` joins a list of lists, placing a separator list between consecutive pieces and then flattening one layer. It preserves the order inside and between pieces. Empty outer input yields `[]`; empty inner pieces still create boundaries. There is no failure form. For strings, the pieces have type `[String]`, the separator has type `String` and the result is one `String`.
+
+### Template and type
+
+```haskell
+intercalate :: [a] -> [[a]] -> [a]
+```
+
+```text
+intercalate separator pieces
+```
+
+`separator` is a list and each member of `pieces` is another list of the same element type. The equivalent finite expression is `concat (intersperse separator pieces)`.
+
+### Worked variation: several characters in a delimiter
+
+Insert a two-character separator at both boundaries, then flatten. There is no leading or final separator.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intercalate, intersperse)
+
+main :: IO ()
+main = print (intercalate "::" ["a","b","c"])
+```
+
+```text
+"a::b::c"
+```
+
+</HaskellTryIt>
+
+### Worked variation: numeric pieces including an empty piece
+
+The empty middle piece contributes no values but still has a boundary on either side. Both inserted zeros survive.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intercalate, intersperse)
+
+main :: IO ()
+main = print (intercalate [0] [[1,2],[],[3]])
+```
+
+```text
+[1,2,0,0,3]
+```
+
+</HaskellTryIt>
+
+### Worked variation: empty outer input and singleton
+
+No pieces give no output. A single piece has no neighbour, so no separator is inserted.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intercalate, intersperse)
+
+main :: IO ()
+main = print ((intercalate "," [], intercalate "," ["solo"]))
+```
+
+```text
+("","solo")
+```
+
+</HaskellTryIt>
+
+### Exam question 6: intercalate (4 marks)
+
+Choose an operation to build `"A | B"` from `["A","B"]`, and verify its concat/intersperse equivalent.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Choose asks for a library operation returning one string. The separator contains spaces as well as a vertical bar.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use intercalate for a list separator; alternatively insert that string between pieces and flatten once.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (intercalate, intersperse)
+
+main :: IO ()
+main = print ((intercalate " | " ["A","B"], concat (intersperse " | " ["A","B"])))
+```
+
+```text
+("A | B","A | B")
+```
+
+</HaskellTryIt>
+
+Both routes preserve the two strings and emit the separator once. No special meaning is assigned to its punctuation.
+
+</Step>
+
+<Step title="4. Check">
+
+Joining `["A"]` gives `"A"`. Joining `["",""]` gives the separator alone, confirming that empty pieces retain boundaries.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`intercalate ',' ["a","b"]` supplies an element where a list is required. GHC reports `Couldn't match type`; use `","`. `concat pieces` is accepted but omits all inserted separators.
+
+### Practice with an answer
+
+Predict `intercalate "" ["a","","b"]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`"ab"`; an empty separator adds no characters. This is also `concat ["a","","b"]`.
+
+</details>
+
+## 7. find: the first matching value
+
+`find` tests elements from left to right and returns the first satisfying value in `Just`. If no element passes, including on an empty list, it returns `Nothing`. It does not return every match or a position. The predicate, a function returning Bool, decides what counts as matching; find itself requires no Eq constraint.
+
+### Template and type
+
+```haskell
+find :: Foldable t => (a -> Bool) -> t a -> Maybe a
+```
+
+```text
+find predicate elements
+```
+
+The full GHC 9.10 library type uses `Foldable t`: a container that can be traversed and combined. On lists, choose `t = []`, giving the specialised type `(a -> Bool) -> [a] -> Maybe a` used throughout this section. This distinction follows the [base 4.20 Data.List reference](https://hackage-content.haskell.org/package/base-4.20.0.0/docs/Data-List.html#v:find).
+
+`predicate` examines one element. Search stops at the first True. For finite defined inputs an alternative is `listToMaybe (filter predicate elements)` from Data.Maybe; the output stays optional.
+
+### Worked variation: several matches
+
+Test 1: False, then 4: True. Return the value 4; later even values do not change the answer.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (find)
+
+main :: IO ()
+main = print (find even [1,4,2,6])
+```
+
+```text
+Just 4
+```
+
+</HaskellTryIt>
+
+### Worked variation: string values
+
+Lengths are 1 then 4. Tree is the first string longer than three; stone is not returned despite also qualifying.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (find)
+
+main :: IO ()
+main = print (find ((>3) . length) ["a","tree","stone"])
+```
+
+```text
+Just "tree"
+```
+
+</HaskellTryIt>
+
+### Worked variation: absent and empty
+
+Both finite searches reach the end without a passing element. Nothing is a normal result, not an exception.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (find)
+
+main :: IO ()
+main = print ((find (>9) [1,2], find even ([] :: [Int])))
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+### Exam question 7: find (4 marks)
+
+Find the first negative number in `[3,0,-2,-4]` and state the result type when the input is `[Int]`.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Find asks for a value, not an index or all negatives. The result must express absence as well.
+
+</Step>
+
+<Step title="2. Plan">
+
+Pass the predicate that tests negativity; leave the optional wrapper in the result.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (find)
+
+main :: IO ()
+main = print (find (<0) ([3,0,-2,-4] :: [Int]))
+```
+
+```text
+Just (-2)
+```
+
+</HaskellTryIt>
+
+3 and 0 fail. Negative two passes, so the result has type `Maybe Int`. Show puts parentheses around a negative constructor argument.
+
+</Step>
+
+<Step title="4. Check">
+
+On `[0]` the answer is Nothing. On `[-4]` it is `Just (-4)`, checking the boundary and the singleton.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`find 3 [1,3]` gives `No instance for` because 3 is being used as a predicate rather than a value to compare. Use `find (==3) [1,3]` for a value or `elemIndex 3 [1,3]` for a position. Arithmetic on a Maybe result without consuming it gives a type error; handle Nothing and Just.
+
+### Practice with an answer
+
+Predict `find null ["a","","b",""]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`Just ""`: the first empty string is a successful value, different from Nothing.
+
+</details>
+
+## 8. findIndex: the first matching position
+
+`findIndex` uses the same left-to-right predicate search as find but returns a zero-based Int position wrapped in Just. Empty input or no match gives Nothing. Positions count every element, including ones that fail the predicate. No equality constraint is needed beyond whatever the supplied predicate needs.
+
+### Template and type
+
+```haskell
+findIndex :: (a -> Bool) -> [a] -> Maybe Int
+```
+
+```text
+findIndex predicate elements
+```
+
+Count positions 0, 1, 2 and so on. Return the first position whose element makes the predicate True. The payload is an Int regardless of the element type.
+
+### Worked variation: several matches
+
+1 at position 0 fails; 4 at position 1 passes. The answer is 1, not the value 4 and not a one-based position 2.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndex)
+
+main :: IO ()
+main = print (findIndex even [1,4,2,6])
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+### Worked variation: index zero can succeed
+
+The first element is already empty. A successful zero position is Just 0, never the missing result.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndex)
+
+main :: IO ()
+main = print (findIndex null ["","x"])
+```
+
+```text
+Just 0
+```
+
+</HaskellTryIt>
+
+### Worked variation: no position
+
+The nonempty list has only failed tests; the empty list has no tests at all. Both lack a successful index.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndex)
+
+main :: IO ()
+main = print ((findIndex odd [2,4], findIndex odd ([] :: [Int])))
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+### Exam question 8: findIndex (4 marks)
+
+Find the first position containing a word of length at least four in `["a","bee","tree","stone"]`.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Find the position asks for Maybe Int rather than the matching string. Length at least four includes four.
+
+</Step>
+
+<Step title="2. Plan">
+
+Build a predicate from length and the inclusive comparison, then use findIndex.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndex)
+
+main :: IO ()
+main = print (findIndex ((>=4) . length) ["a","bee","tree","stone"])
+```
+
+```text
+Just 2
+```
+
+</HaskellTryIt>
+
+At positions 0, 1 and 2 the lengths are 1, 3 and 4. The first passing position is 2.
+
+</Step>
+
+<Step title="4. Check">
+
+Changing tree to oak moves the first successful position to 3; an empty list gives Nothing.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Adding one to the index before returning it contradicts zero-based indexing; GHC accepts that logic but the answer is wrong. `findIndex length ["a"]` is a type error with `Couldn't match type` because length returns Int, not Bool. Compose length with a comparison.
+
+### Practice with an answer
+
+Predict `findIndex (=='b') "abba"`.
+
+<details>
+
+<summary>Answer</summary>
+
+`Just 1`: the first b is at position 1.
+
+</details>
+
+## 9. elemIndex: search for an equal value
+
+`elemIndex` takes a target value rather than a predicate and finds the first equal element. It returns a zero-based position in Just, or Nothing when the target is absent or the list is empty. It preserves the original position numbering and requires Eq so that it can compare elements. It does not return the count of occurrences.
+
+### Template and type
+
+```haskell
+elemIndex :: Eq a => a -> [a] -> Maybe Int
+```
+
+```text
+elemIndex target elements
+```
+
+The target has the same type as one element. `elemIndex target elements` is equivalent to `findIndex (== target) elements`.
+
+### Worked variation: duplicate targets
+
+2 fails equality, then the first 7 matches at position 1. The later duplicate is ignored.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndex, findIndex)
+
+main :: IO ()
+main = print (elemIndex 7 [2,7,7,3])
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+### Worked variation: searching a string
+
+The elements of a String are characters. The first a follows the initial b, giving position 1.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndex, findIndex)
+
+main :: IO ()
+main = print (elemIndex 'a' "banana")
+```
+
+```text
+Just 1
+```
+
+</HaskellTryIt>
+
+### Worked variation: absent and empty
+
+No string in the first list equals x, and the second list has no elements. Both report Nothing.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndex, findIndex)
+
+main :: IO ()
+main = print ((elemIndex "x" ["y"], elemIndex "x" []))
+```
+
+```text
+(Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+### Exam question 9: elemIndex (4 marks)
+
+Rewrite `elemIndex 'n' "banana"` using a predicate search, and predict both outputs.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Rewrite requires an equivalent expression preserving the first-position rule. The target is a character.
+
+</Step>
+
+<Step title="2. Plan">
+
+Turn the fixed target into an equality predicate and give it to findIndex.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndex, findIndex)
+
+main :: IO ()
+main = print ((elemIndex 'n' "banana", findIndex (=='n') "banana"))
+```
+
+```text
+(Just 2,Just 2)
+```
+
+</HaskellTryIt>
+
+Positions 0 and 1 hold b and a. Both searches stop at n at position 2.
+
+</Step>
+
+<Step title="4. Check">
+
+On a string without n, both return Nothing. On `"n"`, both return Just 0, so missing and zero remain distinct.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`elemIndex "a" "banana"` mixes a String target with Char elements and gives `Couldn't match type`. Use a character target. If the target is a function, equality is unavailable: GHC reports `No instance for` an Eq function type. Use a predicate expressing an observable property instead.
+
+### Practice with an answer
+
+Predict `elemIndex "a" ["ab","a","a"]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`Just 1`: equality compares whole strings, not containment inside ab.
+
+</details>
+
+## 10. findIndices: every matching position
+
+`findIndices` is the plural sibling of findIndex. It applies the predicate to every element of a finite list and returns all passing zero-based positions, in increasing encounter order. An empty source or no match yields `[]`, rather than Nothing. The result is always `[Int]`; the element type need not have Eq.
+
+### Template and type
+
+```haskell
+findIndices :: (a -> Bool) -> [a] -> [Int]
+```
+
+```text
+findIndices predicate elements
+```
+
+The equivalent comprehension is `[i | (i,x) <- zip [0..] elements, predicate x]`, with the result fixing i to Int. This applies the established comprehension rule, not a new generator form.
+
+### Worked variation: multiple successes
+
+Test positions 0 through 3. Only 0 fails; emit 1, 2 and 3, including adjacent successes.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndices, findIndex)
+
+main :: IO ()
+main = print (findIndices even [1,4,2,6])
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+### Worked variation: whole-string predicate
+
+The empty strings occupy positions 0 and 2. A failed middle test does not renumber the final element.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndices, findIndex)
+
+main :: IO ()
+main = print (findIndices null ["","a",""])
+```
+
+```text
+[0,2]
+```
+
+</HaskellTryIt>
+
+### Worked variation: no successful indices
+
+Both searches produce an empty list of indices. No element is available to wrap in Just.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndices, findIndex)
+
+main :: IO ()
+main = print ((findIndices (>9) [1,2], findIndices even ([] :: [Int])))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+### Exam question 10: findIndices (4 marks)
+
+Return all positions of negative numbers in `[2,-1,0,-3]`, and contrast the first-position result.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Return all rules out findIndex alone. Negative values are detected by a predicate.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use findIndices for the entire answer and findIndex as a contrast on the same input.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (findIndices, findIndex)
+
+main :: IO ()
+main = print ((findIndices (<0) [2,-1,0,-3], findIndex (<0) [2,-1,0,-3]))
+```
+
+```text
+([1,3],Just 1)
+```
+
+</HaskellTryIt>
+
+The negative numbers occur at positions 1 and 3; the singular operation stops at the earlier one.
+
+</Step>
+
+<Step title="4. Check">
+
+On `[0]`, the plural answer is [] while the singular answer is Nothing. Both express absence in their respective types.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Assuming a `[Int]` result can be matched with Just is a type error with `Couldn't match type`. Use list patterns for findIndices or switch to findIndex. Filtering before attaching positions changes the numbering; attach original positions first.
+
+### Practice with an answer
+
+Predict `findIndices (>2) [3,1,3]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`[0,2]`; the repeated value contributes both original positions.
+
+</details>
+
+## 11. elemIndices: every equal occurrence
+
+`elemIndices` returns all zero-based positions equal to a target. It requires Eq, preserves every occurrence, and lists positions in increasing order. Empty input or an absent target gives `[]`. Unlike elemIndex it has no Maybe wrapper, and unlike nub it does not discard repeated occurrences of the target.
+
+### Template and type
+
+```haskell
+elemIndices :: Eq a => a -> [a] -> [Int]
+```
+
+```text
+elemIndices target elements
+```
+
+The predicate equivalent is `findIndices (== target) elements`. For finite inputs the list length is the occurrence count, while elemIndex asks only for the first position.
+
+### Worked variation: repeated characters
+
+Scan b, a, n, a, n, a at positions 0 through 5. Emit every a position, not just the first.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndices, findIndices)
+
+main :: IO ()
+main = print (elemIndices 'a' "banana")
+```
+
+```text
+[1,3,5]
+```
+
+</HaskellTryIt>
+
+### Worked variation: whole strings
+
+Whole-string equality matches x twice; xx is not equal to x even though it contains that character.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndices, findIndices)
+
+main :: IO ()
+main = print (elemIndices "x" ["x","xx","x"])
+```
+
+```text
+[0,2]
+```
+
+</HaskellTryIt>
+
+### Worked variation: absent and empty
+
+Neither search has an equal element, so both produce no positions. The empty numeric source is explicitly typed.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndices, findIndices)
+
+main :: IO ()
+main = print ((elemIndices 9 [1,2], elemIndices 9 ([] :: [Int])))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+### Exam question 11: elemIndices (4 marks)
+
+Using elemIndices, count the occurrences of 's' in "mississippi", and also show their positions.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Count asks for a number; positions asks for `[Int]`. The input is a string of characters.
+
+</Step>
+
+<Step title="2. Plan">
+
+Find every equal position, then use length on that result rather than on the source.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (elemIndices, findIndices)
+
+main :: IO ()
+main = print ((elemIndices 's' "mississippi", length (elemIndices 's' "mississippi")))
+```
+
+```text
+([2,3,5,6],4)
+```
+
+</HaskellTryIt>
+
+The s characters occur at positions 2, 3, 5 and 6. Four retained positions give the count four.
+
+</Step>
+
+<Step title="4. Check">
+
+For an absent character the list is [] and its length is 0. This confirms that absence is not an error or a phantom position.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`elemIndices (==3) [1,3]` supplies a predicate where a target element is expected; it cannot typecheck. Use `findIndices (==3)` or `elemIndices 3`. Replacing elemIndices with elemIndex then taking length counts the optional wrapper in general Foldable code rather than every occurrence; choose the plural operation.
+
+### Practice with an answer
+
+Predict `elemIndices True [True,False,True,True]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`[0,2,3]`: three matches, retaining original positions.
+
+</details>
+
+## 12. isSuffixOf: an exact ending
+
+`isSuffixOf` tests whether the first list is exactly an ending of the second list. The elements must be contiguous, in the same order, with equality at every position. It returns Bool, not a remainder or an index; a failed test returns False. The empty list is a suffix of every list, including itself. A nonempty list is not a suffix of an empty one. Comparison is case-sensitive for Char.
+
+### Template and type
+
+```haskell
+isSuffixOf :: Eq a => [a] -> [a] -> Bool
+```
+
+```text
+candidate `isSuffixOf` whole
+```
+
+The candidate comes first, the whole list second. For finite lists an equivalent test is `isPrefixOf (reverse candidate) (reverse whole)`; the already-taught prefix test checks the other end.
+
+### Worked variation: file extension
+
+The last three characters are exactly dot, h and s. Characters before that ending do not matter.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isSuffixOf)
+
+main :: IO ()
+main = print (isSuffixOf ".hs" "Main.hs")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+### Worked variation: order and contiguity
+
+The first candidate matches the final two elements. The second cannot skip 2 to make a suffix.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isSuffixOf)
+
+main :: IO ()
+main = print ((isSuffixOf [2,3] [1,2,3], isSuffixOf [1,3] [1,2,3]))
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+### Worked variation: empty boundaries
+
+An empty candidate always fits the ending. A nonempty candidate needs elements that an empty whole cannot provide.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isSuffixOf)
+
+main :: IO ()
+main = print ((isSuffixOf "" "abc", isSuffixOf "" "", isSuffixOf "x" ""))
+```
+
+```text
+(True,True,False)
+```
+
+</HaskellTryIt>
+
+### Exam question 12: isSuffixOf (4 marks)
+
+Choose a function to accept exactly filenames ending in ".mdx". Does it also accept "a.mdx.bak"?
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Choose asks for an ending test. Having .mdx somewhere inside is insufficient.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the exact suffix as the first argument; preserve case-sensitive comparison.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isSuffixOf)
+
+main :: IO ()
+main = print ((isSuffixOf ".mdx" "a.mdx", isSuffixOf ".mdx" "a.mdx.bak"))
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+The first filename ends with the candidate. The second ends with .bak, so an earlier .mdx does not help.
+
+</Step>
+
+<Step title="4. Check">
+
+The filename `".mdx"` itself passes; `"a.MDX"` fails. These check the exact-match and case boundaries.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Reversing candidate and whole is accepted code but asks a different question. `isSuffixOf '.' "a.hs"` gives `Couldn't match type`: a candidate must be a list such as `".hs"`, not one Char.
+
+### Practice with an answer
+
+Predict `isSuffixOf [3,2] [1,2,3]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`False`; a suffix preserves order.
+
+</details>
+
+## 13. isInfixOf: contiguous containment
+
+`isInfixOf` asks whether the first list appears as one contiguous block anywhere in the second. It returns True for at least one occurrence, otherwise False; it does not count matches or expose their positions. Equality requires Eq. The empty list occurs in every list, including the empty one, while a nonempty candidate cannot occur in an empty whole.
+
+### Template and type
+
+```haskell
+isInfixOf :: Eq a => [a] -> [a] -> Bool
+```
+
+```text
+candidate `isInfixOf` whole
+```
+
+The candidate comes first. Unlike suffix testing, a match may finish before the whole list ends. Unlike element membership, it matches a list of neighbouring elements.
+
+### Worked variation: middle and repeated occurrences
+
+Ana appears from position 1 and again from 3; one occurrence already makes True. Ban is also a contiguous block at the start.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+
+main :: IO ()
+main = print ((isInfixOf "ana" "banana", isInfixOf "ban" "banana"))
+```
+
+```text
+(True,True)
+```
+
+</HaskellTryIt>
+
+### Worked variation: not a subsequence search
+
+Matching cannot skip 2 in the first test. The second candidate appears contiguously at the end.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+
+main :: IO ()
+main = print ((isInfixOf [1,3] [1,2,3], isInfixOf [2,3] [1,2,3]))
+```
+
+```text
+(False,True)
+```
+
+</HaskellTryIt>
+
+### Worked variation: empty and case boundaries
+
+An empty candidate succeeds; a missing nonempty candidate fails. Capital and lowercase a are unequal characters.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+
+main :: IO ()
+main = print ((isInfixOf "" "", isInfixOf "x" "", isInfixOf "A" "a"))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+### Exam question 13: isInfixOf (4 marks)
+
+Predict the prefix, suffix and infix tests for candidate "at" in "cats".
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Predict requires three Boolean values. Each test fixes a different allowed location.
+
+</Step>
+
+<Step title="2. Plan">
+
+The candidate occurs at positions 1 and 2. It neither starts at 0 nor reaches the final character.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
+
+main :: IO ()
+main = print ((isPrefixOf "at" "cats", isSuffixOf "at" "cats", isInfixOf "at" "cats"))
+```
+
+```text
+(False,False,True)
+```
+
+</HaskellTryIt>
+
+The contiguous middle occurrence satisfies infix alone. The word ends with ts, not at.
+
+</Step>
+
+<Step title="4. Check">
+
+Candidate `"cats"` would make all three tests True; the empty candidate would also make all three True.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Confusing a subsequence with an infix yields a logic error without a GHC error. A target such as `"a"` cannot be tested with `elem` against `"cat"`: that compares String with Char and gives `Couldn't match type`. Use `elem 'a'` for one character or `isInfixOf "a"` for a list candidate.
+
+### Practice with an answer
+
+Predict `isInfixOf "aa" "aaa"`.
+
+<details>
+
+<summary>Answer</summary>
+
+`True`; overlapping occurrences still count as containment.
+
+</details>
+
+## 14. stripPrefix: remove a verified beginning
+
+`stripPrefix` compares the candidate with the beginning of the whole list. A complete match returns Just containing the unconsumed suffix, in its original order. A mismatch or a candidate longer than the whole returns Nothing. Empty candidate succeeds without removing anything. An exact whole-list match returns `Just []`, which is a success and differs from Nothing. Eq compares corresponding elements.
+
+### Template and type
+
+```haskell
+stripPrefix :: Eq a => [a] -> [a] -> Maybe [a]
+```
+
+```text
+stripPrefix candidate whole
+```
+
+Candidate first, whole second. This combines a prefix test and removal. Blindly doing `drop (length candidate) whole` removes characters even if the candidate does not match.
+
+### Worked variation: successful removal
+
+The four candidate characters all agree at the beginning. Return the remaining view inside Just.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (stripPrefix)
+
+main :: IO ()
+main = print (stripPrefix "pre-" "pre-view")
+```
+
+```text
+Just "view"
+```
+
+</HaskellTryIt>
+
+### Worked variation: empty remainder and no removal
+
+Exact equality consumes everything. An empty candidate consumes nothing, even on an empty whole; every case is successful.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (stripPrefix)
+
+main :: IO ()
+main = print ((stripPrefix "abc" "abc", stripPrefix "" "abc", stripPrefix "" ""))
+```
+
+```text
+(Just "",Just "abc",Just "")
+```
+
+</HaskellTryIt>
+
+### Worked variation: mismatch and candidate too long
+
+The first comparison eventually differs; the other two run out of whole-list elements before matching the candidate. None has a valid remainder.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (stripPrefix)
+
+main :: IO ()
+main = print ((stripPrefix "ab" "ax", stripPrefix "abc" "ab", stripPrefix "x" ""))
+```
+
+```text
+(Nothing,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+### Exam question 14: stripPrefix (4 marks)
+
+Explain why `drop 3 "bad-data"` cannot replace `stripPrefix "ok-" "bad-data"` in a validator.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Explain requires a behavioural difference: the validator must detect an incorrect prefix rather than always remove three characters.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare unchecked dropping with the verified optional result on the same mismatching input.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (stripPrefix)
+
+main :: IO ()
+main = print ((drop 3 "bad-data", stripPrefix "ok-" "bad-data"))
+```
+
+```text
+("-data",Nothing)
+```
+
+</HaskellTryIt>
+
+Drop discards b, a and d regardless of their values. StripPrefix detects the mismatch at the first character and reports Nothing.
+
+</Step>
+
+<Step title="4. Check">
+
+On `"ok-data"`, successful prefix removal yields Just data. On `"ok-"` it yields `Just ""`, which the validator must retain as success.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`stripPrefix "pre" text == "rest"` mixes Maybe String with String and gives `Couldn't match type`. Compare with `Just "rest"` or consume the Maybe safely. Searching for a prefix in the middle is a logic error: stripPrefix only removes at the beginning, not everywhere.
+
+### Practice with an answer
+
+Predict `stripPrefix [1,2] [1,2,1]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`Just [1]`; the remaining occurrence is not removed.
+
+</details>
+
+## 15. Data.List.transpose: columns without padding
+
+`transpose` turns rows into columns. The first output row contains the first available element from each input row, in row order; the next contains the second available elements, and so on. On rectangular input this is the familiar matrix transpose. On ragged input, short or empty rows contribute no element at a missing position; nothing is padded or repeated. Empty outer input and all-empty rows both give `[]`. No element ordering or equality constraint is needed, and raggedness is not an error.
+
+### Template and type
+
+```haskell
+transpose :: [[a]] -> [[a]]
+```
+
+```text
+transpose rows
+```
+
+`rows` is a list of lists with one element type. For nonempty rectangular rows the indexed nested comprehension from Comprehension Templates agrees; it can fail on short rows and needs special care on empty outer input. The library operation handles those shapes directly. Finite rectangular matrices with positive dimensions survive transposing twice; empty-row shapes and ragged shapes need separate checking.
+
+### Worked variation: rectangular numeric rows
+
+Read column 0 down the rows to get 1,4; then column 1 gives 2,5; column 2 gives 3,6. Two rows of three become three rows of two.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (transpose)
+
+main :: IO ()
+main = print (transpose [[1,2,3],[4,5,6]])
+```
+
+```text
+[[1,4],[2,5],[3,6]]
+```
+
+</HaskellTryIt>
+
+### Worked variation: ragged rows
+
+First collect 1,4,5. Row two then runs out, so the next column contains 2,6. Only the first row contributes 3 to the last column.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (transpose)
+
+main :: IO ()
+main = print (transpose [[1,2,3],[4],[5,6]])
+```
+
+```text
+[[1,4,5],[2,6],[3]]
+```
+
+</HaskellTryIt>
+
+### Worked variation: empty outer list and empty rows
+
+No rows and all-empty rows have no available elements. In the mixed case only the nonempty row supplies elements; empty rows are skipped.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (transpose)
+
+main :: IO ()
+main = print ((transpose ([] :: [[Int]]), transpose ([[],[]] :: [[Int]]), transpose [[],[1,2],[]]))
+```
+
+```text
+([],[],[[1],[2]])
+```
+
+</HaskellTryIt>
+
+### Worked variation: strings and a ragged shape that round-trips
+
+Strings are rows of characters: first a,c then b. This particular ragged shape round-trips; it does not prove every ragged shape does.
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (transpose)
+
+main :: IO ()
+main = print ((transpose ["ab","c"], transpose (transpose ["ab","c"])))
+```
+
+```text
+(["ac","b"],["ab","c"])
+```
+
+</HaskellTryIt>
+
+### Exam question 15: Data.List.transpose (4 marks)
+
+Predict `transpose (transpose [[1],[2,3]])`. Does double transpose always recover a ragged input?
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Predict requests the exact nested list, and does asks for a general claim checked by this counterexample.
+
+</Step>
+
+<Step title="2. Plan">
+
+Transpose once to collect the available first and second positions, then repeat on that result.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+import Data.List (transpose)
+
+main :: IO ()
+main = print ((transpose [[1],[2,3]], transpose (transpose [[1],[2,3]])))
+```
+
+```text
+([[1,2],[3]],[[1,3],[2]])
+```
+
+</HaskellTryIt>
+
+The first pass gives rows [1,2] and [3]. Their first column is [1,3], and their second is [2]. Missing cells were not stored, so the original row lengths are lost.
+
+</Step>
+
+<Step title="4. Check">
+
+For `[[1,2],[3,4]]`, two transposes do recover the input. For `[[],[]]`, even the number of original rows is lost: one transpose is [].
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+An indexed transpose using `row !! i` can crash on ragged input because an index is missing. Use Data.List.transpose when skipping missing entries is intended. `transpose [1,2]` has the wrong nesting and gives `No instance for` a numeric list type: supply rows such as `[[1,2]]`. Do not claim ragged input is padded or always reversible.
+
+### Practice with an answer
+
+Predict `transpose ["","ab","c"]`.
+
+<details>
+
+<summary>Answer</summary>
+
+`["ac","b"]`; the empty row contributes no cell at any position.
+
+</details>
+
+## 16. Substring: choose and state a boundary policy
+
+The lecture uses substring informally; Prelude supplies take and drop rather than a standard function named substring. Here `substring start count` drops start characters, then takes at most count of the remainder. Positions are zero-based. The second argument is a count, not an ending position. Our explicit policy is the existing take/drop behaviour: a negative start acts like zero, a non-positive count gives empty text, an oversized start gives empty text and an oversized count takes all remaining text. These cases do not fail. This counts Haskell Char elements rather than bytes or visual grapheme clusters.
+
+### Template and type
+
+```haskell
+substring :: Int -> Int -> String -> String
+```
+
+```text
+substring start count text = take count (drop start text)
+substring start count = take count . drop start
+```
+
+Drop first, take second: composition applies its right-hand function first. The fully applied form makes this ordering visible. The definition also generalises to `[a]` with the signature `Int -> Int -> [a] -> [a]`, without needing equality.
+
+### Worked variation: middle selection
+
+Drop a and b, leaving cdef. Take three characters, cde; start plus count is not the last included position.
+
+<HaskellTryIt>
+
+```haskell
+substring :: Int -> Int -> String -> String
+substring start count = take count . drop start
+
+main :: IO ()
+main = print (substring 2 3 "abcdef")
+```
+
+```text
+"cde"
+```
+
+</HaskellTryIt>
+
+### Worked variation: truncated bounds
+
+Starting at 4 leaves ef and an oversized take keeps it all. Starting beyond the end leaves nothing to take.
+
+<HaskellTryIt>
+
+```haskell
+substring :: Int -> Int -> String -> String
+substring start count = take count . drop start
+
+main :: IO ()
+main = print ((substring 4 9 "abcdef", substring 9 2 "abcdef"))
+```
+
+```text
+("ef","")
+```
+
+</HaskellTryIt>
+
+### Worked variation: negative arguments and empty text
+
+Negative drop removes nothing, negative take returns nothing, and empty text cannot supply characters under any positive count.
+
+<HaskellTryIt>
+
+```haskell
+substring :: Int -> Int -> String -> String
+substring start count = take count . drop start
+
+main :: IO ()
+main = print ((substring (-2) 3 "abcd", substring 1 (-2) "abcd", substring 0 2 ""))
+```
+
+```text
+("abc","","")
+```
+
+</HaskellTryIt>
+
+### Worked variation: alternate spelling and generic lists
+
+Both spellings drop the first value and retain the next two. The same list operations work on integers without changing the policy.
+
+<HaskellTryIt>
+
+```haskell
+substring :: Int -> Int -> String -> String
+substring start count = take count . drop start
+
+main :: IO ()
+main = print ((substring 1 2 "abcd", take 2 (drop 1 "abcd"), take 2 (drop 1 [10,20,30,40])))
+```
+
+```text
+("bc","bc",[20,30])
+```
+
+</HaskellTryIt>
+
+### Exam question 16: Substring (4 marks)
+
+Write a zero-based slice taking positions 2 through 4 inclusive from "abcdef", using this substring policy.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Write asks for a call. The endpoint is inclusive, so convert the interval into a count before using the template.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use start 2 and count equal to 4 minus 2 plus 1, which is 3.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+substring :: Int -> Int -> String -> String
+substring start count = take count . drop start
+
+main :: IO ()
+main = print (substring 2 (4 - 2 + 1) "abcdef")
+```
+
+```text
+"cde"
+```
+
+</HaskellTryIt>
+
+Positions 2, 3 and 4 contain c, d and e. The supplied count is three, not four.
+
+</Step>
+
+<Step title="4. Check">
+
+An inclusive interval consisting of position 2 alone needs count 1. A zero count returns empty text, checking the difference between a position and a count.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using `drop start . take count` reverses the order and truncates the wrong portion; GHC accepts the code but the result differs. Negative literal arguments need parentheses, as in `substring (-1) 2 text`. If a question requires rejecting negatives rather than clamping them, state and implement that different policy instead of silently using this one.
+
+### Practice with an answer
+
+Under this policy, predict `substring (-1) 0 "abc"` and `substring 3 1 "abc"`.
+
+<details>
+
+<summary>Answer</summary>
+
+Both give `""`: the first takes zero; the second starts at the length, beyond the final valid index.
+
+</details>
+
+## 17. The lecture's cat: append with (++)
+
+The lecture's informal cat means concatenate two lists, written `(++)` in Haskell. There is no Prelude string operation named cat. Lists already taught how append is built; the new exam task here is translating the lecture vocabulary and choosing the correct list level. Append keeps every element of the first list, then every element of the second; it neither separates, interleaves nor flattens nested elements. Empty input on either side acts as an identity, and there is no missing-result form.
+
+### Template and type
+
+```haskell
+(++) :: [a] -> [a] -> [a]
+```
+
+```text
+left ++ right
+(++) left right
+```
+
+Both operands have the same list type. String append is the Char instance. Two whole lists are arguments; this differs from the one-element left argument of cons.
+
+### Worked variation: joining text with no inserted separator
+
+Copy rain then bow. A space would have to be supplied explicitly as content.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("rain" ++ "bow")
+```
+
+```text
+"rainbow"
+```
+
+</HaskellTryIt>
+
+### Worked variation: joining lists of strings
+
+The elements are whole strings. The result is three strings, not the single string abc.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (["a","b"] ++ ["c"])
+```
+
+```text
+["a","b","c"]
+```
+
+</HaskellTryIt>
+
+### Worked variation: empty identities and alternate application
+
+Either empty operand contributes no characters. Prefix operator application gives the same append operation as infix notation.
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (("" ++ "x", "x" ++ "", (++) "a" "b"))
+```
+
+```text
+("x","x","ab")
+```
+
+</HaskellTryIt>
+
+### Exam question 17: The lecture's cat (4 marks)
+
+Translate the lecture expression cat(first,last) into Haskell and insert a separating space between two names.
+
+<details>
+
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Translate asks for Haskell syntax. The informal cat is not a function to import, and a name report needs an explicit space.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use append for each boundary: first name, one space, then last name.
+
+</Step>
+
+<Step title="3. Solution">
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("Ada" ++ " " ++ "Lovelace")
+```
+
+```text
+"Ada Lovelace"
+```
+
+</HaskellTryIt>
+
+Append inserts only the characters present in its operands. Supplying the space string is what separates the names.
+
+</Step>
+
+<Step title="4. Check">
+
+If both names are empty, this particular expression still returns one space. Trimming or suppressing it would require a different report policy.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Writing `cat "a" "b"` without defining cat produces `Variable not in scope`. Use `"a" ++ "b"`. Writing `"a" ++ 'b'` produces `Couldn't match type`; the second operand must be a list, so use `"b"` or `['b']`.
+
+### Practice with an answer
+
+How do `"a" ++ ""` and `intercalate "," ["a",""]` differ?
+
+<details>
+
+<summary>Answer</summary>
+
+They give `"a"` and `"a,"`. Append adds no separator; intercalate inserts one at the boundary even with an empty second piece.
+
+</details>
+
+## 18. Choosing by the answer shape
+
+| Required answer | Operation | Empty or missing result |
+|---|---|---|
+| Nonempty whitespace-separated words | `words` | `[]` |
+| One string with spaces between supplied pieces | `unwords` | `""` for no pieces |
+| Newline-separated lines, keeping blank lines | `lines` | `[]` for empty input |
+| Every supplied line with its own terminator | `unlines` | `""` for no lines |
+| Separator elements, retaining the list layer | `intersperse` | `[]` |
+| Separator lists, then one flattened result | `intercalate` | `[]` (a String may print as `""`) |
+| First passing value | `find` | `Nothing` |
+| First passing position | `findIndex` | `Nothing` |
+| First equal position | `elemIndex` | `Nothing` |
+| Every passing position | `findIndices` | `[]` |
+| Every equal position | `elemIndices` | `[]` |
+| Ending test | `isSuffixOf` | `False` on mismatch |
+| Contiguous containment test | `isInfixOf` | `False` on mismatch |
+| Verified prefix remainder | `stripPrefix` | `Nothing` on mismatch |
+| Available columns | `transpose` | `[]` for no cells |
+| Positional text segment | `take count . drop start` | `""` under this policy |
+| Two lists joined end to end | `(++)` | Empty operands contribute nothing |
+
+Predicates are functions returning Bool; a target value is an element. Keep that distinction when choosing between findIndex and elemIndex. For every match rather than the first value, use the already-taught `filter` or a comprehension. To check one character use elem; to check a contiguous list use isInfixOf. For the beginning use the existing isPrefixOf lesson, and use stripPrefix when the remainder matters. Case-insensitive matching requires an explicit normalisation policy before these equality-based tests; none automatically changes case.
+
+## Summary
+
+<Callout type="key" title="Remember">
+Words discard whitespace layout; lines retain empty lines but do not store whether the final line was terminated. Unwords inserts spaces between pieces; unlines terminates every piece. Intersperse inserts an element; intercalate inserts a list and flattens. Singular searches return Maybe; plural index searches return lists. Suffix and infix tests require contiguous order, and stripPrefix verifies before removing. Substring needs a stated count and boundary policy. Transpose skips missing cells, so ragged and empty shapes can lose information. The lecture's cat is append, written ++.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can a split/join round trip change text?">
+Splitting can discard gap sizes or final-terminator information; joining creates its own separators or terminators. Such a round trip normalises instead of remembering the original layout.
+</CheckQuestion>
+
+<CheckQuestion question="Which operation returns a matching value rather than a position?">
+Find returns Maybe a; findIndex and elemIndex return Maybe Int. FindIndices and elemIndices return every matching position as [Int].
+</CheckQuestion>
+
+<CheckQuestion question="How do a failed prefix removal and a successful empty remainder differ?">
+The failure is Nothing. Successful removal of the entire string is Just containing the empty string.
+</CheckQuestion>
+
+<CheckQuestion question="Does intercalate add a trailing separator?">
+It adds separators only between supplied pieces. An empty last piece can nevertheless make the final boundary's separator appear at the end of the resulting text.
+</CheckQuestion>
+
+<CheckQuestion question="Why is double transpose unsafe as a general ragged round-trip law?">
+Missing positions are not retained as cells, so the first transpose can lose which row was short or empty. Repeating it need not restore original row boundaries.
+</CheckQuestion>
+
+</CheckQuestions>
