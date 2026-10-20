@@ -1,0 +1,27 @@
+-- Title: Implement descending insertion sort
+{-
+QUESTION
+Write insertR :: Integer -> [Integer] -> [Integer] and sortR :: [Integer] -> [Integer]. [8]
+insertR inserts into an already descending list. sortR sorts any finite list
+by recursively sorting its tail then inserting its head. Retain duplicates.
+-}
+
+-- Read the question: Write insertR :: Integer -> [Integer] -> [Integer]; sortR :: [Integer] -> [Integer].
+-- Plan: Insert before the first suitable element; sort the tail first.
+insertR :: Integer -> [Integer] -> [Integer]
+insertR x [] = [x]
+insertR x (y:ys)
+  | x >= y = x:y:ys
+  | otherwise = y : insertR x ys
+
+sortR :: [Integer] -> [Integer]
+sortR [] = []  -- Already sorted.
+sortR (x:xs) = insertR x (sortR xs)
+
+main :: IO ()
+main = do
+  print (sortR [])  -- expected: []
+  print (sortR [7])  -- expected: [7]
+  print (sortR [3,1,2])  -- expected: [3,2,1]
+  print (sortR [2,1,2])  -- expected: [2,2,1]
+  print (sortR [-1,3,0])  -- expected: [3,0,-1]
