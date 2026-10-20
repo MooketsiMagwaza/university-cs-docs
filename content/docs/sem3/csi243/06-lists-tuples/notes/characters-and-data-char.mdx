@@ -1,0 +1,3413 @@
+---
+title: "Characters and Data.Char"
+description: "Choose character predicates, convert codes and digits safely, read exact escapes, and lift character policies to strings and lists of strings."
+---
+
+Character questions test the rule for one value and the shape of the surrounding text. This lesson extends [Values, Names, Types, and Text](/docs/sem3/csi243/02-expressions-types/notes/values-text), [Lab 02: Making Choices](/docs/sem3/csi243/04-making-choices/notes/lab-02) and [Importing](/docs/sem3/csi243/08-modules-types/notes/imports). Reuse their quotation, decision and import rules; the new work is choosing domains, checking boundaries and transforming complete text.
+
+<LearningObjectives items={[
+ 'Distinguish Char, String and lists of String when choosing a transformation',
+ 'Convert Unicode codes and guarded hexadecimal digit values',
+ 'Predict escapes and exact printed representations',
+ 'Choose character predicates from a specification',
+ 'Build character policies and lift them with one or two maps',
+]} />
+
+Each runnable example is a complete program. Its output block is exactly what main prints. Numeric checks avoid relying on terminal rendering of unusual characters. Imports inside Haskell fences belong at the top of that Haskell program.
+
+## 1. One character, empty text and nested text
+
+The quotation basics are in Values, Names, Types, and Text. The new decision is which level a function reaches: `Char` is one character value; `String` means `[Char]`; `[String]` means `[[Char]]`. There is no empty Char. A space is a character, while `""` is an empty list. `[""]` is not an empty outer list. A displayed symbol can use several Unicode code points, so String length counts Char values, not necessarily visible symbols.
+
+### Template
+
+```haskell
+one :: Char
+one = ' '
+text :: String
+text = [one]
+texts :: [String]
+texts = [text, ""]
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length " ")
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+The ordinary space occupies one list position.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (('Q', ["Q"], ['Q']))
+```
+
+```text
+('Q',["Q"],"Q")
+```
+
+</HaskellTryIt>
+
+The last list holds Chars and therefore prints as a String; the middle list holds Strings.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((length "", length ([] :: [String]), length [""], map length [""," ","ab"]))
+```
+
+```text
+(0,0,1,[0,1,2])
+```
+
+</HaskellTryIt>
+
+The first two are empty at their own level. The singleton outer list contains one empty inner string.
+
+### Exam question 1: One character, empty text and nested text (4 marks)
+
+Write `isBlankChar :: Char -> Bool` recognising only ordinary space, and explain why it cannot recognise an empty character.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `isBlankChar :: Char -> Bool`. Its input is `Char` and its result is `Bool`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare the supplied Char with one space. Absence must be tested at the String level.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+isBlankChar :: Char -> Bool
+isBlankChar c = c == ' '
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`isBlankChar ' '` is `True`; `isBlankChar '\t'` is `False`. No Char argument denotes absence.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`isBlankChar " "` gives a type mismatch with key phrase `Couldn't match`; supply `' '`. `''` is invalid character-literal syntax. A lab function named isEmpty that compares with space tests a space, not an empty Char.
+
+### Practice with answer
+
+State the lengths of `""`, `" "` and `["", " "]`.
+
+<details>
+<summary>Answer</summary>
+
+`0`, `1`, `2`; the final length counts strings.
+
+</details>
+
+## 2. ord and Unicode codes
+
+`ord :: Char -> Int` returns a Unicode code point: the numeric identifier of a Char. ASCII is only the subset 0 through 127. A code point is not a UTF-8 byte count, a keyboard key or a digit value. The lecture's informal getCode operation corresponds to actual `ord`. Uppercase A to Z occupy 65 to 90; lowercase a to z occupy 97 to 122.
+
+### Template
+
+```haskell
+import Data.Char (ord)
+
+codeOf :: Char -> Int
+codeOf c = ord c
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print ((ord 'Z', ord 'z'))
+```
+
+```text
+(90,122)
+```
+
+</HaskellTryIt>
+
+Case changes the character value and its code.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print ((ord '0', ord '9', ord ' '))
+```
+
+```text
+(48,57,32)
+```
+
+</HaskellTryIt>
+
+Digit codes are 48 through 57, not the represented digit values. Space has code 32.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print ((ord '\xE9', ord '\x3BB', ord '\n'))
+```
+
+```text
+(233,955,10)
+```
+
+</HaskellTryIt>
+
+Accented e and Greek lambda are outside ASCII. Newline is one control Char of code 10.
+
+### Exam question 2: ord and Unicode codes (4 marks)
+
+Calculate the decimal value of `'8'` using its offset from `'0'`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The question asks for a value or a prediction. The answer has type `Int`; show how the supplied literals or codes produce it, rather than supplying an unrelated general function.
+
+</Step>
+
+<Step title="2. Plan">
+
+Subtract the zero code because the ten ASCII decimal digits are consecutive. State the decimal-digit precondition.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (ord)
+
+value :: Int
+value = ord '8' - ord '0'
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`56 - 48 = 8`. Applying this formula to `'A'` gives `17`, showing why the precondition matters.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`ord "A"` has a type mismatch (`Couldn't match`): pass `'A'` or use `map ord` on a String. `ord '7'` is `55`, not `7`; GHC accepts the call, but digitToInt answers the latter question.
+
+### Practice with answer
+
+What is `ord '1' - ord '0'`?
+
+<details>
+<summary>Answer</summary>
+
+`1`: the reduction is `49 - 48`.
+
+</details>
+
+## 3. chr and its valid domain
+
+`chr :: Int -> Char` reverses ord on valid codes. GHC accepts codes 0 through 1114111 inclusive (`0x10FFFF`). This interval includes controls, unassigned values and surrogate code values; accepted by chr does not mean printable or a Unicode scalar value. Negative or larger codes fail at run time. The lecture's informal code-to-character getChar means `chr`. Actual `Prelude.getChar :: IO Char` reads input and takes no code argument.
+
+### Template
+
+```haskell
+import Data.Char (chr)
+-- Precondition: 0 <= n && n <= 1114111
+characterOf :: Int -> Char
+characterOf n = chr n
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (chr)
+
+main :: IO ()
+main = print (chr 66)
+```
+
+```text
+'B'
+```
+
+</HaskellTryIt>
+
+Code 66 denotes B. print shows a Char with single quotes.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (chr, ord)
+
+main :: IO ()
+main = print ((ord (chr 955), chr 32 == ' ', chr 10 == '\n'))
+```
+
+```text
+(955,True,True)
+```
+
+</HaskellTryIt>
+
+Non-ASCII code 955 survives conversion. Space and newline have codes 32 and 10.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (chr, ord)
+
+main :: IO ()
+main = print ((ord (chr 0), ord (chr 1114111)))
+```
+
+```text
+(0,1114111)
+```
+
+</HaskellTryIt>
+
+Both accepted endpoints round-trip without asking a terminal to display them.
+
+### Exam question 3: chr and its valid domain (4 marks)
+
+Write `validCode :: Int -> Bool` for chr's argument domain.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `validCode :: Int -> Bool`. Its input is `Int` and its result is `Bool`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use inclusive lower and upper checks joined by Boolean and.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+validCode :: Int -> Bool
+validCode n = 0 <= n && n <= 1114111
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`0` and `1114111` pass; `-1` and `1114112` fail. Code 128 passes despite being outside ASCII.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`chr (-1)` and `chr 1114112` fail with key phrase `bad argument`; range-check first. `getChar 65` is a type mismatch (`Couldn't match`), because getChar is an action, not code conversion. Use `chr 65`.
+
+### Practice with answer
+
+Is every accepted chr value a visible symbol?
+
+<details>
+<summary>Answer</summary>
+
+No. Controls and unassigned codes are included.
+
+</details>
+
+## 4. Numeric escapes and their boundaries
+
+Inside a literal, backslash and decimal digits specify a code; `\x` introduces hexadecimal and `\o` introduces octal. The bases change the written number, not the resulting Char. Numeric escapes consume all following digits valid in their base. In a String, `\&` stops an escape without adding a character. It is not an empty Char.
+
+### Template
+
+```haskell
+decimal = '\65'
+hexadecimal = '\x41'
+octal = '\o101'
+text = "\65\&2"
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (('\65', '\x41', '\o101'))
+```
+
+```text
+('A','A','A')
+```
+
+</HaskellTryIt>
+
+Decimal 65, hexadecimal 41 and octal 101 name the same code.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print ((ord '\233', ord '\xE9', ord '\o351'))
+```
+
+```text
+(233,233,233)
+```
+
+</HaskellTryIt>
+
+The same non-ASCII code has three source spellings.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print ((map ord "\65\&2", map ord "\652"))
+```
+
+```text
+([65,50],[652])
+```
+
+</HaskellTryIt>
+
+With the separator, the digit 2 is another Char. Without it, 652 is one code.
+
+### Exam question 4: Numeric escapes and their boundaries (4 marks)
+
+Write a String containing A then 7, using a decimal escape for A.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The question asks for a value or a prediction. The answer has type `String`; show how the supplied literals or codes produce it, rather than supplying an unrelated general function.
+
+</Step>
+
+<Step title="2. Plan">
+
+Terminate the decimal code before the following digit with the empty escape separator.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+answer :: String
+answer = "\65\&7"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`length answer` is `2`; `map ord answer` is `[65,55]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`"\657"` compiles but contains one character of code 657. There is no diagnostic for this wrong value. Use `"\65\&7"`. An out-of-range source escape is rejected rather than a valid chr boundary test.
+
+### Practice with answer
+
+What does `"\x41\&B"` contain?
+
+<details>
+<summary>Answer</summary>
+
+Two characters, A then B. Without the separator, B could continue the hexadecimal escape.
+
+</details>
+
+## 5. Newlines: representation versus contents
+
+`\n` denotes one newline Char. `print` uses a readable representation, with surrounding quotes and escaped control characters. `putStr` writes String contents; `putStrLn` writes contents followed by one additional newline. Exact-output questions depend on which operation is used.
+
+### Template
+
+```haskell
+lineBreak :: Char
+lineBreak = '\n'
+message :: String
+message = "first\nsecond"
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("a\nb")
+```
+
+```text
+"a\nb"
+```
+
+</HaskellTryIt>
+
+print shows one output line containing the escaped representation.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = putStrLn "a\nb"
+```
+
+```text
+a
+b
+```
+
+</HaskellTryIt>
+
+The embedded newline ends the first line. putStrLn terminates the second.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print ((length "\n", length "\n\n", map ord "\n"))
+```
+
+```text
+(1,2,[10])
+```
+
+</HaskellTryIt>
+
+An escape is one Char regardless of how many source characters spell it.
+
+### Exam question 5: Newlines: representation versus contents (4 marks)
+
+Predict the exact output of `main = print "x\ny"`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The question asks for a value or a prediction. The answer has type `IO ()`; show how the supplied literals or codes produce it, rather than supplying an unrelated general function.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep print's outer quotes and escape the embedded newline in the representation.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = print "x\ny"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The single output line is `"x\ny"`. The output action also terminates that line.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`"a/nb"` has an ordinary slash and compiles as ordinary text. There is no error message; replace slash with backslash. Predicting two content lines for print confuses representation with contents.
+
+### Practice with answer
+
+What is the length of `"a\nb\n"`?
+
+<details>
+<summary>Answer</summary>
+
+`4`: a, newline, b, newline.
+
+</details>
+
+## 6. Tabs are characters, not fixed-width padding
+
+`\t` is a horizontal tab, code 9. Its display width depends on the terminal's tab stops; it is not a fixed number of stored spaces. Use readable output or codes when checking exact values.
+
+### Template
+
+```haskell
+tab :: Char
+tab = '\t'
+isTab :: Char -> Bool
+isTab c = c == tab
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("A\tB")
+```
+
+```text
+"A\tB"
+```
+
+</HaskellTryIt>
+
+print escapes the tab rather than expanding it to spaces.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ((length "\t", length "    ", '\t' == ' '))
+```
+
+```text
+(1,4,False)
+```
+
+</HaskellTryIt>
+
+One tab is one Char, four literal spaces are four, and their values differ.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print (map ord " \t\n")
+```
+
+```text
+[32,9,10]
+```
+
+</HaskellTryIt>
+
+These adjacent whitespace characters have three distinct codes.
+
+### Exam question 6: Tabs are characters, not fixed-width padding (4 marks)
+
+Write `countTabs :: String -> Int` without counting ordinary spaces.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `countTabs :: String -> Int`. Its input is `String` and its result is `Int`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Select exactly the tab Char, then count the selected characters.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+countTabs :: String -> Int
+countTabs s = length (filter (== '\t') s)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`countTabs " \t\t"` is `2`; `countTabs "   "` and `countTabs ""` are `0`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`length` counts Chars, not tab display columns. Comparing with `'t'` compiles but counts the letter t; no GHC error detects it. Repair the literal to `'\t'`.
+
+### Practice with answer
+
+How many tabs occur in `"t\t t"`?
+
+<details>
+<summary>Answer</summary>
+
+`1`; the other t characters are letters.
+
+</details>
+
+## 7. Backslashes in source and output
+
+A backslash introduces an escape. Write `\\` inside a literal for one stored backslash. Counting source characters, stored Chars and print's displayed escape spelling therefore gives different answers.
+
+### Template
+
+```haskell
+slash :: Char
+slash = '\\'
+path :: String
+path = "C:\\tmp"
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (('\\', length "\\"))
+```
+
+```text
+('\\',1)
+```
+
+</HaskellTryIt>
+
+Both literal forms store one backslash. print escapes it again in readable output.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("C:\\tmp\\a")
+```
+
+```text
+"C:\\tmp\\a"
+```
+
+</HaskellTryIt>
+
+Doubled source backslashes prevent t and a becoming escapes.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = putStrLn "\\\\"
+```
+
+```text
+\\
+```
+
+</HaskellTryIt>
+
+Four source backslashes encode two stored backslashes, which putStrLn writes directly.
+
+### Exam question 7: Backslashes in source and output (4 marks)
+
+Construct backslash followed by the letter n, rather than a newline.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The question asks for a value or a prediction. The answer has type `String`; show how the supplied literals or codes produce it, rather than supplying an unrelated general function.
+
+</Step>
+
+<Step title="2. Plan">
+
+Escape the backslash; the following n is then ordinary text.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+literalEscape :: String
+literalEscape = "\\n"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`length literalEscape` is `2`; its codes are `[92,110]`, unlike newline code 10.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+A path with one source backslash before t contains a tab. It compiles, so no GHC error appears. Double the backslash. An unescaped final backslash can instead interfere with the closing quote and cause a lexical error.
+
+### Practice with answer
+
+What is the length of `"\\\\"`?
+
+<details>
+<summary>Answer</summary>
+
+`2`: each escaped pair denotes one stored backslash.
+
+</details>
+
+## 8. Quotes as data
+
+Escape a matching delimiter when it is part of the value: `\'` inside a Char, `\"` inside a String. An apostrophe inside a double-quoted String needs no escape; a double quote inside a single-quoted Char also needs no escape.
+
+### Template
+
+```haskell
+apostrophe :: Char
+apostrophe = '\''
+quoted :: String
+quoted = "\"yes\""
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print (ord '\'')
+```
+
+```text
+39
+```
+
+</HaskellTryIt>
+
+The escaped apostrophe is one Char of code 39.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("\"yes\"")
+```
+
+```text
+"\"yes\""
+```
+
+</HaskellTryIt>
+
+The stored String has quote, y, e, s, quote. print escapes both data quotes.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (ord)
+
+main :: IO ()
+main = print ((ord '"', length "it's", length "\"\""))
+```
+
+```text
+(34,4,2)
+```
+
+</HaskellTryIt>
+
+The opposite quote can be written directly. The two escaped double quotes form a two-Char String.
+
+### Exam question 8: Quotes as data (4 marks)
+
+Construct an apostrophe followed by a double quote as one String.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The question asks for a value or a prediction. The answer has type `String`; show how the supplied literals or codes produce it, rather than supplying an unrelated general function.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the apostrophe directly in the String and escape the double quote.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+quotes :: String
+quotes = "'\""
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`map ord quotes` is `[39,34]`; `length quotes` is `2`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+An unescaped double quote can close a String early, giving a `parse error` in the following source. Escape the data quote. Single quotes cannot delimit a multi-character message.
+
+### Practice with answer
+
+How long is `"say \"hi\""`?
+
+<details>
+<summary>Answer</summary>
+
+`8`: s,a,y,space,quote,h,i,quote.
+
+</details>
+
+## 9. toUpper on one Char
+
+`toUpper :: Char -> Char` uses a Unicode uppercase mapping where one exists, preserving other characters. Subtracting 32 from an arbitrary code is not a general replacement. The result is one Char, not whole-word case folding or a locale-sensitive text service.
+
+### Template
+
+```haskell
+import Data.Char (toUpper)
+
+upperChar :: Char -> Char
+upperChar c = toUpper c
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (toUpper 'q')
+```
+
+```text
+'Q'
+```
+
+</HaskellTryIt>
+
+q maps to Q.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print ((toUpper 'Q', toUpper '7', toUpper '?'))
+```
+
+```text
+('Q','7','?')
+```
+
+</HaskellTryIt>
+
+Already uppercase and nonletters are unchanged.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper, ord)
+
+main :: IO ()
+main = print (ord (toUpper '\xE9'))
+```
+
+```text
+201
+```
+
+</HaskellTryIt>
+
+Accented lowercase e maps to accented uppercase E, code 201.
+
+### Exam question 9: toUpper on one Char (4 marks)
+
+Write `upperIfAscii :: Char -> Char`, preserving all non-ASCII input.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `upperIfAscii :: Char -> Char`. Its input is `Char` and its result is `Char`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Test the ASCII subset first; apply toUpper only on that branch.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isAscii, toUpper)
+
+upperIfAscii :: Char -> Char
+upperIfAscii c
+  | isAscii c = toUpper c
+  | otherwise = c
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'q'` becomes `'Q'`, `'7'` stays `'7'`, accented lowercase e stays unchanged by this restricted policy.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`toUpper "abc"` gives a type mismatch (`Couldn't match`); use `map toUpper "abc"`. Blind code shifts corrupt punctuation even when they compile.
+
+### Practice with answer
+
+Predict `toUpper ' '`.
+
+<details>
+<summary>Answer</summary>
+
+It remains `' '` because space has no uppercase mapping.
+
+</details>
+
+## 10. toLower and information loss
+
+`toLower :: Char -> Char` maps to lowercase where possible. Different input values can map to the same result, so this is not generally reversible. It changes case, not accents or spelling, and is distinct from Unicode normalisation of alternative code-point sequences. State the alphabet policy for vowel and case-insensitive comparisons.
+
+### Template
+
+```haskell
+import Data.Char (toLower)
+
+lowerChar :: Char -> Char
+lowerChar = toLower
+```
+
+The parameter stands for the supplied input; the signature states the input and result shapes.
+
+### Worked variation: Normal input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toLower)
+
+main :: IO ()
+main = print (toLower 'M')
+```
+
+```text
+'m'
+```
+
+</HaskellTryIt>
+
+Uppercase M maps to lowercase m.
+
+### Worked variation: Changed alphabet or output shape
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toLower)
+
+main :: IO ()
+main = print ((toLower 'm', toLower '3', toLower '!'))
+```
+
+```text
+('m','3','!')
+```
+
+</HaskellTryIt>
+
+Lowercase and nonletters remain unchanged.
+
+### Worked variation: Boundary and nonletter cases
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toLower, ord)
+
+main :: IO ()
+main = print ((ord (toLower '\xC9'), toLower 'A' == toLower 'a'))
+```
+
+```text
+(233,True)
+```
+
+</HaskellTryIt>
+
+Accented uppercase E maps to code 233. Both As map to a, discarding their case distinction.
+
+### Exam question 10: toLower and information loss (4 marks)
+
+Write an English-vowel predicate by normalising case first, extending Lab 02.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `englishVowel :: Char -> Bool`. Its input is `Char` and its result is `Bool`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Lowercase the one input Char, then test membership of the five chosen English vowels.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (toLower)
+
+englishVowel :: Char -> Bool
+englishVowel c = toLower c `elem` "aeiou"
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'E'` and `'e'` pass; `'y'`, accented e and punctuation fail under this stated alphabet.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`toLower c == "a"` mixes Char and String (`Couldn't match`). Use `'a'` for equality or `"aeiou"` for membership. Saying toLower removes accents is a logical error with no diagnostic.
+
+### Practice with answer
+
+Does `toLower 'A' == toLower 'a'` imply the originals were equal?
+
+<details>
+<summary>Answer</summary>
+
+No; two distinct input values can have the same normalised result.
+
+</details>
+
+## 11. isAscii and its accepted alphabet
+
+`isAscii :: Char -> Bool` recognises exactly codes 0 through 127, including controls. ASCII does not mean printable or alphabetic.
+
+### Template
+
+```haskell
+import Data.Char (isAscii)
+
+accepted :: Char -> Bool
+accepted c = isAscii c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAscii)
+
+main :: IO ()
+main = print ([isAscii '\0', isAscii '\127'])
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+Both endpoints of the ASCII interval belong.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAscii)
+
+main :: IO ()
+main = print ([isAscii '\128', isAscii '\xE9'])
+```
+
+```text
+[False,False]
+```
+
+</HaskellTryIt>
+
+128 is just outside ASCII, and accented e is outside too.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAscii)
+
+main :: IO ()
+main = print (map isAscii "A7 ?")
+```
+
+```text
+[True,True,True,True]
+```
+
+</HaskellTryIt>
+
+Letters, digits, space and punctuation can all belong to ASCII.
+
+### Exam question 11: isAscii and its accepted alphabet (4 marks)
+
+Write `asciiLetter :: Char -> Bool` accepting only ASCII letters.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `asciiLetter :: Char -> Bool`. Its input is `Char` and its result is `Bool`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Combine the subset predicate with the letter predicate; neither alone states both requirements.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isAscii, isAlpha)
+
+asciiLetter :: Char -> Bool
+asciiLetter c = isAscii c && isAlpha c
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'A'` passes; `'7'` and accented e fail. Newline is ASCII but not a letter.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Being ASCII does not imply being a letter. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isAscii "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Is newline ASCII?
+
+<details>
+<summary>Answer</summary>
+
+Yes: its code is 10.
+
+</details>
+
+## 12. isUpper and its accepted alphabet
+
+`isUpper :: Char -> Bool` recognises Unicode uppercase letters. Equality with the result of toUpper is not the same test, because digits and punctuation are unchanged by conversion too.
+
+### Template
+
+```haskell
+import Data.Char (isUpper)
+
+accepted :: Char -> Bool
+accepted c = isUpper c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isUpper)
+
+main :: IO ()
+main = print (map isUpper "AZ")
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+Both uppercase ASCII endpoints pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isUpper)
+
+main :: IO ()
+main = print (map isUpper "az7? ")
+```
+
+```text
+[False,False,False,False,False]
+```
+
+</HaskellTryIt>
+
+Lowercase and nonletters fail.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isUpper)
+
+main :: IO ()
+main = print ([isUpper '\xC9', isUpper '\xE9'])
+```
+
+```text
+[True,False]
+```
+
+</HaskellTryIt>
+
+Accented uppercase E passes; its lowercase counterpart fails.
+
+### Exam question 12: isUpper and its accepted alphabet (4 marks)
+
+Write `countUpper :: String -> Int`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `countUpper :: String -> Int`. Its input is `String` and its result is `Int`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep uppercase characters and count them. Do not count every character unchanged by toUpper.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isUpper)
+
+countUpper :: String -> Int
+countUpper s = length (filter isUpper s)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`countUpper "A7zB!"` is `2`; empty text gives `0`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Testing `toUpper c == c` incorrectly accepts nonletters. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isUpper "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Is `isUpper '7'` True?
+
+<details>
+<summary>Answer</summary>
+
+No; it is a digit, not an uppercase letter.
+
+</details>
+
+## 13. isLower and its accepted alphabet
+
+`isLower :: Char -> Bool` recognises Unicode lowercase letters. It is not the negation of isUpper: uncased letters, numbers, punctuation and spaces can be neither.
+
+### Template
+
+```haskell
+import Data.Char (isLower)
+
+accepted :: Char -> Bool
+accepted c = isLower c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isLower)
+
+main :: IO ()
+main = print (map isLower "az")
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+Both lowercase ASCII endpoints pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isLower)
+
+main :: IO ()
+main = print (map isLower "AZ0_ ")
+```
+
+```text
+[False,False,False,False,False]
+```
+
+</HaskellTryIt>
+
+Uppercase and nonletters fail.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isLower)
+
+main :: IO ()
+main = print ([isLower '\xE9', isLower '\xC9'])
+```
+
+```text
+[True,False]
+```
+
+</HaskellTryIt>
+
+Accented lowercase e passes, uppercase E fails.
+
+### Exam question 13: isLower and its accepted alphabet (4 marks)
+
+Write `neitherCase :: Char -> Bool`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `neitherCase :: Char -> Bool`. Its input is `Char` and its result is `Bool`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Require both case tests to fail. One failing does not imply the other succeeds.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isUpper, isLower)
+
+neitherCase :: Char -> Bool
+neitherCase c = not (isUpper c) && not (isLower c)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'7'` and `'?'` pass; `'a'` fails because it is lowercase.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using `not . isUpper` as isLower wrongly admits spaces. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isLower "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Can `isUpper ' '` and `isLower ' '` both be False?
+
+<details>
+<summary>Answer</summary>
+
+Yes; a space has neither case.
+
+</details>
+
+## 14. isAlpha and its accepted alphabet
+
+`isAlpha :: Char -> Bool` recognises Unicode letters, beyond English. Digits, spaces and punctuation fail. Testing only an ASCII range deliberately chooses a smaller alphabet.
+
+### Template
+
+```haskell
+import Data.Char (isAlpha)
+
+accepted :: Char -> Bool
+accepted c = isAlpha c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlpha)
+
+main :: IO ()
+main = print (map isAlpha "Az")
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+Both cases of English letters pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlpha)
+
+main :: IO ()
+main = print (map isAlpha "7-_ ")
+```
+
+```text
+[False,False,False,False]
+```
+
+</HaskellTryIt>
+
+Digits, punctuation and space fail.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlpha)
+
+main :: IO ()
+main = print ([isAlpha '\xE9', isAlpha '\x3BB', isAlpha '\x4E2D'])
+```
+
+```text
+[True,True,True]
+```
+
+</HaskellTryIt>
+
+Accented Latin, Greek and Chinese letters all pass.
+
+### Exam question 14: isAlpha and its accepted alphabet (4 marks)
+
+Write `lettersOnly :: String -> String`, preserving letter order.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `lettersOnly :: String -> String`. Its input is `String` and its result is `String`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Filter by the Unicode letter predicate. A hand-written English range narrows the requirement.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isAlpha)
+
+lettersOnly :: String -> String
+lettersOnly = filter isAlpha
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`lettersOnly "A-2 b!"` is `"Ab"`; empty input remains empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using only a to z drops uppercase and non-English letters. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isAlpha "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Is `isAlpha '_'` True?
+
+<details>
+<summary>Answer</summary>
+
+No; identifier punctuation is not a letter.
+
+</details>
+
+## 15. isDigit and its accepted alphabet
+
+`isDigit :: Char -> Bool` recognises only ASCII decimal digits 0 through 9. It does not recognise every Unicode numeric character or the hexadecimal letters A to F.
+
+### Template
+
+```haskell
+import Data.Char (isDigit)
+
+accepted :: Char -> Bool
+accepted c = isDigit c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isDigit)
+
+main :: IO ()
+main = print (map isDigit "09")
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+Both decimal endpoints pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isDigit)
+
+main :: IO ()
+main = print (map isDigit "/ :Af")
+```
+
+```text
+[False,False,False,False,False]
+```
+
+</HaskellTryIt>
+
+Adjacent punctuation, space and hexadecimal letters fail.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isDigit)
+
+main :: IO ()
+main = print ([isDigit '\x0663', isDigit '\x00B2'])
+```
+
+```text
+[False,False]
+```
+
+</HaskellTryIt>
+
+Arabic-Indic three and superscript two are numeric but fail this ASCII test.
+
+### Exam question 15: isDigit and its accepted alphabet (4 marks)
+
+Write `decimalValue :: Char -> Int`, returning -1 outside ASCII decimal digits.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `decimalValue :: Char -> Int`. Its input is `Char` and its result is `Int`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use isDigit before the partial converter. The sentinel -1 lies outside successful results 0 through 9.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isDigit, digitToInt)
+
+decimalValue :: Char -> Int
+decimalValue c
+  | isDigit c = digitToInt c
+  | otherwise = -1
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'9'` returns `9`; `'F'` and Arabic-Indic three return `-1`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Assuming isDigit accepts every Unicode decimal character misstates the library domain. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isDigit "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Does `isDigit 'F'` pass?
+
+<details>
+<summary>Answer</summary>
+
+No; F is hexadecimal but not decimal.
+
+</details>
+
+## 16. isAlphaNum and its accepted alphabet
+
+`isAlphaNum :: Char -> Bool` recognises Unicode letters or Unicode numbers. It is wider than isAlpha or the ASCII-only isDigit. Spaces, underscore and punctuation fail.
+
+### Template
+
+```haskell
+import Data.Char (isAlphaNum)
+
+accepted :: Char -> Bool
+accepted c = isAlphaNum c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlphaNum)
+
+main :: IO ()
+main = print (map isAlphaNum "Az09")
+```
+
+```text
+[True,True,True,True]
+```
+
+</HaskellTryIt>
+
+Letters and ASCII numbers pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlphaNum)
+
+main :: IO ()
+main = print (map isAlphaNum "_- ?")
+```
+
+```text
+[False,False,False,False]
+```
+
+</HaskellTryIt>
+
+Underscore, other punctuation and space fail.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlphaNum)
+
+main :: IO ()
+main = print ([isAlphaNum '\x0663', isAlphaNum '\x00B2', isAlphaNum '\x4E2D'])
+```
+
+```text
+[True,True,True]
+```
+
+</HaskellTryIt>
+
+Unicode numbers and the Chinese letter pass, even when isDigit would fail.
+
+### Exam question 16: isAlphaNum and its accepted alphabet (4 marks)
+
+Write `labelChars :: String -> String`, keeping alphanumeric characters and underscore.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `labelChars :: String -> String`. Its input is `String` and its result is `String`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Add the required underscore exception explicitly, because the library predicate excludes it.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isAlphaNum)
+
+labelChars :: String -> String
+labelChars s = filter (\c -> isAlphaNum c || c == '_') s
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`labelChars "A_2-b!"` is `"A_2b"`; empty text stays empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Replacing isAlphaNum by isAlpha or isDigit changes the Unicode-number policy. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isAlphaNum "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Does isAlphaNum accept underscore by default?
+
+<details>
+<summary>Answer</summary>
+
+No. Add an explicit exception if required.
+
+</details>
+
+## 17. isNumber and its accepted alphabet
+
+`isNumber :: Char -> Bool` recognises Unicode numeric characters, including decimal digits and other numeric forms such as superscripts. This does not make digitToInt safe: that converter accepts an ASCII hexadecimal alphabet.
+
+<Callout type="note" title="Interpreter support">
+
+GHC provides `Data.Char.isNumber`, but the site interpreter does not currently export it. The direct library template, three direct examples and exam definition use plain Haskell fences. Each variation also has a runnable equivalent category check.
+
+</Callout>
+
+### Template
+
+```haskell
+import Data.Char (isNumber)
+
+accepted :: Char -> Bool
+accepted c = isNumber c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+```haskell
+import Data.Char (isNumber)
+
+main :: IO ()
+main = print (map isNumber "09")
+```
+
+```text
+[True,True]
+```
+
+The real-library example above is for GHC. The site interpreter currently lacks `isNumber`; this runnable check uses the equivalent category identity: alphanumeric and not alphabetic means numeric.
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlphaNum, isAlpha)
+
+numberCategory :: Char -> Bool
+numberCategory c = isAlphaNum c && not (isAlpha c)
+
+main :: IO ()
+main = print (map numberCategory "09")
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+ASCII digits are numbers.
+
+### Worked variation: A changed alphabet or nonletter
+
+```haskell
+import Data.Char (isNumber)
+
+main :: IO ()
+main = print ([isNumber '\x0663', isNumber '\x00B2'])
+```
+
+```text
+[True,True]
+```
+
+The real-library example above is for GHC. The site interpreter currently lacks `isNumber`; this runnable check uses the equivalent category identity: alphanumeric and not alphabetic means numeric.
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlphaNum, isAlpha)
+
+numberCategory :: Char -> Bool
+numberCategory c = isAlphaNum c && not (isAlpha c)
+
+main :: IO ()
+main = print ([numberCategory '\x0663', numberCategory '\x00B2'])
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+Arabic-Indic three and superscript two have numeric categories.
+
+### Worked variation: The boundary case
+
+```haskell
+import Data.Char (isNumber)
+
+main :: IO ()
+main = print (map isNumber "Af ?")
+```
+
+```text
+[False,False,False,False]
+```
+
+The real-library example above is for GHC. The site interpreter currently lacks `isNumber`; this runnable check uses the equivalent category identity: alphanumeric and not alphabetic means numeric.
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isAlphaNum, isAlpha)
+
+numberCategory :: Char -> Bool
+numberCategory c = isAlphaNum c && not (isAlpha c)
+
+main :: IO ()
+main = print (map numberCategory "Af ?")
+```
+
+```text
+[False,False,False,False]
+```
+
+</HaskellTryIt>
+
+Hex letters are letters, not Unicode number characters.
+
+### Exam question 17: isNumber and its accepted alphabet (4 marks)
+
+Write `countNumbers :: String -> Int` without converting numeric characters.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `countNumbers :: String -> Int`. Its input is `String` and its result is `Int`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Filter by isNumber and count. Obtaining their numeric values is not required.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isNumber)
+
+countNumbers :: String -> Int
+countNumbers s = length (filter isNumber s)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`countNumbers "A2"` is `1`; a singleton superscript two counts as `1` too.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Using isNumber as a guard for digitToInt still permits invalid conversion arguments. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isNumber "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Does superscript two pass isNumber and isDigit equally?
+
+<details>
+<summary>Answer</summary>
+
+It passes isNumber and fails isDigit.
+
+</details>
+
+## 18. isHexDigit and its accepted alphabet
+
+`isHexDigit :: Char -> Bool` recognises ASCII 0 to 9, a to f, and A to F. This is exactly the character domain of digitToInt. Recognition returns Bool; it does not itself convert.
+
+### Template
+
+```haskell
+import Data.Char (isHexDigit)
+
+accepted :: Char -> Bool
+accepted c = isHexDigit c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isHexDigit)
+
+main :: IO ()
+main = print (map isHexDigit "09aAfF")
+```
+
+```text
+[True,True,True,True,True,True]
+```
+
+</HaskellTryIt>
+
+Decimal digits and either case of hex letters pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isHexDigit)
+
+main :: IO ()
+main = print (map isHexDigit "gG- ")
+```
+
+```text
+[False,False,False,False]
+```
+
+</HaskellTryIt>
+
+The next letters after f, minus and space fail.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isHexDigit)
+
+main :: IO ()
+main = print ([isHexDigit '\x0663', isHexDigit '\xFF21'])
+```
+
+```text
+[False,False]
+```
+
+</HaskellTryIt>
+
+Arabic-Indic three and fullwidth A are not the ASCII hex alphabet.
+
+### Exam question 18: isHexDigit and its accepted alphabet (4 marks)
+
+Write `hexValue :: Char -> Int`, returning -1 outside the hex alphabet.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `hexValue :: Char -> Int`. Its input is `Char` and its result is `Int`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Guard digitToInt with its exact domain predicate.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isHexDigit, digitToInt)
+
+hexValue :: Char -> Int
+hexValue c
+  | isHexDigit c = digitToInt c
+  | otherwise = -1
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'F'` and `'f'` return `15`; `'G'` returns `-1`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+isAlphaNum accepts G even though digitToInt rejects it. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isHexDigit "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Does `isHexDigit 'e'` pass?
+
+<details>
+<summary>Answer</summary>
+
+Yes. e represents hexadecimal value 14.
+
+</details>
+
+## 19. isOctDigit and its accepted alphabet
+
+`isOctDigit :: Char -> Bool` recognises only ASCII 0 through 7. Choose the alphabet a specification names, even though digitToInt accepts a wider domain including 8, 9 and hex letters.
+
+### Template
+
+```haskell
+import Data.Char (isOctDigit)
+
+accepted :: Char -> Bool
+accepted c = isOctDigit c
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isOctDigit)
+
+main :: IO ()
+main = print (map isOctDigit "07")
+```
+
+```text
+[True,True]
+```
+
+</HaskellTryIt>
+
+Both octal endpoints pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isOctDigit)
+
+main :: IO ()
+main = print (map isOctDigit "89aF")
+```
+
+```text
+[False,False,False,False]
+```
+
+</HaskellTryIt>
+
+These are convertible hexadecimal digits but not octal digits.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isOctDigit)
+
+main :: IO ()
+main = print ([isOctDigit ' ', isOctDigit '\x0663'])
+```
+
+```text
+[False,False]
+```
+
+</HaskellTryIt>
+
+Whitespace and non-ASCII digits fail.
+
+### Exam question 19: isOctDigit and its accepted alphabet (4 marks)
+
+Write `octValue :: Char -> Int`, returning -1 outside the octal alphabet.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `octValue :: Char -> Int`. Its input is `Char` and its result is `Int`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the narrower octal guard before the wider converter.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isOctDigit, digitToInt)
+
+octValue :: Char -> Int
+octValue c
+  | isOctDigit c = digitToInt c
+  | otherwise = -1
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`'7'` returns `7`; `'8'` returns `-1`, although digitToInt alone would accept it.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+isDigit incorrectly permits 8 and 9 for an octal requirement. This is a logical mistake, so GHC need not report an error. Passing a String to the predicate, such as `isOctDigit "A"`, instead causes a type mismatch with key phrase `Couldn't match`. Pass one Char or lift the predicate with map.
+
+### Practice with answer
+
+Is digitToInt invalid on every non-octal character?
+
+<details>
+<summary>Answer</summary>
+
+No. It accepts 8, 9 and hex letters, although an octal specification rejects them.
+
+</details>
+
+## 20. isSpace and two different counts
+
+`isSpace :: Char -> Bool` recognises whitespace: ordinary space, tab, newline, carriage return and supported Unicode space characters. `(== ' ')` recognises only the ordinary space. A space count, a whitespace count and a tab count answer different questions. Absence is tested with `null` on a String, not a character predicate.
+
+### Template
+
+```haskell
+import Data.Char (isSpace)
+spaces :: String -> Int
+spaces s = length (filter (== ' ') s)
+whitespace :: String -> Int
+whitespace s = length (filter isSpace s)
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace)
+
+main :: IO ()
+main = print (map isSpace " \t\n\r")
+```
+
+```text
+[True,True,True,True]
+```
+
+</HaskellTryIt>
+
+Different whitespace codes all pass.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace)
+
+main :: IO ()
+main = print (map isSpace "A0_")
+```
+
+```text
+[False,False,False]
+```
+
+</HaskellTryIt>
+
+Letters, digits and underscore are not whitespace.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace)
+
+main :: IO ()
+main = print ((isSpace '\xA0', length (filter (== ' ') " \t\n "), length (filter isSpace " \t\n "), length (filter isSpace "")))
+```
+
+```text
+(True,2,4,0)
+```
+
+</HaskellTryIt>
+
+Non-breaking space passes. The mixed String has two ordinary spaces and four whitespace characters. Empty text contributes none.
+
+### Exam question 20: isSpace and two different counts (4 marks)
+
+Write `counts :: String -> (Int, Int)`, returning ordinary spaces then all whitespace.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `counts :: String -> (Int, Int)`. Its input is `String` and its result is `(Int, Int)`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use two explicit predicates and count each filtered result. Do not replace the narrower requirement by the wider one.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isSpace)
+
+counts :: String -> (Int, Int)
+counts s = (length (filter (== ' ') s), length (filter isSpace s))
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`counts "a \tb\n "` is `(2,4)`; `counts ""` is `(0,0)`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`isSpace ""` has a type mismatch (`Couldn't match`) because it expects Char. Use `null` to test empty text. Replacing `(== ' ')` by isSpace in a literal-space question compiles but answers the wrong requirement.
+
+### Practice with answer
+
+Count ordinary spaces and whitespace in `"\t a\n"`.
+
+<details>
+<summary>Answer</summary>
+
+`1` ordinary space; `3` whitespace characters.
+
+</details>
+
+## 21. digitToInt needs the right guard
+
+`digitToInt :: Char -> Int` converts ASCII 0 through 9 and both cases of a through f to values 0 through 15. It is a hexadecimal digit converter even if an exercise uses decimal input only. Other Chars fail at run time. For a decimal requirement guard with isDigit; for the full domain guard with isHexDigit. Reuse safe-result design from the Maybe lessons; the new issue here is which guard matches the conversion domain.
+
+### Template
+
+```haskell
+import Data.Char (digitToInt, isHexDigit)
+hexOrMinusOne :: Char -> Int
+hexOrMinusOne c
+  | isHexDigit c = digitToInt c
+  | otherwise = -1
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (digitToInt)
+
+main :: IO ()
+main = print ((digitToInt '0', digitToInt '9'))
+```
+
+```text
+(0,9)
+```
+
+</HaskellTryIt>
+
+The digit values differ from ord's codes 48 and 57.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (digitToInt)
+
+main :: IO ()
+main = print ((digitToInt 'a', digitToInt 'F', digitToInt 'f'))
+```
+
+```text
+(10,15,15)
+```
+
+</HaskellTryIt>
+
+a means ten; both Fs mean fifteen.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (digitToInt, isHexDigit)
+
+hexOrMinusOne :: Char -> Int
+hexOrMinusOne c
+  | isHexDigit c = digitToInt c
+  | otherwise = -1
+
+main :: IO ()
+main = print (map hexOrMinusOne "0Fg ?")
+```
+
+```text
+[0,15,-1,-1,-1]
+```
+
+</HaskellTryIt>
+
+0 and F convert; g, space and question mark take the fallback without calling digitToInt.
+
+### Exam question 21: digitToInt needs the right guard (4 marks)
+
+Write a repaired version of `if isAlphaNum c then digitToInt c else -1` for hexadecimal input.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a repair. The given guard accepts every alphanumeric Char, but the converter accepts only ASCII hexadecimal digits. We need a Char-to-Int definition and a concrete counterexample explaining the original failure.
+
+</Step>
+
+<Step title="2. Plan">
+
+G is an alphanumeric counterexample rejected by the converter. Replace the guard with its exact accepted domain.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (digitToInt, isHexDigit)
+
+fixed :: Char -> Int
+fixed c = if isHexDigit c then digitToInt c else -1
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`fixed 'G'` is `-1` with no converter call; `fixed 'B'` is `11`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+A deliberate crash such as `digitToInt 'G'` has stable diagnostic phrase `not a digit`. Keep such calls outside runnable widgets. `read "F" :: Int` is not an alternative: a bare hex letter is not decimal Int input syntax.
+
+### Practice with answer
+
+Why does `isDigit 'f'` fail while `digitToInt 'f'` succeeds?
+
+<details>
+<summary>Answer</summary>
+
+The predicate has an ASCII decimal domain; the converter has an ASCII hexadecimal domain.
+
+</details>
+
+## 22. intToDigit and single-digit output
+
+`intToDigit :: Int -> Char` accepts 0 through 15 inclusive, giving one ASCII hexadecimal digit. Values 10 through 15 become lowercase a through f. It does not format an arbitrary integer as decimal text: `show` gives a String for that task. To get uppercase hex, apply toUpper after guarded conversion.
+
+### Template
+
+```haskell
+import Data.Char (intToDigit)
+hexChar :: Int -> Char
+hexChar n
+  | 0 <= n && n <= 15 = intToDigit n
+  | otherwise = '?'
+```
+
+Read the parameter as the supplied value. The final result type tells whether this operation tests, converts, or transforms.
+
+### Worked variation: The usual alphabet
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (intToDigit)
+
+main :: IO ()
+main = print ((intToDigit 0, intToDigit 9))
+```
+
+```text
+('0','9')
+```
+
+</HaskellTryIt>
+
+The decimal endpoints produce digit Chars.
+
+### Worked variation: A changed alphabet or nonletter
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (intToDigit)
+
+main :: IO ()
+main = print (map intToDigit [10,11,12,13,14,15])
+```
+
+```text
+"abcdef"
+```
+
+</HaskellTryIt>
+
+The six extra values produce lowercase letters. A list of Chars prints as a String.
+
+### Worked variation: The boundary case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (intToDigit)
+
+hexChar :: Int -> Char
+hexChar n
+  | 0 <= n && n <= 15 = intToDigit n
+  | otherwise = '?'
+
+main :: IO ()
+main = print (map hexChar [-1,0,15,16])
+```
+
+```text
+"?0f?"
+```
+
+</HaskellTryIt>
+
+Both invalid sides use the replacement. The accepted endpoints convert to 0 and f.
+
+### Exam question 22: intToDigit and single-digit output (4 marks)
+
+Write `upperHex :: Int -> Char`, returning ? outside 0 through 15 and uppercase hex inside.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `upperHex :: Int -> Char`. Its input is `Int` and its result is `Char`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check both inclusive boundaries before intToDigit. Uppercase only the successful Char.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (intToDigit, toUpper)
+
+upperHex :: Int -> Char
+upperHex n
+  | 0 <= n && n <= 15 = toUpper (intToDigit n)
+  | otherwise = '?'
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`upperHex 10` is `'A'`, `upperHex 15` is `'F'`, and `upperHex 16` is `'?'`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`intToDigit 16` fails with phrase `not a digit`; checking only the upper boundary leaves negatives unsafe. `intToDigit 12` is `'c'`, whereas `show 12` is `"12"`. Passing a Char to intToDigit gives a type mismatch (`Couldn't match`).
+
+### Practice with answer
+
+What is `digitToInt (intToDigit 14)`?
+
+<details>
+<summary>Answer</summary>
+
+`14`. In the other direction, a capital F becomes lowercase f after conversion to a number and back.
+
+</details>
+
+## 23. A character normaliser states a policy
+
+A normaliser makes selected differences disappear. Here the policy is: replace every whitespace Char by ordinary space, and lowercase everything else. A `Char -> Char` function preserves one value per input; it cannot delete a character or expand it into a word. This course policy is not a full Unicode-normalisation algorithm. The if and guard versions use the decision syntax already taught in Lab 02.
+
+### Template
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c
+```
+
+Read the signature from the input shape to the result shape; each map lifts its supplied function through one list level.
+
+### Worked variation: Mixed input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c
+
+main :: IO ()
+main = print (normaliseChar 'R')
+```
+
+```text
+'r'
+```
+
+</HaskellTryIt>
+
+R is not whitespace, so the otherwise branch returns its lowercase mapping.
+
+### Worked variation: The empty or whitespace case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c 
+
+main :: IO ()
+main = print (normaliseChar '\t')
+```
+
+```text
+' '
+```
+
+</HaskellTryIt>
+
+The tab satisfies isSpace, so the first guard replaces it with one ordinary space.
+
+### Worked variation: Nonletters and boundaries
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c
+
+main :: IO ()
+main = print (normaliseChar '?', normaliseChar '7', normaliseChar '\xA0')
+```
+
+```text
+('?','7',' ')
+```
+
+</HaskellTryIt>
+
+Punctuation and digit survive toLower; non-breaking space takes the whitespace branch.
+
+### Exam question 23: A character normaliser states a policy (5 marks)
+
+Write `normaliseWithIf :: Char -> Char` equivalent to the guarded normaliser.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `normaliseWithIf :: Char -> Char`. Its input is `Char` and its result is `Char`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Test the same predicate with the same two results; only the decision notation changes.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseWithIf :: Char -> Char
+normaliseWithIf c = if isSpace c then ' ' else toLower c
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Both versions map `'\n'` to `' '`, `'A'` to `'a'`, and `'?'` to itself.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Returning `""` to delete whitespace makes one branch String and the other Char (`Couldn't match`). Keep the signature and replace, or design a filter on Strings for deletion. Do not assume every nonletter is whitespace.
+
+### Practice with answer
+
+Does the policy delete `'!'`?
+
+<details>
+<summary>Answer</summary>
+
+No. It returns `'!'`; punctuation has no lowercase mapping.
+
+</details>
+
+## 24. Whole-String policies and equivalent forms
+
+Lift a Char rule with `map` to obtain `String -> String`. Each input position yields one result, so the mapped policy preserves length. Filtering is a different operation that may delete positions. Mapping a whitespace replacement does not collapse runs into one space: three whitespace Chars become three ordinary spaces. No generic comprehension rule needs relearning; the job is choosing the character rule.
+
+### Template
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c
+
+normalise :: String -> String
+normalise = map normaliseChar
+normaliseExplicit :: String -> String
+normaliseExplicit s = map normaliseChar s
+```
+
+Read the signature from the input shape to the result shape; each map lifts its supplied function through one list level.
+
+### Worked variation: Mixed input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c
+
+main :: IO ()
+main = print (map normaliseChar "A\tB\n7!")
+```
+
+```text
+"a b 7!"
+```
+
+</HaskellTryIt>
+
+Visit A, tab, B, newline, 7 and ! in order. Each contributes one output Char, preserving length six.
+
+### Worked variation: The empty or whitespace case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c
+
+main :: IO ()
+main = print (map normaliseChar "")
+```
+
+```text
+""
+```
+
+</HaskellTryIt>
+
+There are no characters to visit, so map returns empty text.
+
+### Worked variation: Nonletters and boundaries
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+normaliseChar :: Char -> Char
+normaliseChar c
+  | isSpace c = ' '
+  | otherwise = toLower c
+
+main :: IO ()
+main = print (map normaliseChar " \t\n")
+```
+
+```text
+"   "
+```
+
+</HaskellTryIt>
+
+Three different whitespace characters become three spaces. This is replacement, not run collapsing.
+
+### Worked variation: A changed policy or nesting
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (isSpace, toLower)
+
+compact :: String -> String
+compact s = map toLower (filter (\c -> not (isSpace c)) s)
+
+main :: IO ()
+main = print (compact " A\tB! ")
+```
+
+```text
+"ab!"
+```
+
+</HaskellTryIt>
+
+Filtering removes the three whitespace positions first. The remaining letters lowercase; punctuation stays.
+
+### Exam question 24: Whole-String policies and equivalent forms (5 marks)
+
+Write `lowerLetters :: String -> String`, keeping only Unicode letters and lowercasing them; give an equivalent composition.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The requested definition is `lowerLetters :: String -> String`. Its input is `String` and its result is `String`. The command word "write" requires an implementation; retain the stated alphabet, boundary and invalid-input policy.
+
+</Step>
+
+<Step title="2. Plan">
+
+Filter with isAlpha, then map toLower over the surviving Chars. Composition means applying the right-hand function first.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (isAlpha, toLower)
+
+lowerLetters :: String -> String
+lowerLetters s = map toLower (filter isAlpha s)
+
+lowerLettersPointFree :: String -> String
+lowerLettersPointFree = map toLower . filter isAlpha
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`lowerLetters " A2-b!"` is `"ab"`: the filter keeps A and b, then the map changes A. Empty input stays empty.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+`normalise = toLower` under a String signature has a type mismatch (`Couldn't match`); insert map. `filter toLower` also fails because filter needs a Bool result, not Char. Claiming mapping collapses spaces is a logical error with no diagnostic.
+
+### Practice with answer
+
+Does this mapped policy send `"A  B"` to `"a b"`?
+
+<details>
+<summary>Answer</summary>
+
+No. It produces `"a  b"` with two spaces.
+
+</details>
+
+## 25. Lists of strings and the Currying slide repair
+
+For `[String]`, each outer element is a String. Its transformation must accept String, so lift the Char function first, then lift again: `map (map toUpper)`. The Currying slide's annotation `map toUpper :: [String] -> [String]` is wrong. Its actual specialised type is `String -> String`. Mapping preserves order and duplicates; sorting is a separate choice and must not be silently added when the question preserves the input order.
+
+### Template
+
+```haskell
+import Data.Char (toUpper)
+
+upperText :: String -> String
+upperText = map toUpper
+upperTexts :: [String] -> [String]
+upperTexts = map upperText
+-- Equivalent: upperTexts xs = map (map toUpper) xs
+```
+
+Read the signature from the input shape to the result shape; each map lifts its supplied function through one list level.
+
+### Worked variation: Mixed input
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (map (map toUpper) ["Ada","bo"])
+```
+
+```text
+["ADA","BO"]
+```
+
+</HaskellTryIt>
+
+The outer map visits two Strings; the inner calls visit A,d,a and b,o.
+
+### Worked variation: The empty or whitespace case
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (map (map toUpper) ([] :: [String]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+There are no outer elements. This is an empty list of Strings, not an empty String.
+
+### Worked variation: Nonletters and boundaries
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+
+main :: IO ()
+main = print (map (map toUpper) ["","a1","?"])
+```
+
+```text
+["","A1","?"]
+```
+
+</HaskellTryIt>
+
+The empty inner String stays empty. Nonletters remain unchanged.
+
+### Worked variation: A changed policy or nesting
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toLower)
+
+main :: IO ()
+main = print (map (map toLower) ["B","A\t","B"])
+```
+
+```text
+["b","a\t","b"]
+```
+
+</HaskellTryIt>
+
+The B,A,B order and duplicate B are preserved, as is the tab. Lowercasing does not sort or remove duplicates.
+
+### Exam question 25: Lists of strings and the Currying slide repair (5 marks)
+
+Repair `shoutNames :: [String] -> [String]; shoutNames = map toUpper` and derive the corrected type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a repair and a type derivation. The given input and result are both `[String]`, meaning `[[Char]]`. Keep the signature; correct the function body so it reaches characters at the inner list level.
+
+</Step>
+
+<Step title="2. Plan">
+
+The supplied outer function must accept [Char]. The inner map turns Char-to-Char into [Char]-to-[Char]; the outer map then handles [[Char]].
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+import Data.Char (toUpper)
+
+shoutNames :: [String] -> [String]
+shoutNames = map (map toUpper)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`toUpper :: Char -> Char`; inner map has `[Char] -> [Char]`; outer map therefore has `[[Char]] -> [[Char]]`. `shoutNames ["a",""]` is `["A",""]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The slide signature has a type mismatch (`Couldn't match`) between Char and [Char]; add the inner map. Concatenating first erases boundaries and returns String rather than [String]. Sorting after conversion may change the order a question required, although it compiles.
+
+### Practice with answer
+
+What lengths result from `map (map toUpper) ["a", "", "bc"]`?
+
+<details>
+<summary>Answer</summary>
+
+Outer length `3`; inner lengths `[1,0,2]`, unchanged.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Char is one value; String is a list of Chars; a list of Strings needs another map level. `ord` and `chr` convert codes, whereas `digitToInt` and `intToDigit` convert a single hexadecimal digit within smaller domains. ASCII is a Unicode subset. Match guards to the requested alphabet. Literal space, tab, other whitespace and empty text are different cases. Case mapping preserves nonletters and does not sort, delete or perform full Unicode normalisation. `print` shows readable quotes and escapes; content output writes the stored characters.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is isAlphaNum a poor guard for digitToInt?">
+
+It accepts G and Unicode numbers outside the ASCII hexadecimal converter domain. Use isHexDigit, or isDigit for decimal-only input.
+
+</CheckQuestion>
+
+<CheckQuestion question="How do ord and digitToInt differ on the character 7?">
+
+`ord '7'` is `55`; `digitToInt '7'` is `7`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can a tab be an empty Char?">
+
+No. A tab is one Char of code 9. A space is a different Char of code 32. Empty text is a String with no elements.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is the specialised type of map (map toUpper)?">
+
+`[String] -> [String]`; the outer map visits strings, the inner map visits characters.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does valid input to chr guarantee printable ASCII?">
+
+No. The accepted interval is 0 through 1114111, including controls, unassigned values and codes outside ASCII.
+
+</CheckQuestion>
+
+</CheckQuestions>
