@@ -1,0 +1,1605 @@
+---
+title: "Infinite Data Structures"
+description: "Build productive infinite lists, streams and trees, trace finite observations, and recognise consumers that cannot finish."
+---
+
+Start with the two definitions an exam may give you. Neither constructs infinitely many cells before returning. Each exposes a list constructor now and leaves later demand to reveal what follows.
+
+<LearningObjectives items={[
+  'Explain the shared cycle in ones and trace numsFrom one cell at a time',
+  'Recognise productivity and choose finite observations of infinite lists',
+  'Use repeat, cycle, iterate, ranges, zip and takeWhile with precise termination conditions',
+  'Trace self-referential Fibonacci numbers and the lazy prime sieve',
+  'Define infinite streams and trees and observe only a finite part',
+  'Explain why some right folds can stop but left folds cannot finish infinite input',
+]} />
+
+<Prerequisites items={['Lazy Evaluation: demand, thunks, sharing and bottom', 'List recursion, higher-order functions and recursive data types']} />
+
+## 1. A productive cycle: ones
+
+```haskell
+ones :: [Int]
+ones = 1 : ones
+
+numsFrom :: Int -> [Int]
+numsFrom n = n : numsFrom (n + 1)
+```
+
+In `1 : ones`, `(:)` is the list constructor. Its first field is the element `1`; its second field is another list. Because the fields are lazy, exposing this cons does not require evaluating the tail. The name `ones` refers to the very list being defined. It is a list whose tail is itself: a **cycle** in the shared graph of values.
+
+The general template for a constant infinite list is:
+
+```haskell
+repeatValue :: a -> [a]
+repeatValue x = xs
+  where
+    xs = x : xs
+```
+
+Read `a` as any element type, `x` as the repeated value, and `xs` as one shared recursive list. The constructor comes before recursive demand. In the source-level graph model, `ones` can be represented by one cons cell with its tail pointing back to that same cell. GHC may optimise the representation; the sharing and observable behaviour are the point:
+
+```text
+before demand: ones -> T = thunk(1 : ones)
+force T:       T -> Cons(head = 1, tail -> T)
+next tail:     follows the pointer back to T
+unfolded view:  1 : 1 : 1 : 1 : ...
+```
+
+A **productive** producer reveals each requested finite portion of its output in a finite amount of work. For lists, it must expose the next cons without waiting for the entire remainder. A spine can be productive while its heads are bottom, so check element demand as well. `ones` has a productive spine and defined heads. It differs from `bad = bad`, which exposes no constructor at all.
+
+### Variation: take three ones
+
+<HaskellTryIt>
+
+```haskell
+ones :: [Int]
+ones = 1 : ones
+
+main :: IO ()
+main = print (take 3 ones)
+```
+
+```text
+[1,1,1]
+```
+
+</HaskellTryIt>
+
+Use `take 0 _ = []` and, for positive counts, `take n (x:xs) = x : take (n-1) xs`. Each step follows the same input tail pointer; the decreasing count, not an input `[]`, stops the consumer.
+
+```text
+take 3 ones
+= 1 : take 2 ones        -- expose ones, then take
+= 1 : 1 : take 1 ones    -- reuse the same input cons
+= 1 : 1 : 1 : take 0 ones
+= 1 : 1 : 1 : []         -- take 0 ignores its list
+= [1,1,1]
+```
+
+Printing demands only the three returned heads and finite output spine. The input cycle is not unrolled into an already allocated infinite chain.
+
+### Variation: no cells from another constant
+
+<HaskellTryIt>
+
+```haskell
+zeros :: [Int]
+zeros = 0 : zeros
+
+main :: IO ()
+main = print (take 0 zeros)
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The zero-count equation returns `[]` before even forcing `zeros`. No production is needed.
+
+### Variation: a character cycle and indexing
+
+<HaskellTryIt>
+
+```haskell
+letters :: String
+letters = 'a' : letters
+
+main :: IO ()
+main = do
+  print (take 4 letters)
+  print (letters !! 2)
+```
+
+```text
+"aaaa"
+'a'
+```
+
+</HaskellTryIt>
+
+Four observations of the shared cell give four characters. `print` shows a character list as a quoted string. Index `2` follows two tails and selects the third head; that output is a character with single quotes.
+
+Why does `length ones` not finish? Its equations demand the next tail until reaching `[]`. Following this cycle never reaches `[]`:
+
+```text
+length ones
+= 1 + length ones
+= 1 + (1 + length ones)
+= 1 + (1 + (1 + length ones))
+... no base case is reached
+```
+
+This intentionally divergent program is plain code:
+
+```haskell
+ones :: [Int]
+ones = 1 : ones
+main :: IO ()
+main = print (length ones)
+```
+
+**Safe:** finite `take`, finite non-negative indexing, or `takeWhile (< 1) ones` (empty immediately). **Cannot finish:** `length`, `sum`, `reverse`, `last`, fully demanding `takeWhile (== 1) ones`, or printing all of `ones`. Infinite printing may emit a growing prefix, but never completes. Length follows list structure, not pointer identity: a cyclic graph does not make it count distinct allocated cells.
+
+**Common error:** "Self-reference always loops." Ask whether a constructor is exposed before further recursive demand. Practice: `take 2 (tail ones)` is `[1,1]`; following the cycle changes no observable value.
+
+## 2. A fresh next cell: numsFrom
+
+`numsFrom` changes the next value rather than repeating the same cell. The template is a seed and a next-state rule:
+
+```haskell
+generate :: (a -> a) -> a -> [a]
+generate next seed = seed : generate next (next seed)
+```
+
+`next` calculates the next seed; the recursive call is a tail thunk. In the required definition, `next` is `(+1)`. Initially only the first cons is needed:
+
+```text
+numsFrom 5
+A -> Cons(head = 5, tail -> T6 = thunk(numsFrom (5+1)))
+force T6:
+B -> Cons(head -> thunk(5+1), tail -> T7 = thunk(numsFrom ((5+1)+1)))
+print B's head: update it to 6
+force T7:
+C -> Cons(head -> thunk(6+1), tail -> T8 = thunk(numsFrom ((6+1)+1)))
+print C's head: update it to 7
+```
+
+This is a conceptual demand graph: arithmetic can remain suspended until an element is printed. The visible heads are `5`, `6`, `7`, one at a time. Each tail describes a new call with a changed seed, rather than a pointer back to `A`. Unlike `ones`, this is not a one-cons cycle.
+
+The required `Int -> [Int]` signature uses bounded machine integers: after `maxBound`, addition wraps. The spine still has no end, but indefinite mathematical growth requires `Integer`. These examples stay far from overflow.
+
+### Variation: start at five
+
+<HaskellTryIt>
+
+```haskell
+numsFrom :: Int -> [Int]
+numsFrom n = n : numsFrom (n + 1)
+
+main :: IO ()
+main = print (take 3 (numsFrom 5))
+```
+
+```text
+[5,6,7]
+```
+
+</HaskellTryIt>
+
+The observer demands three cons cells. Its next count is zero, so `numsFrom 8` is not demanded:
+
+```text
+take 3 (numsFrom 5)
+= 5 : take 2 (numsFrom (5+1))
+= 5 : 6 : take 1 (numsFrom (6+1))
+= 5 : 6 : 7 : take 0 (numsFrom (7+1))
+= [5,6,7]
+```
+
+Arithmetic is shown when the corresponding head is demanded. No complete infinite input is built first.
+
+### Variation: cross zero
+
+<HaskellTryIt>
+
+```haskell
+numsFrom :: Int -> [Int]
+numsFrom n = n : numsFrom (n + 1)
+
+main :: IO ()
+main = print (take 4 (numsFrom (-2)))
+```
+
+```text
+[-2,-1,0,1]
+```
+
+</HaskellTryIt>
+
+Successive seeds are `-2`, `-1`, `0`, `1`. Negatives inside a printed list have minus signs without extra parentheses. The count reaches zero even though the seed has no stopping condition.
+
+### Variation: another step and unbounded numbers
+
+<HaskellTryIt>
+
+```haskell
+stepsFrom :: Integer -> [Integer]
+stepsFrom n = n : stepsFrom (n + 3)
+
+main :: IO ()
+main = print (take 4 (stepsFrom 2))
+```
+
+```text
+[2,5,8,11]
+```
+
+</HaskellTryIt>
+
+The state rule is `(+3)`: expose `2`, suspend the call at `5`, then expose `8` and `11` as requested. `Integer` supports arbitrary precision.
+
+**Safe:** finite `take`, non-negative indexing, and a predicate known to fail after finite steps: `takeWhile (< 8) (numsFrom 5)` is `[5,6,7]`. **Cannot finish:** `length`, `sum`, `reverse`, `last` and complete printing of the original endless list. `takeWhile (>= 0) (stepsFrom 0)` with `Integer` never meets a failure.
+
+**Common error:** `numsFrom n = numsFrom (n+1)` removes the constructor and produces no first element. Repair by emitting `n : ...`. Practice: `numsFrom 5 !! 3` is `8`, because indexing starts at zero.
+
+## 3. repeat: a constant supply
+
+`repeat x` is the library constant infinite-list pattern. Its template is `take count (repeat value)`, where `count` bounds observation, not production. Its defining idea is `repeat x = x : repeat x`.
+
+Trace: `take 3 (repeat 4) = 4 : take 2 (repeat 4) = 4 : 4 : take 1 (repeat 4) = [4,4,4]` after take zero returns `[]`.
+
+### Variation: repeated integers
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 (repeat 4))
+```
+
+```text
+[4,4,4]
+```
+
+</HaskellTryIt>
+
+Each requested head is `4`. The count decreases three times; the printed result is finite.
+
+### Variation: whole strings as elements
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 2 (repeat "go"))
+```
+
+```text
+["go","go"]
+```
+
+</HaskellTryIt>
+
+The elements are whole strings rather than characters. The result contains two quoted strings.
+
+### Variation: a zero-sized observation
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 0 (repeat True))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No Boolean is requested. The result is empty independently of the repeated element.
+
+**Safe:** finite prefixes and indices; takeWhile if the repeated value fails the predicate, giving `[]`. **Cannot finish:** fully demanding a takeWhile result when every test passes, or `length`, numeric `sum`, `reverse`, `last` and full printing of the original infinite list. **Common error:** confusing `repeat 3` (endless threes) with `replicate 3 x` (three copies). Practice: `take 2 (repeat False)` gives `[False,False]`.
+
+## 4. cycle: repeat a finite pattern
+
+`cycle pattern` repeats a non-empty finite list. The template is `take count (cycle pattern)`. Conceptually, `cycle xs = xs ++ cycle xs` for a non-empty pattern: after one pass, start another.
+
+Trace: `take 5 (cycle [1,2])` takes `1`, `2`, returns to the start, then takes `1`, `2`, `1`. The count is zero, so observation stops.
+
+### Variation: a two-element pattern
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 5 (cycle [1,2]))
+```
+
+```text
+[1,2,1,2,1]
+```
+
+</HaskellTryIt>
+
+Two complete passes supply four values; the start of the third supplies the fifth. The output need not end at a pattern boundary.
+
+### Variation: a character pattern
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 7 (cycle "abc"))
+```
+
+```text
+"abcabca"
+```
+
+</HaskellTryIt>
+
+Two passes give six characters; `a` starts the third. A String result is printed with double quotes.
+
+### Variation: a singleton cycle
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 (cycle [True]))
+```
+
+```text
+[True,True,True]
+```
+
+</HaskellTryIt>
+
+A one-item pattern behaves like repeat True. It is still an infinite list, not a one-element list.
+
+**Safe:** finite prefixes, finite indices and zip with a finite list, assuming defined required elements. **Cannot finish:** `length`, `sum`, `reverse`, `last` or full printing of an infinite cycle. TakeWhile stops only if an encountered value fails its predicate. **Common error:** an empty pattern. GHC reports `Prelude.cycle: empty list` when `cycle []` is demanded. Check the pattern first, or return `[]` if that is the intended finite result. The failing demonstration is plain code:
+
+```haskell
+-- Fails because cycle has no element to repeat.
+main :: IO ()
+main = print (take 1 (cycle [] :: [Int]))
+```
+
+Practice: `take 4 (cycle [2,5,8])` is `[2,5,8,2]`.
+
+## 5. iterate: repeatedly transform the state
+
+`iterate next seed` yields `seed`, `next seed`, `next (next seed)`, and so on. The template is `iterate :: (a -> a) -> a -> [a]`, with equation `iterate f x = x : iterate f (f x)`. The seed is included; the output type of the state function must match its input type.
+
+Trace: `iterate (*2) 1` exposes `1 : iterate (*2) (1*2)`; the next demanded heads are `2`, `4`, `8`. Each next-state calculation is delayed until needed.
+
+### Variation: a doubling state
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 5 (iterate (*2) (1 :: Integer)))
+```
+
+```text
+[1,2,4,8,16]
+```
+
+</HaskellTryIt>
+
+These are the seed and four doublings. Five values does not mean applying the function five times before the first result.
+
+### Variation: alternating Booleans
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 5 (iterate not True))
+```
+
+```text
+[True,False,True,False,True]
+```
+
+</HaskellTryIt>
+
+Not changes True to False and back. The state space is finite but the sequence of observations is endless.
+
+### Variation: an additive state
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 (iterate (+1) (0 :: Integer)))
+```
+
+```text
+[0,1,2]
+```
+
+</HaskellTryIt>
+
+The first result is seed zero, then one and two. This expresses the numsFrom pattern with a higher-order function.
+
+**Safe:** finite prefixes and indices if the required transitions finish; `takeWhile (< 10) (iterate (*2) (1 :: Integer))` gives `[1,2,4,8]`. **Cannot finish:** `length`, `sum`, `reverse`, `last`, full printing; a transition itself may also be bottom. **Common error:** believing iterate guarantees defined heads. `take 1 (iterate undefined 7)` can provide `[7]`, but printing the second value fails. Practice: `take 3 (iterate id 9)` gives `[9,9,9]`.
+
+## 6. Arithmetic ranges
+
+The template `[start..]` enumerates successive values of an Enum type; `[start,next..]` uses the difference between the first two values. An endpoint gives `[start..end]`. Behaviour depends on the element type.
+
+For unbounded examples use `Integer`: `[1..] :: [Integer]` has no last element. `[1..] :: [Int]` eventually stops at `maxBound`; Char also has a bound. Thus an Int range is not literally infinite, unlike the recursive `numsFrom :: Int -> [Int]`. Avoid treating floating-point ranges as exact arithmetic progressions.
+
+Trace: `take 3 ([5..] :: [Integer])` exposes `5`, `6`, `7`, then the observer's zero-count equation stops.
+
+### Variation: count upwards
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 ([1..] :: [Integer]))
+```
+
+```text
+[1,2,3,4]
+```
+
+</HaskellTryIt>
+
+The implied step is one. Only four range cells are demanded; no endpoint is sought.
+
+### Variation: choose a larger step
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 ([2,5..] :: [Integer]))
+```
+
+```text
+[2,5,8,11]
+```
+
+</HaskellTryIt>
+
+The step is `5-2 = 3`. The second written value is not an endpoint.
+
+### Variation: unbounded descent
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 4 ([0,-2..] :: [Integer]))
+```
+
+```text
+[0,-2,-4,-6]
+```
+
+</HaskellTryIt>
+
+The step is negative two. Integer allows descent without a lower machine bound. Negative list entries print without parentheses.
+
+**Safe:** finite take, indexing, finite zip and a stopping takeWhile. **Cannot finish on these unbounded ranges:** `length`, `sum`, `reverse`, `last` or full printing. **Common error:** confusing `[2,5..]` with finite `[2..5]`, which gives `[2,3,4,5]`. Practice: `take 3 ([10,9..] :: [Integer])` gives `[10,9,8]`.
+
+## 7. Numbering with zip and bounding consumption
+
+Zip aligns two lists and stops at the shorter one. The template is `zip ([start..] :: [Integer]) finiteItems`: use an endless index producer and let the item list bound demand. `zipWith combine infinite finite` applies a rule rather than returning pairs.
+
+Trace: `zip [1..] ['a','b']` exposes `(1,'a')`, then `(2,'b')`, then encounters the finite `[]` and stops. A usual zip equation may inspect an extra constructor on the other side before noticing `[]`; the guarantee is finite demand, not an exact universal allocation count. The required part of each input must be productive.
+
+### Variation: one-based positions
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip ([1..] :: [Integer]) "ab")
+```
+
+```text
+[(1,'a'),(2,'b')]
+```
+
+</HaskellTryIt>
+
+The characters run out after two pairs. Pairs containing characters are not shown as one String; each character has single quotes.
+
+### Variation: empty items
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zip ([0..] :: [Integer]) ([] :: [Bool]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No items means no pairs. No numeric endpoint is needed to finish.
+
+### Variation: combine infinite and finite lists
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (zipWith (+) ([10..] :: [Integer]) [1,2,3])
+```
+
+```text
+[11,13,15]
+```
+
+</HaskellTryIt>
+
+Inputs `(10,1)`, `(11,2)`, `(12,3)` produce the three sums. The second list then ends the result.
+
+**Safe:** full observation of the result when one input is finite and the needed parts of both are defined. Length, numeric sum of zipWith, reverse, last on a non-empty result and printing can then finish. **Cannot finish:** full observation of zip of two infinite productive lists. **Common error:** assuming zip itself always bounds output; `zip [1..] [1..]` remains infinite. Practice: `zip [3..] [False]` gives `[(3,False)]`.
+
+## 8. takeWhile: stop at the first failed test
+
+`takeWhile predicate source` emits consecutive passing elements and stops at the **first** failure. Unlike filter, it does not skip a failure and keep searching. The template is:
+
+```haskell
+prefixWhile :: (a -> Bool) -> [a] -> [a]
+prefixWhile p [] = []
+prefixWhile p (x:xs)
+  | p x = x : prefixWhile p xs
+  | otherwise = []
+```
+
+Trace `takeWhile (< 4) ([1..] :: [Integer])`: tests at `1`, `2`, `3` pass and emit those values. The test at `4` fails and returns `[]`. Four tests produce three outputs; the failing element is inspected but not emitted.
+
+### Variation: a finite boundary
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (takeWhile (< 4) ([1..] :: [Integer]))
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+The first failure is at `4`. Printing reaches the returned empty tail, so the complete result is finite.
+
+### Variation: immediate failure
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (takeWhile odd ([2..] :: [Integer]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+`odd 2` is false. There is no search for the later odd value `3`: takeWhile ends immediately.
+
+### Variation: a growing state crosses a boundary
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (takeWhile (< 20) (iterate (*2) (1 :: Integer)))
+```
+
+```text
+[1,2,4,8,16]
+```
+
+</HaskellTryIt>
+
+The five emitted states pass; the next state `32` fails. It is calculated for the test but excluded from the result.
+
+**Safe:** complete observation when a failed test is reached in finite time; an outer finite take can also bound a productive prefix. **Cannot finish:** `length (takeWhile (> 0) (repeat 1))`, because every test passes. Sum, reverse, last and full printing of that infinite result cannot finish either. **Common error:** assuming takeWhile always makes an infinite list finite. State the first failing value. Practice: `takeWhile (< 3) (cycle [1,2,3])` is `[1,2]`.
+
+## 9. Tying a productive knot: Fibonacci numbers
+
+A self-referential producer can reuse earlier elements. Two seed constructors come before any sums:
+
+```haskell
+fibs :: [Integer]
+fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
+```
+
+The template is `values = first : second : zipWith combine values (tail values)`. Each new output uses two earlier available values. It is productive when combine finishes for those inputs. The required inputs precede the output being computed.
+
+| New index | From values | From tail values | New sum |
+|---|---|---|---|
+| 2 | 0 | 1 | 1 |
+| 3 | 1 | 1 | 2 |
+| 4 | 1 | 2 | 3 |
+| 5 | 2 | 3 | 5 |
+
+Initially the graph has seed cells `A(0)` and `B(1)`, followed by a zipWith thunk referring to A and B. Its first demanded cell reads their heads and emits `1`. The next step reads B and that new cell and emits `2`. Sharing connects later production to earlier cells; it does not calculate an independent Fibonacci recursion tree for each value.
+
+### Variation: standard seeds
+
+<HaskellTryIt>
+
+```haskell
+fibs :: [Integer]
+fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
+
+main :: IO ()
+main = print (take 8 fibs)
+```
+
+```text
+[0,1,1,2,3,5,8,13]
+```
+
+</HaskellTryIt>
+
+After the two seeds, the six sums are `0+1`, `1+1`, `1+2`, `2+3`, `3+5`, `5+8`. No ninth element is needed.
+
+### Variation: different seeds
+
+<HaskellTryIt>
+
+```haskell
+lucas :: [Integer]
+lucas = 2 : 1 : zipWith (+) lucas (tail lucas)
+
+main :: IO ()
+main = print (take 6 lucas)
+```
+
+```text
+[2,1,3,4,7,11]
+```
+
+</HaskellTryIt>
+
+Seeds `2` and `1` give sums `3`, `4`, `7`, `11`. Changing the seeds changes the sequence but preserves the productivity argument.
+
+### Variation: observe only the seeds
+
+<HaskellTryIt>
+
+```haskell
+fibs :: [Integer]
+fibs = 0 : 1 : zipWith (+) fibs (tail fibs)
+
+main :: IO ()
+main = print (take 2 fibs)
+```
+
+```text
+[0,1]
+```
+
+</HaskellTryIt>
+
+Only the two seed cons cells are required. The zipWith tail can remain completely unevaluated.
+
+**Safe:** finite prefixes, non-negative indices and an eventually failing takeWhile: `takeWhile (< 5) fibs` is `[0,1,1,2,3]`. **Cannot finish:** length, sum, reverse, last and full printing of fibs. **Common error:** `bad = zipWith (+) bad (tail bad)` has no seeds; its first constructor depends on itself. Repair by supplying initial constructors. Practice: `fibs !! 5` is `5`.
+
+## 10. A lazy sieve of Eratosthenes
+
+The list sieve emits the first remaining candidate as prime, then removes its multiples before continuing. This is an educational sieve, not a claim about the fastest algorithm. Start at two: including one would incorrectly call it prime and then eliminate every later candidate.
+
+```haskell
+sieve :: [Integer] -> [Integer]
+sieve [] = []
+sieve (p:xs) = p : sieve [x | x <- xs, x `mod` p /= 0]
+
+primes :: [Integer]
+primes = sieve [2..]
+```
+
+The template is `first : sieve (removeMultiples first rest)`. Its primality argument assumes consecutive candidates from two, or a correctly filtered remainder, not arbitrary unsorted input. The comprehension filters lazily; it does not finish the infinite remainder before producing a next prime.
+
+```text
+candidates:       2,3,4,5,6,7,8,9,10,11,...
+emit 2; remove its multiples:
+remaining:        3,5,7,9,11,13,15,...
+emit 3; remove its multiples:
+remaining:        5,7,11,13,17,19,23,...
+emit 5; remove its multiples:
+remaining:        7,11,13,17,19,23,29,...
+```
+
+Each next prime is found after finite search; the filtering stages are demanded only far enough to supply it.
+
+### Variation: a fixed number of primes
+
+<HaskellTryIt>
+
+```haskell
+sieve :: [Integer] -> [Integer]
+sieve [] = []
+sieve (p:xs) = p : sieve [x | x <- xs, x `mod` p /= 0]
+
+main :: IO ()
+main = print (take 6 (sieve [2..]))
+```
+
+```text
+[2,3,5,7,11,13]
+```
+
+</HaskellTryIt>
+
+After emitting `2`, `3`, `5`, `7`, the next filtered heads are `11` and `13`. Only six outputs are requested.
+
+### Variation: primes below a boundary
+
+<HaskellTryIt>
+
+```haskell
+sieve :: [Integer] -> [Integer]
+sieve [] = []
+sieve (p:xs) = p : sieve [x | x <- xs, x `mod` p /= 0]
+
+main :: IO ()
+main = print (takeWhile (< 10) (sieve [2..]))
+```
+
+```text
+[2,3,5,7]
+```
+
+</HaskellTryIt>
+
+The next prime `11` is found and tested. That failure lets takeWhile return an empty tail without emitting eleven.
+
+### Variation: finite candidates
+
+<HaskellTryIt>
+
+```haskell
+sieve :: [Integer] -> [Integer]
+sieve [] = []
+sieve (p:xs) = p : sieve [x | x <- xs, x `mod` p /= 0]
+
+main :: IO ()
+main = print (sieve [2..10])
+```
+
+```text
+[2,3,5,7]
+```
+
+</HaskellTryIt>
+
+After seven no candidates remain. The empty-list equation ends the result, providing a small complete check of the same filtering rules.
+
+**Safe:** finite prefixes, indices and takeWhile with a finite prime bound. **Cannot finish:** length, sum, reverse, last and full printing of `sieve [2..]`. Suitable finite results such as `take 6 primes` can be fully consumed. **Common error:** starting at one or forgetting the divisibility filter. Repair the starting candidate and test. Practice: `take 3 (sieve [2..])` is `[2,3,5]`.
+
+## 11. Infinite streams: an explicit head and lazy tail
+
+A **stream** here is an unending sequence represented by its own type. A list permits `[]`; a stream need not have an empty constructor. This suits algorithms that always expect another state.
+
+```haskell
+data Stream a = Cons a (Stream a)
+
+streamFrom :: (a -> a) -> a -> Stream a
+streamFrom next x = Cons x (streamFrom next (next x))
+
+takeStream :: Int -> Stream a -> [a]
+takeStream n _ | n <= 0 = []
+takeStream n (Cons x xs) = x : takeStream (n - 1) xs
+```
+
+In the type template, a is the element type, the first field is the head and the recursive field is the tail. Ordinary data fields are lazy unless explicitly made strict. Removing an empty constructor does not remove bottom: the type alone does not prove productivity.
+
+```text
+streamFrom (+1) 5
+A -> Cons(5, tail thunk = streamFrom (+1) (5+1))
+force tail -> B -> Cons(6, tail thunk = streamFrom (+1) (6+1))
+force tail -> C -> Cons(7, tail thunk = streamFrom (+1) (7+1))
+takeStream 3 A -> 5 : 6 : 7 : takeStream 0 remaining
+              -> [5,6,7]
+```
+
+Initially one Cons is needed, not its entire tail. A constant stream can instead tie a cycle: `s = Cons x s`.
+
+### Variation: an ascending stream
+
+<HaskellTryIt>
+
+```haskell
+data Stream a = Cons a (Stream a)
+
+streamFrom :: (a -> a) -> a -> Stream a
+streamFrom next x = Cons x (streamFrom next (next x))
+
+takeStream :: Int -> Stream a -> [a]
+takeStream n _ | n <= 0 = []
+takeStream n (Cons x xs) = x : takeStream (n - 1) xs
+
+main :: IO ()
+main = print (takeStream 3 (streamFrom (+1) (5 :: Integer)))
+```
+
+```text
+[5,6,7]
+```
+
+</HaskellTryIt>
+
+The seed is first. Each forced tail exposes the next seed; count zero ends observation after three cells. The returned ordinary list can be printed completely.
+
+### Variation: a cyclic constant stream
+
+<HaskellTryIt>
+
+```haskell
+data Stream a = Cons a (Stream a)
+
+streamFrom :: (a -> a) -> a -> Stream a
+streamFrom next x = Cons x (streamFrom next (next x))
+
+takeStream :: Int -> Stream a -> [a]
+takeStream n _ | n <= 0 = []
+takeStream n (Cons x xs) = x : takeStream (n - 1) xs
+
+flags :: Stream Bool
+flags = Cons True flags
+
+main :: IO ()
+main = print (takeStream 3 flags)
+```
+
+```text
+[True,True,True]
+```
+
+</HaskellTryIt>
+
+Every tail returns to the same Cons, but the observer decreases its count. Cyclic input therefore gives finite output.
+
+### Variation: changing strings
+
+<HaskellTryIt>
+
+```haskell
+data Stream a = Cons a (Stream a)
+
+streamFrom :: (a -> a) -> a -> Stream a
+streamFrom next x = Cons x (streamFrom next (next x))
+
+takeStream :: Int -> Stream a -> [a]
+takeStream n _ | n <= 0 = []
+takeStream n (Cons x xs) = x : takeStream (n - 1) xs
+
+main :: IO ()
+main = print (takeStream 3 (streamFrom (++ "!") "go"))
+```
+
+```text
+["go","go!","go!!"]
+```
+
+</HaskellTryIt>
+
+The seed is `"go"`. One transition appends an exclamation mark; the next appends another. Each resulting String is quoted inside the output list.
+
+List functions are not automatically stream functions. Applying take or length directly to Stream is a type error: "Couldn't match expected type" is the relevant GHC diagnostic. Use the custom observer or convert a finite part. An indexing function, with a non-negative Int precondition, is:
+
+```haskell
+indexStream :: Int -> Stream a -> a
+indexStream 0 (Cons x _) = x
+indexStream n (Cons _ xs) = indexStream (n - 1) xs
+```
+
+**Safe:** finite takeStream and finite non-negative indexStream, given defined required cells and heads. **Cannot finish:** counting or summing the entire stream, finding a last element or reversing it: no empty case exists to reach. Deriving Show would let printing begin, but whole printing of a productive infinite stream would never finish. Without a Show instance, direct printing is a type error instead.
+
+**Common error:** `bad = bad :: Stream Int` supplies no constructor; `bad = Cons undefined bad` supplies cells but no defined heads. Repair the producer to provide the demanded structure and elements. Practice: `takeStream 0 undefined` gives `[]`; `takeStream 2 (streamFrom not False)` gives `[False,True]`.
+
+## 12. Infinite trees and finite depth
+
+A lazy recursive type can branch forever. With Leaf and Node left value right, the template emits a node before either subtree is demanded:
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+infTree :: Integer -> Tree Integer
+infTree n = Node (infTree (2 * n)) n (infTree (2 * n + 1))
+
+firstLevels :: Int -> Tree a -> Tree a
+firstLevels d _ | d <= 0 = Leaf
+firstLevels _ Leaf = Leaf
+firstLevels d (Node l x r) =
+  Node (firstLevels (d - 1) l) x (firstLevels (d - 1) r)
+```
+
+The root label is n; its children have labels `2*n` and `2*n+1`. Depth d counts retained levels: zero keeps none, one keeps the root, two keeps root and immediate children. Deeper branches become Leaf, making the result finite. Integer prevents fixed-width overflow in labels.
+
+```text
+infTree 1
+A -> Node(left -> thunk(infTree 2), value = 1,
+          right -> thunk(infTree 3))
+force left only:
+B -> Node(left -> thunk(infTree 4), value = 2,
+          right -> thunk(infTree 5))
+force A's right:
+C -> Node(left -> thunk(infTree 6), value = 3,
+          right -> thunk(infTree 7))
+
+firstLevels 2 A
+-> Node (firstLevels 1 B) 1 (firstLevels 1 C)
+-> Node (Node Leaf 2 Leaf) 1 (Node Leaf 3 Leaf)
+```
+
+Initially the graph needs only a root and two suspended subtrees, not infinite allocated breadth. The examples print small results by traversing the **pruned finite tree** in root-left-right order.
+
+### Variation: retain two levels
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+infTree :: Integer -> Tree Integer
+infTree n = Node (infTree (2 * n)) n (infTree (2 * n + 1))
+
+firstLevels :: Int -> Tree a -> Tree a
+firstLevels d _ | d <= 0 = Leaf
+firstLevels _ Leaf = Leaf
+firstLevels d (Node l x r) =
+  Node (firstLevels (d - 1) l) x (firstLevels (d - 1) r)
+
+preorder :: Tree a -> [a]
+preorder Leaf = []
+preorder (Node l x r) = x : (preorder l ++ preorder r)
+
+main :: IO ()
+main = print (preorder (firstLevels 2 (infTree 1)))
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+The root is one; its children are two and three. Their children become Leaf without demand on their labels. Preorder visits root, left, then right.
+
+### Variation: another root and one level
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+infTree :: Integer -> Tree Integer
+infTree n = Node (infTree (2 * n)) n (infTree (2 * n + 1))
+
+firstLevels :: Int -> Tree a -> Tree a
+firstLevels d _ | d <= 0 = Leaf
+firstLevels _ Leaf = Leaf
+firstLevels d (Node l x r) =
+  Node (firstLevels (d - 1) l) x (firstLevels (d - 1) r)
+
+preorder :: Tree a -> [a]
+preorder Leaf = []
+preorder (Node l x r) = x : (preorder l ++ preorder r)
+
+main :: IO ()
+main = print (preorder (firstLevels 1 (infTree 5)))
+```
+
+```text
+[5]
+```
+
+</HaskellTryIt>
+
+Only root five is retained. Both subtree observers have depth zero and return Leaf without demanding labels ten and eleven.
+
+### Variation: retain no levels
+
+<HaskellTryIt>
+
+```haskell
+data Tree a = Leaf | Node (Tree a) a (Tree a)
+
+infTree :: Integer -> Tree Integer
+infTree n = Node (infTree (2 * n)) n (infTree (2 * n + 1))
+
+firstLevels :: Int -> Tree a -> Tree a
+firstLevels d _ | d <= 0 = Leaf
+firstLevels _ Leaf = Leaf
+firstLevels d (Node l x r) =
+  Node (firstLevels (d - 1) l) x (firstLevels (d - 1) r)
+
+preorder :: Tree a -> [a]
+preorder Leaf = []
+preorder (Node l x r) = x : (preorder l ++ preorder r)
+
+main :: IO ()
+main = print (preorder (firstLevels 0 (infTree 1)))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The zero-depth equation returns Leaf without inspecting the input root. Preorder of Leaf is empty. Decreasing depth stops the observer.
+
+**Safe:** root selection, a fixed finite left/right path, and finite-depth pruning followed by a total finite-tree consumer. A fully branching tree has `2^d - 1` retained nodes for non-negative depth d; finite can still be large.
+
+**Cannot finish:** counting all nodes, summing all labels, computing total height or fully printing the original infinite tree. A derived Show instance could start but never complete; without one, direct printing is a type error. Depth-first search can miss a value forever: preorder of unpruned `infTree 1` follows the endless left path `1,2,4,8,...`, never reaching right child three. `take 4 (preorder (infTree 1))` is safe but does not give the first two levels. Unpruned inorder goes left forever and cannot even produce its first label. Breadth-first enumeration is needed to visit every node at finite depth eventually.
+
+**Common error:** checking only Leaf in an unbounded consumer of infTree, which has no leaves. Add a decreasing depth or path bound, with the zero-depth case before demand on the tree. Practice: three levels from root one have preorder `[1,2,4,5,3,6,7]` and seven nodes.
+
+## 13. Folds: a finite answer from infinite input
+
+A right fold has shape `foldr step base (x:xs) = step x (foldr step base xs)`. Its recursive result is a thunk. If step returns without that argument, the fold can stop. The search template is `foldr (\x rest -> test x || rest) False source`. A successful short-circuit can avoid the empty-list base case.
+
+A left fold has shape `foldl step acc (x:xs) = foldl step (step acc x) xs`. The enclosing recursive call must reach `[]` before returning its final accumulator. Ignoring that accumulator or forcing its updates cannot supply the missing end.
+
+```text
+foldr (\x rest -> x == 3 || rest) False [1..]
+-> False || foldr step False [2..]   -- test 1
+-> False || foldr step False [3..]   -- demand rest, then test 2
+-> True  || foldr step False [4..]   -- demand rest, then test 3
+-> True                             -- recursive remainder unused
+```
+
+Each earlier False demands the rest; True stops the chain. The trace reduces each False disjunction before expanding the next step. It is not evaluation from an infinitely distant last element.
+
+### Variation: a successful right-fold search
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldr (\x rest -> x == 3 || rest) False ([1..] :: [Integer]))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The step tests one, two, then three. At three, its recursive result is unused; only a finite source prefix is demanded.
+
+### Variation: produce output with a right fold
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (take 3 (foldr (:) [] ([1..] :: [Integer])))
+```
+
+```text
+[1,2,3]
+```
+
+</HaskellTryIt>
+
+Cons exposes a constructor without forcing its tail. The fold exposes one cell per requested input cell; take bounds the result without finding the input end.
+
+### Variation: a left fold after a finite bound
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (foldl (+) 0 (take 4 ([1..] :: [Integer])))
+```
+
+```text
+10
+```
+
+</HaskellTryIt>
+
+The fold sees finite spine `[1,2,3,4]`, reaches `[]`, and returns `(((0+1)+2)+3)+4 = 10`. The finite bound belongs before the final fold.
+
+**Safe:** foldr whose step returns after finite demand, or suitable folds after finite bounding. **Cannot finish:** `foldr (+) 0 ([1..] :: [Integer])`, because addition demands the recursive sum; right-fold searches with no match; every final left fold on an infinite spine, including `foldl (\_ _ -> 0) 0 source`. The strict foldl' changes update evaluation but cannot find the input end.
+
+**Common error:** "foldr always works on infinite lists" or "foldr starts at the last element". Inspect demand on the recursive argument. Practice: `foldr (\x rest -> x > 0 && rest) True (0 : [1..])` returns False at the first head, leaving the rest unused.
+
+## 14. Choosing an observation and repairing errors
+
+| Observation | Can finish when | Why it may fail or not finish |
+|---|---|---|
+| `take n xs` | Finite count and productive required output | Producer or requested head may be bottom |
+| `xs !! k` | Non-negative finite index and defined required cells | Negative index; finite list too short |
+| `takeWhile p xs` fully printed | Finite end or first failed test reached | All tests pass forever, or a test is bottom |
+| `zip xs finite` | Needed parts of both inputs are defined | Two infinite inputs give infinite output |
+| `length`, `sum`, `reverse`, `last` | Suitable finite input | Infinite input has no empty tail or final element |
+| `takeStream n s` | Finite count and defined required cells and heads | Stream type alone does not prove productivity |
+| `firstLevels d t` fully observed | Finite depth and defined required nodes and labels | Unbounded traversal stays in one branch forever |
+
+For negative list indices GHC reports `Prelude.!!: negative index`; an out-of-range index gives `Prelude.!!: index too large`. Validate the index or return Maybe. A type error such as list take applied to Stream is different: the program is rejected before evaluation. Laziness does not repair type mismatches.
+
+Termination arguments assume enough resources for the finite calculation; an enormous finite depth or index can still be impractical.
+
+## Exam questions
+
+
+### Exam question 1: the memory cycle (5 marks)
+
+Explain `ones = 1 : ones` using a memory sketch. Trace `take 3 ones`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" requires a constructor-and-tail model; "trace" requires the take equations.
+
+</Step>
+
+<Step title="2. Plan">
+
+Expose one cons, share its tail reference and decrease the observation count.
+
+</Step>
+
+<Step title="3. Solution">
+
+`ones -> A = Cons(1, tail -> A)`. Then `take 3 ones = 1 : take 2 ones = 1 : 1 : take 1 ones = 1 : 1 : 1 : take 0 ones = [1,1,1]`. The observer returns a finite list; its source is a cycle.
+
+</Step>
+
+<Step title="4. Check">
+
+The output has three elements. Taking zero returns `[]` without entering the source, confirming the stopping equation.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: one new seed at a time (5 marks)
+
+Given `numsFrom n = n : numsFrom (n+1)`, trace `take 3 (numsFrom 5)` and say what remains unevaluated.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" asks for producer and consumer steps together, not merely the statement that a list is infinite.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the seed-producing template and stop on take zero.
+
+</Step>
+
+<Step title="3. Solution">
+
+`take 3 (numsFrom 5) = 5 : take 2 (numsFrom 6) = 5 : 6 : take 1 (numsFrom 7) = 5 : 6 : 7 : take 0 (numsFrom 8) = [5,6,7]`. The last call is not demanded; later seeds need not be calculated.
+
+</Step>
+
+<Step title="4. Check">
+
+The first value must be five because the seed is included. With count one the result is `[5]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: productivity and termination (6 marks)
+
+Compare `ones = 1 : ones`, `bad = bad`, and `head (filter (> 2) (repeat 1))`. Does `length ones` finish?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" asks which computations can provide the demanded constructor or value.
+
+</Step>
+
+<Step title="2. Plan">
+
+Distinguish productive supply from a terminating complete observation.
+
+</Step>
+
+<Step title="3. Solution">
+
+Ones exposes a cons immediately and supplies any finite prefix. Bad exposes nothing when demanded. The filter rejects one forever and never exposes its first output cell, so head cannot return. Length keeps following the tail cycle of ones without reaching `[]`.
+
+</Step>
+
+<Step title="4. Check">
+
+`take 1 ones` gives `[1]`; the first observation distinguishes ones from bad and the unproductive filter. A productive source need not have a finite length.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: three generator patterns (5 marks)
+
+State the printed results of `take 4 (repeat 2)`, `take 4 (cycle [2,5])` and `take 4 (iterate (+3) 2)`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" asks for three finite results; identify what changes between them.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use constant supply, pattern restart and repeated state transformation.
+
+</Step>
+
+<Step title="3. Solution">
+
+The outputs are `[2,2,2,2]`, `[2,5,2,5]` and `[2,5,8,11]`. Repeat keeps one value, cycle restarts after two elements, and iterate calculates each next state from its predecessor.
+
+</Step>
+
+<Step title="4. Check">
+
+Every result has four values. The first value is two in all three; later values reveal the different rules.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: when takeWhile stops (5 marks)
+
+Compare `takeWhile (< 5) ([1..] :: [Integer])` with `takeWhile (> 0) (repeat 1)`. Which can be fully printed?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Compare" asks for both the output and full-result termination.
+
+</Step>
+
+<Step title="2. Plan">
+
+Find the first failed predicate rather than assuming takeWhile imposes a count.
+
+</Step>
+
+<Step title="3. Solution">
+
+The first prints `[1,2,3,4]`; five is inspected and fails. Every value in the second source is one, which passes, so its result is infinite. Printing may begin but never completes.
+
+</Step>
+
+<Step title="4. Check">
+
+Changing the second predicate to `(< 1)` makes its first test fail and gives the finite result `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: an indexed finite result (4 marks)
+
+Evaluate `zip ([1..] :: [Integer]) ["red","blue"]` and explain why it is finite.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Evaluate" asks for the value; "explain" asks which input bounds traversal.
+
+</Step>
+
+<Step title="2. Plan">
+
+Pair one item at a time and stop when the item list ends.
+
+</Step>
+
+<Step title="3. Solution">
+
+The result prints as `[(1,"red"),(2,"blue")]`. The second list supplies two items and then `[]`, so no third pair can be emitted. Strings retain their double quotes.
+
+</Step>
+
+<Step title="4. Check">
+
+The result length is two, matching the shorter input. An empty item list gives `[]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: a self-referential recurrence (6 marks)
+
+Using `fibs = 0 : 1 : zipWith (+) fibs (tail fibs)`, derive the first six values and explain productivity.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Derive" requires the seed values and each new sum.
+
+</Step>
+
+<Step title="2. Plan">
+
+Align fibs with its one-place shift, showing that every sum uses earlier values.
+
+</Step>
+
+<Step title="3. Solution">
+
+The seeds are zero and one. The sums are `0+1 = 1`, `1+1 = 2`, `1+2 = 3`, `2+3 = 5`. The prefix is `[0,1,1,2,3,5]`. Both inputs for each new sum are already available when needed.
+
+</Step>
+
+<Step title="4. Check">
+
+The third value uses the two literal seeds. Without seeds the first constructor would depend on itself and productivity would fail.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: a stream observer (6 marks)
+
+Declare a stream type with a head and lazy tail, then write a function returning its first n elements as a list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Declare" and "write" require a type and executable equations, including a stopping case.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use one recursive Cons constructor and a decreasing count.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+data Stream a = Cons a (Stream a)
+
+takeStream :: Int -> Stream a -> [a]
+takeStream n _ | n <= 0 = []
+takeStream n (Cons x xs) = x : takeStream (n - 1) xs
+```
+
+The count equation comes before the constructor match so a zero count does not inspect the stream. Neither field is declared strict.
+
+</Step>
+
+<Step title="4. Check">
+
+For `s = Cons 9 s`, `takeStream 2 s` is `[9,9]`; `takeStream 0 undefined` is `[]`. The returned structure is a finite list, not a Stream.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: pruning an infinite tree (6 marks)
+
+For the given infTree, give `preorder (firstLevels 3 (infTree 1))`. Explain why an unbounded node count does not finish.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" asks for the bounded traversal; "explain" asks why the original tree lacks a stopping boundary.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep root, children and grandchildren, then visit root-left-right.
+
+</Step>
+
+<Step title="3. Solution">
+
+The retained levels contain root one, children two and three, and grandchildren four to seven. Preorder prints `[1,2,4,5,3,6,7]`. Depth decreases to zero, replacing deeper subtrees with Leaf. An unbounded node count never finds the leaves needed to finish the infinite tree.
+
+</Step>
+
+<Step title="4. Check">
+
+Three levels contain `2^3-1 = 7` nodes, matching the output length. One retained level gives `[1]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 10: two folds on an endless list (6 marks)
+
+Does `foldr (\x r -> x == 2 || r) False [1..]` terminate? Does `foldl (\_ _ -> True) False [1..]` terminate? Assume Integer ranges.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Does" requires separate decisions and demand-based justification.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect demand on the recursive argument for foldr and on the enclosing recursive call for foldl.
+
+</Step>
+
+<Step title="3. Solution">
+
+The right fold tests one and demands its rest; at two it gets `True || r`, which returns True without demanding r. The left fold carries True after the first update but still traverses the spine forever waiting for `[]`; it cannot return that accumulator.
+
+</Step>
+
+<Step title="4. Check">
+
+On finite `[1,2]`, both return True. Only the right-fold step can bypass the endless remainder in the original question.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 11: trace the sieve (5 marks)
+
+Trace enough of the lazy sieve to produce its first four primes. Why must the input start at two?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" asks for emissions and filtering stages; the second part asks for the input invariant.
+
+</Step>
+
+<Step title="2. Plan">
+
+Emit the first candidate and remove its multiples before the next emission.
+
+</Step>
+
+<Step title="3. Solution">
+
+Emit two; removing evens leaves `3,5,7,9,...`. Emit three; removing its multiples leaves `5,7,11,...`. Emit five; removing its multiples leaves `7,11,13,...`. Emit seven. The prefix is `[2,3,5,7]`. Starting at one would emit a non-prime and then remove every candidate, since each is divisible by one.
+
+</Step>
+
+<Step title="4. Check">
+
+The emitted values have no divisors between two and their square roots. Eleven survives next, but a four-element observation does not need to emit it.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+Ones is a productive shared cycle; numsFrom exposes a seed and suspends the next call. Infinite structures are useful through finite observations. Filter may search forever; takeWhile needs an eventual failure to give a finite complete result. Seeds make the Fibonacci knot productive. Streams have a head and lazy recursive tail; trees need finite depth or path bounds. A right fold can return without its recursive result, whereas a final left fold needs the input end. Always name the consumer and stopping condition.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is ones different from bad = bad?">
+
+Ones exposes a cons before following its recursive tail. Bad exposes no constructor or value at all.
+
+</CheckQuestion>
+
+<CheckQuestion question="What stops take 3 (numsFrom 5)?">
+
+The observer's count reaches zero after three cells. It does not wait for the source to end.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can takeWhile return an infinite list?">
+
+Yes: every test might pass forever. A finite outer take can still observe a productive prefix.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does Stream guarantee defined heads and tails?">
+
+No. It removes an explicit empty constructor but still admits bottom fields or an entirely bottom value. Check productivity separately.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why prune before traversing an infinite tree?">
+
+A finite depth introduces Leaf boundaries and a finite result. An unbounded depth-first traversal may stay in one branch forever.
+
+</CheckQuestion>
+
+<CheckQuestion question="What determines whether foldr can finish on infinite input?">
+
+Whether its step can produce the required result after finite demand without forcing the recursive result forever. A successful short-circuiting search can; addition cannot.
+
+</CheckQuestion>
+
+</CheckQuestions>
