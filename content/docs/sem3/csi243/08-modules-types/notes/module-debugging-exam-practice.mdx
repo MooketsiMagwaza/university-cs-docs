@@ -1,0 +1,1763 @@
+---
+title: "Module Debugging Exam Practice"
+description: "Investigate missing modules, stale definitions, wrong results and lazy failures with reproducible GHCi command sessions."
+---
+
+Debugging is an investigation: reproduce a fault, inspect the evidence, repair one cause and rerun a boundary test. Read [Modules and Abstraction Practice](/docs/sem3/csi243/08-modules-types/notes/modules-and-abstraction-practice), [Modules](/docs/sem3/csi243/08-modules-types/notes/modules), [Importing](/docs/sem3/csi243/08-modules-types/notes/imports), [Setting Up and Using GHCi](/docs/sem3/csi243/02-expressions-types/notes/ghci) and [Your First Haskell Program](/docs/sem3/csi243/02-expressions-types/notes/first-program) for the underlying language and edit/run cycle.
+
+<LearningObjectives items={[
+  'Separate file lookup, scope, type and logical failures',
+  'Use browse, modules, paths and shell evidence to investigate a session',
+  'Set interpreted breakpoints and trace evaluation history',
+  'Inspect lazy bindings without accidentally forcing a failure',
+  'Repair a fault and verify saved source after reloading',
+]} />
+
+<Callout type="note" title="Real GHCi commands, not simulated debugger output">
+The browser cannot perform file loading or debugger commands. Command sessions below are plain fences and are intended for local GHCi 9.10 with the supplied source files. They list every input in order. Observations following each session describe what to inspect; compiler progress, paths, breakpoint numbers, source spans, thunk names and history entry counts depend on the session and are deliberately not fabricated as exact transcripts. Ordinary calculation outputs in runnable panels are exact. Diagnostic fences give key phrases only.
+</Callout>
+
+These command forms follow the [GHC 9.10.3 GHCi guide](https://downloads.haskell.org/ghc/9.10.3/docs/users_guide/ghci.html). Start a fresh `ghci -ignore-dot-ghci` in the directory holding the following three files. Set `:set prompt "ghci> "` if you want the ordinary prompt shown here. Debugger stops add location information to the prompt. For interpreted breakpoints use `:set -fbyte-code` before loading.
+
+## 1. Three fault fixtures and their regression checks
+
+Each fixture is small enough to explain by substitution. A logical error may compile successfully. Non-termination and an out-of-range index are runtime failures, not import errors.
+
+Template: state the contract, save the faulty definition, choose an input that separates intended and actual behaviour, investigate, replace the faulty definition and reload. The intentionally faulty source below is not a runnable panel.
+
+### Worked variation: a missing zero base case
+
+Contract: sum positive integers down to one; non-positive inputs return zero.
+
+**FaultSum.hs**
+
+```haskell
+module FaultSum (sumDown, request) where
+sumDown :: Integer -> Integer
+sumDown n = if n == 1 then 1 else n + sumDown (n - 1)
+request :: Integer -> Integer
+request n = sumDown (n - 1)
+```
+
+sumDown 3 reduces to 3 + 2 + 1, so the happy path returns 6. sumDown 0 goes to -1, -2 and so on, never reaching 1. Interrupt a runaway evaluation with Ctrl+C; do not wait for a universal, fixed "loop message". Repair the condition and result to `if n <= 0 then 0 else n + sumDown (n - 1)`. Three regression checks:
+
+<HaskellTryIt>
+
+```haskell
+sumDown :: Integer -> Integer
+sumDown n = if n <= 0 then 0 else n + sumDown (n - 1)
+main :: IO ()
+main = print (sumDown 3)
+```
+
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+The ordinary positive case is preserved.
+
+<HaskellTryIt>
+
+```haskell
+sumDown :: Integer -> Integer
+sumDown n = if n <= 0 then 0 else n + sumDown (n - 1)
+main :: IO ()
+main = print (sumDown 0)
+```
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Zero now stops immediately.
+
+<HaskellTryIt>
+
+```haskell
+sumDown :: Integer -> Integer
+sumDown n = if n <= 0 then 0 else n + sumDown (n - 1)
+main :: IO ()
+main = print (sumDown (-2))
+```
+
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The stated non-positive policy handles negative input too.
+
+### Worked variation: a threshold excludes equality
+
+Contract: a mark at least 50 passes. The supplied program excludes 50:
+
+**FaultBand.hs**
+
+```haskell
+module FaultBand (classify, request) where
+classify :: Int -> String
+classify mark = if mark > 50 then "pass" else "fail"
+request :: Int -> String
+request mark = classify (mark + 0)
+```
+
+classify 50 returns "fail" because 50 > 50 is False. There is no compiler diagnostic for this logical defect. Repair > to >=. Three regression checks separate the below, equal and above partitions:
+
+<HaskellTryIt>
+
+```haskell
+classify :: Int -> String
+classify mark = if mark >= 50 then "pass" else "fail"
+main :: IO ()
+main = print (classify 49)
+```
+
+
+```text
+"fail"
+```
+
+</HaskellTryIt>
+
+Below the threshold still fails.
+
+<HaskellTryIt>
+
+```haskell
+classify :: Int -> String
+classify mark = if mark >= 50 then "pass" else "fail"
+main :: IO ()
+main = print (classify 50)
+```
+
+
+```text
+"pass"
+```
+
+</HaskellTryIt>
+
+Equality is now included.
+
+<HaskellTryIt>
+
+```haskell
+classify :: Int -> String
+classify mark = if mark >= 50 then "pass" else "fail"
+main :: IO ()
+main = print (classify 51)
+```
+
+
+```text
+"pass"
+```
+
+</HaskellTryIt>
+
+The ordinary passing case is preserved.
+
+### Worked variation: index equal to length
+
+Contract: a zero-based index must be non-negative and strictly less than the list length. The faulty test permits equality:
+
+**FaultIndex.hs**
+
+```haskell
+module FaultIndex (pick, request) where
+pick :: [Int] -> Int -> Maybe Int
+pick xs i = if i < 0 || i > length xs then Nothing else Just (xs !! i)
+request :: Int -> Maybe Int
+request i = pick [7,8] (i + 0)
+```
+
+pick [7,8] 2 builds Just around a failing lookup; observing the payload demands a missing third element. The key exception phrase is: 
+```text
+index too large
+```
+Partial output may already have appeared before the exception. It is not safe merely because the outer constructor is Just. Repair `i > length xs` to `i >= length xs`. Three checks:
+
+<HaskellTryIt>
+
+```haskell
+pick :: [Int] -> Int -> Maybe Int
+pick xs i = if i < 0 || i >= length xs then Nothing else Just (xs !! i)
+main :: IO ()
+main = print (pick [7,8] 1)
+```
+
+
+```text
+Just 8
+```
+
+</HaskellTryIt>
+
+The last valid index remains accepted.
+
+<HaskellTryIt>
+
+```haskell
+pick :: [Int] -> Int -> Maybe Int
+pick xs i = if i < 0 || i >= length xs then Nothing else Just (xs !! i)
+main :: IO ()
+main = print (pick [7,8] 2)
+```
+
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+Equality is now rejected before indexing.
+
+<HaskellTryIt>
+
+```haskell
+pick :: [Int] -> Int -> Maybe Int
+pick xs i = if i < 0 || i >= length xs then Nothing else Just (xs !! i)
+main :: IO ()
+main = print (pick [] (-1))
+```
+
+
+```text
+Nothing
+```
+
+</HaskellTryIt>
+
+The negative-index guard handles an empty input without indexing.
+
+### Common errors
+
+A successful load proves neither the threshold nor the base case correct. Writing pick's guard correctly but forgetting to save/reload leaves the faulty definition active. A missing module gives `Could not find module`; a missing value gives `Variable not in scope`; a type mismatch is not fixed by reloading unchanged source. Reproduce the first relevant failure before editing.
+
+### Exam question 1: distinguish the failures (6 marks)
+
+Classify the three fixture defects and select one boundary test for each.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Classify" asks what kind of failure occurs, then "select" asks for evidence distinguishing the faulty and repaired definitions.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare each definition against its contract, not just its Haskell type.
+
+</Step>
+
+<Step title="3. Solution">
+
+sumDown has a termination/base-case defect at zero; classify has a logical threshold error at 50; pick has a runtime bounds error at index equal to length. None requires a module lookup failure.
+
+</Step>
+
+<Step title="4. Check">
+
+The repaired checks sumDown 0, classify 50 and pick [7,8] 2 return 0, "pass" and Nothing respectively.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Why does a test of classify 51 fail to expose the defect? Why does merely seeing Just fail to prove pick is safe?
+
+<details>
+<summary>Answer</summary>
+
+Both threshold versions pass 51. Just reveals the outer constructor, while its payload may still be an unevaluated failing computation.
+
+</details>
+
+## 2. Complete investigations to replay
+
+Keep the fixtures faulty until each investigation reaches its repair instruction. Start a fresh GHCi for each session so earlier repairs, breakpoints and imports do not change the experiment. All listed lines are inputs. When instructed to edit, use an editor, save the file, then enter the next command. No omitted command is needed to finish the investigation.
+
+### Session A: zero never reaches the stopping case
+
+Enter these commands after starting GHCi in the fixture directory:
+
+```text
+ghci> :set -fbyte-code
+ghci> :load FaultSum.hs
+ghci> :browse FaultSum
+ghci> :show modules
+ghci> :show paths
+ghci> :! echo sum-investigation
+ghci> :list sumDown
+ghci> :break sumDown
+ghci> :trace request 1
+ghci> :history 10
+ghci> :print n
+ghci> :force n
+ghci> :list
+ghci> :abandon
+ghci> :delete *
+```
+
+The browse lists sumDown and request. The module list identifies FaultSum as interpreted; paths should identify your fixture directory; the shell prints sum-investigation. The breakpoint stops inside sumDown, reached from request 1. The argument is zero, because request subtracts one. :print observes its present evaluation state, which may include a thunk; :force n establishes n = 0. The displayed source condition tests 1, so the recursion moves away from its base case. History contains the evaluation locations logged before the stop, rather than a record of keyboard commands. Abandon the pending call to avoid the known runaway computation.
+
+Now edit sumDown to the repaired non-positive definition in section 1 and save. Finish the same session:
+
+```text
+ghci> :reload
+ghci> :show modules
+ghci> sumDown 0
+0
+ghci> sumDown 3
+6
+ghci> sumDown (-2)
+0
+ghci> :quit
+```
+
+### Session B: a successful load with the wrong boundary answer
+
+Restore the faulty FaultBand file if it was edited, then start a fresh GHCi. Enter:
+
+```text
+ghci> :set -fbyte-code
+ghci> :load FaultBand.hs
+ghci> :browse FaultBand
+ghci> :show modules
+ghci> :show paths
+ghci> :! echo band-investigation
+ghci> :list classify
+ghci> :break classify
+ghci> :trace request 50
+ghci> :history 10
+ghci> :print mark
+ghci> :force mark
+ghci> :list
+ghci> :delete *
+ghci> :continue
+"fail"
+```
+
+The exported signature returns String, not Bool. The stop is at classify with argument 50; forcing mark establishes that value. Listing the body exposes > rather than >=. Continuing completes normally but produces the wrong String. No type or import flag can repair the contract.
+
+Edit > to >=, save, then finish:
+
+```text
+ghci> :reload
+ghci> :show modules
+ghci> classify 49
+"fail"
+ghci> classify 50
+"pass"
+ghci> classify 51
+"pass"
+ghci> :quit
+```
+
+### Session C: a lazy payload hides an invalid index
+
+Restore the faulty FaultIndex file if needed and start a fresh GHCi. Enter:
+
+```text
+ghci> :set -fbyte-code
+ghci> :load FaultIndex.hs
+ghci> :browse FaultIndex
+ghci> :show modules
+ghci> :show paths
+ghci> :! echo index-investigation
+ghci> :list pick
+ghci> :break pick
+ghci> :trace request 2
+ghci> :history 10
+ghci> :print xs i
+ghci> :force xs i
+ghci> :list
+ghci> :abandon
+ghci> :delete *
+```
+
+The stop is at pick. xs is [7,8] and i is 2 after forcing. These arguments themselves are safe to force; the indexed result is not. The test i > length xs is False at equality, so it allows the failing lookup. Abandon the call before demanding the result. This deliberately avoids adding a crash to the normal command sequence.
+
+Edit the guard to >=, save, and finish:
+
+```text
+ghci> :reload
+ghci> :show modules
+ghci> pick [7,8] 1
+Just 8
+ghci> pick [7,8] 2
+Nothing
+ghci> pick [] 0
+Nothing
+ghci> :quit
+```
+
+The next sections take apart these investigations command by command. Each worked variation names the fixture and the exact evidence sought. Reset or restart between independent variations; an already repaired fixture naturally gives different behaviour.
+
+## 3. Loading the intended target
+
+:load replaces the current target set and loads its dependency graph. A new load is useful when the active file is not the one you meant to investigate. It does not repair source text.
+
+Template: `:load FILE`; `:l FILE` is the short form. Use :show modules afterwards to identify the loaded home modules.
+
+### Worked variation: a looping numeric core
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :show modules
+```
+
+FaultSum should be loaded. Calling sumDown 3 can work while the zero case remains faulty; loading is only the first check. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: a wrong String result
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> classify 50
+```
+
+The faulty source loads and the expression prints "fail". Successful loading does not discharge its contract. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: a latent bounds error
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> pick [7,8] 1
+```
+
+The valid index prints Just 8. The input establishes a loaded baseline before investigating index 2. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+Typing a shell build command as an expression is a parse/scope failure. For `Could not find module`, fix the directory/search root first. Use :add when deliberately extending the target set; :load replaces it.
+
+### Exam question 2: loading the intended target (5 marks)
+
+A session loaded FaultBand but you intend to debug pick in FaultIndex. Give the first two commands.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" asks for target selection and confirmation, not a new pick definition.
+
+</Step>
+
+<Step title="2. Plan">
+
+Replace the target and then inspect the loaded set.
+
+</Step>
+
+<Step title="3. Solution">
+
+Enter `:load FaultIndex.hs` followed by `:show modules`.
+
+</Step>
+
+<Step title="4. Check">
+
+FaultIndex must appear. Run pick [7,8] 1 to establish Just 8 before the failing boundary.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does :load execute main? How can a library without main be loaded?
+
+<details>
+<summary>Answer</summary>
+
+Loading checks and installs definitions; main runs only when requested. A library is a valid GHCi target without an executable entry.
+
+</details>
+
+## 4. Reloading saved repairs
+
+:reload revisits the current targets after edits and recompiles as needed. It reads the saved file, not an unsaved editor buffer. Prompt bindings and active breakpoints should not be treated as durable source.
+
+Template: `edit, save, :reload, rerun normal and boundary checks`. Use :r as the abbreviation. Before editing a suspended call, abandon it and remove obsolete breakpoints.
+
+### Worked variation: base case repaired
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :reload
+ghci> sumDown 0
+ghci> sumDown 3
+```
+
+Between load and reload save the repaired sumDown. The final calls print 0 and 6; the boundary stops and the ordinary case is preserved. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: threshold repaired
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :reload
+ghci> classify 49
+ghci> classify 50
+```
+
+Save the >= version between load and reload. The calls print "fail" and "pass"; equality is the distinguishing check. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: index repaired
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :reload
+ghci> pick [] 0
+ghci> pick [7,8] 1
+```
+
+Save the >= length test before reload. The outputs are Nothing and Just 8, preserving a valid lookup. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+If the wrong answer persists, check saving, loaded paths and target selection before editing again. A reload error means read the diagnostic first; do not use a previous executable as evidence for the new source.
+
+### Exam question 3: reloading saved repairs (5 marks)
+
+You fixed classify in the editor but GHCi still says "fail" for 50. Describe the repair cycle.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Describe" asks for an operational sequence and a distinguishing test.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check that the saved file and loaded module are the intended ones.
+
+</Step>
+
+<Step title="3. Solution">
+
+Save FaultBand.hs, abandon any suspended call, reload, then test 49, 50 and 51.
+
+</Step>
+
+<Step title="4. Check">
+
+Expect "fail", "pass", "pass" after the correction.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Why rerun 49 and 51 rather than checking only 50?
+
+<details>
+<summary>Answer</summary>
+
+They protect the neighbouring partitions against an over-broad repair such as always returning "pass".
+
+</details>
+
+## 5. Browsing a public interface
+
+:browse shows a module interface so you can ask whether an operation exists and what arguments/results it expects. It does not display the implementation or run the function.
+
+Template: `:browse MODULE`; for interpreted home source, `:browse *MODULE` includes implementation-level entities too. A debugger view of private source does not grant ordinary client imports access to private names.
+
+### Worked variation: numeric contract
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :browse FaultSum
+```
+
+Look for sumDown :: Integer -> Integer and request :: Integer -> Integer. The interface cannot reveal the missing zero case. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: String rather than Bool
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :browse FaultBand
+```
+
+classify returns String. A test should compare "pass", not True; the interface exposes that mistaken test assumption. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: Maybe rather than plain Int
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :browse FaultIndex
+```
+
+pick takes [Int], then Int, and returns Maybe Int. Test the optional result, but remember its success payload can still be partial in a faulty implementation. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+A missing exported name is not repaired by adding an application argument. If a name is private, use the public interface or intentionally redesign exports. :browse is not :list: signatures alone do not prove the body correct.
+
+### Exam question 4: browsing a public interface (5 marks)
+
+A test compares classify 50 with True. Which command gives immediate interface evidence, and how should the test change?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Which" asks for a command; the repair concerns a test type mismatch.
+
+</Step>
+
+<Step title="2. Plan">
+
+Inspect the declared result, then compare a result of that type.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `:browse FaultBand`; compare classify 50 with "pass".
+
+</Step>
+
+<Step title="4. Check">
+
+The repaired test type-checks but still fails on the faulty > implementation, exposing a separate logical error.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does :browse *Marks show that a normal client may construct Mark directly?
+
+<details>
+<summary>Answer</summary>
+
+No. The starred view can inspect interpreted implementation details. Client source remains restricted by exports and imports.
+
+</details>
+
+## 6. Showing loaded modules
+
+:show modules identifies the currently loaded home modules and their interpreted or compiled status. It helps distinguish debugging the wrong target from a fault in the intended definition.
+
+Template: `:show modules` after loading, adding a target or changing compilation mode. The display includes filenames/status, so do not assume a fixed column width or absolute path.
+
+### Worked variation: wrong active target
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :show modules
+```
+
+FaultSum should appear, not FaultBand. A wrong target explains why classify is unavailable. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: switch to another investigation
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :show modules
+```
+
+FaultBand replaces the target. Changing targets is distinct from editing FaultSum. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: several targets
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs FaultIndex.hs
+ghci> :show modules
+```
+
+Both modules should be listed. They have no cycle. Use qualified names when their request functions would be ambiguous in an expanded context. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+Loaded modules and names in the interactive import context are different lists. Use :show imports for the latter. A compiled module may be callable but not support interpreted breakpoints.
+
+### Exam question 5: showing loaded modules (5 marks)
+
+A breakpoint will not bind in a home module loaded as object code. What evidence and change should you use?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"What evidence" asks for status, then an action justified by that status.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check the loaded mode and request bytecode for the home source.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use :show modules; set -fbyte-code and load the source again before setting the breakpoint.
+
+</Step>
+
+<Step title="4. Check">
+
+The home module should now be interpreted. Packaged library code is not thereby turned into editable interpreted source.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does :show modules list every name available at the prompt?
+
+<details>
+<summary>Answer</summary>
+
+No. It describes loaded modules. :show imports reports the interactive imports; :show bindings describes prompt bindings.
+
+</details>
+
+## 7. Showing search paths
+
+:show paths gives the working directory and source search directories. Use it when a target or imported module cannot be found. A path root must be above the namespace hierarchy.
+
+Template: `:show paths`, then `:set -iROOT`, then `:load ENTRY`. Relative roots are interpreted from the working directory. Changing directory with :cd unloads home modules, so load again afterwards.
+
+### Worked variation: fixture directory
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :show paths
+ghci> :load FaultSum.hs
+```
+
+Verify that the current directory actually holds FaultSum.hs. If not, use :cd to the fixture directory and then load. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: hierarchical source
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :set -isrc
+ghci> :show paths
+ghci> :load app/Main.hs
+```
+
+For the School.Geometry program in the companion lesson, the source search list must include src, not src/School. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: two roots
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :set -ilib -iapp
+ghci> :show paths
+ghci> :load app/Main.hs
+```
+
+For the Course.Tools.Geometry variation, lib supplies the hierarchy and app supplies entry-side modules. The displayed absolute directory depends on your project location. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+A module-name mismatch is not the same as a missing root. Verify the located file header. Do not copy another machine's absolute path as if it were compiler-generated evidence on yours.
+
+### Exam question 6: showing search paths (5 marks)
+
+GHC cannot find School.Geometry stored at src/School/Geometry.hs. What path should you add, and how do you inspect it?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"What path" asks for the root, not the complete filename.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate the hierarchical relative name from its root.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use :set -isrc, :show paths, then :load app/Main.hs from the project root.
+
+</Step>
+
+<Step title="4. Check">
+
+The root joined with School/Geometry.hs locates the source.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does :! cd change GHCi's own directory?
+
+<details>
+<summary>Answer</summary>
+
+No. It runs a child shell. Use :cd for GHCi, then load again because changing directory unloads home modules.
+
+</details>
+
+## 8. Shell evidence with :!
+
+:! sends a command to an operating-system shell. It helps check tool versions or inspect the environment while keeping the GHCi session. The shell command is not a Haskell expression.
+
+Template: `:! COMMAND`. Choose a command available in the host shell; shell output is environment-specific. An echo marker provides deterministic evidence that the shell command ran.
+
+### Worked variation: numeric investigation marker
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :! echo sum-investigation
+```
+
+The shell prints sum-investigation. This identifies a notebook section; it does not inspect sumDown or fix its base case. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: check compiler executable
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :! ghc --version
+```
+
+The shell reports the installed GHC version. Check it matches the intended toolchain before comparing version-dependent diagnostics. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: check file location on Windows
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :! cd
+```
+
+On Windows the shell reports its current directory. Compare it with :show paths if a file seems missing. On Unix use :! pwd instead. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+The commands in these examples are read-only. A child-shell cd does not persistently change GHCi. A shell "command not found" is an executable/PATH problem, not a Haskell type error.
+
+### Exam question 7: shell evidence with :! (5 marks)
+
+A student types ghc --version as a Haskell expression. Give the correct GHCi form and state what it checks.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" asks for syntax and purpose, not installation instructions.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the escape from GHCi into its shell.
+
+</Step>
+
+<Step title="3. Solution">
+
+Enter `:! ghc --version`. It identifies the compiler executable found by the shell.
+
+</Step>
+
+<Step title="4. Check">
+
+Its version text is not the result of evaluating a Haskell function and may differ between machines.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Can :! replace :browse to find a function signature?
+
+<details>
+<summary>Answer</summary>
+
+No. :browse asks the loaded Haskell environment about its interface. A shell command asks the host operating system to run a program.
+
+</details>
+
+## 9. Setting breakpoints
+
+:break pauses evaluation at an instrumented location in interpreted home source. A breakpoint on a function takes effect when that function is sufficiently applied and its body is demanded; merely defining a thunk need not reach it.
+
+Template: `:break FUNCTION`, or `:break MODULE LINE [COLUMN]`. Use :list first. A function with several equations may receive more than one breakpoint. Use :show breaks to obtain the assigned numbers.
+
+### Worked variation: numeric body
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :break sumDown
+ghci> :trace request 1
+```
+
+The stop is inside sumDown, with n representing zero. It occurs before allowing the bad recursive branch to run indefinitely. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: threshold body
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :break FaultBand.classify
+ghci> :trace request 50
+```
+
+A qualified function name identifies the target. The stop lets you inspect mark before the comparison. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: index body by line
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :list pick
+ghci> :break FaultIndex 3
+ghci> :trace request 2
+```
+
+With the source exactly as printed, line 3 contains pick's body. After edits, inspect :list and update the location instead of trusting an obsolete line number. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+A breakpoint cannot be placed inside arbitrary compiled base-library code. Put it in the home wrapper before the library call. If a name is not in scope, qualify it or select the correct module. :show breaks gives the real ids; never assume the next id is zero.
+
+### Exam question 8: setting breakpoints (5 marks)
+
+Why might setting a breakpoint fail for a callable compiled function? Give a practical repair for pick.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Why" asks about instrumentation, not whether the function has a type.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use interpreted home source and stop before the problematic library operation.
+
+</Step>
+
+<Step title="3. Solution">
+
+Set -fbyte-code, load FaultIndex.hs, and set a breakpoint on pick rather than on Prelude's indexing implementation.
+
+</Step>
+
+<Step title="4. Check">
+
+The wrapper breakpoint exposes xs and i before indexing is demanded.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does let delayed = sumDown 0 necessarily hit a breakpoint immediately?
+
+<details>
+<summary>Answer</summary>
+
+No. The binding can remain unevaluated. The breakpoint is reached when the computation is demanded.
+
+</details>
+
+## 10. Tracing demanded evaluation
+
+:trace evaluates while logging instrumented locations. It stops at enabled breakpoints, letting you inspect how evaluation reached them. This is demand-driven evaluation history, not a conventional imperative call stack.
+
+Template: `:trace EXPRESSION` starts tracing a new expression. At a suspended call, `:trace` with no expression resumes with logging. Use a wrapper such as request so there is work before the target breakpoint.
+
+### Worked variation: trace towards a missing base case
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :break sumDown
+ghci> :trace request 1
+```
+
+request subtracts one before sumDown is needed. At the stop, inspect n and abandon the known nonterminating call. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: trace a wrong result
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :break classify
+ghci> :trace request 50
+```
+
+The wrapper supplies 50. The comparison will choose fail in the faulty source, even though the call is well-typed. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: trace towards a partial payload
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :break pick
+ghci> :trace request 2
+```
+
+The wrapper supplies a two-element list and index 2. Do not mistake a Maybe return type for a proof that the implementation guards its payload correctly. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+A trace can still loop if no stopping point is reached. Use a breakpoint first or interrupt with Ctrl+C. :trace is not Debug.Trace.trace, which is a different source-level library operation.
+
+### Exam question 9: tracing demanded evaluation (5 marks)
+
+You want the evaluation route into pick before the failing index is demanded. Give an ordered command sequence.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" requires a repeatable order, including the stopping point.
+
+</Step>
+
+<Step title="2. Plan">
+
+Load interpreted source, set a breakpoint, then trace the wrapper.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use :load FaultIndex.hs, :break pick, :trace request 2, then :history and :print xs i.
+
+</Step>
+
+<Step title="4. Check">
+
+The stop occurs in the home function before completing the lookup. Inspect i and length xs to identify equality.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does :trace log the editor changes or all previous prompt commands?
+
+<details>
+<summary>Answer</summary>
+
+No. It logs instrumented evaluation locations for the traced execution.
+
+</details>
+
+## 11. Reading evaluation history
+
+:history lists recently logged evaluation locations for a traced run. It helps answer how a demanded computation reached a stop. History is bounded, and inspecting an earlier location does not undo heap evaluation or side effects.
+
+Template: `:history N`, then optionally `:back` and `:forward`. The number chooses how many entries to display, not the input size. Increase the stored limit with -fghci-hist-size when necessary.
+
+### Worked variation: numeric entry route
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :break sumDown
+ghci> :trace request 1
+ghci> :history 5
+```
+
+Look for the source route through request into sumDown. The list may be short; a breakpoint at the first body has little preceding work. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: threshold entry route
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :break classify
+ghci> :trace request 50
+ghci> :history 10
+```
+
+The locations concern the wrapper and demanded argument computation. They are not proof that both if branches were evaluated. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: bounds entry route
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :break pick
+ghci> :trace request 2
+ghci> :history 20
+```
+
+The history records the route into pick, not yet every step of indexing. Inspect the body and argument evidence together. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+Running normally without :trace does not create the same evaluation log. A history with no earlier entry cannot be navigated backwards. :back changes inspection context; it does not turn back time. Do not invent a fixed entry count or source span.
+
+### Exam question 10: reading evaluation history (5 marks)
+
+Explain why :history is not the same as pressing the Up arrow at the prompt.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" requires separating execution evidence from command-entry convenience.
+
+</Step>
+
+<Step title="2. Plan">
+
+Identify what each history records.
+
+</Step>
+
+<Step title="3. Solution">
+
+:history shows logged evaluation locations from :trace; Up recalls text you typed. A recalled command may never have reached a breakpoint at all.
+
+</Step>
+
+<Step title="4. Check">
+
+The wrapper trace has source locations; a keyboard history has strings such as :load FaultBand.hs.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Can moving :back undo a forced thunk?
+
+<details>
+<summary>Answer</summary>
+
+No. It changes the debugger inspection context, not the already performed evaluation.
+
+</details>
+
+## 12. Listing the relevant source
+
+:list displays saved source around a name or location so you can compare code with the contract. It supplies evidence about a branch condition, while argument inspection explains which branch matters.
+
+Template: `:list FUNCTION`, `:list MODULE LINE`, or at a stop `:list`. The no-argument form uses the current stopped location; a standalone session without one should use an explicit name.
+
+### Worked variation: numeric condition
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :list sumDown
+```
+
+The condition n == 1 is visible. It cannot stop the descending sequence that begins at zero. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: threshold condition
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :list FaultBand 3
+```
+
+For the exact fixture, line 3 contains mark > 50. Equality is excluded. Use a name after moving the definition. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: bounds condition at a stop
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :break pick
+ghci> :trace request 2
+ghci> :list
+```
+
+The active source contains i > length xs. With i = 2 and length xs = 2 this condition is False. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+Listing source does not execute it. An unsaved editor buffer is not the loaded definition. A line-number breakpoint must be reviewed after edits; names are often more robust.
+
+### Exam question 11: listing the relevant source (5 marks)
+
+Which source evidence distinguishes the faulty and repaired pick guards, and why is the input important?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Which" asks for a precise expression rather than the whole file.
+
+</Step>
+
+<Step title="2. Plan">
+
+List pick and compare the relation at the boundary.
+
+</Step>
+
+<Step title="3. Solution">
+
+The faulty relation is >; the repaired one is >=. For [7,8] at index 2, equality must be rejected.
+
+</Step>
+
+<Step title="4. Check">
+
+At index 1 both versions succeed, so that input alone does not expose the guard defect.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+What does :list with no arguments mean while paused?
+
+<details>
+<summary>Answer</summary>
+
+Display source around the current stopped location. It is not a catalogue of all imported functions.
+
+</details>
+
+## 13. Observing bindings with :print
+
+:print inspects a binding without forcing its thunks. Unevaluated parts may receive debugger-generated names such as _t1; the exact fresh number and type display are session-dependent. Observation preserves the distinction between an available outer constructor and an unevaluated payload.
+
+Template: `:print IDENTIFIER ...`. It takes binding names, not an arbitrary arithmetic expression. At a breakpoint use local variable names. For a new observation experiment, create a fresh binding rather than reusing one already forced.
+
+### Worked variation: possibly suspended numeric argument
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :break sumDown
+ghci> :trace request 1
+ghci> :print n
+```
+
+The argument may still be suspended. Printing it this way does not intentionally evaluate the subtraction; use :force n when you choose to determine its value. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: threshold argument
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :break classify
+ghci> :trace request 50
+ghci> :print mark
+```
+
+Inspect the current state of mark without requiring the comparison or result String. A value already evaluated may be displayed directly. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: list and index arguments
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :break pick
+ghci> :trace request 2
+ghci> :print xs i
+```
+
+Inspect the list and index independently from the dangerous result. Any thunk names are handles introduced by the debugger, not variables in FaultIndex.hs. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+Typing an ordinary expression such as xs at the prompt asks GHCi to display its value and can demand evaluation. :print is designed for observation. Do not promise a fresh thunk is always shown: earlier evaluation and sharing affect the observed state.
+
+### Exam question 12: observing bindings with :print (5 marks)
+
+Why use :print rather than entering a suspicious list binding directly?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Why" asks about evaluation effects of the observation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate structural inspection from printing through Show.
+
+</Step>
+
+<Step title="3. Solution">
+
+:print can show an outer constructor and suspended parts without forcing those parts. Ordinary value display may demand a failing tail or payload.
+
+</Step>
+
+<Step title="4. Check">
+
+A binding may show a thunk before :force, then an evaluated value afterwards. Seeing different displays can reflect sharing rather than changed source.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does a printed thunk name prove the computation is invalid?
+
+<details>
+<summary>Answer</summary>
+
+No. It means the corresponding part has not been evaluated. It might later produce a valid value, fail or diverge.
+
+</details>
+
+## 14. Forcing selected evidence with :force
+
+:force traverses and evaluates the named binding while displaying it. This changes its evaluatedness and may raise an exception or diverge. Choose a finite, relevant argument when possible; do not force the whole suspicious result merely to see what happens.
+
+Template: `:force IDENTIFIER ...`. Start with :print, choose what is safe and useful to demand, then :force it and inspect again. Ordinary output and debugger structural display are different presentation mechanisms.
+
+### Worked variation: establish the numeric boundary
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :break sumDown
+ghci> :trace request 1
+ghci> :print n
+ghci> :force n
+ghci> :print n
+```
+
+Forcing n establishes 0. This safe argument calculation does not require forcing sumDown 0; abandon that faulty call. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: establish threshold equality
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :break classify
+ghci> :trace request 50
+ghci> :print mark
+ghci> :force mark
+```
+
+The value is 50. Evaluate 50 > 50 separately to see why the faulty branch fails; forcing the argument does not repair the comparison. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Worked variation: establish length and index
+
+Inputs for a fresh investigation:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :break pick
+ghci> :trace request 2
+ghci> :print xs i
+ghci> :force xs i
+```
+
+The finite list is [7,8] and the index is 2. These arguments are safe; the result payload xs !! i is not. If paused after this independent variation, use `:abandon` before starting a different one.
+
+### Common errors
+
+Do not use :force on an infinite list if you need a prompt back. Forcing a bottom can raise an exception. Debugger forcing ignores encountered breakpoints while reporting them, so it is not a substitute for normal stepping. Avoid forcing _result at the current faulty breakpoint.
+
+### Exam question 13: forcing selected evidence with :force (5 marks)
+
+A student claims :force merely reveals existing values and cannot change an investigation. Explain the error.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain the error" asks for the semantic difference from observation.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare what each command demands.
+
+</Step>
+
+<Step title="3. Solution">
+
+:print observes without evaluating thunks; :force evaluates them. It can expose an exception, diverge or change later displays through shared evaluated bindings.
+
+</Step>
+
+<Step title="4. Check">
+
+Forcing xs in the finite index fixture is safe; forcing its invalid indexed payload is not.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+How would you inspect only a finite prefix of an infinite source?
+
+<details>
+<summary>Answer</summary>
+
+Create a separate finite binding such as prefix = take 3 source, then inspect/force prefix. Do not force the entire source.
+
+</details>
+
+
+## 15. Resume, abandon and navigate deliberately
+
+A breakpoint suspends an evaluation. Continuing completes it; abandoning discards the pending evaluation. Deleting breakpoints changes future stops. Moving through recorded history changes the inspection context, not past effects or already evaluated data. These are different controls, so choose one intentionally.
+
+Template: `:show breaks` to inspect ids; `:delete ID` or `:delete *` to remove stops; `:continue` to resume; `:abandon` to discard a pending call. After `:history`, `:back` and `:forward` move the inspection cursor if the corresponding recorded entries exist. For each variation below, inspect the history first. If it lists an earlier entry, use the back/forward pair; otherwise skip that pair. This condition avoids pretending every stop has earlier history.
+
+### Worked variation: discard a nonterminating numeric call
+
+Start with faulty FaultSum, then enter:
+
+```text
+ghci> :load FaultSum.hs
+ghci> :break sumDown
+ghci> :show breaks
+ghci> :trace request 1
+ghci> :history 10
+```
+
+When an earlier entry is listed, enter `:back`, inspect its source with `:list`, then `:forward` to return. Finally enter:
+
+```text
+ghci> :abandon
+ghci> :delete *
+ghci> :show breaks
+```
+
+The pending call is discarded and no enabled breakpoint remains. This is preferable to continuing a recursion known to move away from its base case. In a fresh repaired numeric investigation, the alternative finishing sequence `:delete *`, `:continue` completes request 1 and prints 0: continue is appropriate after the repair has made that input safe.
+
+### Worked variation: continue to a wrong but finite String
+
+Start with faulty FaultBand:
+
+```text
+ghci> :load FaultBand.hs
+ghci> :break classify
+ghci> :show breaks
+ghci> :trace request 50
+ghci> :history 10
+```
+
+Use `:back`, `:list`, `:forward` only when the log has an earlier entry. At the current stop use:
+
+```text
+ghci> :delete *
+ghci> :continue
+"fail"
+```
+
+Deleting stops does not fix the comparison: continuing still returns the faulty answer. To practise the alternative control, repeat the trace in a fresh run and use `:abandon`, then `:delete *` instead. It discards the pending call without producing its final result.
+
+### Worked variation: discard a dangerous indexed payload
+
+Start with faulty FaultIndex:
+
+```text
+ghci> :load FaultIndex.hs
+ghci> :break pick
+ghci> :show breaks
+ghci> :trace request 2
+ghci> :history 10
+```
+
+If available, use the same `:back`, `:list`, `:forward` inspection pair. Then choose `:abandon`, `:delete *`, `:show breaks`. The argument evidence already proves the boundary error, so completing the invalid result is unnecessary. After repairing and reloading, repeat the breakpoint/trace with request 1 instead; `:delete *` then `:continue` safely prints Just 8. This separates a finite valid control case from the invalid payload case.
+
+### Common errors
+
+`:continue` does not repair code or undo forcing. `:delete *` removes stops but leaves a suspended evaluation to be continued or abandoned. `:back` without earlier logged entries cannot move to a previous context. Obtain real ids from :show breaks when deleting just one stop. Do not assume an id stays the same after reload.
+
+### Exam question 14: finish an investigation safely (5 marks)
+
+You are paused in faulty sumDown with n equal to zero. You have enough evidence to repair it. Choose the next commands and justify them.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Choose" asks for a next action supported by the observed input. Completing the faulty computation is unnecessary.
+
+</Step>
+
+<Step title="2. Plan">
+
+Discard the bad call, remove obsolete stops and update saved source.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use :abandon and :delete *. Save the non-positive base-case repair, reload, and rerun zero, a negative input and a positive input.
+
+</Step>
+
+<Step title="4. Check">
+
+sumDown 0 and sumDown (-2) return 0; sumDown 3 returns 6. No old suspended call is being mistaken for a new execution.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does :back reverse a previously executed IO action? What happens if you only delete a breakpoint while paused?
+
+<details>
+<summary>Answer</summary>
+
+No: it moves the history inspection cursor. Deleting a breakpoint changes stop configuration but does not itself complete or discard the suspended evaluation.
+
+</details>
+
+## 16. Tool-role decisions in an exam
+
+An editor changes source; GHC checks/compiles it; the compilation manager follows dependencies; GHCi supports interactive evaluation and interpreted debugging; the shell launches programs. A diagnostic question often asks which layer owns a symptom. Naming the correct layer avoids changing a correct function to compensate for a path problem.
+
+Template: identify the symptom, select the responsible layer, obtain one piece of evidence, then repair and retest. Interpretive execution still checks types. Native compilation can optimise code, but it does not prove the program satisfies its specification.
+
+### Worked variation: missing source rather than wrong arithmetic
+
+Suppose the repaired FaultSum file is under src but an application cannot find it. Use :show paths and add -isrc before loading the entry. Do not change sumDown. Once loaded, sumDown 3 should print 6. This check separates file discovery from calculation.
+
+### Worked variation: correct source but an old interactive definition
+
+The editor shows classify using >=, yet the current session still returns "fail" at 50. Confirm the intended file, save, and reload. The repaired session then prints "pass". Reinstalling GHC is not justified by this evidence.
+
+### Worked variation: testing versus distributing
+
+The repaired pick works for valid indices in GHCi. For a regression suite, save a separate Main test consumer and run it with runghc. To distribute a native program, build its entry with ghc --make and -o, then execute that result. The compiler emits .o object code and .hi interface data during the normal native build; neither file is the application entry or editable source.
+
+### Common errors
+
+An interpreter does not accept an ill-typed program merely because it is interactive. An executable built before an edit cannot demonstrate the new source's behaviour. A successful compiler run does not imply the bounds policy or base case matches the contract. Installation utilities manage toolchains; they do not debug a student's function.
+
+### Exam question 15: identify the responsible layer (6 marks)
+
+Give the responsible tool/layer for editing a missing base case, locating a hierarchical import, checking types interactively, and producing a native executable.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" asks for four mappings. The actions concern different layers of the development cycle.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate source editing, dependency discovery, interactive checking and native building.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use the editor for the definition; GHC/GHCi module lookup with the correct -i root for the import; GHCi for interactive type checks; ghc --make with -o for an executable. Hsc is the single-module compiler machinery, not a separate source language.
+
+</Step>
+
+<Step title="4. Check">
+
+The saved source must be reloaded/rebuilt after editing. A library without main is inspectable, while a default executable requires Main.main. All four choices now match their purposes.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does a successful native build prove the three faulty fixtures correct?
+
+<details>
+<summary>Answer</summary>
+
+No. Each faulty definition is well-typed. Correctness needs evidence against the contract: zero/negative recursion, equality at the threshold and index equal to length.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+Choose commands to answer a question: browse for an interface, modules for loaded targets/mode, paths for lookup, list for source, break for a stop, trace/history for the evaluation route. :print observes; :force evaluates and can fail. Abandon a known bad pending call, save the repair, reload, and rerun distinguishing boundary tests.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can GHC accept a function that gives the wrong answer?">
+Type checking verifies type consistency, not the problem's threshold, termination argument or index contract.
+</CheckQuestion>
+
+<CheckQuestion question="Why might a breakpoint not fire after defining a lazy binding?">
+The computation can remain unevaluated until demanded. A definition alone need not enter the function body.
+</CheckQuestion>
+
+<CheckQuestion question="Which debugger command observes without forcing thunks?">
+:print. :force deliberately evaluates thunks and may raise an exception or diverge.
+</CheckQuestion>
+
+<CheckQuestion question="Does :history record the commands typed at the prompt?">
+No. It records instrumented evaluation locations during tracing. Keyboard command history is different.
+</CheckQuestion>
+
+<CheckQuestion question="Why must a repair be saved and reloaded before testing?">
+GHCi uses its loaded definitions. An unsaved editor change is not the program currently being evaluated.
+</CheckQuestion>
+
+</CheckQuestions>

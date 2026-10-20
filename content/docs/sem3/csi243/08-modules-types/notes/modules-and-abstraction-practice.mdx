@@ -1,0 +1,2195 @@
+---
+title: "Modules and Abstraction Practice"
+description: "Build module boundaries, test public interfaces, repair name visibility and protect representation invariants."
+---
+
+A module boundary is a promise about what another file may use. Read [Modules](/docs/sem3/csi243/08-modules-types/notes/modules) and [Importing](/docs/sem3/csi243/08-modules-types/notes/imports) first. This lesson develops construction and diagnosis beyond those introductions. The basic edit and run cycle is in [Your First Haskell Program](/docs/sem3/csi243/02-expressions-types/notes/first-program) and [Setting Up and Using GHCi](/docs/sem3/csi243/02-expressions-types/notes/ghci).
+
+<LearningObjectives items={[
+  'Build separate core, application and test modules',
+  'Resolve hierarchical modules from the correct search roots',
+  'Distinguish exported names, imported names, type names and constructors',
+  'Repair Prelude clashes, missing modules and cycles',
+  'Protect invariants with opaque interfaces and smart constructors',
+  'Distinguish module functors from Haskell Functor and ordinary parameters',
+]} />
+
+<Callout type="note" title="Files and runnable panels">
+Each bold filename labels a separate file. Keep different variations in separate directories, or replace the named file when instructed. Multi-file examples use plain fences because the browser cannot load neighbouring source files. Runnable panels check single-file calculations, not export visibility. Shell command fences contain inputs, not compiler progress output. Deliberately rejected examples give only a diagnostic key phrase.
+</Callout>
+
+## 1. Core, application and test boundaries
+
+The core contains reusable calculations. The application chooses inputs and prints results. The test entry calls the same core with independently chosen expected answers. Neither entry belongs in the core's dependencies.
+
+Template: `module Core (operation) where` in `Core.hs`; `module Main where` and `import Core` in an application file; another `module Main where` in an independent test file. Load one entry at a time: two Main files are alternative programs, not imports of each other.
+
+### Worked variation: Geometry and floating results
+
+**geometry/Geometry.hs**
+
+```haskell
+module Geometry (rectangleArea, circleArea) where
+rectangleArea :: Double -> Double -> Double
+rectangleArea width height = width * height
+circleArea :: Double -> Double
+circleArea radius = pi * radius * radius
+```
+
+**geometry/ModulesApp.hs**
+
+```haskell
+module Main where
+import qualified Geometry as G
+main :: IO ()
+main = do
+  print (G.rectangleArea 3 4)
+  print (G.circleArea 0)
+```
+
+**geometry/ModulesTest.hs**
+
+```haskell
+module Main where
+import Geometry (rectangleArea, circleArea)
+main :: IO ()
+main = do
+  print (rectangleArea 3 4 == 12)
+  print (abs (circleArea 1 - pi) < 1e-12)
+  print (rectangleArea 0 9 == 0)
+```
+
+From `geometry`, run `runghc ModulesApp.hs`, then separately `runghc ModulesTest.hs`. Application output:
+
+```text
+12.0
+0.0
+```
+
+Test output:
+
+```text
+True
+True
+True
+```
+
+The signature fixes `Double`, hence `12.0`. The circle test uses tolerance rather than a long printed approximation. This tiny harness prints `False` on a failed assertion; it does not set a failing process exit code.
+
+<HaskellTryIt>
+
+```haskell
+rectangleArea :: Double -> Double -> Double
+rectangleArea w h = w * h
+main :: IO ()
+main = print (rectangleArea 3 4)
+```
+
+```text
+12.0
+```
+
+</HaskellTryIt>
+
+### Worked variation: MyCalculator and exact integer checks
+
+**calculator/MyCalculator.hs**
+
+```haskell
+module MyCalculator (addTwo, maxThree, areSorted) where
+addTwo :: Int -> Int -> Int
+addTwo x y = x + y
+maxThree :: Int -> Int -> Int -> Int
+maxThree x y z = max x (max y z)
+areSorted :: Int -> Int -> Int -> Bool
+areSorted x y z = (x < y && y < z) || (x > y && y > z)
+```
+
+**calculator/CalculatorApp.hs**
+
+```haskell
+module Main where
+import MyCalculator
+main :: IO ()
+main = print (addTwo 7 5, maxThree 4 9 2)
+```
+
+**calculator/CalculatorTest.hs**
+
+```haskell
+module Main where
+import MyCalculator
+main :: IO ()
+main = print (addTwo (-2) 2 == 0, maxThree 9 9 2 == 9,
+              areSorted 3 2 1, not (areSorted 2 2 1))
+```
+
+Run each entry separately from `calculator`. Application output:
+
+```text
+(12,9)
+```
+
+Test output:
+
+```text
+(True,True,True,True)
+```
+
+“Sorted” here means strictly increasing or strictly decreasing. The equality case is deliberately excluded; the test documents that policy.
+
+<HaskellTryIt>
+
+```haskell
+areSorted :: Int -> Int -> Int -> Bool
+areSorted x y z = (x < y && y < z) || (x > y && y > z)
+main :: IO ()
+main = print (areSorted 3 2 1, areSorted 2 2 1)
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+### Worked variation: a String core and the empty boundary
+
+**labels/Label.hs**
+
+```haskell
+module Label (label) where
+label :: String -> String
+label name = "CSI243: " ++ name
+```
+
+**labels/LabelApp.hs**
+
+```haskell
+module Main where
+import Label (label)
+main :: IO ()
+main = print (label "Ada")
+```
+
+**labels/LabelTest.hs**
+
+```haskell
+module Main where
+import Label (label)
+main :: IO ()
+main = print (label "" == "CSI243: ", label "Ada" == "CSI243: Ada")
+```
+
+From `labels`, run `runghc LabelApp.hs` or `runghc LabelTest.hs`. Their respective outputs are:
+
+```text
+"CSI243: Ada"
+```
+
+```text
+(True,True)
+```
+
+Concatenating an empty name preserves the trailing space. `print` includes String quotes; `putStrLn` would print only the characters.
+
+<HaskellTryIt>
+
+```haskell
+label :: String -> String
+label name = "CSI243: " ++ name
+main :: IO ()
+main = print (label "")
+```
+
+```text
+"CSI243: "
+```
+
+</HaskellTryIt>
+
+### Common errors
+
+Two module headers in one file cause a `parse error`; split the files. An incorrect Boolean calculation may compile without a diagnostic; boundary tests detect it. Do not import the application into its own core or import deliberately broken examples into normal tests.
+
+### Exam question 1: design a test boundary (6 marks)
+
+Write a core/client/test layout for rectangle area, including a zero-width test.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” requires files and definitions, not just reasons why modules are useful. The test must cover a boundary.
+
+</Step>
+
+<Step title="2. Plan">
+
+Put multiplication in Geometry. Give the application and tests independent Main entries.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use the three Geometry files above. The test compares rectangleArea 0 9 with zero and tests a normal area independently.
+
+</Step>
+
+<Step title="4. Check">
+
+The zero case prints True. The core imports neither consumer, so it can be reused without either entry.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Add a test for a 2 by 5 rectangle. Why not import ModulesApp into the test?
+
+<details>
+<summary>Answer</summary>
+
+Test `rectangleArea 2 5 == 10`. Import Geometry because it is the reusable calculation. An application is another consumer of that interface.
+
+</details>
+
+## 2. Filenames, hierarchical paths and search roots
+
+An import is resolved from a search root: replace module-name dots by directories and append `.hs`. The root goes above the first name component. This is separate from export visibility.
+
+Template: `module School.Geometry where` belongs in `ROOT/School/Geometry.hs`; use `ghci -iROOT ENTRY.hs`. Repeat `-i` options for several roots to avoid platform-specific path separators. Within GHCi, use `:set -iROOT`, then load the entry.
+
+### Worked variation: flat lookup
+
+Use Geometry.hs and ModulesApp.hs from section 1, both in the current directory. Shell inputs:
+
+```text
+ghci -i. ModulesApp.hs
+```
+
+At its prompt, `main` prints `12.0` then `0.0`. The candidate for import Geometry is `./Geometry.hs`; the explicitly supplied entry may have a filename other than Main.hs.
+
+### Worked variation: one namespace
+
+**src/School/Geometry.hs**
+
+```haskell
+module School.Geometry (rectangleArea) where
+rectangleArea :: Double -> Double -> Double
+rectangleArea w h = w * h
+```
+
+**app/Main.hs**
+
+```haskell
+module Main where
+import qualified School.Geometry as G
+main :: IO ()
+main = print (G.rectangleArea 3 4)
+```
+
+From the project root use `runghc -isrc app/Main.hs`. Program output:
+
+```text
+12.0
+```
+
+`src` plus `School/Geometry.hs` locates the core. `-isrc/School` would be one directory too deep.
+
+### Worked variation: a deeper namespace and two roots
+
+**lib/Course/Tools/Geometry.hs**
+
+```haskell
+module Course.Tools.Geometry (rectangleArea) where
+rectangleArea :: Double -> Double -> Double
+rectangleArea w h = w * h
+```
+
+Replace the preceding app's import with `import qualified Course.Tools.Geometry as G`. From this variation's project root use `ghci -ilib -iapp app/Main.hs`. Running main prints:
+
+```text
+12.0
+```
+
+The root is `lib`; every name component becomes a directory except the final filename. The second root also makes modules stored under app available. Do not place module parameters in the dots.
+
+### Common errors
+
+A missing root or incorrect filename can produce `Could not find module`. If a located file declares a different module, fix that header mismatch. Case must agree even if the local filesystem happens to ignore case. Moving functions between export lists cannot fix a file search failure.
+
+### Exam question 2: choose a search root (4 marks)
+
+src/College/Math/Areas.hs declares College.Math.Areas. Give a command to load app/Main.hs from the project root.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Give” asks for a command under the stated directory assumption.
+
+</Step>
+
+<Step title="2. Plan">
+
+Remove College/Math/Areas.hs from the location to obtain the search root.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `ghci -isrc app/Main.hs`. The client imports College.Math.Areas.
+
+</Step>
+
+<Step title="4. Check">
+
+Joining src with College/Math/Areas.hs reproduces the file location. -isrc/College would repeat College in the search.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Where does module College.Text live under lib?
+
+<details>
+<summary>Answer</summary>
+
+`lib/College/Text.hs`, with `-ilib` as the search option.
+
+</details>
+
+## 3. Entry points, execution modes and build artefacts
+
+GHC checks and translates source. GHCi adds an interactive environment, normally using bytecode for home modules while also supporting compiled object code. runghc performs an entry action without leaving a stand-alone executable. A native executable starts at Main.main by default. A library need not have main.
+
+Template: `ghci ENTRY.hs`, then `main`; or `runghc ENTRY.hs`; or `ghc --make ENTRY.hs -o NAME`, then execute NAME. Use section 1's Geometry files, from their directory.
+
+### Worked variation: inspect a library without main
+
+Start `ghci Geometry.hs`, then enter:
+
+```text
+ghci> rectangleArea 2 5
+10.0
+```
+
+The library loads without an entry action. The interactive expression supplies its own computation to inspect.
+
+### Worked variation: perform a saved application once
+
+At the shell enter `runghc ModulesApp.hs`. It prints:
+
+```text
+12.0
+0.0
+```
+
+The runner performs Main.main and returns to the shell. There is no interactive prompt for rectangleArea afterwards.
+
+### Worked variation: build a native application
+
+Shell inputs on Windows:
+
+```text
+ghc --make ModulesApp.hs -o areas
+.\areas.exe
+```
+
+On Unix use `./areas` for the second line. Application output is again:
+
+```text
+12.0
+0.0
+```
+
+The compilation manager follows the import graph. With this normal native build, Geometry.o holds object code and Geometry.hi holds compiler interface information. ModulesApp.o and ModulesApp.hi are named after the entry source file even though its module is Main. The linked executable is the runnable result.
+
+Three artefact decisions: a changed core body can regenerate its object code; a changed exported signature can require dependent modules to be rechecked; deleted generated .hi/.o files must be rebuilt. These files do not replace editable source. Debugging normally needs interpreted home modules rather than opaque compiled library code.
+
+### Common errors
+
+Building Geometry alone with `-o areas` as an executable fails because there is `no Main module`. Add a Main consumer, or use `ghc -c Geometry.hs` when an object is wanted. A named test module Tests can instead be selected with `ghc --make Tests.hs -main-is Tests.main -o tests`. Do not type shell commands as Haskell expressions.
+
+### Exam question 3: select the right tool (6 marks)
+
+Choose tools for inspecting a function, distributing an executable and rerunning a saved test. Explain .hi versus .o.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Choose” requires matching each purpose, not listing tool names alone.
+
+</Step>
+
+<Step title="2. Plan">
+
+Separate interactive exploration, native building and one-shot execution.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use GHCi for the function, ghc --make with -o for the executable, and runghc for the test. .hi describes the compiler interface; .o holds object code.
+
+</Step>
+
+<Step title="4. Check">
+
+A library without main is inspectable in GHCi but is not a default executable entry. A runghc invocation returns to the shell.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Is Hsc a different language? Does interpreting a Haskell program skip type checking?
+
+<details>
+<summary>Answer</summary>
+
+No. Hsc names GHC's single-module compiler machinery. GHC's compilation manager handles dependencies and its pipeline coordinates compilation stages. GHCi also checks types; interpreted does not mean unchecked.
+
+</details>
+## 4. Exported values and re-exported interfaces
+
+An export list controls the names clients may import. Omitting it exports locally defined entities, not every imported entity. An empty list exposes no named entities. The module's own definitions still see each other.
+
+Template: `module M (publicValue, publicType) where`. The list names existing entities; it does not define them. An interface is a source boundary, not a security barrier against a debugger inspecting implementation source.
+
+### Worked variation: default local exports
+
+**ExportCore.hs**
+
+```haskell
+module ExportCore where
+helper :: Int -> Int
+helper x = 2 * x
+public :: Int -> Int
+public x = helper x + 1
+```
+
+**ExportApp.hs**
+
+```haskell
+module Main where
+import ExportCore
+main :: IO ()
+main = print (public 3, helper 3)
+```
+
+Run `runghc ExportApp.hs`. Program output:
+```text
+(7,6)
+```
+
+Both local functions are exported. The helper doubles 3 and public adds one.
+
+### Worked variation: small explicit interface
+
+**ExportCore.hs**
+
+```haskell
+module ExportCore (public) where
+helper :: Int -> Int
+helper x = 2 * x
+public :: Int -> Int
+public x = helper x + 1
+```
+
+**ExportApp.hs**
+
+```haskell
+module Main where
+import ExportCore
+main :: IO ()
+main = print (public 3)
+```
+
+Run `runghc ExportApp.hs`. Program output:
+```text
+7
+```
+
+Only public is visible to the client. Its body can still use the private helper.
+
+### Worked variation: empty interface
+
+**ExportCore.hs**
+
+```haskell
+module ExportCore () where
+helper :: Int -> Int
+helper x = 2 * x
+public :: Int -> Int
+public x = helper x + 1
+```
+
+**ExportApp.hs**
+
+```haskell
+module Main where
+import ExportCore
+main :: IO ()
+main = print (42 :: Int)
+```
+
+Run `runghc ExportApp.hs`. Program output:
+```text
+42
+```
+
+The import supplies no public names. This independent client still compiles.
+
+Re-exporting is an intentional way to assemble an API. Three variations, each in API.hs, with the explicit ExportCore above:
+
+- `module API (public) where` followed by `import ExportCore (public)` re-exports that value.
+- `module API (module ExportCore) where` followed by `import ExportCore` re-exports the imported interface.
+- The same module re-export followed by `import ExportCore (public)` re-exports only that selection.
+
+A client importing API can call public 3 and gets 7 in all three cases. A module re-export does not bypass a selective import.
+
+### Common errors
+
+With the explicit API, adding `print (helper 3)` in ExportApp is rejected: `Variable not in scope`. Use public, or deliberately enlarge the interface. Qualifying helper cannot recover a private export. Importing a module does not automatically re-export all its definitions.
+
+### Exam question 4: reduce the public surface (6 marks)
+
+Export only public from ExportCore. May it still call helper?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Export only" fixes the client boundary, not the implementation.
+
+</Step>
+
+<Step title="2. Plan">
+
+List public in the header and retain helper internally.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `module ExportCore (public) where` with both definitions above.
+
+</Step>
+
+<Step title="4. Check">
+
+public 3 is 7; a client cannot name helper.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+What does module M () where export? How can a facade expose a selected imported function?
+
+<details>
+<summary>Answer</summary>
+
+No named entities. Import the desired function and name it in the facade export list.
+
+</details>
+
+## 5. Type names versus constructors
+
+For `data Signal = Stop | Go`, Signal names a type; Stop and Go construct values and occur in patterns. Exporting the type alone does not export its constructors. The same choices apply in an import list; an import cannot recover constructors the exporter withheld.
+
+Template: `Signal` exposes the type; `Signal(..)` exposes every constructor; `Signal(Go)` exposes only Go. The defining module can use all its constructors.
+
+### Worked variation: opaque type
+
+**Signals.hs**
+
+```haskell
+module Signals (Signal, initial, isGo) where
+data Signal = Stop | Go
+initial :: Signal
+initial = Go
+isGo :: Signal -> Bool
+isGo Stop = False
+isGo Go = True
+```
+
+**SignalApp.hs**
+
+```haskell
+module Main where
+import Signals (Signal, initial, isGo)
+main :: IO ()
+main = print (isGo initial)
+```
+
+Run `runghc SignalApp.hs`. Program output:
+```text
+True
+```
+
+The client can annotate Signal and use initial and isGo. It cannot construct Go or match Stop.
+
+### Worked variation: all constructors
+
+**Signals.hs**
+
+```haskell
+module Signals (Signal(..), initial, isGo) where
+data Signal = Stop | Go
+initial :: Signal
+initial = Go
+isGo :: Signal -> Bool
+isGo Stop = False
+isGo Go = True
+```
+
+**SignalApp.hs**
+
+```haskell
+module Main where
+import Signals (Signal(..), initial, isGo)
+main :: IO ()
+main = print (map isGo [Stop,Go])
+```
+
+Run `runghc SignalApp.hs`. Program output:
+```text
+[False,True]
+```
+
+Both constructor names are available, so the client builds both values.
+
+### Worked variation: one selected constructor
+
+**Signals.hs**
+
+```haskell
+module Signals (Signal(Go), initial, isGo) where
+data Signal = Stop | Go
+initial :: Signal
+initial = Go
+isGo :: Signal -> Bool
+isGo Stop = False
+isGo Go = True
+```
+
+**SignalApp.hs**
+
+```haskell
+module Main where
+import Signals (Signal(Go), initial, isGo)
+main :: IO ()
+main = print (isGo Go)
+```
+
+Run `runghc SignalApp.hs`. Program output:
+```text
+True
+```
+
+Go is available but Stop is withheld. Values of the type may still contain Stop internally.
+
+To vary the import alone, retain the all-constructor exporter and select `Signal, initial, isGo`, `Signal(..), initial, isGo`, or `Signal(Go), initial, isGo` in the three clients respectively. The same outputs follow, but the import now sets the boundary. Record field selectors are separately named operations too; avoid exposing fields that allow unwanted record updates.
+
+### Common errors
+
+With the opaque exporter, client `x = Go` gives `Data constructor not in scope`. A written Signal signature also requires the type name to be imported. A client matching only Go is not total merely because Stop's name is hidden; use isGo to observe the abstract value.
+
+### Exam question 5: expose one constructor (6 marks)
+
+Expose Signal and Go while hiding Stop. Can a client assume every Signal is Go?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Expose" asks for a header; "can" asks about values rather than visible names.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the selected-constructor form and consider values returned by operations.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `module Signals (Signal(Go), initial, isGo) where`. The client cannot assume every value is Go: the implementation still has Stop.
+
+</Step>
+
+<Step title="4. Check">
+
+An additional public stopValue could return Stop without exporting its constructor name.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Import only the type and initial from an all-constructor exporter.
+
+<details>
+<summary>Answer</summary>
+
+Use `import Signals (Signal, initial)`. A variable can carry Signal without matching its constructors.
+
+</details>
+
+## 6. Hidden types, synonyms and inferred knowledge
+
+Source scope and type checking are different. The compiler can know an imported function's type even when a client cannot spell a particular name in a signature. Algebraic type names and synonym names obey export and import lists. The claims "types cannot be hidden" and "synonyms are always exported" are false.
+
+Template: export make and observe, optionally Ticket or Count. The client can compose the functions without writing their intermediate type. Hiding an alias name does not turn the alias into a distinct type.
+
+### Worked variation: type name omitted from exports
+
+**Tickets.hs**
+
+```haskell
+module Tickets (make, observe) where
+data Ticket = Ticket Int
+type Count = Int
+make :: Count -> Ticket
+make = Ticket
+observe :: Ticket -> Count
+observe (Ticket n) = n
+```
+
+**TicketApp.hs**
+
+```haskell
+module Main where
+import Tickets
+main :: IO ()
+main = print (observe (make 4))
+```
+
+Run `runghc TicketApp.hs`. Program output:
+```text
+4
+```
+
+Ticket is absent from client source scope. Inference still connects make and observe.
+
+### Worked variation: selective import omits the alias
+
+**Tickets.hs**
+
+```haskell
+module Tickets (Ticket, Count, make, observe) where
+data Ticket = Ticket Int
+type Count = Int
+make :: Count -> Ticket
+make = Ticket
+observe :: Ticket -> Count
+observe (Ticket n) = n
+```
+
+**TicketApp.hs**
+
+```haskell
+module Main where
+import Tickets (make, observe)
+main :: IO ()
+main = print (observe (make 0))
+```
+
+Run `runghc TicketApp.hs`. Program output:
+```text
+0
+```
+
+Ticket and Count are exported but not selected. Composition still works.
+
+### Worked variation: hiding removes a synonym
+
+**Tickets.hs**
+
+```haskell
+module Tickets (Ticket, Count, make, observe) where
+data Ticket = Ticket Int
+type Count = Int
+make :: Count -> Ticket
+make = Ticket
+observe :: Ticket -> Count
+observe (Ticket n) = n
+```
+
+**TicketApp.hs**
+
+```haskell
+module Main where
+import Tickets hiding (Count)
+main :: IO ()
+value :: Int
+value = observe (make 7)
+main = print value
+```
+
+Run `runghc TicketApp.hs`. Program output:
+```text
+7
+```
+
+Count is hidden, but the result can be annotated Int because Count is an alias for Int.
+
+Three rejected changes expose the rule: in variation one, add `example :: Ticket`; in variation two add `count :: Count`; in variation three also add `count :: Count`. Supply a body such as undefined so the missing definition is not the issue. The diagnostic key phrase for the missing type name is:
+
+```text
+Not in scope: type constructor or class
+```
+
+With an opaque Ticket exporter, `import Tickets hiding (Ticket)` can likewise remove the algebraic type name while leaving make and observe.
+
+### Common errors
+
+Qualification does not recover a name excluded by an import list. Successful inferred composition does not prove every type name was imported. Hiding Count cannot prevent passing an Int to make: an alias is not a distinct wrapper. Use newtype and a controlled constructor interface for that guarantee.
+
+### Exam question 6: explain a hidden intermediate type (6 marks)
+
+Tickets exports only make and observe. Why does observe (make 4) work while a client signature mentioning Ticket fails?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" needs both an inference fact and a source-scope fact.
+
+</Step>
+
+<Step title="2. Plan">
+
+Follow the inferred type through the composition, then inspect the explicitly written name.
+
+</Step>
+
+<Step title="3. Solution">
+
+The compiler knows make returns the type accepted by observe. Ticket is absent from exports, so the client cannot explicitly name it.
+
+</Step>
+
+<Step title="4. Check">
+
+The composition prints 4. Adding a client Ticket signature is a scope error.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Can hiding Count prevent mixing it with Int?
+
+<details>
+<summary>Answer</summary>
+
+No. It is an alias for Int. A private wrapper constructor is needed for a distinct controlled type.
+
+</details>
+
+## 7. Ordinary, selective and hiding imports
+
+An ordinary import permits unqualified names and qualified names using its effective module qualifier. Selective and hiding lists change *which* names are imported; qualified changes *how* they may be written. These decisions are independent.
+
+Templates: `import Data.Char`; `import Data.Char (toUpper)`; `import Data.Char hiding (toLower)`. An empty `import M ()` imports no named entities. Instances are not selected by these name lists.
+
+### Worked variation: ordinary: both spellings
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char
+main :: IO ()
+main = print ((toUpper 'a', Data.Char.toUpper 'b'))
+```
+
+
+```text
+('A','B')
+```
+
+</HaskellTryIt>
+
+The ordinary import permits both spellings.
+
+### Worked variation: ordinary: a predicate
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char
+main :: IO ()
+main = print (Data.Char.isDigit '8')
+```
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Every exported function is available, not just conversion functions.
+
+### Worked variation: ordinary: punctuation
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char
+main :: IO ()
+main = print (toUpper '?')
+```
+
+
+```text
+'?'
+```
+
+</HaskellTryIt>
+
+Lookup succeeds; the function leaves punctuation unchanged.
+
+### Worked variation: selective: one name
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+main :: IO ()
+main = print (toUpper 'q')
+```
+
+
+```text
+'Q'
+```
+
+</HaskellTryIt>
+
+Only toUpper is selected from Data.Char.
+
+### Worked variation: selective: qualification
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper)
+main :: IO ()
+main = print (Data.Char.toUpper 'r')
+```
+
+
+```text
+'R'
+```
+
+</HaskellTryIt>
+
+Selection does not ban qualified spelling of retained names.
+
+### Worked variation: selective: two names
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char (toUpper, toLower)
+main :: IO ()
+main = print ((toUpper 's', toLower 'T'))
+```
+
+
+```text
+('S','t')
+```
+
+</HaskellTryIt>
+
+Both listed operations are imported.
+
+### Worked variation: hiding: retain uppercase
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char hiding (toLower)
+main :: IO ()
+main = print (toUpper 'u')
+```
+
+
+```text
+'U'
+```
+
+</HaskellTryIt>
+
+Hiding removes toLower, not the module.
+
+### Worked variation: hiding: qualified retained name
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char hiding (toLower)
+main :: IO ()
+main = print (Data.Char.isDigit '?')
+```
+
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+The predicate remains available with a prefix.
+
+### Worked variation: hiding: several exclusions
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char hiding (toUpper, toLower)
+main :: IO ()
+main = print (isDigit '3')
+```
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The predicate is not excluded.
+
+### Common errors
+
+After selecting only toUpper, using toLower gives `Variable not in scope`. Hiding toLower also excludes Data.Char.toLower from that import. Combining `(toUpper) hiding (toLower)` in one declaration is a `parse error`; choose one list form. Imports precede declarations and do not go inside main.
+
+### Exam question 7: repair selection (6 marks)
+
+A client imports only toUpper and calls Data.Char.toLower. Repair it without importing the whole module.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Repair" preserves the intended function call.
+
+</Step>
+
+<Step title="2. Plan">
+
+Selection filters qualified and unqualified access. Add the missing operation.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `import Data.Char (toUpper, toLower)`. Retain the qualified call if desired.
+
+</Step>
+
+<Step title="4. Check">
+
+Data.Char.toLower 'A' now yields 'a'. The prefix was not the problem.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Does import Data.Char forbid Data.Char.toUpper? What about import Data.Char ()?
+
+<details>
+<summary>Answer</summary>
+
+The ordinary import allows it. The empty import supplies neither spelling of toUpper.
+
+</details>
+
+## 8. Qualified imports and aliases
+
+A qualified import requires a prefix. `as` chooses the effective prefix without renaming the function. An ordinary aliased import still permits unqualified names. Two modules may share an alias when the particular names used remain unambiguous.
+
+Templates: `import qualified Data.Char`; `import qualified Data.Char as C`; `import Data.Char as C`. After as C, use C as this import's qualifier rather than assuming the original qualifier remains available through it.
+
+### Worked variation: qualified: conversion
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Char
+main :: IO ()
+main = print (Data.Char.toUpper 'a')
+```
+
+
+```text
+'A'
+```
+
+</HaskellTryIt>
+
+Use the full module prefix.
+
+### Worked variation: qualified: predicate
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Char
+main :: IO ()
+main = print (Data.Char.isDigit '7')
+```
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+Predicates obey the same lookup rule.
+
+### Worked variation: qualified: edge character
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Char
+main :: IO ()
+main = print (Data.Char.toLower '!')
+```
+
+
+```text
+'!'
+```
+
+</HaskellTryIt>
+
+Qualification changes lookup, not behaviour.
+
+### Worked variation: alias: required short prefix
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Char as C
+main :: IO ()
+main = print (C.toLower 'A')
+```
+
+
+```text
+'a'
+```
+
+</HaskellTryIt>
+
+C is the effective qualifier.
+
+### Worked variation: alias: ordinary import
+
+<HaskellTryIt>
+
+```haskell
+import Data.Char as C
+main :: IO ()
+main = print ((toUpper 'b', C.toUpper 'c'))
+```
+
+
+```text
+('B','C')
+```
+
+</HaskellTryIt>
+
+Both names work because qualified was omitted.
+
+### Worked variation: alias: two modules share a prefix
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.Char as X
+import qualified Data.List as X
+main :: IO ()
+main = print ((X.toUpper 'd', X.sort [3,1,2 :: Int]))
+```
+
+
+```text
+('D',[1,2,3])
+```
+
+</HaskellTryIt>
+
+Each referenced name has exactly one supplier.
+
+### Common errors
+
+Bare toUpper after only `import qualified Data.Char as C` gives `Variable not in scope`: use C.toUpper. Import Data.List and Data.Map both qualified as X, then use X.insert, and the diagnostic includes `Ambiguous occurrence`. Give them different aliases. Argument types do not choose the module automatically.
+
+### Exam question 8: share an alias safely (6 marks)
+
+Why can X.toUpper and X.sort work with one alias, while X.insert can be ambiguous?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Why" asks about exact-name lookup.
+
+</Step>
+
+<Step title="2. Plan">
+
+Determine the supplier of each occurrence.
+
+</Step>
+
+<Step title="3. Solution">
+
+Data.Char and Data.List supply distinct toUpper and sort names. Data.List and Data.Map both supply insert. Use distinct aliases for those modules.
+
+</Step>
+
+<Step title="4. Check">
+
+The runnable shared-alias example prints ('D',[1,2,3]). Competing insert names cannot be selected by argument types.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Must as always appear with qualified?
+
+<details>
+<summary>Answer</summary>
+
+No. import Data.Char as C also provides unqualified names. qualified requires the prefix.
+
+</details>
+
+## 9. Prelude and competing names
+
+Prelude is normally imported implicitly. An explicit Prelude import replaces that implicit import for the module. When providing an alternative function, decide how to retain the standard operation and ordinary IO/type names.
+
+Templates: `import Prelude hiding (reverse)` with a second qualified import; a qualified competing library; or a selective explicit Prelude list containing every Prelude name you write.
+
+### Worked variation: hide one name and retain an escape route
+
+<HaskellTryIt>
+
+```haskell
+import Prelude hiding (reverse)
+import qualified Prelude as P
+reverse :: [a] -> [a]
+reverse xs = xs
+main :: IO ()
+main = print (reverse [1,2,3 :: Int], P.reverse [1,2,3 :: Int])
+```
+
+
+```text
+([1,2,3],[3,2,1])
+```
+
+</HaskellTryIt>
+
+The local function preserves its input; P.reverse performs standard reversal.
+
+### Worked variation: qualify a competing library
+
+<HaskellTryIt>
+
+```haskell
+import qualified Data.List as L
+main :: IO ()
+main = print (reverse [1,2,3 :: Int], L.reverse [1,2,3 :: Int])
+```
+
+
+```text
+([3,2,1],[3,2,1])
+```
+
+</HaskellTryIt>
+
+Prelude supplies the short name and L supplies the qualified spelling. Both reverse here.
+
+### Worked variation: explicit Prelude dependencies
+
+<HaskellTryIt>
+
+```haskell
+import Prelude (IO, Int, print, reverse)
+main :: IO ()
+main = print (reverse [1,2,3 :: Int])
+```
+
+
+```text
+[3,2,1]
+```
+
+</HaskellTryIt>
+
+The list includes IO and Int as well as operations. No implicit whole-Prelude import fills omissions.
+
+### Common errors
+
+After `import Prelude ()`, print gives `Variable not in scope`; a written IO signature lacks its type name (`Not in scope: type constructor or class`). Restore the required imports. Hiding reverse from Data.List does not remove Prelude.reverse: hiding affects one import, not all routes. Two competing imported definitions produce `Ambiguous occurrence`; qualify the intended supplier rather than guessing which was imported first.
+
+### Exam question 9: retain two versions (6 marks)
+
+Write imports allowing a local reverse and the standard reverse to coexist.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" requires import declarations and usable spellings.
+
+</Step>
+
+<Step title="2. Plan">
+
+Remove the short Prelude spelling and add a qualified route.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use `import Prelude hiding (reverse)` and `import qualified Prelude as P`. Call the standard function P.reverse.
+
+</Step>
+
+<Step title="4. Check">
+
+The first variation demonstrates different results from the same input.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Why might a name hidden from one import remain usable?
+
+<details>
+<summary>Answer</summary>
+
+Another import, including Prelude, can supply it. Inspect every route.
+
+</details>
+
+## 10. Missing modules and dependency cycles
+
+A missing module is a location/package problem. A cycle is a dependency-design problem. A scope error arises after a module has been found but a name is unavailable. Read the first failing import before changing calculations.
+
+Template: draw arrows from importer to imported module. Move shared definitions below both consumers, or pass an operation as an argument. Advanced SOURCE/hs-boot mechanisms exist, but these small programs need neither.
+
+### Worked variation: missing flat file
+
+**MissingApp.hs**
+
+```haskell
+module Main where
+import Absent
+main :: IO ()
+main = print (1 :: Int)
+```
+
+When the named module is unavailable, the diagnostic key phrase is:
+```text
+Could not find module
+```
+
+Create Absent.hs declaring module Absent, or correct the import spelling. The independent literal calculation cannot repair lookup.
+
+### Worked variation: missing hierarchical root
+
+**MissingApp.hs**
+
+```haskell
+module Main where
+import School.Geometry
+main :: IO ()
+main = print (1 :: Int)
+```
+
+When the named module is unavailable, the diagnostic key phrase is:
+```text
+Could not find module
+```
+
+Supply -isrc when the source is src/School/Geometry.hs. The independent literal calculation cannot repair lookup.
+
+### Worked variation: unavailable package module
+
+**MissingApp.hs**
+
+```haskell
+module Main where
+import MissingPackage.Tool
+main :: IO ()
+main = print (1 :: Int)
+```
+
+When the named module is unavailable, the diagnostic key phrase is:
+```text
+Could not find module
+```
+
+Check the spelling and exposed supplying package. A source search root does not install a package. The independent literal calculation cannot repair lookup.
+
+### Worked variation: two-way cycle
+
+**A.hs**
+
+```haskell
+module A where
+import B
+a :: Int
+a = 1
+```
+
+**B.hs**
+
+```haskell
+module B where
+import A
+b :: Int
+b = 2
+```
+
+Loading the top module is rejected; diagnostic key phrase:
+```text
+Module imports form a cycle
+```
+
+Move a shared type into Model, imported by both A and B. Imports create edges even when their values are unused.
+
+### Worked variation: cycle through the application
+
+**Main.hs**
+
+```haskell
+module Main where
+import B
+main :: IO ()
+main = print (1 :: Int)
+```
+
+**B.hs**
+
+```haskell
+module B where
+import Main
+b :: Int
+b = 2
+```
+
+Loading the top module is rejected; diagnostic key phrase:
+```text
+Module imports form a cycle
+```
+
+Remove the B-to-Main edge. Extract reusable application logic into a lower-level Core. Imports create edges even when their values are unused.
+
+### Worked variation: three-way cycle
+
+**A.hs**
+
+```haskell
+module A where
+import B
+a :: Int
+a = 1
+```
+
+**B.hs**
+
+```haskell
+module B where
+import C
+b :: Int
+b = 2
+```
+
+**C.hs**
+
+```haskell
+module C where
+import A
+c :: Int
+c = 3
+```
+
+Loading the top module is rejected; diagnostic key phrase:
+```text
+Module imports form a cycle
+```
+
+With C importing A, extract the common dependency, or pass the required operation as a parameter. Imports create edges even when their values are unused.
+
+### Common errors
+
+Adding -i cannot remove a cycle. Exporting everything cannot locate a missing file. A located file with the wrong module header needs its header/path repaired before individual names are considered. Keep BrokenExamples outside the normal entry's dependency graph.
+
+### Exam question 10: cut a cycle (6 marks)
+
+A imports B and B imports A only to share a type. Redesign the graph.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Redesign" asks for dependencies, not a compiler flag.
+
+</Step>
+
+<Step title="2. Plan">
+
+The shared type belongs below both consumers.
+
+</Step>
+
+<Step title="3. Solution">
+
+Move it into Model.hs. A imports Model; B imports Model. Remove the cross-imports needed only for the type.
+
+</Step>
+
+<Step title="4. Check">
+
+Both arrows end at Model, which has no path back to A or B.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+May a deliberately broken source file remain beside tests?
+
+<details>
+<summary>Answer</summary>
+
+It may be stored separately, but normal tests must not import/load it. Build only the valid entry and its dependencies.
+
+</details>
+
+## 11. An opaque stack
+
+An abstract data type exposes operations while hiding representation. A stack removes the most recently pushed item first. Here clients create stacks only through empty and push; pop returns Nothing on an empty stack. The representation is a list, but clients need not know that.
+
+Template: export `Stack, empty, push, pop, toList`, define a private constructor, supply initial values, updates and observations. `Stack a` is parameterised by element type. Exporting Stack(..) would let clients depend on its field shape.
+
+**stack/Stack.hs**
+
+```haskell
+module Stack (Stack, empty, push, pop, toList) where
+newtype Stack a = Stack [a]
+empty :: Stack a
+empty = Stack []
+push :: a -> Stack a -> Stack a
+push x (Stack xs) = Stack (x:xs)
+pop :: Stack a -> Maybe (a, Stack a)
+pop (Stack []) = Nothing
+pop (Stack (x:xs)) = Just (x, Stack xs)
+toList :: Stack a -> [a]
+toList (Stack xs) = xs
+```
+
+**stack/StackApp.hs**
+
+```haskell
+module Main where
+import qualified Stack as S
+main :: IO ()
+main = print (S.toList (S.push 2 (S.push 1 S.empty)))
+```
+
+**stack/StackTest.hs**
+
+```haskell
+module Main where
+import qualified Stack as S
+main :: IO ()
+main = do
+  print (S.toList (S.empty :: S.Stack Int) == [])
+  print (case S.pop (S.push 8 S.empty) of
+           Nothing -> False
+           Just (x, rest) -> x == 8 && null (S.toList rest))
+```
+
+Run the two entries separately from stack. Application output:
+```text
+[2,1]
+```
+Test output:
+```text
+True
+True
+```
+
+### Worked variation: empty boundary
+
+<HaskellTryIt>
+
+```haskell
+newtype Stack a = Stack [a]
+empty :: Stack a
+empty = Stack []
+push :: a -> Stack a -> Stack a
+push x (Stack xs) = Stack (x:xs)
+pop :: Stack a -> Maybe (a, Stack a)
+pop (Stack []) = Nothing
+pop (Stack (x:xs)) = Just (x, Stack xs)
+toList :: Stack a -> [a]
+toList (Stack xs) = xs
+main :: IO ()
+main = do
+  print (case pop (empty :: Stack Int) of Nothing -> True; Just _ -> False)
+```
+
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The empty case selects Nothing without demanding a nonexistent element.
+
+### Worked variation: push then pop
+
+<HaskellTryIt>
+
+```haskell
+newtype Stack a = Stack [a]
+empty :: Stack a
+empty = Stack []
+push :: a -> Stack a -> Stack a
+push x (Stack xs) = Stack (x:xs)
+pop :: Stack a -> Maybe (a, Stack a)
+pop (Stack []) = Nothing
+pop (Stack (x:xs)) = Just (x, Stack xs)
+toList :: Stack a -> [a]
+toList (Stack xs) = xs
+main :: IO ()
+main = do
+  print (case pop (push 8 empty) of Nothing -> []; Just (x, rest) -> x : toList rest)
+```
+
+
+```text
+[8]
+```
+
+</HaskellTryIt>
+
+Push stores 8; pop separates it from the empty remainder.
+
+### Worked variation: polymorphism and persistence
+
+<HaskellTryIt>
+
+```haskell
+newtype Stack a = Stack [a]
+empty :: Stack a
+empty = Stack []
+push :: a -> Stack a -> Stack a
+push x (Stack xs) = Stack (x:xs)
+pop :: Stack a -> Maybe (a, Stack a)
+pop (Stack []) = Nothing
+pop (Stack (x:xs)) = Just (x, Stack xs)
+toList :: Stack a -> [a]
+toList (Stack xs) = xs
+main :: IO ()
+main = do
+  let old = push "a" empty
+  print (toList (push "b" old), toList old)
+```
+
+
+```text
+(["b","a"],["a"])
+```
+
+</HaskellTryIt>
+
+The new stack adds b; the old immutable stack still contains only a.
+
+### Common errors
+
+A client `S.Stack [1,2]` is rejected with `Not in scope` for the constructor. Use public operations. Comparing pop empty with Nothing via == would require Eq for every possible payload, including Stack. Case analysis avoids demanding an unnecessary representation instance. The operations preserve last-in-first-out order; testing values through toList does not expose a mutable list field.
+
+### Exam question 11: change the representation (6 marks)
+
+Can Stack change its internal representation without changing a client using only the public operations? State the obligation.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Can" asks about the contract, not text substitution.
+
+</Step>
+
+<Step title="2. Plan">
+
+Preserve public types and observable behaviour.
+
+</Step>
+
+<Step title="3. Solution">
+
+Yes, provided empty, push, pop and toList retain their meanings, including last-in-first-out order and empty failure. Hidden constructors stop clients matching the old field.
+
+</Step>
+
+<Step title="4. Check">
+
+The three runnable boundary/order tests should remain valid after the implementation changes.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Why would exporting Stack(..) make the change harder?
+
+<details>
+<summary>Answer</summary>
+
+A client could construct or match the old list field, so its code would depend on the representation.
+
+</details>
+
+## 12. Smart constructors and a validated mark
+
+A smart constructor checks an invariant before constructing a value. Here a Mark contains an Int from 0 through 100 inclusive. Clients receive either a reason or a valid Mark. The raw constructor stays private. A public observation returns an Int without mutating the original Mark.
+
+Template: `newtype Mark = Mark Int`; `mkMark :: Int -> Either String Mark`; `markValue :: Mark -> Int`. Every introduction route must validate. Do not export an unchecked setter or record field that lets clients bypass validation.
+
+**marks/Marks.hs**
+
+```haskell
+module Marks (Mark, mkMark, markValue, passes) where
+newtype Mark = Mark Int
+mkMark :: Int -> Either String Mark
+mkMark n
+  | n < 0 || n > 100 = Left "mark out of range"
+  | otherwise = Right (Mark n)
+markValue :: Mark -> Int
+markValue (Mark n) = n
+passes :: Mark -> Bool
+passes m = markValue m >= 50
+```
+
+**marks/MarksApp.hs**
+
+```haskell
+module Main where
+import Marks (mkMark, markValue)
+main :: IO ()
+main = print (case mkMark 72 of Left e -> Left e; Right m -> Right (markValue m))
+```
+
+**marks/MarksTest.hs**
+
+```haskell
+module Main where
+import Marks
+check :: Int -> Bool
+check n = case mkMark n of
+  Left _ -> n < 0 || n > 100
+  Right m -> markValue m == n && n >= 0 && n <= 100
+main :: IO ()
+main = print (map check [-1,0,50,100,101])
+```
+
+Run the two entries separately from marks. Application output:
+```text
+Right 72
+```
+Test output:
+```text
+[True,True,True,True,True]
+```
+
+### Worked variation: lower boundary
+
+<HaskellTryIt>
+
+```haskell
+newtype Mark = Mark Int
+mkMark :: Int -> Either String Mark
+mkMark n
+  | n < 0 || n > 100 = Left "mark out of range"
+  | otherwise = Right (Mark n)
+markValue :: Mark -> Int
+markValue (Mark n) = n
+passes :: Mark -> Bool
+passes m = markValue m >= 50
+main :: IO ()
+main = print (case mkMark 0 of Left e -> Left e; Right m -> Right (markValue m, passes m))
+```
+
+
+```text
+Right (0,False)
+```
+
+</HaskellTryIt>
+
+Zero is valid but below the pass threshold.
+
+### Worked variation: pass and upper boundaries
+
+<HaskellTryIt>
+
+```haskell
+newtype Mark = Mark Int
+mkMark :: Int -> Either String Mark
+mkMark n
+  | n < 0 || n > 100 = Left "mark out of range"
+  | otherwise = Right (Mark n)
+markValue :: Mark -> Int
+markValue (Mark n) = n
+passes :: Mark -> Bool
+passes m = markValue m >= 50
+main :: IO ()
+main = print (map (\n -> case mkMark n of Left _ -> False; Right m -> passes m) [49,50,100])
+```
+
+
+```text
+[False,True,True]
+```
+
+</HaskellTryIt>
+
+49 is valid and fails; 50 and 100 are valid and pass.
+
+### Worked variation: both invalid partitions
+
+<HaskellTryIt>
+
+```haskell
+newtype Mark = Mark Int
+mkMark :: Int -> Either String Mark
+mkMark n
+  | n < 0 || n > 100 = Left "mark out of range"
+  | otherwise = Right (Mark n)
+markValue :: Mark -> Int
+markValue (Mark n) = n
+passes :: Mark -> Bool
+passes m = markValue m >= 50
+main :: IO ()
+main = print (map (\n -> case mkMark n of Left e -> e; Right _ -> "valid") [-1,101])
+```
+
+
+```text
+["mark out of range","mark out of range"]
+```
+
+</HaskellTryIt>
+
+Both outside partitions return reasons instead of public invalid Marks.
+
+### Common errors
+
+Client `bad = Mark 101` gives `Data constructor not in scope`. Use mkMark and handle Left. Exporting Mark(..) would make bad legal and defeat validation. Returning zero for invalid input would merge an error with a valid boundary mark. Passing an Either straight to markValue is a type error: consume the success branch first.
+
+### Exam question 12: preserve the invariant (6 marks)
+
+Design an interface preventing clients from constructing mark 101. Which exports would defeat it?
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Design" requires a representation, construction route and observations.
+
+</Step>
+
+<Step title="2. Plan">
+
+Hide the constructor and validate every introduction route.
+
+</Step>
+
+<Step title="3. Solution">
+
+Export Mark, mkMark, markValue and passes, as above. Exporting Mark(..), or any unchecked Int-to-Mark function, defeats the invariant.
+
+</Step>
+
+<Step title="4. Check">
+
+mkMark 100 succeeds; mkMark 101 fails. Negative inputs fail too.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+Would type Mark = Int provide the same guarantee?
+
+<details>
+<summary>Answer</summary>
+
+No. An alias accepts every Int without a controlled construction boundary.
+
+</details>
+
+## 13. Parameterised modules and ordinary Haskell alternatives
+
+Some languages call a module that accepts a module and returns a module a "functor". The outline's "parameterised modules (functors)" refers to that idea. Standard Haskell module headers do not accept module parameters. Haskell's Functor class instead supplies fmap over values in a type context; it is a different concept, developed in the polymorphism chapter.
+
+Template alternatives: pass an operation `(a -> a)` as a value parameter; parameterise a data type `Stack a`; or package related operations in a record and pass that record. These change values/types, not the import graph. Type classes can also select operations by type; they do not generate modules.
+
+### Worked variation: function parameter
+
+<HaskellTryIt>
+
+```haskell
+twiceWith :: (a -> a) -> a -> a
+twiceWith step x = step (step x)
+main :: IO ()
+main = print (twiceWith (+3) (1 :: Int), twiceWith reverse "abc")
+```
+
+
+```text
+(7,"abc")
+```
+
+</HaskellTryIt>
+
+1 becomes 4 then 7. Reversing twice restores the string.
+
+### Worked variation: type parameter
+
+<HaskellTryIt>
+
+```haskell
+newtype Stack a = Stack [a]
+empty :: Stack a
+empty = Stack []
+push :: a -> Stack a -> Stack a
+push x (Stack xs) = Stack (x:xs)
+pop :: Stack a -> Maybe (a, Stack a)
+pop (Stack []) = Nothing
+pop (Stack (x:xs)) = Just (x, Stack xs)
+toList :: Stack a -> [a]
+toList (Stack xs) = xs
+main :: IO ()
+main = print (toList (push True empty), toList (push "x" empty))
+```
+
+
+```text
+([True],["x"])
+```
+
+</HaskellTryIt>
+
+One Stack definition works at Bool and String without generating new modules.
+
+### Worked variation: a record of policy operations
+
+<HaskellTryIt>
+
+```haskell
+data Policy = Policy { acceptable :: Int -> Bool, describe :: Int -> String }
+report :: Policy -> Int -> String
+report policy n = if acceptable policy n then describe policy n else "rejected"
+main :: IO ()
+main = do
+  let nonnegative = Policy (>= 0) show
+  let small = Policy (<= 10) (const "small")
+  print (report nonnegative 12, report small 12, report small 3)
+```
+
+
+```text
+("12","rejected","small")
+```
+
+</HaskellTryIt>
+
+Two records supply different operations to the same function. The small policy rejects 12 and accepts 3.
+
+### Common errors
+
+`module MakeStack (ElementModule) where` is an export-list shape, not a declaration of a module parameter. If ElementModule is not an exported entity this is a scope failure. Inventing other parameterised header syntax gives a parse failure. Use ordinary value/type parameters; do not describe every higher-order function as Haskell Functor.
+
+### Exam question 13: translate a module-parameter idea (6 marks)
+
+Implement a reusable operation applying a supplied transformation twice. Distinguish the two meanings of functor.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Implement" asks for code plus a terminology distinction.
+
+</Step>
+
+<Step title="2. Plan">
+
+Pass the transformation as an ordinary function value.
+
+</Step>
+
+<Step title="3. Solution">
+
+Use twiceWith above. A module functor transforms modules in languages supporting that feature; Haskell Functor supplies fmap. Neither module generation nor a Functor instance is needed for twiceWith.
+
+</Step>
+
+<Step title="4. Check">
+
+twiceWith (+3) 1 is 7; twiceWith reverse "abc" is "abc".
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Practice with answers
+
+How can several related operations be supplied together?
+
+<details>
+<summary>Answer</summary>
+
+Use a record such as Policy and pass that record as a value; keep conventional module headers.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+An entry selects a program; imports select dependencies; exports and imports together control source-level names. T, T(..) and T(C) expose different constructor sets. Hidden names may still occur in inferred types. Ordinary imports permit qualification. Protect an invariant by controlling every construction route. Test consumers through the public interface, and keep broken clients outside normal builds.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can a composition use a hidden type?">
+The compiler knows the types of imported operations; the client need not spell the hidden name. Explicitly naming it still requires scope.
+</CheckQuestion>
+
+<CheckQuestion question="Does hiding on one import globally forbid a name?">
+No. Another import may supply it. Check all routes, including Prelude.
+</CheckQuestion>
+
+<CheckQuestion question="What should an opaque Mark interface expose?">
+The type, a validating constructor function and observations. The raw data constructor stays private.
+</CheckQuestion>
+
+<CheckQuestion question="What root finds src/A/B.hs for module A.B?">
+Use src, not src/A.
+</CheckQuestion>
+
+<CheckQuestion question="Can a library without main be tested?">
+Yes: use GHCi expressions or a separate Main test entry importing it.
+</CheckQuestion>
+
+</CheckQuestions>
+
