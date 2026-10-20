@@ -1,0 +1,1390 @@
+---
+title: "Text and File IO Practice"
+description: "Compose pure text processors with whole-input and file actions, validate separate inputs and report test outcomes."
+---
+
+Complete applications separate a pure calculation from the actions that obtain and deliver text. This lesson extends [Input, Bindings, and Processing](/docs/sem3/csi243/03-defining-functions/notes/input-processing), [A Complete Haskell Program](/docs/sem3/csi243/03-defining-functions/notes/complete-program) and [Terminal Output: putStrLn, print, and show](/docs/sem3/csi243/03-defining-functions/notes/output). Use [IO Sequencing and Loops](/docs/sem3/csi243/03-defining-functions/notes/io-sequencing-and-loops) for action order and repeated prompts. Safe `readMaybe` parsing and `Maybe`/`Either` case analysis are prerequisites from [Maybe in Depth](/docs/sem3/csi243/09-polymorphism/notes/maybe-in-depth) and [Either in Depth](/docs/sem3/csi243/09-polymorphism/notes/either-in-depth).
+
+<LearningObjectives items={[
+  'Process finite standard input through getContents or interact',
+  'Keep newline and EOF behaviour explicit',
+  'Read, overwrite and append local files with a testable pure core',
+  'Label independent validation successes and failures',
+  'Execute IO Bool tests and choose a successful or failing exit status'
+]} />
+
+In runnable examples the input attribute contains only supplied characters, including real line breaks. Output excludes terminal echo. File and process-exit programs use plain Haskell fences: the browser does not provide a real filesystem or process exit. Their deterministic pure checks remain runnable. Every plain file example describes a local fixture to create in an exercise directory before running it; no fixture is assumed to exist on the site. All shown files use ASCII text and logical `\n` line endings. Text-mode IO may translate host line endings; the transcripts describe the text seen by Haskell, not a byte encoding contract.
+
+## 1. getContents and demand for whole input
+
+`getContents :: IO String` supplies the remaining standard input as lazy text. In GHC the binding can happen before the whole stream has been consumed. The processor demands characters as needed. A computation such as `length` or a total over all tokens needs the end of a finite input before it can finish. Reading a prefix can finish without needing the rest. Standard input is a stream, not a list of prompts.
+
+**Template.** `do { text <- getContents; putStr (process text) }`, where `process :: String -> String` is pure. A final newline is part of the input if supplied, and is part of the output only if the processor retains or adds it.
+
+A redirected input file supplies EOF after its final character. At a Windows terminal, EOF is normally signalled with Ctrl+Z then Enter; EOF signalling is terminal-dependent and is not text to put into an Input box. Enter alone adds a newline and does not end the stream. With `getLine`, EOF after some characters can terminate the final unterminated line; EOF with no characters left raises an exception. `getContents` instead returns an empty remainder at EOF.
+
+### Variation: count all words
+
+<HaskellTryIt input="red blue
+ green">
+
+```haskell
+main :: IO ()
+main = do
+  text <- getContents
+  print (length (words text))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The processor demands the complete finite input to know there are three words. The line break and space separate words; they are not counted as words.
+
+### Variation: preserve a final unterminated line
+
+<HaskellTryIt input="first
+last">
+
+```haskell
+main :: IO ()
+main = do
+  text <- getContents
+  print (lines text)
+```
+
+```text
+["first","last"]
+```
+
+</HaskellTryIt>
+
+There is no final newline after `last`, but `lines` still includes it. Printing the list shows quotes around each String.
+
+### Variation: empty input at EOF
+
+<HaskellTryIt input="">
+
+```haskell
+main :: IO ()
+main = do
+  text <- getContents
+  print (length text, lines text)
+```
+
+```text
+(0,[])
+```
+
+</HaskellTryIt>
+
+No input characters means a zero-length String and no lines. This differs from one newline, whose `lines` result is `[""]`.
+
+### Exam question: count complete input (5 marks)
+
+Write a whole-input program which prints the number of lines and words. Explain why it may wait after the user presses Enter.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Write" asks for an application, and "whole-input" means reading the remaining stream rather than one line. Two counts must be produced.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Bind `getContents`, split by lines and words, then print both lengths. Both counts require the input to end.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  text <- getContents
+  print (length (lines text), length (words text))
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+Input `a b` then `c` with EOF gives `(2,3)`. Enter terminates a line but does not signal that no more lines will arrive.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Treating Enter as EOF leaves a whole-input total waiting; this is expected stream behaviour, not a type error. `words getContents` supplies `IO String` instead of String and gives a type mismatch, key phrase `Couldn't match`. Bind the action first. Do not claim all lazy input is consumed at the `<-` line.
+
+**Practice.** How many characters are in input `"a\nb\n"`? What about `"a\nb"`?
+
+<details>
+<summary>Answer</summary>
+
+Four and three. Newlines are real characters, and the final one is not invented by `getContents`.
+
+</details>
+
+## 2. interact composes a pure text processor with IO
+
+`interact :: (String -> String) -> IO ()` reads standard input, applies a pure processor and writes its resulting String. It is the compact form of `getContents >>= putStr . process`. It adds no newline by itself. A streaming processor may produce output before EOF; one that needs the complete input must wait. Do not claim the entire input is always read before any output is possible.
+
+**Template.** `main = interact process`, with `process :: String -> String`. The processor must return text; use `show` when the calculated result is numeric.
+
+### Variation: normalise the words
+
+<HaskellTryIt input="a   b
+c">
+
+```haskell
+main :: IO ()
+main = interact (unlines . words)
+```
+
+```text
+a
+b
+c
+```
+
+</HaskellTryIt>
+
+`words` produces three tokens, then `unlines` puts each on its own line, including a newline after the last token.
+
+### Variation: reverse each line
+
+<HaskellTryIt input="cat
+dog">
+
+```haskell
+main :: IO ()
+main = interact (unlines . map reverse . lines)
+```
+
+```text
+tac
+god
+```
+
+</HaskellTryIt>
+
+The processor retains line order but reverses each line's contents. `unlines` supplies a final newline even though input lacked one.
+
+### Variation: count with an explicit newline
+
+<HaskellTryIt input="">
+
+```haskell
+report :: String -> String
+report text = show (length (words text)) ++ "\n"
+main :: IO ()
+main = interact report
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The empty stream contains no words. The report supplies the newline; `interact` does not.
+
+### Exam question: choose the processor type (5 marks)
+
+Use `interact` to print the number of characters, including newlines, followed by one newline.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Use interact" fixes the IO shell. Counting gives an Int but the processor must return a String.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Count the original characters, convert the count with `show` and append a newline.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+report :: String -> String
+report s = show (length s) ++ "\n"
+main :: IO ()
+main = interact report
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+Input `ab` with EOF gives `2` and a newline; input `ab` followed by a newline gives `3` and a newline. The count needs EOF.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `interact length` has a result-type mismatch, key phrase `Couldn't match type`; length returns Int rather than String. `interact putStrLn` supplies an effectful function where a pure processor is needed. Add `show` for counts and keep output outside the core.
+
+**Practice.** Is `unlines . lines` always the identity on text?
+
+<details>
+<summary>Answer</summary>
+
+No. It adds a final newline to a nonempty final unterminated line: `"a"` becomes `"a\n"`. Use `id` for an exact text copy.
+
+</details>
+
+## 3. Pure processors and deterministic local fixtures
+
+A pure core computes a result from text without reading or writing anything. It can be checked on a fixed String independently of terminal or file access. The same core can serve `interact`, `getContents` or `readFile`. Fixture text is a tiny, named known input. For local exercises, create the corresponding file with exactly that text; a name in this lesson is not a downloadable file.
+
+**Template.** `process :: String -> String`; test `process fixture == expected`, then attach an IO shell. Use line/word operations from [Text and List Library](/docs/sem3/csi243/06-lists-tuples/notes/text-and-list-library) for their detailed split/join rules.
+
+Our shared core keeps only nonempty lines and adds one newline to each retained line. A line containing spaces is nonempty and is deliberately retained.
+
+### Variation: two data lines and a blank line
+
+Local fixture `notes-a.txt` has the exact logical contents `"alpha\n\nbeta\n"`.
+
+<HaskellTryIt>
+
+```haskell
+clean :: String -> String
+clean = unlines . filter (not . null) . lines
+main :: IO ()
+main = do
+  print (clean "alpha\n\nbeta\n")
+  print (clean "alpha\n\nbeta\n" == "alpha\nbeta\n")
+```
+
+```text
+"alpha\nbeta\n"
+True
+```
+
+</HaskellTryIt>
+
+The empty middle line is removed. `print` makes the newline escapes visible in the String representation.
+
+### Variation: empty fixture
+
+Local fixture `empty.txt` has zero characters, `""`.
+
+<HaskellTryIt>
+
+```haskell
+clean :: String -> String
+clean = unlines . filter (not . null) . lines
+main :: IO ()
+main = do
+  print (clean "")
+  print (clean "" == "")
+```
+
+```text
+""
+True
+```
+
+</HaskellTryIt>
+
+No lines are retained and no newline is invented for empty output.
+
+### Variation: whitespace is retained
+
+Local fixture `space.txt` has the exact contents `" \nlast"`.
+
+<HaskellTryIt>
+
+```haskell
+clean :: String -> String
+clean = unlines . filter (not . null) . lines
+main :: IO ()
+main = do
+  print (clean " \nlast")
+  print (clean " \nlast" == " \nlast\n")
+```
+
+```text
+" \nlast\n"
+True
+```
+
+</HaskellTryIt>
+
+The space line has length one and survives. The final unterminated line gains a newline.
+
+### Exam question: separate core and shell (6 marks)
+
+Write a pure function removing empty lines, then a whole-input application using it. State whether it removes space-only lines.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+"Write a pure function" excludes IO from the core. The term "empty" means zero characters, which differs from whitespace-only.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Split lines, filter by nonempty, rebuild lines and compose with `interact`.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+clean :: String -> String
+clean = unlines . filter (not . null) . lines
+main :: IO ()
+main = interact clean
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+`clean "a\n\nb"` equals `"a\nb\n"`. A one-space line remains because it is not empty. These checks are deterministic and need no file.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Printing inside `clean :: String -> String` produces an IO/String mismatch, key phrase `Couldn't match`. Return text instead. Assuming removal of whitespace-only lines is a specification error; there is no GHC diagnostic. Use a whitespace predicate only if the question requests it.
+
+**Practice.** How would you reuse `clean` for a previously obtained String named `text`?
+
+<details>
+<summary>Answer</summary>
+
+Use `let result = clean text` to name the pure output, then `putStr result` to perform output. The core itself remains unchanged.
+
+</details>
+
+## 4. readFile and lazy file input
+
+`readFile :: FilePath -> IO String` obtains text from a path; `FilePath` is a synonym for String. Relative paths are resolved from the process working directory, not automatically from the source file's directory. In GHC the returned String is lazy, so binding it does not promise the entire file is already read or its handle closed. A count demands the complete finite file. A missing or unreadable file causes an IO exception, not `Nothing`; this lesson does not assume a fixed operating-system error message.
+
+**Template.** `do { text <- readFile "input.txt"; putStr (process text) }`. Use separate input and output paths when a later action writes a result.
+
+### Variation: line count
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = do
+  text <- readFile "notes-a.txt"
+  print (length (lines text))
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Fixture notes-a.txt: "alpha\n\nbeta\n"
+stdin: none
+stdout: 3
+```
+
+Create `notes-a.txt` from the fixture in section 3. The blank line counts; evaluating the length demands the whole file.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length (lines "alpha\n\nbeta\n"))
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+### Variation: empty file
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = do
+  text <- readFile "empty.txt"
+  print (null text)
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Fixture empty.txt: ""
+stdin: none
+stdout: True
+```
+
+The fixture has zero characters. Detecting emptiness needs the first stream result, which here is EOF.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (null "")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+### Variation: unterminated final line
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = do
+  text <- readFile "space.txt"
+  print (lines text)
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Fixture space.txt: " \nlast"
+stdin: none
+stdout: [" ","last"]
+```
+
+The final line is retained without a final newline; the space-only line is retained as well.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (lines " \nlast")
+```
+
+```text
+[" ","last"]
+```
+
+</HaskellTryIt>
+
+### Exam question: readFile and lazy file input (6 marks)
+
+Write a program reading `notes-a.txt` and displaying the word count. Explain when the count becomes known.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write" with a file input, one numeric output and a demand question.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Bind the file action, count its words and print. Counting needs EOF, even though binding the lazy String may finish earlier.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  text <- readFile "notes-a.txt"
+  print (length (words text))
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+The section 3 fixture has two words, so stdout is `2`. A missing fixture fails with an IO exception rather than yielding zero.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `words (readFile "notes-a.txt")` uses an action where text is needed: key phrase `Couldn't match`. Bind first. Reading a file lazily then overwriting that same path can interfere with a still-open input handle. Write to a separate result path; do not treat `<-` as a guarantee of complete consumption.
+
+**Practice.** Is `readFile` a pure function because a filename is a String?
+
+<details>
+<summary>Answer</summary>
+
+No. Its type ends in `IO String`, and file contents can change between runs.
+
+</details>
+
+## 5. writeFile overwrites a destination
+
+`writeFile :: FilePath -> String -> IO ()` writes exactly the supplied text, creating a missing file or replacing the contents of an existing file. It adds no newline. This is persistence outside the process, unlike a local binding. These programs use `result.txt` inside a dedicated exercise directory; it must be safe to replace that local output. Keep it distinct from input fixtures. Successful completion means the text-writing action completed, not a promise about every hardware durability guarantee.
+
+**Template.** `writeFile "result.txt" (process text)`. A pure processor can be reused from the whole-input shell.
+
+### Variation: replace existing contents
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = writeFile "result.txt" "new\n"
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Before result.txt: "old\nextra\n"
+stdin: none
+stdout: empty
+After result.txt: "new\n"
+```
+
+Create the before-file with the shown text. None of its previous contents survives.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("new\n" == "new" ++ "\n")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+### Variation: write empty text
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = writeFile "result.txt" ""
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Before result.txt: "old\n"
+stdin: none
+stdout: empty
+After result.txt: ""
+```
+
+An empty write truncates the existing file; it does not mean skip the operation.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (length ("" :: String))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+### Variation: complete pure-core file pipeline
+
+This is a local terminal program in a plain fence.
+
+```haskell
+clean :: String -> String
+clean = unlines . filter (not . null) . lines
+main :: IO ()
+main = do
+  text <- readFile "notes-a.txt"
+  writeFile "result.txt" (clean text)
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Fixture notes-a.txt: "alpha\n\nbeta\n"
+Before result.txt: absent
+stdin: none
+stdout: empty
+After result.txt: "alpha\nbeta\n"
+```
+
+The separate result path is created. Its entire contents come from the cleaned input.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+clean :: String -> String
+clean = unlines . filter (not . null) . lines
+main :: IO ()
+main = print (clean "alpha\n\nbeta\n" == "alpha\nbeta\n")
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+### Exam question: writeFile overwrites a destination (6 marks)
+
+Write a file pipeline that converts `space.txt` to one word per line in `result.txt`. State what happens to an older result.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write" and the output destination is a file, so terminal printing is not enough.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the fixture, use the pure `unlines . words` processor, then overwrite the separate output path.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  text <- readFile "space.txt"
+  writeFile "result.txt" (unlines (words text))
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+The input `" \nlast"` produces `"last\n"`. An old result is replaced. Successful execution has no stdout.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `writeFile "result.txt"` alone is still a function expecting text, so using it as a complete IO statement gives a type mismatch: key phrase `Couldn't match`. Supplying `show report` when report is already a String writes representation quotes and escapes. Supply report directly.
+
+**Practice.** Does writing `"x"` make a newline appear after x?
+
+<details>
+<summary>Answer</summary>
+
+No. Use `"x\n"` if the file must end in a newline.
+
+</details>
+
+## 6. appendFile extends a destination
+
+`appendFile :: FilePath -> String -> IO ()` adds the supplied text after existing contents, creating the file if absent. It inserts no separator and no newline automatically. Use it for a local accumulating log when repeated runs should accumulate text; use `writeFile` when repeated runs should replace a report.
+
+**Template.** `appendFile "result.txt" newText`. Include a delimiter in newText or ensure the preceding contents already end with one.
+
+### Variation: append a second line
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = appendFile "result.txt" "second\n"
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Before result.txt: "first\n"
+stdin: none
+stdout: empty
+After result.txt: "first\nsecond\n"
+```
+
+The existing newline separates the two words into different lines.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("first\n" ++ "second\n")
+```
+
+```text
+"first\nsecond\n"
+```
+
+</HaskellTryIt>
+
+### Variation: no separator is invented
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = appendFile "result.txt" "second"
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Before result.txt: "first"
+stdin: none
+stdout: empty
+After result.txt: "firstsecond"
+```
+
+Without delimiters, concatenation makes one continuous word.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("first" ++ "second")
+```
+
+```text
+"firstsecond"
+```
+
+</HaskellTryIt>
+
+### Variation: append to a missing local file
+
+This is a local terminal program in a plain fence.
+
+```haskell
+main :: IO ()
+main = appendFile "result.txt" "start\n"
+```
+
+Labelled transcript (file contents are shown as Haskell Strings to expose line endings):
+
+```text
+Before result.txt: absent
+stdin: none
+stdout: empty
+After result.txt: "start\n"
+```
+
+A new file is created. This example assumes the directory exists and is writable.
+
+Deterministic pure check:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print ("" ++ "start\n")
+```
+
+```text
+"start\n"
+```
+
+</HaskellTryIt>
+
+### Exam question: appendFile extends a destination (6 marks)
+
+Write a program that appends one word-count record for `notes-a.txt` to `result.txt`, preserving previous records.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "append"; previous output must survive and records need separators.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read the input fixture, calculate a count and append a newline-terminated record.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+main :: IO ()
+main = do
+  text <- readFile "notes-a.txt"
+  appendFile "result.txt" ("words=" ++ show (length (words text)) ++ "\n")
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+With before-text `"words=0\n"`, the fixture gives after-text `"words=0\nwords=2\n"`. Stdout remains empty.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Using `writeFile` instead silently discards the previous records: a logic error, not a GHC diagnostic. Forgetting a separator merges records. Passing a numeric count directly where String is required gives `Couldn't match type`; convert the count with `show`.
+
+**Practice.** If `appendFile "result.txt" "x"` succeeds twice on an initially empty file, what remains?
+
+<details>
+<summary>Answer</summary>
+
+`"xx"`; repeated appends are not idempotent. Two successful overwrites of `"x"` would leave `"x"`.
+
+</details>
+
+## 7. Two independent inputs and labelled outcomes
+
+Reading two inputs does not mean their validations depend on one another. Obtain both Strings and report each separately so a failure in the first does not suppress the second report. Reuse `readMaybe` for safe parsing; this section practises the IO boundary rather than constructing another parser. The policy here accepts any `Int`, with no extra range restriction.
+
+**Template.** `do { first <- getLine; second <- getLine; report "first" first; report "second" second }`. A labelled report consumes a validation result and prints either success or error.
+
+### Variation: both valid
+
+<HaskellTryIt input="7
+-2">
+
+```haskell
+import Text.Read (readMaybe)
+report :: String -> String -> IO ()
+report label text =
+  case readMaybe text :: Maybe Int of
+    Nothing -> putStrLn (label ++ ": error: integer required")
+    Just n -> putStrLn (label ++ ": success: " ++ show n)
+main :: IO ()
+main = do
+  a <- getLine
+  b <- getLine
+  report "first" a
+  report "second" b
+```
+
+```text
+first: success: 7
+second: success: -2
+```
+
+</HaskellTryIt>
+
+Each independent parse succeeds; negative two is valid at Int.
+
+### Variation: first invalid, second valid
+
+<HaskellTryIt input="bad
+9">
+
+```haskell
+import Text.Read (readMaybe)
+report :: String -> String -> IO ()
+report label text =
+  case readMaybe text :: Maybe Int of
+    Nothing -> putStrLn (label ++ ": error: integer required")
+    Just n -> putStrLn (label ++ ": success: " ++ show n)
+main :: IO ()
+main = do
+  a <- getLine
+  b <- getLine
+  report "first" a
+  report "second" b
+```
+
+```text
+first: error: integer required
+second: success: 9
+```
+
+</HaskellTryIt>
+
+The first error does not prevent reporting the second result.
+
+### Variation: first valid, second invalid
+
+<HaskellTryIt input="0
+no">
+
+```haskell
+import Text.Read (readMaybe)
+report :: String -> String -> IO ()
+report label text =
+  case readMaybe text :: Maybe Int of
+    Nothing -> putStrLn (label ++ ": error: integer required")
+    Just n -> putStrLn (label ++ ": success: " ++ show n)
+main :: IO ()
+main = do
+  a <- getLine
+  b <- getLine
+  report "first" a
+  report "second" b
+```
+
+```text
+first: success: 0
+second: error: integer required
+```
+
+</HaskellTryIt>
+
+Zero is valid. The second line is malformed and gets its own label.
+
+### Exam question: independent validation (6 marks)
+
+Explain and repair a program that validates the second input only inside the first input's success branch, although both results must be reported.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command asks for a repair under an independence requirement. An error in the first should not hide information about the second.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Read both lines first, then run two separate labelled reports, using the supplied report helper.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+import Text.Read (readMaybe)
+report :: String -> String -> IO ()
+report label text =
+  case readMaybe text :: Maybe Int of
+    Nothing -> putStrLn (label ++ ": error: integer required")
+    Just n -> putStrLn (label ++ ": success: " ++ show n)
+main :: IO ()
+main = do
+  first <- getLine
+  second <- getLine
+  report "first" first
+  report "second" second
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+For `bad` then `9`, output is `first: error: integer required` then `second: success: 9`, each on its own line. For two malformed lines both error labels appear.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** An early failure branch which skips later validation is a logic error, not a compiler error. `readMaybe getLine` supplies an action instead of String: key phrase `Couldn't match`. Bind the input before parsing. If the second computation truly requires the first numeric result, document that dependency instead of pretending it is independent.
+
+**Practice.** What labels appear for two empty lines?
+
+<details>
+<summary>Answer</summary>
+
+`first: error: integer required` and `second: error: integer required`. Empty lines are actual input; EOF is different.
+
+</details>
+
+## 8. Running a suite with sequence and pure ()
+
+A test action may print a labelled result and return `Bool` to say whether it passed. The suite is `[IO Bool]`, a list of action descriptions. `sequence` performs every action in list order and returns `IO [Bool]`. Only after obtaining the results do we count passes and use `and` to decide the suite outcome. `and []` is True; an empty suite can pass under that convention without establishing any tested behaviour. A returned False does not stop `sequence`: it is an ordinary result, not an exception. If an action raises an IO exception, ordinary sequencing stops unless it is handled.
+
+**Template.** `do { results <- sequence tests; print (length (filter id results)); if and results then pure () else failureAction }`. `pure ()` is a successful no-op, not an early exit. See the next section for the real process exit operation.
+
+### Variation: all pass
+
+<HaskellTryIt>
+
+```haskell
+check :: String -> Bool -> IO Bool
+check label ok = do
+  putStrLn ((if ok then "PASS " else "FAIL ") ++ label)
+  pure ok
+main :: IO ()
+main = do
+  results <- sequence [check "a" True,check "b" True]
+  print (length (filter id results), and results)
+  pure ()
+```
+
+```text
+PASS a
+PASS b
+(2,True)
+```
+
+</HaskellTryIt>
+
+The effects label two passes, and the returned list contains two True values.
+
+### Variation: failure does not suppress a later test
+
+<HaskellTryIt>
+
+```haskell
+check :: String -> Bool -> IO Bool
+check label ok = do
+  putStrLn ((if ok then "PASS " else "FAIL ") ++ label)
+  pure ok
+main :: IO ()
+main = do
+  results <- sequence [check "a" False,check "b" True]
+  print (length (filter id results), and results)
+  pure ()
+```
+
+```text
+FAIL a
+PASS b
+(1,False)
+```
+
+</HaskellTryIt>
+
+The second test still runs. Counting finds one pass, and conjunction finds the failure.
+
+### Variation: empty suite
+
+<HaskellTryIt>
+
+```haskell
+check :: String -> Bool -> IO Bool
+check label ok = do
+  putStrLn ((if ok then "PASS " else "FAIL ") ++ label)
+  pure ok
+main :: IO ()
+main = do
+  results <- sequence []
+  print (length (filter id results), and results)
+  pure ()
+```
+
+```text
+(0,True)
+```
+
+</HaskellTryIt>
+
+No check actions run. The conjunction of an empty list is True, but zero tests were performed.
+
+### Exam question: suite result versus effect (6 marks)
+
+Write a runner for `tests :: [IO Bool]` which prints the number of passes and the conjunction of results. Explain why `sequence_` is unsuitable.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write"; the result values are required for the summary as well as the effects.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Collect with `sequence`, then count True values and conjoin the list. `sequence_` would throw away this information.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+runTests :: [IO Bool] -> IO ()
+runTests tests = do
+  results <- sequence tests
+  print (length (filter id results), and results)
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+For results `[True,False,True]`, the summary is `(2,False)`. For no tests it is `(0,True)`.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** `and tests` expects Booleans but receives IO actions: key phrase `Couldn't match type`. Execute `sequence` first. Assuming `and` will prevent later test effects is a logic error: those effects were already performed by `sequence` before the conjunction is examined.
+
+**Practice.** How can a test print PASS but still return False?
+
+<details>
+<summary>Answer</summary>
+
+Its implementation can be wrong: the printed label and returned Boolean are separate. Use one shared `ok` value to choose both. Tests passing is evidence, not a proof of correctness.
+
+</details>
+
+## 9. exitFailure and process status
+
+`exitFailure` from `System.Exit` terminates the process with a failure status. Its polymorphic type is `IO a`: it can fit either branch because it never normally returns a value. This differs from `pure ()`, which succeeds normally and lets following actions run. Failure status is how a command-line test runner signals failure to its caller. Successful normal completion of `main` reports success. Exact nonzero numeric failure codes are platform-dependent, so the contract here says nonzero rather than inventing one fixed number.
+
+**Template.** `if and results then pure () else exitFailure`. Place any final success message inside the success branch if it must be absent on failure. These local programs require a real process and are plain fences; the browser runner cannot implement process termination.
+
+### Variation: successful suite
+
+```haskell
+import System.Exit (exitFailure)
+main :: IO ()
+main = do
+  let results = [True,True]
+  if and results
+    then putStrLn "summary: pass" >> pure ()
+    else putStrLn "summary: fail" >> exitFailure
+  putStrLn "after"
+```
+
+Labelled local transcript, with no stdin:
+
+```text
+stdout:
+summary: pass
+after
+status: success (zero)
+```
+
+The success branch returns unit and the following action runs.
+
+The decision is independently checkable without exiting the browser:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (and ([True,True] :: [Bool]))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+### Variation: failed suite
+
+```haskell
+import System.Exit (exitFailure)
+main :: IO ()
+main = do
+  let results = [True,False]
+  if and results
+    then putStrLn "summary: pass" >> pure ()
+    else putStrLn "summary: fail" >> exitFailure
+  putStrLn "after"
+```
+
+Labelled local transcript, with no stdin:
+
+```text
+stdout:
+summary: fail
+status: failure (nonzero)
+```
+
+The failure branch prints a label and exits before the following action.
+
+The decision is independently checkable without exiting the browser:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (and ([True,False] :: [Bool]))
+```
+
+```text
+False
+```
+
+</HaskellTryIt>
+
+### Variation: no tests under the empty-suite convention
+
+```haskell
+import System.Exit (exitFailure)
+main :: IO ()
+main = do
+  let results = []
+  if and results
+    then putStrLn "summary: pass" >> pure ()
+    else putStrLn "summary: fail" >> exitFailure
+  putStrLn "after"
+```
+
+Labelled local transcript, with no stdin:
+
+```text
+stdout:
+summary: pass
+after
+status: success (zero)
+```
+
+The empty conjunction is True. A specification requiring at least one test must add a nonempty check.
+
+The decision is independently checkable without exiting the browser:
+
+<HaskellTryIt>
+
+```haskell
+main :: IO ()
+main = print (and ([] :: [Bool]))
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+### Exam question: real suite exit policy (6 marks)
+
+Write `finish :: [Bool] -> IO ()` which reports a labelled summary, succeeds if every test passed and exits with failure otherwise. Do not print a success message after failure.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command is "write" and asks for an operating-system outcome, not merely a printed False.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Calculate conjunction. Use the normal unit action for success, and `exitFailure` after the failure label.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+import System.Exit (exitFailure)
+finish :: [Bool] -> IO ()
+finish results =
+  if and results
+    then putStrLn "PASS suite" >> pure ()
+    else putStrLn "FAIL suite" >> exitFailure
+```
+
+  </Step>
+
+  <Step title="4. Check">
+
+`finish [True,False]` prints `FAIL suite` and ends with nonzero status. `[True]` prints `PASS suite` and returns normally. An empty list passes under the stated convention.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+**Common errors.** Replacing `exitFailure` with `pure ()` prints the same failure label but incorrectly reports normal completion: a logic error with no compiler diagnostic. Import omission gives `Variable not in scope`. Do not put a process-exiting example inside HaskellTryIt.
+
+**Practice.** How would a suite require at least one passing test and no failures?
+
+<details>
+<summary>Answer</summary>
+
+Use `not (null results) && and results` as its success predicate. The empty list then fails.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+Keep a pure String processor separate from its IO shell. Whole-input counts need EOF; Enter alone is not EOF. Lazy reads are demanded by the processor, not necessarily completed at the binding. `interact` and file writes add no automatic newline. `writeFile` replaces, while `appendFile` concatenates. Use distinct input and output paths. Report independent inputs independently. Execute `[IO Bool]` with `sequence` before inspecting results; `pure ()` succeeds normally and `exitFailure` ends a real process with failure.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="Does getContents always consume the entire stream before its binding completes in GHC?">
+    No. Its String is lazy; the consuming processor determines demand. A complete count eventually needs EOF.
+  </CheckQuestion>
+
+  <CheckQuestion question="Does interact append a newline?">
+    No. Any newline must come from the processor's returned String.
+  </CheckQuestion>
+
+  <CheckQuestion question="What happens when writeFile is supplied an empty String?">
+    A successful write creates or truncates the destination to empty contents.
+  </CheckQuestion>
+
+  <CheckQuestion question="What separates appended records?">
+    Only the separators supplied by the program or already present in the file. `appendFile` adds none automatically.
+  </CheckQuestion>
+
+  <CheckQuestion question="Why does a suite need sequence rather than sequence_ to count passes?">
+    It needs the returned Boolean values, which the underscore form discards.
+  </CheckQuestion>
+
+  <CheckQuestion question="Does printing FAIL make a process fail?">
+    No. The exit policy must use a failure status, such as `exitFailure`, when the suite fails.
+  </CheckQuestion>
+
+</CheckQuestions>
