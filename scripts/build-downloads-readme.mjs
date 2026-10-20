@@ -30,6 +30,20 @@ const PREFIX_TITLES = {
   Poly: 'Polymorphism and type classes',
   Lazy: 'Lazy evaluation and infinite data',
   Proof: 'Proofs about programs',
+  Arith: 'Arithmetic and numeric operators',
+  Alias: 'Type synonyms and aliases',
+  Char: 'Characters and Data.Char',
+  TextList: 'Text and list library functions',
+  Sort: 'Sorting and merging',
+  Collections: 'Maps and sets',
+  IO: 'Input and output',
+  Context: 'Functor, Applicative and dependent computation',
+  Cost: 'Complexity and recurrences',
+  Spec: 'Contracts and specifications',
+  Class: 'Standard type classes',
+  Operator: 'Operators and lexical rules',
+  Module: 'Modules and abstraction',
+  Capstone: 'Integrated capstone programs',
 };
 
 function titleOf(file) {
@@ -37,17 +51,21 @@ function titleOf(file) {
   const m = /^--\s*Title:\s*(.+)$/m.exec(text);
   return m ? m[1].trim() : '';
 }
-const files = fs.readdirSync(completedDir).filter((f) => f.endsWith('.hs')).sort();
+const entries = fs
+  .readdirSync(completedDir, { withFileTypes: true })
+  .filter((entry) => entry.name.endsWith('.hs') || (entry.isDirectory() && fs.existsSync(path.join(completedDir, entry.name, 'Main.hs'))))
+  .map((entry) => ({ name: entry.name, bundle: entry.isDirectory() }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 const groups = new Map();
 const legacy = [];
-for (const f of files) {
-  const m = /^([A-Za-z0-9]+)_/.exec(f);
+for (const entry of entries) {
+  const m = /^([A-Za-z0-9]+)_/.exec(entry.name);
   if (!m || !PREFIX_TITLES[m[1]]) {
-    legacy.push(f);
+    legacy.push(entry);
     continue;
   }
   if (!groups.has(m[1])) groups.set(m[1], []);
-  groups.get(m[1]).push(f);
+  groups.get(m[1]).push(entry);
 }
 
 const lines = [];
@@ -58,21 +76,25 @@ lines.push(
   'Files ending in `V2` or `V3` are variations: the same kind of question with different data, a different condition or a different type.',
   '',
   'Run a file with `runghc FileName.hs`, or load it in GHCi with `ghci FileName.hs`.',
+  'For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its parent folder.',
   '',
 );
 for (const [prefix, list] of [...groups.entries()].sort((a, b) => Object.keys(PREFIX_TITLES).indexOf(a[0]) - Object.keys(PREFIX_TITLES).indexOf(b[0]))) {
   lines.push(`## ${PREFIX_TITLES[prefix]}`, '', '| File | Question |', '| --- | --- |');
-  for (const f of list) {
-    const title = titleOf(path.join(completedDir, f)).replace(/\|/g, '\\|');
-    const hasStarter = fs.existsSync(path.join(starterDir, f));
-    lines.push(`| \`${f}\`${hasStarter ? '' : ' (no starter)'} | ${title} |`);
+  for (const entry of list) {
+    const completedPath = entry.bundle ? path.join(completedDir, entry.name, 'Main.hs') : path.join(completedDir, entry.name);
+    const starterPath = entry.bundle ? path.join(starterDir, entry.name, 'Main.hs') : path.join(starterDir, entry.name);
+    const title = titleOf(completedPath).replace(/\|/g, '\\|');
+    const hasStarter = fs.existsSync(starterPath);
+    const label = entry.bundle ? `${entry.name}/` : entry.name;
+    lines.push(`| \`${label}\`${hasStarter ? '' : ' (no starter)'} | ${title} |`);
   }
   lines.push('');
 }
 if (legacy.length) {
   lines.push('## First programs and the first lab', '', '| File | Note |', '| --- | --- |');
-  for (const f of legacy) lines.push(`| \`${f}\` | Introductory file; it may read from the keyboard, so run it in a terminal. |`);
+  for (const entry of legacy) lines.push(`| \`${entry.bundle ? `${entry.name}/` : entry.name}\` | Introductory file; it may read from the keyboard, so run it in a terminal. |`);
   lines.push('');
 }
 fs.writeFileSync(path.join(base, 'README.md'), lines.join('\n'));
-console.log(`README.md written: ${files.length} completed files in ${groups.size} groups`);
+console.log(`README.md written: ${entries.length} completed files or bundles in ${groups.size} groups`);

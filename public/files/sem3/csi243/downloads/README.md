@@ -5,6 +5,7 @@ Every question is a pair of files with the same name. The file in `completed-exa
 Files ending in `V2` or `V3` are variations: the same kind of question with different data, a different condition or a different type.
 
 Run a file with `runghc FileName.hs`, or load it in GHCi with `ghci FileName.hs`.
+For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its parent folder.
 
 ## Lab 1: recursion
 
