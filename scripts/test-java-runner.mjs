@@ -20,7 +20,11 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import { chromium } from '@playwright/test';
+import ts from 'typescript';
+import { apiProbes } from './java-api-probes.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -123,69 +127,12 @@ function loadNotesExamples() {
 }
 
 const harness = `<!doctype html><meta charset="utf-8"><title>java runner harness</title><script type="module">
-let compilerWorker, compilerReady, requestId = 1;
-const resetCompiler = () => { compilerWorker?.terminate(); compilerWorker = undefined; compilerReady = undefined; };
-function waitForMessage(worker, matches, onMessage, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { cleanup(); reject(new Error('The Java compiler did not respond in time.')); }, timeoutMs);
-    const handleMessage = (event) => { onMessage(event.data); if (matches(event.data)) { cleanup(); resolve(event.data); } };
-    const handleError = (event) => { cleanup(); reject(new Error(event.message || 'The Java compiler worker crashed.')); };
-    const cleanup = () => { clearTimeout(timer); worker.removeEventListener('message', handleMessage); worker.removeEventListener('error', handleError); };
-    worker.addEventListener('message', handleMessage); worker.addEventListener('error', handleError);
-  });
-}
-async function getCompiler() {
-  if (compilerReady) return compilerReady;
-  compilerReady = (async () => {
-    const worker = new Worker('/java-playground/compiler-worker.js', { type: 'module' });
-    compilerWorker = worker;
-    await waitForMessage(worker, (m) => m.command === 'initialized', () => {}, 45000);
-    const id = String(requestId++);
-    const loaded = waitForMessage(worker, (m) => m.id === id && (m.command === 'ok' || m.command === 'error'), () => {}, 60000);
-    worker.postMessage({ id, command: 'load-classlib', url: '/java-playground/compile-classlib-teavm.bin', runtimeUrl: '/java-playground/runtime-classlib-teavm.bin' });
-    const response = await loaded;
-    if (response.command !== 'ok') throw new Error(response.text || 'The Java standard library could not be loaded.');
-    return worker;
-  })().catch((error) => { resetCompiler(); throw error; });
-  return compilerReady;
-}
-function execute(script) {
-  return new Promise((resolve) => {
-    const worker = new Worker('/java-playground/executor-worker.js?v=4', { type: 'module' });
-    const lines = []; let chars = 0; let settled = false;
-    const finish = (result) => { if (settled) return; settled = true; clearTimeout(timer); worker.terminate(); resolve({ lines, ...result }); };
-    const timer = setTimeout(() => finish({ error: 'Stopped after 5 seconds. The program may contain an infinite loop.', timedOut: true }), 5000);
-    worker.addEventListener('message', (event) => {
-      const m = event.data;
-      if (m.type === 'line' && m.stream) {
-        chars += (m.text || '').length + 1;
-        if (lines.length >= 500 || chars > 65536) { finish({ error: 'Output limit exceeded (500 lines or 64 KiB).' }); return; }
-        lines.push({ stream: m.stream, text: m.text || '' });
-      } else if (m.type === 'done') finish({ error: m.error });
-    });
-    worker.addEventListener('error', (event) => finish({ error: 'Java runtime worker crashed: ' + (event.message || 'unknown error') }));
-    const bytes = new Uint8Array(script instanceof ArrayBuffer ? script : script.buffer ? script : script); const copy = bytes.slice();
-    worker.postMessage({ code: copy }, [copy.buffer]);
-  });
-}
-window.resetCompiler = resetCompiler;
-window.runJava = async (code) => {
-  const started = performance.now(); const diagnostics = [];
-  try {
-    const worker = await getCompiler();
-    const id = String(requestId++);
-    const completed = waitForMessage(worker, (m) => m.id === id && (m.command === 'compilation-complete' || m.command === 'error'),
-      (m) => { if (m.id === id && (m.command === 'compiler-diagnostic' || m.command === 'diagnostic')) diagnostics.push((m.severity || 'error').toUpperCase() + ' ' + (m.lineNumber > 0 ? 'line ' + m.lineNumber : m.fileName || 'compiler') + ': ' + (m.message || m.text || '')); }, 60000);
-    worker.postMessage({ id, command: 'compile', text: code });
-    const response = await completed;
-    if (response.command === 'error') return { ok: false, lines: [], diagnostics, error: response.text || 'Compilation failed.', stage: 'compile', ms: performance.now() - started };
-    if (response.status !== 'successful' || !response.script) return { ok: false, lines: [], diagnostics, error: diagnostics.length ? undefined : 'Compilation failed.', stage: 'compile', ms: performance.now() - started };
-    const execution = await execute(response.script);
-    return { ok: !execution.error, lines: execution.lines, diagnostics, error: execution.error, timedOut: execution.timedOut, stage: 'run', ms: performance.now() - started };
-  } catch (error) {
-    resetCompiler();
-    return { ok: false, lines: [], diagnostics, error: 'Java compiler worker failed: ' + (error instanceof Error ? error.message : String(error)), stage: 'worker', ms: performance.now() - started };
-  }
+import { runJava } from '/__lib/runner.js';
+window.runJava = async (code, stdin) => {
+  const result = await runJava(code, undefined, { stdin });
+  const workerFailure = (result.error || '').startsWith('Java compiler worker failed');
+  const compileFailure = !result.ok && result.lines.length === 0 && (result.diagnostics.some((d) => d.startsWith('ERROR')) || /Compilation failed/.test(result.error || ''));
+  return { ...result, stage: workerFailure ? 'worker' : compileFailure ? 'compile' : 'run', ms: result.elapsedMs };
 };
 window.harnessReady = true;
 </script>`;
@@ -196,6 +143,14 @@ const server = http.createServer((req, res) => {
   if (url === '/__harness.html') {
     res.writeHead(200, { 'content-type': 'text/html' });
     res.end(harness);
+    return;
+  }
+  if (url.startsWith('/__lib/')) {
+    const source = path.join(root, 'lib/java-playground', path.basename(url, '.js') + '.ts');
+    if (!fs.existsSync(source)) { res.writeHead(404); res.end('not found'); return; }
+    const js = ts.transpileModule(fs.readFileSync(source, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from '(\.\/[\w-]+)'/g, "from '$1.js'");
+    res.writeHead(200, { 'content-type': 'text/javascript' });
+    res.end(js);
     return;
   }
   const file = path.join(root, 'public', url);
@@ -212,9 +167,30 @@ const base = `http://127.0.0.1:${server.address().port}`;
 
 let cases = [];
 if (!only || only === 'probes') cases.push(...probes.map((p) => ({ ...p, group: 'probes' })));
+if (!only || only === 'api') cases.push(...apiProbes);
 if (!only || only === 'playground') cases.push(...(await loadPlaygroundExamples()).map((p) => ({ ...p, group: 'playground' })));
 if (!only || only === 'notes') cases.push(...loadNotesExamples().map((p) => ({ ...p, group: 'notes' })));
 
+/** Runs a program with the local JDK and returns its output, or undefined when the JDK rejects it. */
+function jdkOutput(code, stdin = '') {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jdk-probe-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'Main.java'), code);
+    const compiled = spawnSync('javac', ['-encoding', 'UTF-8', '-d', dir, path.join(dir, 'Main.java')], { encoding: 'utf8', timeout: 60000 });
+    if (compiled.status !== 0) return { invalid: String(compiled.stderr).split(/\r?\n/)[0] };
+    const ran = spawnSync('java', ['-cp', dir, 'Main'], { encoding: 'utf8', timeout: 60000, input: stdin });
+    return { output: String(ran.stdout).replace(/\r\n/g, '\n'), failed: ran.status !== 0 };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+for (const testCase of cases) {
+  if (!testCase.diff) continue;
+  const jdk = jdkOutput(testCase.code, testCase.stdin ?? '');
+  if (jdk.invalid) testCase.skip = jdk.invalid;
+  else if (jdk.failed) testCase.expectError = true;
+  else testCase.expect = jdk.output;
+}
 if (match) cases = cases.filter((c) => c.name.toLowerCase().includes(match));
 
 const browser = await chromium.launch({ headless: true });
@@ -231,11 +207,12 @@ await openPage();
 const results = [];
 let crashed = 0;
 for (const [index, testCase] of cases.entries()) {
+  if (testCase.skip) { results.push({ group: testCase.group, name: testCase.name, verdict: 'skip', cause: `the JDK rejects this probe: ${testCase.skip}`, ms: 0, note: '' }); if (verbose) console.log(`skip  [${testCase.group}] ${testCase.name}`); continue; }
   if (fresh && index > 0) await openPage();
   let result;
   try {
     result = await Promise.race([
-      page.evaluate((code) => window.runJava(code), testCase.code),
+      page.evaluate(([code, stdin]) => window.runJava(code, stdin), [testCase.code, testCase.stdin ?? '']),
       new Promise((resolve) => setTimeout(() => resolve({ ok: false, stage: 'worker', error: 'No answer after 150 s (page hung)', lines: [], diagnostics: [] }), 150000)),
     ]);
   } catch (error) {
@@ -282,7 +259,7 @@ const groups = [...new Set(results.map((r) => r.group))];
 console.log('\nSummary');
 for (const g of groups) {
   const rows = results.filter((r) => r.group === g);
-  console.log(`  ${g.padEnd(11)} ${rows.filter((r) => r.verdict === 'pass').length} of ${rows.length} pass`);
+  console.log(`  ${g.padEnd(11)} ${rows.filter((r) => r.verdict === 'pass').length} of ${rows.filter((r) => r.verdict !== 'skip').length} pass${rows.some((r) => r.verdict === 'skip') ? ` (${rows.filter((r) => r.verdict === 'skip').length} skipped: the JDK rejects them)` : ''}`);
 }
 const firstBroken = results.findIndex((r) => /the runner broke|the browser page died/.test(r.cause));
 if (firstBroken >= 0) console.log(`  The runner itself broke at case ${firstBroken + 1} ("${results[firstBroken].name}") and ${results.filter((r) => /the runner broke|the browser page died/.test(r.cause)).length} case(s) in all.`);
