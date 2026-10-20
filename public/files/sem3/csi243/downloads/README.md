@@ -768,6 +768,35 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Module_ValidatedMarkV2/` | Validate opaque marks from zero to 20 |
 | `Module_ValidatedMarkV3/` | Validate opaque marks from zero to 10 |
 
+## Integrated capstone programs
+
+| File | Question |
+| --- | --- |
+| `Capstone_AveragePolicyGroups/` | Compare a mean of group means with a pooled mean |
+| `Capstone_AveragePolicyGroupsV2/` | Compare a mean of group means with a pooled mean |
+| `Capstone_AveragePolicyGroupsV3/` | Compare a mean of group means with a pooled mean |
+| `Capstone_AveragePolicyWeighted/` | Compute a validated weighted mean with weights 1 and 3 |
+| `Capstone_AveragePolicyWeightedV2/` | Compute a validated weighted mean with weights 3 and 1 |
+| `Capstone_AveragePolicyWeightedV3/` | Compute a validated weighted mean with weights 2 and 2 |
+| `Capstone_GradeBookOutcomes/` | Classify a modular grade book at 50 and 75 |
+| `Capstone_GradeBookOutcomesV2/` | Classify a modular grade book at 60 and 80 |
+| `Capstone_GradeBookOutcomesV3/` | Classify a modular grade book at 40 and 70 |
+| `Capstone_GradeBookSummary/` | Report grade-book rows with a 50-mark pass boundary |
+| `Capstone_GradeBookSummaryV2/` | Report grade-book rows with a 60-mark pass boundary |
+| `Capstone_GradeBookSummaryV3/` | Report grade-book rows with a 40-mark pass boundary |
+| `Capstone_MockIntegrated/` | Complete an independent modular practical for library loans |
+| `Capstone_MockIntegratedV2/` | Complete an independent modular practical for parcel deliveries |
+| `Capstone_MockIntegratedV3/` | Complete an independent modular practical for sensor readings |
+| `Capstone_TestHarnessAssertions/` | Implement labelled assertions and diagnose deliberate failures |
+| `Capstone_TestHarnessAssertionsV2/` | Implement labelled assertions and diagnose deliberate failures |
+| `Capstone_TestHarnessAssertionsV3/` | Implement labelled assertions and diagnose deliberate failures |
+| `Capstone_TestHarnessSuite/` | Run independent tests against an add-1 transform |
+| `Capstone_TestHarnessSuiteV2/` | Run independent tests against an add-2 transform |
+| `Capstone_TestHarnessSuiteV3/` | Run independent tests against an add-3 transform |
+| `Capstone_ValidationRoster/` | Validate a roster using exact names |
+| `Capstone_ValidationRosterV2/` | Validate a roster using case-insensitive names |
+| `Capstone_ValidationRosterV3/` | Validate a roster using names with whitespace normalised |
+
 ## First programs and the first lab
 
 | File | Note |
