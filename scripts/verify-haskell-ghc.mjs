@@ -60,7 +60,9 @@ function readExamples(text) {
     const code = fences[0][2];
     const expected = fences[1] ? fences[1][2] : undefined;
     const line = text.slice(0, match.index).split('\n').length;
-    examples.push({ code, expected, session, line });
+    const inputMatch = /\binput="([^"]*)"/.exec(match[1]);
+    const stdin = inputMatch ? inputMatch[1] : '';
+    examples.push({ code, expected, session, line, stdin });
   }
   return examples;
 }
@@ -77,10 +79,10 @@ function typecheck(source, name) {
   return { ok: r.status === 0, message: clean(r.stderr || r.stdout || String(r.error ?? '')) };
 }
 
-function runProgram(source, name) {
+function runProgram(source, name, stdin = '') {
   const file = path.join(work, `${name}.hs`);
   fs.writeFileSync(file, source + '\n');
-  const r = run('runghc', [file], { cwd: work });
+  const r = run('runghc', [file], { cwd: work, input: stdin });
   return { ok: r.status === 0, out: clean(r.stdout ?? ''), message: clean(r.stderr ?? String(r.error ?? '')) };
 }
 
@@ -143,8 +145,8 @@ for (const file of targets.flatMap(listFiles)) {
         ok = false;
       } else ok = compare(result.out, 'session output differs');
     } else if (hasMain(example.code)) {
-      let result = runProgram(example.code, name);
-      if (!result.ok && wrongScope.test(result.message)) result = runProgram(`${context()}\n\n${example.code}`, name);
+      let result = runProgram(example.code, name, example.stdin);
+      if (!result.ok && wrongScope.test(result.message)) result = runProgram(`${context()}\n\n${example.code}`, name, example.stdin);
       if (!result.ok) {
         const shownError = example.expected && /error/i.test(example.expected);
         if (shownError) ok = null;
