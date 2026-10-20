@@ -1,0 +1,2647 @@
+---
+title: "Designing Recursive List Functions"
+description: "Derive recursive list algorithms from specifications, preserve their invariants and test every boundary from Lab 03 to one-pass splits."
+---
+
+A list problem becomes manageable when its result shape, stopping conditions and smaller recursive input are explicit. This lesson extends [Recursion on Lists](/docs/sem3/csi243/06-lists-tuples/notes/list-recursion), [Lab 03b: Recursion and Lists (Continued)](/docs/sem3/csi243/06-lists-tuples/notes/lab-03) and [Lab 03a: Search, Counting, and Comprehensions](/docs/sem3/csi243/06-lists-tuples/notes/lab-03a). Their introductory equations are prerequisites; here the focus is deriving complete algorithms, contrasting sibling operations and exposing boundary mistakes.
+
+<LearningObjectives items={[
+  'Turn a specification into a signature, base cases, recursive step and narrated dry run',
+  'Distinguish counting, selection, transformation, membership and adjacent-pair checks',
+  'Preserve an original index while a helper counts down and reject the length boundary',
+  'Implement bounded prefixes, suffixes and one-pass splits without library shortcuts',
+  'Choose tests for empty, singleton, all-match, no-match, signed and oversized inputs',
+]} />
+
+<Prerequisites items={[
+  'Recursion on Lists: cons patterns, empty cases and structural decrease',
+  'Lab 03a and Lab 03b specifications; recognising Maybe and Either results',
+]} />
+
+## 1. Design before code
+
+First write the purpose and result type. Then partition the input into stopping and continuing cases. Removing a head decreases the length of a finite list; a count supplies another stopping condition. The finite-input assumption matters: consuming tails does not guarantee reaching an end on an infinite list.
+
+```text
+Purpose and policy: what happens at every boundary?
+Signature:          scalar, list, pair or safe optional result?
+Base cases:         empty; possibly singleton, zero count or first failure
+Step:               inspect head(s), contribute something, solve smaller input
+Dry run:            substitute one defining equation at a time and name it
+Tests:              a representative of every boundary and guard outcome
+```
+
+Read the concrete templates below as instances of that plan. To adapt one, change the purpose and type first, then the base and contribution. A different predicate can change the promised result even though the code has the same shape.
+
+| Result needed | Contribution of a matching head | Stopping answer |
+|---|---|---|
+| Count | add one | 0 |
+| Conditional sum | add its value | 0 |
+| Selection | cons the unchanged head | [] |
+| Transformation | cons a changed head | [] |
+| Membership | return True immediately | False at exhaustion |
+| Sortedness | require this pair and remaining pairs | True with fewer than two elements |
+| Split | prepend only to the front component | empty front paired with current suffix |
+
+For ordinary product the identity is 1, not 0; the existing sum/product/length examples explain those foundational choices. The new conditional-sum and counting questions show why a shared structural shape can need different contributions.
+
+## 2. Positional lookup: preserve the original index
+
+A position is a distance from the beginning, starting at zero. A helper counts down while the public function keeps the original index for the result pair. Reporting the helper's final counter would incorrectly report zero for every successful lookup.
+
+The partial lab signature is `atPosition :: [a] -> Int -> (Int,a)`. Here a safe version returns `Either String (Int,a)` so invalid inputs can be tested without crashing. Result consumption is taught in [Either in Depth](/docs/sem3/csi243/09-polymorphism/notes/either-in-depth). A length-four list has indices zero through three: equality with the length is invalid.
+
+### Template and reading guide
+
+```haskell
+atPosition :: [a] -> Int -> Either String (Int,a)
+atPosition xs original
+  | original < 0 = Left "negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = Left "index outside list"
+    go (x:_) 0 = Right (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+```
+
+`original` stays fixed; `remaining` counts heads still to skip. The zero equation precedes the general cons equation. The empty pattern rejects oversize indices without computing length. Each recursive call consumes one head.
+
+### Worked variation: Last valid index
+
+Last valid index changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+atPosition :: [a] -> Int -> Either String (Int,a)
+atPosition xs original
+  | original < 0 = Left "negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = Left "index outside list"
+    go (x:_) 0 = Right (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print (atPosition [3,5,2,10 :: Int] 3)
+```
+
+```text
+Right (3,10)
+```
+
+</HaskellTryIt>
+
+Skip 3, 5 and 2 as the counter goes 3, 2, 1, 0. The selected head is 10, paired with the saved 3.
+
+### Worked variation: Singleton and a different type
+
+Singleton and a different type changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+atPosition :: [a] -> Int -> Either String (Int,a)
+atPosition xs original
+  | original < 0 = Left "negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = Left "index outside list"
+    go (x:_) 0 = Right (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print (atPosition "z" 0)
+```
+
+```text
+Right (0,'z')
+```
+
+</HaskellTryIt>
+
+Counter zero selects the head immediately. It is a Char, so print uses single quotes.
+
+### Worked variation: Index equal to length
+
+Index equal to length changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+atPosition :: [a] -> Int -> Either String (Int,a)
+atPosition xs original
+  | original < 0 = Left "negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = Left "index outside list"
+    go (x:_) 0 = Right (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print (atPosition [8,9 :: Int] 2)
+```
+
+```text
+Left "index outside list"
+```
+
+</HaskellTryIt>
+
+Two skips leave [] with counter zero. The empty equation wins: no third element exists.
+
+### Worked variation: Negative and empty boundaries
+
+Negative and empty boundaries changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+atPosition :: [a] -> Int -> Either String (Int,a)
+atPosition xs original
+  | original < 0 = Left "negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = Left "index outside list"
+    go (x:_) 0 = Right (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print ((atPosition [8 :: Int] (-1), atPosition ([] :: [Int]) 0))
+```
+
+```text
+(Left "negative index",Left "index outside list")
+```
+
+</HaskellTryIt>
+
+The guard rejects a negative before walking; an empty list has no position zero.
+
+### Exam question: positional lookup: preserve the original index (6 marks)
+
+Write a safe atPosition returning the requested index paired with its element. Reject negative indices and indices at or beyond the length, without length or (!!). Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Guard against negatives, then use a local countdown helper. Empty means failure; a non-empty list at zero means success using the saved original index.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+atPosition :: [a] -> Int -> Either String (Int,a)
+atPosition xs original
+  | original < 0 = Left "negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = Left "index outside list"
+    go (x:_) 0 = Right (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+atPosition [3,5,2,10] 3
+= go [3,5,2,10] 3       -- original fixed at 3
+= go [5,2,10] 2         -- skip a head
+= go [2,10] 1           -- skip a head
+= go [10] 0             -- skip a head
+= Right (3,10)          -- zero equation
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+`Right (remaining,x)` reports `(0,x)` at success. Repair it to use original. A bounds test using only `y > length xs` misses equality. Testing only index zero hides the lost-index error.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict atPosition [4,4,9] 1 and atPosition [4,4,9] 3.
+
+<details>
+<summary>Answer</summary>
+
+`Right (1,4)` and `Left "index outside list"`. Duplicate values do not alter positions.
+
+</details>
+
+### Other ways to express the requirement
+
+For a partial lab answer, replace the Left branches by `error` with an informative message and return `(original,x)` at success. That changes the result contract, not the countdown algorithm. A checked `xs !! y` version is shorter, but does not satisfy a required recursive definition.
+
+### The original lab's unwrapped result
+
+The original question asks for a pair directly and an informative failure message for invalid input. Its signature is therefore different from the safe variant. Use the following algorithm as `atPosition` in a lab submission; it is named atPositionLab here to make the two contracts distinct. No length or indexing library call is used.
+
+```haskell
+atPositionLab :: [a] -> Int -> (Int,a)
+atPositionLab xs original
+  | original < 0 = error "atPosition: negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = error "atPosition: index outside list"
+    go (x:_) 0 = (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+```
+
+Each error branch deliberately has no successful result. The successful dry run follows the same countdown as the safe version, ending in `(3,10)` instead of `Right (3,10)`. An index equal to length still reaches the empty equation. The tests below only demand valid results; invalid boundaries are exercised safely in the four variations above.
+
+### Worked variation: Last valid position
+
+This uses the lab's direct pair result.
+
+<HaskellTryIt>
+
+```haskell
+atPositionLab :: [a] -> Int -> (Int,a)
+atPositionLab xs original
+  | original < 0 = error "atPosition: negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = error "atPosition: index outside list"
+    go (x:_) 0 = (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print (atPositionLab [3,5,2,10 :: Int] 3)
+```
+
+```text
+(3,10)
+```
+
+</HaskellTryIt>
+
+The helper skips three heads and returns the saved index 3 with head 10.
+
+### Worked variation: First position in a singleton
+
+This uses the lab's direct pair result.
+
+<HaskellTryIt>
+
+```haskell
+atPositionLab :: [a] -> Int -> (Int,a)
+atPositionLab xs original
+  | original < 0 = error "atPosition: negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = error "atPosition: index outside list"
+    go (x:_) 0 = (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print (atPositionLab [7 :: Int] 0)
+```
+
+```text
+(0,7)
+```
+
+</HaskellTryIt>
+
+Counter zero selects the first head with no recursive skip.
+
+### Worked variation: Repeated values with a non-zero index
+
+This uses the lab's direct pair result.
+
+<HaskellTryIt>
+
+```haskell
+atPositionLab :: [a] -> Int -> (Int,a)
+atPositionLab xs original
+  | original < 0 = error "atPosition: negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = error "atPosition: index outside list"
+    go (x:_) 0 = (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print (atPositionLab [4,4,9 :: Int] 1)
+```
+
+```text
+(1,4)
+```
+
+</HaskellTryIt>
+
+Skip one occurrence of 4. The selected value is also 4, but the saved index must be 1.
+
+### Worked variation: A character result
+
+This uses the lab's direct pair result.
+
+<HaskellTryIt>
+
+```haskell
+atPositionLab :: [a] -> Int -> (Int,a)
+atPositionLab xs original
+  | original < 0 = error "atPosition: negative index"
+  | otherwise = go xs original
+  where
+    go [] _ = error "atPosition: index outside list"
+    go (x:_) 0 = (original,x)
+    go (_:rest) remaining = go rest (remaining - 1)
+
+main :: IO ()
+main = print (atPositionLab "abc" 2)
+```
+
+```text
+(2,'c')
+```
+
+</HaskellTryIt>
+
+Skip a then b. At zero the head is Char c, printed with single quotes.
+
+
+## 3. Threshold selection: largerY
+
+Selection retains every passing value in encounter order, including duplicates. The threshold is strict: a value equal to y is excluded. The result is a list because zero, one or many candidates can pass.
+
+### Template and reading guide
+
+```haskell
+largerY :: Ord a => [a] -> a -> [a]
+largerY [] _ = []
+largerY (x:xs) y
+  | x > y = x : largerY xs y
+  | otherwise = largerY xs y
+```
+
+`x` is the candidate, xs contains all later candidates and y stays fixed. Empty input supplies []. Both branches recurse: rejection does not mean later values fail. Ord supplies comparison; the original integer lab can use `[Integer] -> Integer -> [Integer]`.
+
+### Worked variation: Threshold equality and duplicates
+
+Threshold equality and duplicates changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+largerY :: Ord a => [a] -> a -> [a]
+largerY [] _ = []
+largerY (x:xs) y
+  | x > y = x : largerY xs y
+  | otherwise = largerY xs y
+
+main :: IO ()
+main = print (largerY [4,7,4,9,7 :: Int] 4)
+```
+
+```text
+[7,9,7]
+```
+
+</HaskellTryIt>
+
+Both 4s fail; cons 7, 9 and 7 in their original order.
+
+### Worked variation: No matches
+
+No matches changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+largerY :: Ord a => [a] -> a -> [a]
+largerY [] _ = []
+largerY (x:xs) y
+  | x > y = x : largerY xs y
+  | otherwise = largerY xs y
+
+main :: IO ()
+main = print (largerY [1,2,3 :: Int] 3)
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+Every head fails, including the equal 3, and exhaustion supplies [].
+
+### Worked variation: All matches with signed data
+
+All matches with signed data changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+largerY :: Ord a => [a] -> a -> [a]
+largerY [] _ = []
+largerY (x:xs) y
+  | x > y = x : largerY xs y
+  | otherwise = largerY xs y
+
+main :: IO ()
+main = print (largerY [-2,-1,0 :: Int] (-3))
+```
+
+```text
+[-2,-1,0]
+```
+
+</HaskellTryIt>
+
+Every head is greater than -3; being negative does not mean failing.
+
+### Worked variation: Empty input and another ordered type
+
+Empty input and another ordered type changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+largerY :: Ord a => [a] -> a -> [a]
+largerY [] _ = []
+largerY (x:xs) y
+  | x > y = x : largerY xs y
+  | otherwise = largerY xs y
+
+main :: IO ()
+main = print ((largerY ([] :: [Int]) 0, largerY ["ant","bee","ape"] "ant"))
+```
+
+```text
+([],["bee","ape"])
+```
+
+</HaskellTryIt>
+
+Empty input gives []; String comparison is lexicographic and both bee and ape follow ant.
+
+### Exam question: threshold selection: largery (6 marks)
+
+Write largerY recursively, preserving order and without filter or a comprehension. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the select template: [] returns []; a passing head is consed onto the selected tail; a failing head is skipped.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+largerY :: Ord a => [a] -> a -> [a]
+largerY [] _ = []
+largerY (x:xs) y
+  | x > y = x : largerY xs y
+  | otherwise = largerY xs y
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+largerY [4,7,2] 4
+= largerY [7,2] 4        -- equal head fails
+= 7 : largerY [2] 4      -- keep 7
+= 7 : largerY [] 4       -- skip 2
+= 7 : []                 -- base
+= [7]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Using `>=` changes the boundary. Returning [] at the first rejection loses later matches. `x ++ largerY xs y` uses an element where append needs a list; GHC reports `Couldn't match` incompatible types. Use cons.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict largerY [3,5,3,8] 3.
+
+<details>
+<summary>Answer</summary>
+
+`[5,8]`; equality is excluded and the later 8 is still inspected.
+
+</details>
+
+### Other ways to express the requirement
+
+`filter (> y) xs` and `[x | x <- xs, x > y]` are unrestricted equivalents. For at-least-y use `>=`; for at-most-y use `<=`. State that new boundary policy rather than silently reusing the old specification.
+
+## 4. Positive selection and its signed siblings
+
+Positive means strictly greater than zero. Non-negative includes zero; negative means less than zero. These predicates share a keep-or-skip algorithm but answer different questions. Selection keeps existing values rather than changing their signs.
+
+### Template and reading guide
+
+```haskell
+positiveNumbers :: [Integer] -> [Integer]
+positiveNumbers [] = []
+positiveNumbers (x:xs)
+  | x > 0 = x : positiveNumbers xs
+  | otherwise = positiveNumbers xs
+
+nonNegative :: [Integer] -> [Integer]
+nonNegative [] = []
+nonNegative (x:xs)
+  | x >= 0 = x : nonNegative xs
+  | otherwise = nonNegative xs
+
+negativeNumbers :: [Integer] -> [Integer]
+negativeNumbers [] = []
+negativeNumbers (x:xs)
+  | x < 0 = x : negativeNumbers xs
+  | otherwise = negativeNumbers xs
+```
+
+Each base returns []; each branch consumes xs. Only the predicate changes. The original order and duplicates survive in every selected result.
+
+### Worked variation: Mixed signs
+
+Mixed signs changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+positiveNumbers :: [Integer] -> [Integer]
+positiveNumbers [] = []
+positiveNumbers (x:xs)
+  | x > 0 = x : positiveNumbers xs
+  | otherwise = positiveNumbers xs
+
+nonNegative :: [Integer] -> [Integer]
+nonNegative [] = []
+nonNegative (x:xs)
+  | x >= 0 = x : nonNegative xs
+  | otherwise = nonNegative xs
+
+negativeNumbers :: [Integer] -> [Integer]
+negativeNumbers [] = []
+negativeNumbers (x:xs)
+  | x < 0 = x : negativeNumbers xs
+  | otherwise = negativeNumbers xs
+
+main :: IO ()
+main = print ((positiveNumbers [-2,0,3,3], nonNegative [-2,0,3,3], negativeNumbers [-2,0,3,3]))
+```
+
+```text
+([3,3],[0,3,3],[-2])
+```
+
+</HaskellTryIt>
+
+Zero distinguishes the inclusive predicate; both occurrences of 3 survive.
+
+### Worked variation: Empty input
+
+Empty input changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+positiveNumbers :: [Integer] -> [Integer]
+positiveNumbers [] = []
+positiveNumbers (x:xs)
+  | x > 0 = x : positiveNumbers xs
+  | otherwise = positiveNumbers xs
+
+nonNegative :: [Integer] -> [Integer]
+nonNegative [] = []
+nonNegative (x:xs)
+  | x >= 0 = x : nonNegative xs
+  | otherwise = nonNegative xs
+
+negativeNumbers :: [Integer] -> [Integer]
+negativeNumbers [] = []
+negativeNumbers (x:xs)
+  | x < 0 = x : negativeNumbers xs
+  | otherwise = negativeNumbers xs
+
+main :: IO ()
+main = print ((positiveNumbers [], nonNegative [], negativeNumbers []))
+```
+
+```text
+([],[],[])
+```
+
+</HaskellTryIt>
+
+No candidates exist; every base returns [].
+
+### Worked variation: Singleton at the boundary
+
+Singleton at the boundary changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+positiveNumbers :: [Integer] -> [Integer]
+positiveNumbers [] = []
+positiveNumbers (x:xs)
+  | x > 0 = x : positiveNumbers xs
+  | otherwise = positiveNumbers xs
+
+nonNegative :: [Integer] -> [Integer]
+nonNegative [] = []
+nonNegative (x:xs)
+  | x >= 0 = x : nonNegative xs
+  | otherwise = nonNegative xs
+
+negativeNumbers :: [Integer] -> [Integer]
+negativeNumbers [] = []
+negativeNumbers (x:xs)
+  | x < 0 = x : negativeNumbers xs
+  | otherwise = negativeNumbers xs
+
+main :: IO ()
+main = print ((positiveNumbers [0], nonNegative [0], negativeNumbers [0]))
+```
+
+```text
+([],[0],[])
+```
+
+</HaskellTryIt>
+
+Only non-negative selection accepts zero.
+
+### Worked variation: All and no matches
+
+All and no matches changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+positiveNumbers :: [Integer] -> [Integer]
+positiveNumbers [] = []
+positiveNumbers (x:xs)
+  | x > 0 = x : positiveNumbers xs
+  | otherwise = positiveNumbers xs
+
+nonNegative :: [Integer] -> [Integer]
+nonNegative [] = []
+nonNegative (x:xs)
+  | x >= 0 = x : nonNegative xs
+  | otherwise = nonNegative xs
+
+negativeNumbers :: [Integer] -> [Integer]
+negativeNumbers [] = []
+negativeNumbers (x:xs)
+  | x < 0 = x : negativeNumbers xs
+  | otherwise = negativeNumbers xs
+
+main :: IO ()
+main = print ((positiveNumbers [2,1], positiveNumbers [-2,-1], negativeNumbers [-2,-1]))
+```
+
+```text
+([2,1],[],[-2,-1])
+```
+
+</HaskellTryIt>
+
+The all-positive input is preserved; all-negative input gives no positives and retains all negatives.
+
+### Exam question: positive selection and its signed siblings (6 marks)
+
+Implement positiveNumbers using recursion only. Explain why zero is excluded and give a test distinguishing non-negative selection. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Keep x exactly when x > 0. Both outcomes must recurse because a non-positive head says nothing about later values.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+positiveNumbers :: [Integer] -> [Integer]
+positiveNumbers [] = []
+positiveNumbers (x:xs)
+  | x > 0 = x : positiveNumbers xs
+  | otherwise = positiveNumbers xs
+
+nonNegative :: [Integer] -> [Integer]
+nonNegative [] = []
+nonNegative (x:xs)
+  | x >= 0 = x : nonNegative xs
+  | otherwise = nonNegative xs
+
+negativeNumbers :: [Integer] -> [Integer]
+negativeNumbers [] = []
+negativeNumbers (x:xs)
+  | x < 0 = x : negativeNumbers xs
+  | otherwise = negativeNumbers xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+positiveNumbers [-1,0,5]
+= positiveNumbers [0,5]     -- negative fails
+= positiveNumbers [5]       -- zero fails
+= 5 : positiveNumbers []    -- keep positive
+= 5 : []                    -- base
+= [5]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+`x >= 0` implements non-negative, not positive. Returning [] on -1 stops too early. Applying abs transforms values instead of selecting existing positives.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Compare positiveNumbers [0,-4,6,0,2] with nonNegative on the same input.
+
+<details>
+<summary>Answer</summary>
+
+`[6,2]` versus `[0,6,0,2]`; both zeros belong only to the inclusive predicate.
+
+</details>
+
+### Other ways to express the requirement
+
+`positiveNumbers xs = largerY xs 0` reuses threshold selection. The library and comprehension forms are `filter (> 0) xs` and `[x | x <- xs, x > 0]`. Choosing another predicate changes what is selected, not the recursive shape.
+
+## 5. Adjacent pairs: descending, ascending and strict order
+
+Sortedness validates every neighbouring pair without rearranging anything. Descending with ties means non-increasing, using `>=`; strictly descending uses `>`. Ascending has the corresponding `<=` and `<` variants. Empty and singleton lists have no bad pair, so all four conventions accept them.
+
+### Template and reading guide
+
+```haskell
+ordered :: (a -> a -> Bool) -> [a] -> Bool
+ordered _ [] = True
+ordered _ [_] = True
+ordered relation (x:y:rest) = relation x y && ordered relation (y:rest)
+
+isSorted :: Ord a => [a] -> Bool
+isSorted = ordered (>=)
+
+strictDesc :: Ord a => [a] -> Bool
+strictDesc = ordered (>)
+
+ascending :: Ord a => [a] -> Bool
+ascending = ordered (<=)
+
+strictAsc :: Ord a => [a] -> Bool
+strictAsc = ordered (<)
+```
+
+`relation` is the required relation for one adjacent pair. Retain y in the recursive `(y:rest)` so it meets its next neighbour. Exactly one input element is removed at each continuing step. Specialise to `[Integer] -> Bool` for the original lab.
+
+### Worked variation: Ties distinguish strictness
+
+Ties distinguish strictness changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+ordered :: (a -> a -> Bool) -> [a] -> Bool
+ordered _ [] = True
+ordered _ [_] = True
+ordered relation (x:y:rest) = relation x y && ordered relation (y:rest)
+
+isSorted :: Ord a => [a] -> Bool
+isSorted = ordered (>=)
+
+strictDesc :: Ord a => [a] -> Bool
+strictDesc = ordered (>)
+
+ascending :: Ord a => [a] -> Bool
+ascending = ordered (<=)
+
+strictAsc :: Ord a => [a] -> Bool
+strictAsc = ordered (<)
+
+main :: IO ()
+main = print ((isSorted [5,5,2 :: Int], strictDesc [5,5,2 :: Int], ascending [2,5,5 :: Int], strictAsc [2,5,5 :: Int]))
+```
+
+```text
+(True,False,True,False)
+```
+
+</HaskellTryIt>
+
+The equal pair satisfies `>=` and `<=`, but not `>` or `<`.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+ordered :: (a -> a -> Bool) -> [a] -> Bool
+ordered _ [] = True
+ordered _ [_] = True
+ordered relation (x:y:rest) = relation x y && ordered relation (y:rest)
+
+isSorted :: Ord a => [a] -> Bool
+isSorted = ordered (>=)
+
+strictDesc :: Ord a => [a] -> Bool
+strictDesc = ordered (>)
+
+ascending :: Ord a => [a] -> Bool
+ascending = ordered (<=)
+
+strictAsc :: Ord a => [a] -> Bool
+strictAsc = ordered (<)
+
+main :: IO ()
+main = print ((isSorted ([] :: [Int]), strictDesc [7 :: Int], ascending ([] :: [Int]), strictAsc [7 :: Int]))
+```
+
+```text
+(True,True,True,True)
+```
+
+</HaskellTryIt>
+
+Neither list shape contains an adjacent comparison to violate.
+
+### Worked variation: Hidden middle violation
+
+Hidden middle violation changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+ordered :: (a -> a -> Bool) -> [a] -> Bool
+ordered _ [] = True
+ordered _ [_] = True
+ordered relation (x:y:rest) = relation x y && ordered relation (y:rest)
+
+isSorted :: Ord a => [a] -> Bool
+isSorted = ordered (>=)
+
+strictDesc :: Ord a => [a] -> Bool
+strictDesc = ordered (>)
+
+ascending :: Ord a => [a] -> Bool
+ascending = ordered (<=)
+
+strictAsc :: Ord a => [a] -> Bool
+strictAsc = ordered (<)
+
+main :: IO ()
+main = print ((isSorted [9,4,7,1 :: Int], strictDesc [9,4,7,1 :: Int], ascending [1,7,4,9 :: Int], strictAsc [1,7,4,9 :: Int]))
+```
+
+```text
+(False,False,False,False)
+```
+
+</HaskellTryIt>
+
+Descending fails at 4 then 7; ascending fails at 7 then 4. Disjoint-pair checking would miss these boundaries.
+
+### Worked variation: Signed strict order
+
+Signed strict order changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+ordered :: (a -> a -> Bool) -> [a] -> Bool
+ordered _ [] = True
+ordered _ [_] = True
+ordered relation (x:y:rest) = relation x y && ordered relation (y:rest)
+
+isSorted :: Ord a => [a] -> Bool
+isSorted = ordered (>=)
+
+strictDesc :: Ord a => [a] -> Bool
+strictDesc = ordered (>)
+
+ascending :: Ord a => [a] -> Bool
+ascending = ordered (<=)
+
+strictAsc :: Ord a => [a] -> Bool
+strictAsc = ordered (<)
+
+main :: IO ()
+main = print ((isSorted [0,-2,-7 :: Int], strictDesc [0,-2,-7 :: Int], ascending [-7,-2,0 :: Int], strictAsc [-7,-2,0 :: Int]))
+```
+
+```text
+(True,True,True,True)
+```
+
+</HaskellTryIt>
+
+Every neighbour relation has the chosen direction, with no ties.
+
+### Exam question: adjacent pairs: descending, ascending and strict order (6 marks)
+
+Write descending isSorted permitting ties. Explain why dropping both compared heads is incorrect. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use three shapes: empty, singleton, and at least two elements. The last shape checks the first pair and then checks the list beginning with its second element.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+ordered :: (a -> a -> Bool) -> [a] -> Bool
+ordered _ [] = True
+ordered _ [_] = True
+ordered relation (x:y:rest) = relation x y && ordered relation (y:rest)
+
+isSorted :: Ord a => [a] -> Bool
+isSorted = ordered (>=)
+
+strictDesc :: Ord a => [a] -> Bool
+strictDesc = ordered (>)
+
+ascending :: Ord a => [a] -> Bool
+ascending = ordered (<=)
+
+strictAsc :: Ord a => [a] -> Bool
+strictAsc = ordered (<)
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+isSorted [9,4,7]
+= (9 >= 4) && isSorted [4,7]       -- first pair
+= True && ((4 >= 7) && isSorted [7])
+= True && (False && isSorted [7])
+= False                           -- short-circuit
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Recursing on rest instead of `(y:rest)` skips a comparison. Omitting the singleton base can cause `Non-exhaustive patterns` when it is demanded. Sorting then comparing with the input avoids the requested recursive check.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Find a shortest counterexample to a descending checker that drops both compared heads.
+
+<details>
+<summary>Answer</summary>
+
+`[3,1,2]`: it checks 3 >= 1, then accepts singleton [2], missing the failed 1 >= 2 comparison.
+
+</details>
+
+### Other ways to express the requirement
+
+A direct lab step is `isSorted (x:y:rest) | x >= y = isSorted (y:rest) | otherwise = False`, together with the two True bases. This guard version and the && version stop at the first bad pair. Sorting algorithms belong to Sorting and Merging.
+
+## 6. Conditional accumulation: sums of even elements
+
+The 2026 sums task adds even values rather than counting them. A conditional scalar traversal adds a passing head and skips a failing one. Negative even values still contribute negatively; zero is even but adds nothing. The audit's name `sumEvens` describes this same specification; use the identifier requested on the question paper.
+
+### Template and reading guide
+
+```haskell
+sums :: [Integer] -> Integer
+sums [] = 0
+sums (x:xs)
+  | even x = x + sums xs
+  | otherwise = sums xs
+```
+
+Zero is the additive identity. A passing head contributes x, not 1. Both branches consume xs. The fixed Integer signature makes the lab's arithmetic domain explicit.
+
+### Worked variation: Mixed parity
+
+Mixed parity changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+sums :: [Integer] -> Integer
+sums [] = 0
+sums (x:xs)
+  | even x = x + sums xs
+  | otherwise = sums xs
+
+main :: IO ()
+main = print (sums [1,2,3,4])
+```
+
+```text
+6
+```
+
+</HaskellTryIt>
+
+Skip 1, add 2, skip 3, add 4; the empty tail contributes zero.
+
+### Worked variation: Signed values and zero
+
+Signed values and zero changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+sums :: [Integer] -> Integer
+sums [] = 0
+sums (x:xs)
+  | even x = x + sums xs
+  | otherwise = sums xs
+
+main :: IO ()
+main = print (sums [-4,-3,0,2])
+```
+
+```text
+-2
+```
+
+</HaskellTryIt>
+
+The even values are -4, 0 and 2; their sum is -2.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+sums :: [Integer] -> Integer
+sums [] = 0
+sums (x:xs)
+  | even x = x + sums xs
+  | otherwise = sums xs
+
+main :: IO ()
+main = print ((sums [], sums [8]))
+```
+
+```text
+(0,8)
+```
+
+</HaskellTryIt>
+
+The base is 0; a passing singleton contributes 8 + 0.
+
+### Worked variation: No matches and all matches
+
+No matches and all matches changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+sums :: [Integer] -> Integer
+sums [] = 0
+sums (x:xs)
+  | even x = x + sums xs
+  | otherwise = sums xs
+
+main :: IO ()
+main = print ((sums [1,3,5], sums [2,2,6]))
+```
+
+```text
+(0,10)
+```
+
+</HaskellTryIt>
+
+Every odd value is skipped; repeated even values each contribute.
+
+### Exam question: conditional accumulation: sums of even elements (6 marks)
+
+Define sums recursively to add even integers, without sum, filter or comprehensions. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+The result is an Integer, so use addition. Choose 0 at []; add x only if even x holds, then solve the tail.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+sums :: [Integer] -> Integer
+sums [] = 0
+sums (x:xs)
+  | even x = x + sums xs
+  | otherwise = sums xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+sums [2,3,4]
+= 2 + sums [3,4]       -- even contributes
+= 2 + sums [4]         -- odd skipped
+= 2 + (4 + sums [])    -- even contributes
+= 2 + (4 + 0)          -- base
+= 6
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+`1 + sums xs` counts matches instead of summing values. A base of 1 adds an unwanted offset. Consing onto sums xs gives the wrong result type, with GHC's `Couldn't match` diagnostic.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Give one input where even-count and sums differ, and one where they accidentally agree.
+
+<details>
+<summary>Answer</summary>
+
+On [4,6], count is 2 and sum is 10. On [2,0], both are 2, so that input alone is a weak test.
+
+</details>
+
+### Other ways to express the requirement
+
+`sum (filter even xs)` and `sum [x | x <- xs, even x]` are unrestricted equivalents. A conditional product instead uses multiplication and seed 1. The ordinary sum/product/length definitions and identity choices are prerequisites from Recursion on Lists.
+
+## 7. Transform every element: multList
+
+Scaling changes each value while preserving length and order. The scalar parameter remains fixed throughout recursion. A zero multiplier gives one zero per input cell, not an empty result. The sheet's capitalised MultList must be written as the lower-case value name multList.
+
+### Template and reading guide
+
+```haskell
+multList :: Integer -> [Integer] -> [Integer]
+multList _ [] = []
+multList k (x:xs) = (k * x) : multList k xs
+```
+
+`k` is fixed, x is the head to transform, and xs is the smaller input. Emit exactly one transformed head per input cell. The [] base returns a list, not a numeric zero.
+
+### Worked variation: Ordinary scale
+
+Ordinary scale changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+multList :: Integer -> [Integer] -> [Integer]
+multList _ [] = []
+multList k (x:xs) = (k * x) : multList k xs
+
+main :: IO ()
+main = print (multList 3 [2,4,1])
+```
+
+```text
+[6,12,3]
+```
+
+</HaskellTryIt>
+
+Multiply each head by 3 in its original position.
+
+### Worked variation: Negative multiplier
+
+Negative multiplier changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+multList :: Integer -> [Integer] -> [Integer]
+multList _ [] = []
+multList k (x:xs) = (k * x) : multList k xs
+
+main :: IO ()
+main = print (multList (-2) [-3,0,4])
+```
+
+```text
+[6,0,-8]
+```
+
+</HaskellTryIt>
+
+Signs follow multiplication; zero remains zero.
+
+### Worked variation: Zero and identity multipliers
+
+Zero and identity multipliers changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+multList :: Integer -> [Integer] -> [Integer]
+multList _ [] = []
+multList k (x:xs) = (k * x) : multList k xs
+
+main :: IO ()
+main = print ((multList 0 [5,7], multList 1 [5,7]))
+```
+
+```text
+([0,0],[5,7])
+```
+
+</HaskellTryIt>
+
+Zero preserves both slots; one preserves their values too.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+multList :: Integer -> [Integer] -> [Integer]
+multList _ [] = []
+multList k (x:xs) = (k * x) : multList k xs
+
+main :: IO ()
+main = print ((multList 9 [], multList 4 [3]))
+```
+
+```text
+([],[12])
+```
+
+</HaskellTryIt>
+
+No heads means no output; one head produces one transformed value.
+
+### Exam question: transform every element: multlist (6 marks)
+
+Write multList with patterns and recursion only, including a test of multiplier zero. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Return [] at exhaustion. Cons k*x onto the transformed tail and pass the same k to the next call.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+multList :: Integer -> [Integer] -> [Integer]
+multList _ [] = []
+multList k (x:xs) = (k * x) : multList k xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+multList (-2) [3,0]
+= (-6) : multList (-2) [0]       -- transform head
+= (-6) : (0 : multList (-2) [])  -- transform head
+= (-6) : (0 : [])               -- base
+= [-6,0]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+`multList 0 xs = []` loses the required output cells. Passing x as the next multiplier changes the task. Capitalised MultList is parsed as a constructor name rather than an ordinary function name; repair the name before changing the recursion.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict multList (-1) [4,-4,0] and its length.
+
+<details>
+<summary>Answer</summary>
+
+`[-4,4,0]`, length 3. Each input cell gives one output cell.
+
+</details>
+
+### Other ways to express the requirement
+
+`map (k *) xs` and `[k*x | x <- xs]` are equivalents when allowed. Pure transformation retains one output per input; selection can shorten it; count and sum return scalars.
+
+## 8. Membership: has stops on success
+
+Membership asks whether at least one element matches. Empty input contains no match. A matching head settles the answer immediately, whereas counting must continue after a match. The comparison needs equality, not numeric arithmetic or ordering.
+
+### Template and reading guide
+
+```haskell
+has :: Eq a => a -> [a] -> Bool
+has _ [] = False
+has target (x:xs)
+  | target == x = True
+  | otherwise = has target xs
+```
+
+`target` stays fixed and the list shrinks. Eq a supplies ==. The interface is element-first, matching Lab 03a; changing argument order requires changing the signature, equations and calls consistently.
+
+### Worked variation: Match after rejection
+
+Match after rejection changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+has :: Eq a => a -> [a] -> Bool
+has _ [] = False
+has target (x:xs)
+  | target == x = True
+  | otherwise = has target xs
+
+main :: IO ()
+main = print (has 7 [3,7,9 :: Int])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+3 fails; 7 succeeds and the search stops before 9.
+
+### Worked variation: Absent and empty
+
+Absent and empty changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+has :: Eq a => a -> [a] -> Bool
+has _ [] = False
+has target (x:xs)
+  | target == x = True
+  | otherwise = has target xs
+
+main :: IO ()
+main = print ((has 4 [1,2 :: Int], has 4 ([] :: [Int])))
+```
+
+```text
+(False,False)
+```
+
+</HaskellTryIt>
+
+The unsuccessful search eventually reaches the False base.
+
+### Worked variation: Another element type
+
+Another element type changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+has :: Eq a => a -> [a] -> Bool
+has _ [] = False
+has target (x:xs)
+  | target == x = True
+  | otherwise = has target xs
+
+main :: IO ()
+main = print (has "CS" ["MA","CS","PH"])
+```
+
+```text
+True
+```
+
+</HaskellTryIt>
+
+The elements are whole Strings; the second matches the target.
+
+### Worked variation: Duplicate and singleton
+
+Duplicate and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+has :: Eq a => a -> [a] -> Bool
+has _ [] = False
+has target (x:xs)
+  | target == x = True
+  | otherwise = has target xs
+
+main :: IO ()
+main = print ((has 2 [2,2 :: Int], has 2 [2 :: Int], has 2 [3 :: Int]))
+```
+
+```text
+(True,True,False)
+```
+
+</HaskellTryIt>
+
+The first success suffices, including with duplicates; a failed singleton reaches [].
+
+### Exam question: membership: has stops on success (6 marks)
+
+Write has without elem, and justify its Eq constraint and empty result. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use False for no candidates. Return True on a matching head; recurse on xs only after a mismatch.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+has :: Eq a => a -> [a] -> Bool
+has _ [] = False
+has target (x:xs)
+  | target == x = True
+  | otherwise = has target xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+has 7 [3,7,9]
+= has 7 [7,9]          -- first head differs
+= True                 -- second matches; stop
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Returning False on the first mismatch misses later matches. Requiring Ord is unnecessary. A list-first signature conflicts with element-first equations. Omitting the equality constraint leaves == unsupported for an arbitrary element type.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Why is has 9 [1,9,9] True rather than 2?
+
+<details>
+<summary>Answer</summary>
+
+The return type is Bool and the question asks for existence. Two is a count, requiring a different result type and full traversal.
+
+</details>
+
+### Other ways to express the requirement
+
+`target == x || has target xs` is the equivalent recursive step, and elem is the library version. A list-first wrapper can call `has target xs`. The existing positionOf example answers a different question: where the first match occurs.
+
+## 9. Counting by a predicate
+
+A count adds one per passing element, not the value of that element. A predicate is a function returning Bool. Supplying it as a parameter lets the same recursive shape count spaces, even values or occurrences, while still inspecting every candidate.
+
+### Template and reading guide
+
+```haskell
+countR :: (a -> Bool) -> [a] -> Int
+countR _ [] = 0
+countR p (x:xs)
+  | p x = 1 + countR p xs
+  | otherwise = countR p xs
+```
+
+`p` decides the category; the result is always Int, regardless of the element type. Zero counts no cells; 1 + records a match. Recurse on the tail after both outcomes.
+
+### Worked variation: Even count versus even sum
+
+Even count versus even sum changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+countR :: (a -> Bool) -> [a] -> Int
+countR _ [] = 0
+countR p (x:xs)
+  | p x = 1 + countR p xs
+  | otherwise = countR p xs
+
+main :: IO ()
+main = print (countR even [2,4,7,0 :: Int])
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+2, 4 and 0 each contribute one, not their numeric values.
+
+### Worked variation: Character predicate
+
+Character predicate changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+countR :: (a -> Bool) -> [a] -> Int
+countR _ [] = 0
+countR p (x:xs)
+  | p x = 1 + countR p xs
+  | otherwise = countR p xs
+
+main :: IO ()
+main = print (countR (== ' ') " a b ")
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The three literal spaces pass; a and b do not.
+
+### Worked variation: None and all
+
+None and all changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+countR :: (a -> Bool) -> [a] -> Int
+countR _ [] = 0
+countR p (x:xs)
+  | p x = 1 + countR p xs
+  | otherwise = countR p xs
+
+main :: IO ()
+main = print ((countR (> 9) [1,2 :: Int], countR (> 0) [1,2 :: Int]))
+```
+
+```text
+(0,2)
+```
+
+</HaskellTryIt>
+
+Every failure contributes zero; every success contributes one.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+countR :: (a -> Bool) -> [a] -> Int
+countR _ [] = 0
+countR p (x:xs)
+  | p x = 1 + countR p xs
+  | otherwise = countR p xs
+
+main :: IO ()
+main = print ((countR even ([] :: [Int]), countR even [8 :: Int]))
+```
+
+```text
+(0,1)
+```
+
+</HaskellTryIt>
+
+No cells gives zero; an even singleton contributes one before the base.
+
+### Exam question: counting by a predicate (6 marks)
+
+Write countR recursively, then specialise it to count occurrences of a target. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Derive the general predicate count. An occurrence counter uses `(== target)` and therefore requires Eq, although countR itself needs no class constraint.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+countR :: (a -> Bool) -> [a] -> Int
+countR _ [] = 0
+countR p (x:xs)
+  | p x = 1 + countR p xs
+  | otherwise = countR p xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+countR even [2,3,4]
+= 1 + countR even [3,4]      -- pass
+= 1 + countR even [4]        -- fail
+= 1 + (1 + countR even [])   -- pass
+= 1 + (1 + 0)               -- base
+= 2
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Adding x gives a conditional sum. Returning 1 at the first match ignores later occurrences. Both numeric mistakes can typecheck; use values other than 1 and repeated matches in tests.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+How many values does countR (< 0) [-2,0,-2,4] count?
+
+<details>
+<summary>Answer</summary>
+
+2. Repeated matching values occupy separate cells and each counts once.
+
+</details>
+
+### Other ways to express the requirement
+
+`length (filter p xs)` and `length [x | x <- xs, p x]` are equivalents. `countR (const True)` measures length. Define `occurrences target xs = countR (== target) xs` with signature `Eq a => a -> [a] -> Int`.
+
+## 10. Select then transform in one traversal
+
+A combined traversal discards a head or emits a changed version of it. State whether the predicate tests the original or transformed value: those can give different answers. Here p tests the original head before f transforms it; the output element type can change.
+
+### Template and reading guide
+
+```haskell
+selectMapR :: (a -> Bool) -> (a -> b) -> [a] -> [b]
+selectMapR _ _ [] = []
+selectMapR p f (x:xs)
+  | p x = f x : selectMapR p f xs
+  | otherwise = selectMapR p f xs
+```
+
+p takes an a and returns Bool; f converts an accepted a to b. A failure emits no cell but still recurses. A success emits exactly one f x, preserving the relative order of accepted values.
+
+### Worked variation: Square odd originals
+
+Square odd originals changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+selectMapR :: (a -> Bool) -> (a -> b) -> [a] -> [b]
+selectMapR _ _ [] = []
+selectMapR p f (x:xs)
+  | p x = f x : selectMapR p f xs
+  | otherwise = selectMapR p f xs
+
+main :: IO ()
+main = print (selectMapR odd (\x -> x*x) [1,2,3,4 :: Int])
+```
+
+```text
+[1,9]
+```
+
+</HaskellTryIt>
+
+Original 1 and 3 pass, then square to 1 and 9.
+
+### Worked variation: Change the element type
+
+Change the element type changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+selectMapR :: (a -> Bool) -> (a -> b) -> [a] -> [b]
+selectMapR _ _ [] = []
+selectMapR p f (x:xs)
+  | p x = f x : selectMapR p f xs
+  | otherwise = selectMapR p f xs
+
+main :: IO ()
+main = print (selectMapR (> 0) show [-1,2,0,3 :: Int])
+```
+
+```text
+["2","3"]
+```
+
+</HaskellTryIt>
+
+Retained integers become Strings, so print includes quotes.
+
+### Worked variation: None and all
+
+None and all changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+selectMapR :: (a -> Bool) -> (a -> b) -> [a] -> [b]
+selectMapR _ _ [] = []
+selectMapR p f (x:xs)
+  | p x = f x : selectMapR p f xs
+  | otherwise = selectMapR p f xs
+
+main :: IO ()
+main = print ((selectMapR (> 9) (+1) [1,2 :: Int], selectMapR (> 0) (+1) [1,2 :: Int]))
+```
+
+```text
+([],[2,3])
+```
+
+</HaskellTryIt>
+
+No passing heads emit no cells; all passing heads emit changed values.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+selectMapR :: (a -> Bool) -> (a -> b) -> [a] -> [b]
+selectMapR _ _ [] = []
+selectMapR p f (x:xs)
+  | p x = f x : selectMapR p f xs
+  | otherwise = selectMapR p f xs
+
+main :: IO ()
+main = print ((selectMapR even negate ([] :: [Int]), selectMapR even negate [4 :: Int]))
+```
+
+```text
+([],[-4])
+```
+
+</HaskellTryIt>
+
+The base is empty; the passing singleton yields one negated value.
+
+### Exam question: select then transform in one traversal (6 marks)
+
+Write a recursive function squaring only odd input integers, without map, filter or comprehensions. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the keep-or-skip shape with odd as p and squaring as f. Test the original x, then emit its square only on success.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+selectMapR :: (a -> Bool) -> (a -> b) -> [a] -> [b]
+selectMapR _ _ [] = []
+selectMapR p f (x:xs)
+  | p x = f x : selectMapR p f xs
+  | otherwise = selectMapR p f xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+selectMapR odd (\x -> x*x) [2,3]
+= selectMapR odd (\x -> x*x) [3]       -- reject 2
+= 9 : selectMapR odd (\x -> x*x) []   -- transform 3
+= 9 : []                              -- base
+= [9]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Testing `p (f x)` changes the contract and may fail to typecheck when a and b differ. Keeping x only selects. Transforming all heads forgets the rejection branch.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Compare selecting positive originals then negating [-2,3], with negating first then selecting positives.
+
+<details>
+<summary>Answer</summary>
+
+The first gives [-3]. Negating first gives [2,-3], whose positive selection is [2]. Operation order matters.
+
+</details>
+
+### Other ways to express the requirement
+
+`map f (filter p xs)` and `[f x | x <- xs, p x]` express this order. `filter p (map f xs)` expresses a different one. Lab 03a already covers a pure transform three ways; this extends it to conditional emission and type change.
+
+## 11. Bounded prefixes: take
+
+Taking n elements means up to n, rather than requiring exactly n. Non-positive counts return an empty prefix, and oversize counts stop at exhaustion. The count and the list shape are independent stopping conditions.
+
+### Template and reading guide
+
+```haskell
+takeR :: Int -> [a] -> [a]
+takeR n _ | n <= 0 = []
+takeR _ [] = []
+takeR n (x:xs) = x : takeR (n - 1) xs
+```
+
+The guard covers both negative and zero counts. The empty equation covers exhaustion with a positive count. Otherwise copy one head and reduce n while consuming xs.
+
+### Worked variation: Ordinary prefix
+
+Ordinary prefix changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeR :: Int -> [a] -> [a]
+takeR n _ | n <= 0 = []
+takeR _ [] = []
+takeR n (x:xs) = x : takeR (n - 1) xs
+
+main :: IO ()
+main = print (takeR 2 [8,5,3 :: Int])
+```
+
+```text
+[8,5]
+```
+
+</HaskellTryIt>
+
+Copy 8 and 5; counter zero stops before 3.
+
+### Worked variation: Negative and zero counts
+
+Negative and zero counts changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeR :: Int -> [a] -> [a]
+takeR n _ | n <= 0 = []
+takeR _ [] = []
+takeR n (x:xs) = x : takeR (n - 1) xs
+
+main :: IO ()
+main = print ((takeR (-2) [8,5 :: Int], takeR 0 [8,5 :: Int]))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+Both counts satisfy `n <= 0` and emit nothing.
+
+### Worked variation: Oversize count
+
+Oversize count changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeR :: Int -> [a] -> [a]
+takeR n _ | n <= 0 = []
+takeR _ [] = []
+takeR n (x:xs) = x : takeR (n - 1) xs
+
+main :: IO ()
+main = print (takeR 9 "ab")
+```
+
+```text
+"ab"
+```
+
+</HaskellTryIt>
+
+Two copied characters exhaust the input before the count reaches zero.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+takeR :: Int -> [a] -> [a]
+takeR n _ | n <= 0 = []
+takeR _ [] = []
+takeR n (x:xs) = x : takeR (n - 1) xs
+
+main :: IO ()
+main = print ((takeR 2 ([] :: [Int]), takeR 1 [7 :: Int]))
+```
+
+```text
+([],[7])
+```
+
+</HaskellTryIt>
+
+Empty input stops immediately; the singleton is copied once.
+
+### Exam question: bounded prefixes: take (6 marks)
+
+Implement takeR without take, drop, splitAt or length. State the negative and oversize policies. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Stop for `n <= 0` or empty input. Otherwise emit x and recur with n-1 on xs. Both stopping conditions are needed.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+takeR :: Int -> [a] -> [a]
+takeR n _ | n <= 0 = []
+takeR _ [] = []
+takeR n (x:xs) = x : takeR (n - 1) xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+takeR 2 [8,5,3]
+= 8 : takeR 1 [5,3]       -- copy and decrement
+= 8 : (5 : takeR 0 [3])   -- copy and decrement
+= 8 : (5 : [])            -- count base
+= [8,5]
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Only stopping at n == 0 fails the negative-count policy. Failing on [] violates the up-to-n contract. Passing n unchanged copies the whole finite input instead of limiting it.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict takeR (-1) [7] and takeR 4 [7].
+
+<details>
+<summary>Answer</summary>
+
+`[]` and `[7]`. The count is a bound, not a demand for missing cells.
+
+</details>
+
+### Other ways to express the requirement
+
+Prelude take has this clipping policy. A positional comprehension can express a finite prefix but obscures the two stopping cases. A case on the list plus a guarded count can express the same recursion.
+
+## 12. Bounded suffixes: drop
+
+Dropping n skips up to n heads and returns the remaining suffix. Non-positive counts preserve the whole input. Oversize counts exhaust it and return [], so dropping at exactly the length is valid even though indexing there fails.
+
+### Template and reading guide
+
+```haskell
+dropR :: Int -> [a] -> [a]
+dropR n xs | n <= 0 = xs
+dropR _ [] = []
+dropR n (_:xs) = dropR (n - 1) xs
+```
+
+Return the current xs at the count base and [] at exhaustion. The recursive step emits nothing: it skips one head and decreases n.
+
+### Worked variation: Ordinary suffix
+
+Ordinary suffix changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropR :: Int -> [a] -> [a]
+dropR n xs | n <= 0 = xs
+dropR _ [] = []
+dropR n (_:xs) = dropR (n - 1) xs
+
+main :: IO ()
+main = print (dropR 2 [8,5,3 :: Int])
+```
+
+```text
+[3]
+```
+
+</HaskellTryIt>
+
+Skip 8 and 5, then return the untouched suffix [3].
+
+### Worked variation: Negative and zero counts
+
+Negative and zero counts changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropR :: Int -> [a] -> [a]
+dropR n xs | n <= 0 = xs
+dropR _ [] = []
+dropR n (_:xs) = dropR (n - 1) xs
+
+main :: IO ()
+main = print ((dropR (-2) [8,5 :: Int], dropR 0 [8,5 :: Int]))
+```
+
+```text
+([8,5],[8,5])
+```
+
+</HaskellTryIt>
+
+Neither removes any cells.
+
+### Worked variation: Oversize count
+
+Oversize count changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropR :: Int -> [a] -> [a]
+dropR n xs | n <= 0 = xs
+dropR _ [] = []
+dropR n (_:xs) = dropR (n - 1) xs
+
+main :: IO ()
+main = print (dropR 9 [1,2 :: Int])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+After skipping both available values the empty base returns []; the positive count does not demand another cell.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+dropR :: Int -> [a] -> [a]
+dropR n xs | n <= 0 = xs
+dropR _ [] = []
+dropR n (_:xs) = dropR (n - 1) xs
+
+main :: IO ()
+main = print ((dropR 2 ([] :: [Int]), dropR 1 [7 :: Int]))
+```
+
+```text
+([],[])
+```
+
+</HaskellTryIt>
+
+Both runs exhaust their input.
+
+### Exam question: bounded suffixes: drop (6 marks)
+
+Implement dropR recursively and distinguish its zero case from takeR. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+Use the same stopping conditions as takeR, but return the current suffix at the count base and never cons a skipped head.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+dropR :: Int -> [a] -> [a]
+dropR n xs | n <= 0 = xs
+dropR _ [] = []
+dropR n (_:xs) = dropR (n - 1) xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+dropR 2 [8,5,3]
+= dropR 1 [5,3]       -- discard 8
+= dropR 0 [3]         -- discard 5
+= [3]                 -- return suffix
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+`dropR 0 xs = []` discards the required remainder. Consing x back undoes dropping. Calling tail repeatedly without an empty case demands a missing tail on an oversize count.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+Predict dropR 3 [1,2,3] and dropR 0 [1,2,3].
+
+<details>
+<summary>Answer</summary>
+
+`[]` and `[1,2,3]`; equality with length is valid for a drop count.
+
+</details>
+
+### Other ways to express the requirement
+
+Prelude drop is the library version. With a stated clipping policy, `takeR count (dropR start xs)` extracts a slice. Its negative start removes nothing; a negative count yields an empty slice.
+
+## 13. Return both halves: splitAt
+
+A split returns the prefix and suffix together. Splitting at the length is valid, with an empty suffix. One recursive traversal can derive both components instead of walking independently for take and drop.
+
+### Template and reading guide
+
+```haskell
+splitR :: Int -> [a] -> ([a],[a])
+splitR n xs | n <= 0 = ([],xs)
+splitR _ [] = ([],[])
+splitR n (x:xs) = (x:front,back)
+  where
+    (front,back) = splitR (n - 1) xs
+```
+
+The recursive pair names two results of one call. On returning, add x only to front; back remains the suffix found at the boundary. Empty and non-positive policies follow take and drop.
+
+### Worked variation: Ordinary split
+
+Ordinary split changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+splitR :: Int -> [a] -> ([a],[a])
+splitR n xs | n <= 0 = ([],xs)
+splitR _ [] = ([],[])
+splitR n (x:xs) = (x:front,back)
+  where
+    (front,back) = splitR (n - 1) xs
+
+main :: IO ()
+main = print (splitR 2 [8,5,3 :: Int])
+```
+
+```text
+([8,5],[3])
+```
+
+</HaskellTryIt>
+
+The count base supplies ([],[3]); prepend 5 then 8 only to the front.
+
+### Worked variation: Negative and zero
+
+Negative and zero changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+splitR :: Int -> [a] -> ([a],[a])
+splitR n xs | n <= 0 = ([],xs)
+splitR _ [] = ([],[])
+splitR n (x:xs) = (x:front,back)
+  where
+    (front,back) = splitR (n - 1) xs
+
+main :: IO ()
+main = print ((splitR (-1) [8,5 :: Int], splitR 0 [8,5 :: Int]))
+```
+
+```text
+(([],[8,5]),([],[8,5]))
+```
+
+</HaskellTryIt>
+
+Both leave the entire input in the suffix.
+
+### Worked variation: Oversize and exact length
+
+Oversize and exact length changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+splitR :: Int -> [a] -> ([a],[a])
+splitR n xs | n <= 0 = ([],xs)
+splitR _ [] = ([],[])
+splitR n (x:xs) = (x:front,back)
+  where
+    (front,back) = splitR (n - 1) xs
+
+main :: IO ()
+main = print ((splitR 9 [1,2 :: Int], splitR 2 [1,2 :: Int]))
+```
+
+```text
+(([1,2],[]),([1,2],[]))
+```
+
+</HaskellTryIt>
+
+Both put all input in front and leave an empty back, exercising exhaustion and the exact count boundary.
+
+### Worked variation: Empty and singleton
+
+Empty and singleton changes the input or boundary exercised by the template.
+
+<HaskellTryIt>
+
+```haskell
+splitR :: Int -> [a] -> ([a],[a])
+splitR n xs | n <= 0 = ([],xs)
+splitR _ [] = ([],[])
+splitR n (x:xs) = (x:front,back)
+  where
+    (front,back) = splitR (n - 1) xs
+
+main :: IO ()
+main = print ((splitR 3 ([] :: [Int]), splitR 1 [7 :: Int]))
+```
+
+```text
+(([],[]),([7],[]))
+```
+
+</HaskellTryIt>
+
+Exhaustion supplies two empty halves; a singleton at count one goes entirely in front.
+
+### Exam question: return both halves: splitat (6 marks)
+
+Implement splitR using one recursive call per consumed head, without take, drop or splitAt. Give a signature, base and step, dry run and boundary tests.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+  <Step title="1. Read the question">
+
+The command word is "write": supply a definition, not only a sample result. The inputs and required result shape are fixed by the signature below; any no-library restriction is part of the specification.
+
+  </Step>
+
+  <Step title="2. Plan">
+
+At `n <= 0` return ([],xs); at exhaustion return ([],[]). Split the tail once and prepend x to only the returned front.
+
+  </Step>
+
+  <Step title="3. Solution">
+
+```haskell
+splitR :: Int -> [a] -> ([a],[a])
+splitR n xs | n <= 0 = ([],xs)
+splitR _ [] = ([],[])
+splitR n (x:xs) = (x:front,back)
+  where
+    (front,back) = splitR (n - 1) xs
+```
+
+The base cases provide the stopping answers. The continuing case consumes the required cell or cells, retaining only the information the next call needs.
+
+  </Step>
+
+  <Step title="4. Dry run and check">
+
+```text
+splitR 2 [8,5,3]
+= (8:front1,back1)       -- pair1 = splitR 1 [5,3]
+splitR 1 [5,3]
+= (5:front2,back2)       -- pair2 = splitR 0 [3]
+splitR 0 [3] = ([],[3])  -- count base
+splitR 1 [5,3] = ([5],[3])
+splitR 2 [8,5,3] = ([8,5],[3])
+```
+
+Check the empty and singleton variations above, then a case for every guard outcome or exhaustion direction. Passing those tests is evidence, rather than a universal proof.
+
+  </Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repair
+
+Adding x to both halves duplicates input; adding it to neither loses input. Returning `(xs,[])` at zero reverses the halves. Calling splitR twice separately for fst and snd duplicates source-level recursive work.
+
+A wrong result with the right type need not produce any GHC error. A discriminating test must expose that semantic mistake.
+
+### Practice with answer
+
+What should appending the two components of splitR n xs reconstruct?
+
+<details>
+<summary>Answer</summary>
+
+The original finite xs for every Int count. Negative gives [] ++ xs, and oversize gives xs ++ []. These cases illustrate the property; a general proof needs induction.
+
+</details>
+
+### Other ways to express the requirement
+
+`splitAt n xs` is the library function, and `(take n xs,drop n xs)` gives the same pair for finite inputs. The direct pair template exposes how both results share one recursive computation.
+
+## 14. Test design and existing question files
+
+For the four original lab questions, submit all four required parts: signature, base and recursive definition, dry run, and implementation with tests. Choose contrasting partitions rather than several similar happy paths.
+
+| Function | Contrasting tests | Error exposed |
+|---|---|---|
+| atPosition | negative; empty at zero; first; last; exactly length; beyond | lost index and invalid equality boundary |
+| largerY | equality; none; all; repeated matches; empty | wrong inclusivity or accidental reordering |
+| positiveNumbers | negative; zero; positive; mixed; singleton; empty | positive versus non-negative |
+| isSorted | empty; singleton; ties; strict order; middle violation | skipped neighbour and wrong ties policy |
+| sums / countR | even zero; negative even; odd; none; empty | count versus value total |
+| multList | negative, zero, one multipliers; empty; singleton | missing output cells |
+| takeR / dropR / splitR | negative; zero; exact length; oversize; empty | clipped counts versus invalid indices |
+
+Use the existing [Lab3_AtPosition.hs](/files/sem3/csi243/downloads/completed-examples/Lab3_AtPosition.hs), [Lab3_LargerY.hs](/files/sem3/csi243/downloads/completed-examples/Lab3_LargerY.hs), [Lab3_PositiveNumbers.hs](/files/sem3/csi243/downloads/completed-examples/Lab3_PositiveNumbers.hs) and [Lab3_IsSorted.hs](/files/sem3/csi243/downloads/completed-examples/Lab3_IsSorted.hs) as independent attempts. Compare their failure policies with the safe versions here. Try the [AtPosition starter](/files/sem3/csi243/downloads/starter-code/Lab3_AtPosition.hs) before viewing the completed definition.
+
+For related shapes use [Lab2_ElementOccurs.hs](/files/sem3/csi243/downloads/completed-examples/Lab2_ElementOccurs.hs), [Lab2_IsElementIn.hs](/files/sem3/csi243/downloads/completed-examples/Lab2_IsElementIn.hs), [Lab2_ListLength.hs](/files/sem3/csi243/downloads/completed-examples/Lab2_ListLength.hs), [List_LengthSum.hs](/files/sem3/csi243/downloads/completed-examples/List_LengthSum.hs) and [List_TakeDrop.hs](/files/sem3/csi243/downloads/completed-examples/List_TakeDrop.hs). These are existing exercises, with their own question comments and variants.
+
+## Summary
+
+<Callout type="key" title="Remember">
+The signature determines whether to add, cons, return a Boolean or build a pair. State boundaries before coding. Index equal to length fails; taking, dropping and splitting at that count are valid. Selection continues after rejection; membership can stop on success; sortedness retains the overlapping neighbour. A helper can change a countdown while preserving the original index.
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+  <CheckQuestion question="Why must atPosition reject an index equal to length?">
+    A length-n list has indices zero through n-1. After n skips there is no head to select.
+  </CheckQuestion>
+
+  <CheckQuestion question="How do count, select and transform differ at a matching head?">
+    Count adds one; select conses the unchanged head; transform conses a changed head. The result types separate the shapes.
+  </CheckQuestion>
+
+  <CheckQuestion question="Why retain y in the sortedness recursive call?">
+    It must meet its next neighbour. Dropping both x and y skips a comparison.
+  </CheckQuestion>
+
+  <CheckQuestion question="What is splitR (-2) [1,2]?">
+    `([],[1,2])`. A non-positive count leaves all input in the suffix.
+  </CheckQuestion>
+
+</CheckQuestions>
+
