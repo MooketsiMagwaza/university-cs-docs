@@ -535,6 +535,89 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Char_NormaliseV3.hs` | Normalise characters across text values |
 | `Char_NormaliseV4.hs` | Normalise characters across text values |
 
+## Text and list library functions
+
+| File | Question |
+| --- | --- |
+| `TextList_JoinSeparator.hs` | Insert a character separator between characters |
+| `TextList_JoinSeparatorV2.hs` | Join string fields with a string separator |
+| `TextList_JoinSeparatorV3.hs` | Join lists of integers with a list separator |
+| `TextList_JoinSeparatorV4.hs` | Concatenate text using the standard append operator |
+| `TextList_LinesRoundTrip.hs` | Split lines while retaining interior empty lines |
+| `TextList_LinesRoundTripV2.hs` | Join lines with a newline after every element |
+| `TextList_LinesRoundTripV3.hs` | Normalise the final newline of nonempty text |
+| `TextList_LinesRoundTripV4.hs` | Check when splitting and joining preserves exact text |
+| `TextList_PrefixSuffixCheck.hs` | Test whether text ends with a requested suffix |
+| `TextList_PrefixSuffixCheckV2.hs` | Remove a prefix safely without searching inside the text |
+| `TextList_PrefixSuffixCheckV3.hs` | Test whether a pattern occurs anywhere in text |
+| `TextList_SearchFirst.hs` | Find the first integer meeting a threshold |
+| `TextList_SearchFirstV2.hs` | Find the index of the first even integer |
+| `TextList_SearchFirstV3.hs` | Find the first position of a requested word |
+| `TextList_SubstringBounds.hs` | Extract a bounded substring with zero-based positions |
+| `TextList_SubstringBoundsV2.hs` | Extract a bounded slice of a string list |
+| `TextList_SubstringBoundsV3.hs` | Extract text between two exclusive boundary positions |
+| `TextList_TransposeRagged.hs` | Transpose integer rows using library ragged-list semantics |
+| `TextList_TransposeRaggedV2.hs` | Read character rows as columns |
+| `TextList_TransposeRaggedV3.hs` | Sum columns of a ragged integer matrix |
+| `TextList_WordsNormalise.hs` | Normalise arbitrary whitespace between words |
+| `TextList_WordsNormaliseV2.hs` | Split text into words and report their lengths |
+| `TextList_WordsNormaliseV3.hs` | Join word tokens without preserving empty token boundaries |
+| `TextList_WordsNormaliseV4.hs` | Compare literal space removal with whitespace normalisation |
+
+## Sorting and merging
+
+| File | Question |
+| --- | --- |
+| `Sort_ComparatorStable.hs` | Sort labelled scores by score with stable ties |
+| `Sort_ComparatorStableV2.hs` | Sort strings by descending length with stable ties |
+| `Sort_ComparatorStableV3.hs` | Repair sorting after uppercasing a list of strings |
+| `Sort_FrequencyRuns.hs` | Build an ascending integer frequency table |
+| `Sort_FrequencyRunsV2.hs` | Count words in lexicographic key order |
+| `Sort_FrequencyRunsV3.hs` | Count consecutive runs without reordering integers |
+| `Sort_InsertionOrdered.hs` | Implement stable ascending insertion sort on labelled scores |
+| `Sort_InsertionOrderedV2.hs` | Implement descending insertion sort for integers |
+| `Sort_InsertionOrderedV3.hs` | Implement insertion sort by ascending string length |
+| `Sort_MergeStable.hs` | Implement stable merge sort on labelled scores |
+| `Sort_MergeStableV2.hs` | Implement descending merge sort on integers |
+| `Sort_MergeStableV3.hs` | Implement ascending lexicographic merge sort |
+
+## Maps and sets
+
+| File | Question |
+| --- | --- |
+| `Collections_MapModelOrdered.hs` | Model an ordered map with last duplicate key winning |
+| `Collections_MapModelOrderedV2.hs` | Model an ordered integer-key map holding text |
+| `Collections_MapModelOrderedV3.hs` | Model a map that sums values of duplicate keys |
+| `Collections_SetModelAlgebra.hs` | Model integer sets and their algebra using sorted lists |
+| `Collections_SetModelAlgebraV2.hs` | Model string sets with case-sensitive ordered traversal |
+| `Collections_SetModelAlgebraV3.hs` | Model character sets with duplicate-free string results |
+
+## Input and output
+
+| File | Question |
+| --- | --- |
+| `IO_CharacterRemainder.hs` | Observe the remainder after getChar |
+| `IO_CharacterRemainderV2.hs` | Consume a newline character before reading a line |
+| `IO_CharacterRemainderV3.hs` | Read an integer action followed by a text action |
+| `IO_FilePipelineScratch.hs` | Overwrite a scratch fixture then append a transformed report |
+| `IO_FilePipelineScratchV2.hs` | Reverse scratch-file lines before appending a marker |
+| `IO_FilePipelineScratchV3.hs` | Write scratch-file line lengths and append a zero |
+| `IO_FormattedReportExact.hs` | Format an exact price report to two decimal places |
+| `IO_FormattedReportExactV2.hs` | Format an exact mass report to two decimal places |
+| `IO_FormattedReportExactV3.hs` | Format an exact balance report to two decimal places |
+| `IO_PromptLoopValidate.hs` | Prompt until a nonnegative integer is entered |
+| `IO_PromptLoopValidateV2.hs` | Prompt until an integer mark is in range |
+| `IO_PromptLoopValidateV3.hs` | Prompt until a yes or no token is entered |
+| `IO_SentinelCollect.hs` | Sum valid integers until a stop sentinel |
+| `IO_SentinelCollectV2.hs` | Count words until a dot sentinel |
+| `IO_SentinelCollectV3.hs` | Collect text in reverse order until END |
+| `IO_SequenceActions.hs` | Execute a list of input actions with sequence |
+| `IO_SequenceActionsV2.hs` | Collect mapM results and execute sequence_ output |
+| `IO_SequenceActionsV3.hs` | Report two independent parse outcomes using bind |
+| `IO_WholeInputTransform.hs` | Count complete input and report normalised words |
+| `IO_WholeInputTransformV2.hs` | Transform every input line with interact |
+| `IO_WholeInputTransformV3.hs` | Report the length of every line using a pure core |
+
 ## First programs and the first lab
 
 | File | Note |
