@@ -1,0 +1,1037 @@
+---
+title: "Operator and Pattern Repairs"
+description: "Repair reserved names, quoting mistakes, repeated pattern variables and legacy n+k patterns while distinguishing parsing, scope and type failures."
+---
+
+A repair must preserve the intended behaviour, not merely silence an error. [Operators and Lexical Rules](/docs/sem3/csi243/03-defining-functions/notes/operators-and-lexical-rules) supplies the naming and fixity rules; this lesson applies them to broken source and to older lecture syntax.
+
+<LearningObjectives items={[
+  'Rename reserved words consistently and distinguish names from quoted literals',
+  'Replace repeated pattern variables with fresh bindings and equality guards',
+  'Explain why arithmetic and ordinary function calls are not general patterns',
+  'Translate legacy n+k matching into ordinary patterns, guards and subtraction',
+  'Distinguish parse, scope, type and incorrect-result failures',
+]} />
+
+Use [Defining Functions](/docs/sem3/csi243/03-defining-functions/notes/defining-functions) for specification and testing. We extend, rather than repeat, [Pattern Matching](/docs/sem3/csi243/04-making-choices/notes/pattern-matching), [Guards](/docs/sem3/csi243/04-making-choices/notes/guards), and [Case Expressions](/docs/sem3/csi243/04-making-choices/notes/case-expressions). The section, lambda and negative-section rules remain in [Currying and Sections](/docs/sem3/csi243/07-higher-order/notes/currying-and-sections).
+
+## The repair method
+
+Read the intended contract first. Identify the smallest bad fragment. Decide whether the parser cannot form an expression, a required name is absent, or two types disagree. Repair that cause, then reduce a normal case and a boundary case. A program can also compile and calculate the wrong result: those cases need a test and a corrected definition, not a fabricated compiler message.
+
+## 1. Reserved words are syntax, not available names
+
+A reserved word is a token with a fixed grammatical role. Lower-case spelling alone does not make a legal identifier: `case`, `where` and `type` cannot be reused as ordinary parameter or function names. Choose another whole identifier and update every reference. `caseValue`, `where_` and `type'` are different tokens and are legal.
+
+The Haskell 2010 reserved words are `case`, `class`, `data`, `default`, `deriving`, `do`, `else`, `foreign`, `if`, `import`, `in`, `infix`, `infixl`, `infixr`, `instance`, `let`, `module`, `newtype`, `of`, `then`, `type`, `where`, and the special wildcard `_`. Extensions can add syntax; avoid borrowing language keywords. Names such as `otherwise`, `map` and `sum` are ordinary Prelude bindings rather than reserved words. Shadowing one locally is possible, but can make a program confusing.
+
+### Template
+
+```haskell
+classify :: Int -> Int
+classify caseValue = caseValue + 1
+-- Rename the parameter and every use of it together.
+```
+
+`caseValue` is one identifier, not the keyword `case` followed by `Value`. A suffix changes the token; whitespace separates tokens.
+
+### Worked variation: rename a keyword parameter
+
+<HaskellTryIt>
+
+```haskell
+classify :: Int -> Int
+classify caseValue = caseValue + 1
+main :: IO ()
+main = print (classify 4)
+```
+
+```text
+5
+```
+
+</HaskellTryIt>
+
+The intended broken parameter was `case`. Naming it `caseValue` throughout preserves the formula: `4 + 1 = 5`.
+
+### Worked variation: a prime keeps a familiar domain word
+
+<HaskellTryIt>
+
+```haskell
+type' :: String -> String
+type' label = label ++ "!"
+main :: IO ()
+main = print (type' "book")
+```
+
+```text
+"book!"
+```
+
+</HaskellTryIt>
+
+`type'` is not the keyword `type`. The call appends an exclamation mark to the input string; `print` includes quotes.
+
+### Worked variation: an underscore suffix in a local value
+
+<HaskellTryIt>
+
+```haskell
+move :: Int -> Int
+move amount = let where_ = 10 in where_ - amount
+main :: IO ()
+main = print (move 3, move 10)
+```
+
+```text
+(7,0)
+```
+
+</HaskellTryIt>
+
+The legal identifier `where_` holds `10`. The two calls subtract `3` and the boundary value `10`, respectively.
+
+### Exam question: rename consistently (4 marks)
+
+Repair `cost type = type * 2` without changing its arithmetic. Supply an `Int` signature.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Repair” asks to preserve doubling. The offending token is a reserved word used where a parameter should be.
+
+</Step>
+
+<Step title="2. Plan">
+
+Choose one fresh value identifier and replace both occurrences. `cost` itself is already legal.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+cost :: Int -> Int
+cost typeValue = typeValue * 2
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`cost 3 = 6` and `cost 0 = 0`. Renaming only the left occurrence would leave invalid syntax on the right.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+This deliberately invalid program uses a keyword as a parameter:
+
+```haskell
+-- Incorrect: keyword used as a parameter
+cost type = type * 2
+```
+
+```text
+parse error
+```
+
+
+Repair both occurrences to `typeValue`. Capitalising the parameter to `Type` does not create an ordinary variable: upper-case names are interpreted as constructors. Adding a suffix, as in `type_`, works; adding whitespace, as in `type _`, leaves the reserved token in place.
+
+### Practice with answers
+
+Repair `f where = where + 2`. Are `ifThen`, `where_`, `class'`, and `otherwise` reserved?
+
+<details>
+<summary>Answer</summary>
+
+One repair is `f whereValue = whereValue + 2`. All four proposed names are non-reserved identifiers; `otherwise` is already a Prelude binding, so avoid using it for an unrelated value.
+
+</details>
+
+## 2. Names, character literals and string literals
+
+A bare identifier refers to a binding. Single quotes delimit a character literal such as `'A'`; double quotes delimit a string literal such as `"A"`. They are not decorations around a variable name. A name with a trailing prime, such as `label'`, is still an identifier because its apostrophe is part of the name, not an opening character-literal delimiter.
+
+A source capitalisation repair and a quoting repair solve different problems. `listLen` can name a function, while `ListLen` would denote a constructor. `"listLen"` is data containing the letters of the name, not a callable function. Backticks in ``x `div` y`` select infix use of an identifier; neither single nor double quotes do that.
+
+### Template
+
+```haskell
+label :: String
+label = "A"
+letter :: Char
+letter = 'A'
+-- label is a name; "label" is a literal String.
+```
+
+Choose the literal delimiter from the required type. Use the bare name when you mean its value.
+
+### Worked variation: retrieve a binding or print its spelling
+
+<HaskellTryIt>
+
+```haskell
+label :: String
+label = "Ready"
+main :: IO ()
+main = do
+  print label
+  print "label"
+```
+
+```text
+"Ready"
+"label"
+```
+
+</HaskellTryIt>
+
+The first line looks up `label` and prints its value. The second prints the literal spelling `label`; no lookup takes place.
+
+### Worked variation: Char and String patterns have different shapes
+
+<HaskellTryIt>
+
+```haskell
+isA :: Char -> Bool
+isA 'A' = True
+isA _ = False
+isWordA :: String -> Bool
+isWordA "A" = True
+isWordA _ = False
+main :: IO ()
+main = print (isA 'A', isWordA "A", isWordA "AA")
+```
+
+```text
+(True,True,False)
+```
+
+</HaskellTryIt>
+
+The character pattern consumes one `Char`. The string pattern matches exactly the one-character string `"A"`; it does not match `"AA"`.
+
+### Worked variation: repair an uppercase function rather than quoting it
+
+<HaskellTryIt>
+
+```haskell
+listLen' :: [Int] -> Int
+listLen' xs = length xs
+main :: IO ()
+main = print (listLen' [7,8], listLen' [])
+```
+
+```text
+(2,0)
+```
+
+</HaskellTryIt>
+
+A legal repair of an intended `ListLen` function starts lower-case. A prime is also legal. Counting the two-element list gives `2`; the empty list gives `0`.
+
+### Exam question: choose the needed spelling (4 marks)
+
+Given `tag = "blue"`, state the values of `tag` and `"tag"`. Repair `letter :: Char; letter = "B"`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“State” asks for values, and “repair” asks to satisfy the declared type. Keep names separate from literal contents.
+
+</Step>
+
+<Step title="2. Plan">
+
+Look up a bare name. Read quoted text literally. A `Char` needs a character literal rather than a `String`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+tag = "blue"
+letter :: Char
+letter = 'B'
+```
+
+`tag` is `"blue"`; `"tag"` is the string containing the letters t, a, g.
+
+</Step>
+
+<Step title="4. Check">
+
+`print letter` prints `'B'`; `print tag` prints `"blue"`. Their delimiters reflect their different types.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The type mismatch is deliberate:
+
+```haskell
+-- Incorrect: String supplied where Char is promised
+letter :: Char
+letter = "B"
+```
+
+```text
+Couldn't match
+```
+
+
+Use `letter = 'B'`, or change the signature to `String` if text was intended. `'tag'` is not a legal multi-character `Char`; use `"tag"` for that text, or `tag` for the binding. Quoting an unbound identifier changes the meaning instead of supplying its missing definition.
+
+### Practice with answers
+
+Given `n = 4`, what do `print n`, `print 'n'` and `print "n"` display? How should an intended function `Add x y = x + y` be renamed?
+
+<details>
+<summary>Answer</summary>
+
+They print `4`, `'n'` and `"n"`, respectively. Rename the function to `add` and call `add`; do not quote `Add` to try to make it a function.
+
+</details>
+
+## 3. Repeated pattern variables need an equality guard
+
+A pattern binds fresh names for the fields it matches; it does not refer back to a previously bound value to demand equality. Every variable in one pattern, or in the set of argument patterns of one equation, must be distinct. Thus neither `(x,x)` nor `f x x` expresses “two equal inputs”. This condition is sometimes called a linear pattern.
+
+Use two names, then compare them in a Boolean guard. For general element types, the equality test needs `Eq a =>`: the type must support equality. The [Eq and Class Constraints](/docs/sem3/csi243/09-polymorphism/notes/eq-and-class-constraints) lesson explains that class. A constructor pattern such as `Just x` still binds `x` freshly; the constructor itself checks shape, not equality of two separately bound fields. Repeated literal patterns such as `(0,0)` are allowed because literals do not bind a variable.
+
+### Template
+
+```haskell
+samePair :: Eq a => (a, a) -> Bool
+samePair (x, y)
+  | x == y = True
+  | otherwise = False
+```
+
+`x` and `y` bind independently. The first guard performs equality after matching; the fallback supplies a result for unequal values. Here the shorter equivalent is `samePair (x,y) = x == y`.
+
+### Worked variation: equal and unequal integer fields
+
+<HaskellTryIt>
+
+```haskell
+samePair :: Eq a => (a, a) -> Bool
+samePair (x, y)
+  | x == y = True
+  | otherwise = False
+main :: IO ()
+main = print (samePair (4,4), samePair (4,9))
+```
+
+```text
+(True,False)
+```
+
+</HaskellTryIt>
+
+Both pairs match the tuple pattern. The tests are then `4 == 4` and `4 == 9`, selecting the first and second guards.
+
+### Worked variation: two separate string arguments
+
+<HaskellTryIt>
+
+```haskell
+choose :: String -> String -> String
+choose x y
+  | x == y = "same"
+  | otherwise = "different"
+main :: IO ()
+main = print (choose "red" "red", choose "red" "blue")
+```
+
+```text
+("same","different")
+```
+
+</HaskellTryIt>
+
+Separate parameters must also have distinct names. Comparing their strings selects the appropriate quoted label.
+
+### Worked variation: nested shape check plus equality in a case
+
+<HaskellTryIt>
+
+```haskell
+repeatedHead :: Eq a => [a] -> Bool
+repeatedHead xs = case xs of
+  (x:y:_) | x == y -> True
+  _ -> False
+main :: IO ()
+main = print (repeatedHead [2,2,7], repeatedHead [2,3], repeatedHead ([] :: [Int]))
+```
+
+```text
+(True,False,False)
+```
+
+</HaskellTryIt>
+
+For the first list the shape has two heads and the equality succeeds. For the second the shape matches but the guard fails, so the next alternative returns `False`. The empty list never matches the two-head pattern.
+
+### Exam question: repair a duplicate binding (6 marks)
+
+Repair `pairLabel (x,x) = "same"; pairLabel _ = "different"` for pairs of any equality-comparable element type. Preserve both outcomes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Repair” asks to implement equality testing rather than duplicate binding. The intended result has two labels.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind distinct fields, require `Eq a`, and test them in a guard. Retain an unequal fallback.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+pairLabel :: Eq a => (a, a) -> String
+pairLabel (x, y)
+  | x == y = "same"
+  | otherwise = "different"
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+On `(2,2)` the guard succeeds and returns `"same"`; on `(2,5)` it fails and returns `"different"`. An alternative is `if x == y then "same" else "different"`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+This is deliberately invalid:
+
+```haskell
+-- Incorrect: repeated pattern binding, not equality
+same (x, x) = True
+same _ = False
+```
+
+```text
+Conflicting definitions
+```
+
+
+Rename the second variable and add a comparison. Merely changing it to `same (x,y) = True` makes every pair succeed and silently loses the requirement. Repeating `_x` is illegal for the same reason as repeating `x`; repeated bare wildcards `_` bind no names and are legal. A variable may reappear in separate equations because those equations have separate binding scopes.
+
+### Practice with answers
+
+Write `sameEnds` for triples of `Int`, testing equality of the first and third fields and ignoring the middle. Is `zeroPair (0,0) = True` rejected for repetition?
+
+<details>
+<summary>Answer</summary>
+
+```haskell
+sameEnds :: (Int, Int, Int) -> Bool
+sameEnds (first, _, lastValue) = first == lastValue
+```
+
+`sameEnds (4,9,4)` is `True`; `(4,9,5)` gives `False`. The two literal zeros bind no variable, so the `zeroPair` equation is legal, although it needs a fallback for other inputs if it is meant to be total.
+
+</details>
+
+## 4. Arithmetic and function calls are not general patterns
+
+A pattern recognises the structure already present in a value. It does not solve an equation to recover an unknown input. Ordinary multiplication, addition and function application therefore belong in expressions or guards, not arbitrary patterns. For example, matching `(2*n)` would require solving a multiplication equation; Haskell does not do that.
+
+Move the calculation to the right or bind the whole input and test it in a guard. If the intention is to recognise a computed value, put that computation on the expression side of `case`, then match its result with an ordinary constructor or literal pattern. Numeric literals, including a parenthesised negative literal such as `(-1)`, are valid patterns. The legacy `n+k` exception in the next section is narrow; it does not generalise to multiplication, subtraction or arbitrary function calls.
+
+### Template
+
+```haskell
+decode :: Int -> Maybe Int
+decode value
+  | even value = Just (value `div` 2)
+  | otherwise = Nothing
+```
+
+`value` matches the whole integer; the guard states the admissible values, and the right-hand side computes the recovered component. This is the ordinary replacement for an intended even-number pattern `2*n`.
+
+### Worked variation: replace a multiplication pattern
+
+<HaskellTryIt>
+
+```haskell
+decode :: Int -> Maybe Int
+decode value
+  | even value = Just (value `div` 2)
+  | otherwise = Nothing
+main :: IO ()
+main = print (decode 8, decode 7, decode (-4))
+```
+
+```text
+(Just 4,Nothing,Just (-2))
+```
+
+</HaskellTryIt>
+
+For `8`, evenness succeeds and division returns `4`. For `7`, return `Nothing`. `-4` is also even and yields `-2`, displayed inside `Just` as `Just (-2)`.
+
+### Worked variation: compute first, then match a literal result
+
+<HaskellTryIt>
+
+```haskell
+opposites :: (Int, Int) -> Bool
+opposites (x, y) = case x + y of
+  0 -> True
+  _ -> False
+main :: IO ()
+main = print (opposites (3,-3), opposites (3,2), opposites (0,0))
+```
+
+```text
+(True,False,True)
+```
+
+</HaskellTryIt>
+
+The tuple pattern only extracts fields. The scrutinee calculates `0`, `5`, and `0`; the literal zero pattern succeeds in the first and third calls.
+
+### Worked variation: replace a function-call pattern
+
+<HaskellTryIt>
+
+```haskell
+hasOne :: [Int] -> Bool
+hasOne xs = case length xs of
+  1 -> True
+  _ -> False
+main :: IO ()
+main = print (hasOne [], hasOne [8], hasOne [8,9])
+```
+
+```text
+(False,True,False)
+```
+
+</HaskellTryIt>
+
+There is no pattern `length xs`. Instead `length xs` is an expression whose result is matched against `1`. The lengths are `0`, `1`, `2`. A direct equivalent is `hasOne [_] = True; hasOne _ = False`.
+
+### Exam question: repair an inverse-arithmetic pattern (6 marks)
+
+The intended `half (2*n) = Just n` should accept even integers and return `Nothing` on odd integers. Write it in ordinary Haskell.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Write” asks for a total implementation of the stated policy. The multiplication expression is not a permitted arithmetic pattern.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind the input once. Check evenness before integer division, and provide the odd fallback.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+half :: Int -> Maybe Int
+half value
+  | even value = Just (value `div` 2)
+  | otherwise = Nothing
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+`half 0 = Just 0`, `half 6 = Just 3`, and `half 5 = Nothing`. Negative even inputs also succeed, as required for all even integers.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+The invalid source is a pattern error:
+
+```haskell
+-- Incorrect: multiplication is an expression, not a pattern
+half (2 * n) = n
+```
+
+```text
+Parse error in pattern
+```
+
+
+Likewise, `f (n-1) = n` is not a subtraction-solving pattern, and `f (length xs) = xs` is not an ordinary constructor pattern. Adding parentheses changes grouping, not whether a function call is a permitted pattern. A legal `f (-1) = ...` matches the literal negative one; it does not bind an unknown to solve for.
+
+### Practice with answers
+
+Write `isMinusOne :: Int -> Bool` using a literal pattern. Repair an intended `isDouble (2*n) = True` to accept exactly even integers.
+
+<details>
+<summary>Answer</summary>
+
+```haskell
+isMinusOne :: Int -> Bool
+isMinusOne (-1) = True
+isMinusOne _ = False
+
+isDouble :: Int -> Bool
+isDouble value = even value
+```
+
+The first distinguishes `-1` from all other inputs. The second tests a property instead of pretending to invert a pattern; `isDouble 0` is `True`.
+
+</details>
+
+## 5. Legacy n+k matching: preserve the threshold and fallback
+
+The handout ho7 uses `pred (n+1) = n`. In old Haskell syntax this matches an integral input at least `1` and binds `n` to one less than that input. It does not mean “add 1 to an already known n”. GHC can enable this optional syntax with `NPlusKPatterns`; ordinary Haskell 2010 source does not include it. The [GHC extension guide](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/nk_patterns.html) identifies this extension as enabling `n+k` patterns and as part of the older Haskell98 language setting.
+
+For the positive offsets below, matching `n+k` against an input `value` succeeds when `value >= k`, then binds `n = value - k`. Below the threshold the pattern fails and matching proceeds to the next equation. A single legacy equation without a fallback is partial. In new code, bind the input and put this threshold test in a guard, then subtract in the result. Keep the same threshold and fallback when claiming equivalence.
+
+This isolated reference uses the optional extension. It stays outside the runnable interpreter examples because the site interpreter does not support `n+k` patterns. Distinct names avoid confusion with Prelude `pred`:
+
+```haskell
+{-# LANGUAGE NPlusKPatterns #-}
+legacyPred :: Int -> Int
+legacyPred (n+1) = n
+legacyPred _ = 0
+
+legacyDropTwo :: Int -> Maybe Int
+legacyDropTwo (n+2) = Just n
+legacyDropTwo _ = Nothing
+
+legacyMultiple :: Int -> Int
+legacyMultiple (n+3) = 2 * n
+legacyMultiple _ = -1
+
+legacyAfterTen :: Int -> Maybe Int
+legacyAfterTen (n+10) = Just n
+legacyAfterTen _ = Nothing
+```
+
+
+For example, `legacyDropTwo 2` binds `n = 0` and returns `Just 0`, while `legacyDropTwo 1` falls through to `Nothing`. Enabling the extension does not enable general arithmetic patterns such as `2*n`. The recommended rewrites below need no extension.
+
+### Template
+
+```haskell
+dropOffset :: Int -> Maybe Int
+dropOffset value
+  | value >= 3 = Just (value - 3)
+  | otherwise = Nothing
+```
+
+The offset is `3` here. Replace it consistently in both the guard and the subtraction. Returning `Nothing` is a policy choice; preserve whatever fallback the original specification supplies.
+
+### Worked variation: offset one with a saturating fallback
+
+<HaskellTryIt>
+
+```haskell
+previous :: Int -> Int
+previous value
+  | value >= 1 = value - 1
+  | otherwise = 0
+main :: IO ()
+main = print (previous 5, previous 1, previous 0, previous (-2))
+```
+
+```text
+(4,0,0,0)
+```
+
+</HaskellTryIt>
+
+This matches `legacyPred`: on `5`, the old pattern binds `n = 4`; on `1`, it binds `0`; zero and negatives fail the threshold and use `0`. Unconditional `value - 1` would differ on those failing cases.
+
+### Worked variation: offset two with an explicit failure result
+
+<HaskellTryIt>
+
+```haskell
+dropTwo :: Int -> Maybe Int
+dropTwo value
+  | value >= 2 = Just (value - 2)
+  | otherwise = Nothing
+main :: IO ()
+main = print (dropTwo 6, dropTwo 2, dropTwo 1, dropTwo (-1))
+```
+
+```text
+(Just 4,Just 0,Nothing,Nothing)
+```
+
+</HaskellTryIt>
+
+For the successful calls, `n` would be `6 - 2 = 4` and `2 - 2 = 0`. Values below `2` must not enter the old successful equation, so the rewrite returns `Nothing`.
+
+### Worked variation: use the recovered variable in a larger expression
+
+<HaskellTryIt>
+
+```haskell
+multiple :: Int -> Int
+multiple value
+  | value >= 3 = 2 * (value - 3)
+  | otherwise = -1
+main :: IO ()
+main = print (multiple 7, multiple 3, multiple 2)
+```
+
+```text
+(8,0,-1)
+```
+
+</HaskellTryIt>
+
+The legacy body is `2*n`, so substitute the whole `value - 3` for `n`: `2*(7-3)=8`, then `2*(3-3)=0`. Below the threshold retain `-1`.
+
+### Worked variation: offset ten expressed with case and a guard
+
+<HaskellTryIt>
+
+```haskell
+afterTen :: Int -> Maybe Int
+afterTen value = case value of
+  whole | whole >= 10 -> Just (whole - 10)
+  _ -> Nothing
+main :: IO ()
+main = print (afterTen 13, afterTen 10, afterTen 9)
+```
+
+```text
+(Just 3,Just 0,Nothing)
+```
+
+</HaskellTryIt>
+
+The variable pattern binds `whole` without arithmetic. Its guard accepts `13` and `10`, giving recovered values `3` and `0`. When the guard fails on `9`, the wildcard alternative returns `Nothing`.
+
+### Exam question: translate ho7 without losing the boundary (7 marks)
+
+An older definition is `f (n+2) = 3*n; f _ = -1`, using `NPlusKPatterns`. Rewrite it without the extension and evaluate it on `5`, `2`, `1` and `-3`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Rewrite” requires equivalent matching and results, including the fallback. The input is integral and the offset is `2`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bind the whole input. Test `value >= 2`; in the successful branch substitute `value - 2` everywhere the old body used `n`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+f :: Int -> Int
+f value
+  | value >= 2 = 3 * (value - 2)
+  | otherwise = -1
+```
+
+
+</Step>
+
+<Step title="4. Check">
+
+The answers are `9`, `0`, `-1`, `-1`. At the exact threshold, the recovered `n` is zero, so the success branch must include equality.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+Without the legacy extension, this deliberately invalid source is rejected:
+
+```haskell
+-- Incorrect in ordinary Haskell: no NPlusKPatterns enabled
+oldPrevious :: Int -> Int
+oldPrevious (n+1) = n
+```
+
+```text
+Parse error in pattern
+```
+
+
+For new source, use a guard rather than enabling syntax just to make the parse error disappear. `value > k` wrongly loses the boundary case `value == k`. Rewriting the body `2*n` as `2*value-k` is another error: substitution gives `2*(value-k)`. A fallback added to a partial original is a deliberate extension of its behaviour, not strict equivalence outside the old successful domain. Do not claim that the one-line handout equation alone defines a result for zero or negative input.
+
+### Practice with answers
+
+Rewrite `g (n+4) = n*n; g _ = 0` without the extension. Check inputs `7`, `4`, and `3`. Would unconditional `(value-4)*(value-4)` be equivalent?
+
+<details>
+<summary>Answer</summary>
+
+```haskell
+g :: Int -> Int
+g value
+  | value >= 4 = (value - 4) * (value - 4)
+  | otherwise = 0
+```
+
+The checks are `9`, `0`, `0`. The unconditional formula gives `1` at `3` and therefore is not equivalent.
+
+</details>
+
+## 6. Classify parse, scope and type failures before repairing
+
+A parse failure means the source cannot be grouped as permitted Haskell syntax; a fixity conflict is one example. A scope failure means the source asks for a binding or constructor that is not available at that use. A type failure means the source is syntactically meaningful but the types do not fit. GHC may present more than one diagnostic; start with the earliest cause in a small isolated example.
+
+A successful parse does not prove that names are in scope. Names in scope do not prove the arguments have the right types. Well-typed code does not prove that it meets the specification. This order prevents repairs such as quoting a misspelt variable or adding parentheses around a wrong-type operand.
+
+### Template
+
+```haskell
+distance :: Int -> Int -> Int
+distance left right = left - right
+-- Check syntax, then available names, then input/result types,
+-- then compare the value with the required behaviour.
+```
+
+The example is valid. Use this sequence on a broken call before changing its formula.
+
+### Worked variation: repair a precedence parsing conflict
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+infixr 6 <~>
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+(<~>) :: Int -> Int -> Int
+x <~> y = x - y
+main :: IO ()
+main = print ((20 <-> 6) <~> 2, 20 <-> (6 <~> 2))
+```
+
+```text
+(12,16)
+```
+
+</HaskellTryIt>
+
+The broken unparenthesised chain has a fixity conflict before arithmetic can run. Explicit grouping repairs syntax. The two possible intentions produce `(20-6)-2=12` and `20-(6-2)=16`.
+
+### Worked variation: repair a scope failure without changing data into text
+
+<HaskellTryIt>
+
+```haskell
+total :: Int
+total = 18
+main :: IO ()
+main = print (total - 5)
+```
+
+```text
+13
+```
+
+</HaskellTryIt>
+
+An intended call using `totla` would ask for a missing binding. Correct the spelling to the declared `total`. Quoting `"totla"` would introduce a string and leave the arithmetic ill-typed.
+
+### Worked variation: repair the type at the operand
+
+<HaskellTryIt>
+
+```haskell
+infixl 6 <->
+(<->) :: Int -> Int -> Int
+x <-> y = x - y
+main :: IO ()
+main = print (10 <-> 3)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+The wrong call `10 <-> "3"` supplies a `String` as the second operand. The repaired literal `3` has the required numeric type, and `10 - 3 = 7`. Parentheses alone could not change a string into an integer.
+
+### Exam question: three independent broken fragments (8 marks)
+
+Classify these independent failures and repair each: `f = if True then 1`; `answer = missingScore + 1` with no such binding; and `answer = (10 :: Int) + True`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+“Classify” asks for the kind of failure, not just a plausible edit. Each fragment is considered separately.
+
+</Step>
+
+<Step title="2. Plan">
+
+The first lacks required syntax. The second has valid syntax but no available name. The third has an available Boolean where an integer is required.
+
+</Step>
+
+<Step title="3. Solution">
+
+The first is a parse failure: supply `else`, for example `f = if True then 1 else 0`. The second is a scope failure: declare `missingScore = 4` if that is the intended input, or correct the name to an existing binding. The third is a type failure: if the intention is to add a Boolean indicator, write `(10 :: Int) + (if True then 1 else 0)` rather than adding `True` directly.
+
+</Step>
+
+<Step title="4. Check">
+
+The example repairs give `1`, `5` and `11`. Check the false branch too: the indicator then contributes `0`, giving `10`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors
+
+These independent invalid fragments illustrate reliable key phrases:
+
+```haskell
+-- Incorrect: missing else
+f = if True then 1
+```
+
+```text
+parse error
+```
+
+```haskell
+-- Incorrect: missing binding
+answer = missingScore + 1
+```
+
+```text
+Variable not in scope
+```
+
+```haskell
+-- Incorrect: Bool is not Int
+answer = (10 :: Int) + True
+```
+
+```text
+Couldn't match expected type
+```
+
+
+A conflicting fixity chain gives `Precedence parsing error`; resolve the grouping first. A capitalised missing constructor gives `Not in scope: data constructor`, not an ordinary lower-case variable diagnostic. Correct the source according to its intended role. An output such as `16` when the specification requires `12` can be a grouping mistake in otherwise valid code; the compiler need not report any error.
+
+### Practice with answers
+
+Classify `map *2 [1,2]`, an isolated use of `lostValue`, and `not (3 :: Int)`. What would you change?
+
+<details>
+<summary>Answer</summary>
+
+`map *2 [1,2]` is valid infix syntax but is ill-typed: it parses as `map * (2 [1,2])`, treating `map` as a multiplicand and applying `2` as a function. Use `map (*2) [1,2]`; the section rule is in Currying and Sections. `lostValue` is a scope error: supply or correct its binding. `not (3 :: Int)` is a type error: `not` needs a `Bool`, such as `not (3 > 0)`. The correct classification depends on the actual parse, not how strange the source looks.
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Rename keywords consistently; quoting creates literals rather than bindings. Patterns bind distinct names, while equality belongs in guards or expressions. Arithmetic does not generally work backwards in patterns. Translate legacy `n+k` matching by binding the input, testing the threshold, and subtracting the offset in the result. Preserve the fallback and the exact boundary. Distinguish parse, scope and type failures before editing, then check that the repaired result meets the specification.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is a repeated variable not an equality pattern?">
+
+A pattern binds names once; it cannot bind the same name twice. Bind two distinct names and test equality, requiring Eq for a general element type.
+
+</CheckQuestion>
+
+<CheckQuestion question="Is an underscore-prefixed repeated name legal?">
+
+No. It is still a binding. Repeated bare wildcards are legal because they bind no names.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does the old n+2 pattern bind on input 5?">
+
+With the legacy extension enabled it succeeds and binds n to 3. The ordinary rewrite checks the input is at least 2, then subtracts 2.
+
+</CheckQuestion>
+
+<CheckQuestion question="Can a legacy n+k pattern be replaced with unconditional subtraction?">
+
+Only on the successful domain. To preserve a complete definition, retain its threshold test and fallback for smaller inputs.
+
+</CheckQuestion>
+
+<CheckQuestion question="What must be checked after source compiles?">
+
+Its behaviour against the intended specification, including boundary inputs. Successful compilation alone does not establish that the arithmetic or grouping is correct.
+
+</CheckQuestion>
+
+</CheckQuestions>
