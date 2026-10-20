@@ -1,0 +1,2898 @@
+---
+title: "Designing Folds and Zips"
+description: "Derive fold seeds, combining functions and aligned list traversals from specifications, then adapt them to the exact weighted-mark and Appendix C problems."
+---
+
+A trace tells you what a supplied function does; a design question asks you to invent the function. This lesson starts from the empty case and the recursive equation, then extracts the fold or zipper that fits the specification.
+
+<LearningObjectives items={[
+  'Derive a fold seed and step from empty and non-empty recursive equations',
+  'Design totals, counts and list-valued folds under no-map restrictions',
+  'Place Int-to-Double conversions correctly in weighted marking rules',
+  'Derive polymorphic two-list and three-list traversals with every stopping case',
+  'Adapt a design to dot products, triples and three weighted tests',
+  'Use boundary tests to distinguish a type-correct program from the requested program',
+]} />
+
+<Prerequisites items={[
+  'Reading [] and x:xs patterns and curried function types',
+  'Folds and Function Composition, Zip and zipWith, and Applying Higher-Order Functions by Hand',
+]} />
+
+Read [Folds and Function Composition](/docs/sem3/csi243/07-higher-order/notes/folds-and-composition), [Zip and zipWith](/docs/sem3/csi243/07-higher-order/notes/zip-and-zipwith), and [Applying Higher-Order Functions by Hand](/docs/sem3/csi243/07-higher-order/notes/applying-by-hand) first. Their definitions and full reduction method are prerequisites. Here the new work is choosing the function from a specification. The companion [Lab 04: Folds and Zips](/docs/sem3/csi243/07-higher-order/notes/lab-04-folds-and-zips) gives independently attemptable tasks.
+
+The sixteen design sections each have four runnable variations. For each, read the specification, derive the template, try the exam task, then check the counterexample and practice answer. Numerical Int examples use small values to avoid bounded-integer overflow.
+
+## 1. Derive a square total from recursive equations
+
+The Lab 4 restriction is to use `foldr` without `map`. Rather than building a list of squares first, square the current element inside the combining function. The seed is the answer for no elements, not the first element of the range.
+
+**Template**
+
+```text
+total [] = seed
+total (x:xs) = combine x (total xs)
+-- Therefore: total xs = foldr combine seed xs
+```
+
+Here `total xs` is the result for the tail; replace that whole recursive call by `acc`. For squares, `total [] = 0` and `total (x:xs) = x*x + total xs`, so `combine x acc = x*x + acc`. Generate `[1..n]` only after deriving the list operation. Our range policy is explicit: `n <= 0` denotes an empty range and returns zero. This is a range sum, not a claim about factorials or negative squares.
+
+### Worked variation: Positive range
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumsq; predict the result of the main call and justify the design.
+sumsq :: Int -> Int
+sumsq n = foldr (\x acc -> x*x + acc) 0 [1..n]
+
+main :: IO ()
+main = print (sumsq 4)
+```
+
+```text
+30
+```
+
+</HaskellTryIt>
+
+The range is `[1,2,3,4]`. Replace the tail by zero: `1 + (4 + (9 + (16 + 0))) = 30`.
+
+### Worked variation: Zero endpoint
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumsq; predict the result of the main call and justify the design.
+sumsq :: Int -> Int
+sumsq n = foldr (\x acc -> x*x + acc) 0 [1..n]
+
+main :: IO ()
+main = print (sumsq 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+`[1..0]` is empty, so the seed is the entire answer.
+
+### Worked variation: Negative endpoint under the stated policy
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumsq; predict the result of the main call and justify the design.
+sumsq :: Int -> Int
+sumsq n = foldr (\x acc -> x*x + acc) 0 [1..n]
+
+main :: IO ()
+main = print (sumsq (-3))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+`[1..(-3)]` is empty. The policy deliberately returns zero; it does not sum the squares of negative integers.
+
+### Worked variation: Singleton range
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumsq; predict the result of the main call and justify the design.
+sumsq :: Int -> Int
+sumsq n = foldr (\x acc -> x*x + acc) 0 [1..n]
+
+main :: IO ()
+main = print (sumsq 1)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+The only update is `1*1 + 0`. No special equation for one is needed.
+
+### Exam question 1: Derive a square total from recursive equations (6 marks)
+
+Write `sumsq :: Int -> Int`, the sum of the squares from 1 through n, using `foldr` and no `map`. State the result for non-positive n.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Read the empty case before the recursive case. A sum of no squares is zero. Replace the recursive square total in `x*x + total xs` by `acc`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+sumsq :: Int -> Int
+sumsq n = foldr (\x acc -> x*x + acc) 0 [1..n]
+```
+
+Here `total xs` is the result for the tail; replace that whole recursive call by `acc`. For squares, `total [] = 0` and `total (x:xs) = x*x + total xs`, so `combine x acc = x*x + acc`. Generate `[1..n]` only after deriving the list operation. Our range policy is explicit: `n <= 0` denotes an empty range and returns zero. This is a range sum, not a claim about factorials or negative squares.
+
+</Step>
+
+<Step title="4. Check">
+
+For n = 2 the definition gives `1 + (4 + 0) = 5`; n = 0 gives zero. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`foldr (+) 0 [1..n]` compiles but adds the numbers, not their squares. For n = 2 it gives 3 rather than 5. `foldr (\x -> x*x) 0 [1..n]` supplies a one-argument rule where a two-argument rule is needed; with the `Int` signature GHC reports `Couldn't match`. Add the accumulator parameter and combine with it.
+
+### Practice with answer
+
+Adapt the step to total `2*x*x` over `[1..3]`.
+
+<details>
+<summary>Answer</summary>
+
+Use `foldr (\x acc -> 2*x*x + acc) 0 [1..3]`; the terms are 2, 8 and 18, so the answer is 28.
+
+</details>
+
+## 2. Choose the multiplicative seed: productTo
+
+A product needs one as its empty result: inserting zero would destroy every non-empty answer. Appendix C.1 asks for the product of the inclusive range from one to n.
+
+**Template**
+
+```text
+productOf [] = 1
+productOf (x:xs) = x * productOf xs
+-- Replace the recursive result by acc: combine x acc = x * acc
+```
+
+Thus the operator is `(*)`, the seed is `1`, and the range is `[1..n]`. We define `productTo n` as an empty-range product for non-positive n, returning 1. If a specification calls it factorial, restrict its domain to non-negative integers or reject negative input separately; returning 1 does not make a negative factorial valid.
+
+### Worked variation: Several factors
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: productTo; predict the result of the main call and justify the design.
+productTo :: Integer -> Integer
+productTo n = foldr (*) 1 [1..n]
+
+main :: IO ()
+main = print (productTo 5)
+```
+
+```text
+120
+```
+
+</HaskellTryIt>
+
+The expansion is `1*(2*(3*(4*(5*1))))`. Each factor occurs once.
+
+### Worked variation: Empty range at zero
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: productTo; predict the result of the main call and justify the design.
+productTo :: Integer -> Integer
+productTo n = foldr (*) 1 [1..n]
+
+main :: IO ()
+main = print (productTo 0)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+There are no factors, so the seed 1 remains.
+
+### Worked variation: Negative range endpoint
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: productTo; predict the result of the main call and justify the design.
+productTo :: Integer -> Integer
+productTo n = foldr (*) 1 [1..n]
+
+main :: IO ()
+main = print (productTo (-2))
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+The ascending range is empty; this follows the stated range policy.
+
+### Worked variation: One factor
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: productTo; predict the result of the main call and justify the design.
+productTo :: Integer -> Integer
+productTo n = foldr (*) 1 [1..n]
+
+main :: IO ()
+main = print (productTo 1)
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+The step is `1*1`; seed and factor have different roles even though both have value one.
+
+### Exam question 2: Choose the multiplicative seed: productTo (6 marks)
+
+Derive `productTo` using `foldr`. Explain why a seed of 0 is wrong.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The command asks for a definition and a justification. Start with the empty product 1, then replace recursive multiplication by the operator `(*)`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+productTo :: Integer -> Integer
+productTo n = foldr (*) 1 [1..n]
+```
+
+Thus the operator is `(*)`, the seed is `1`, and the range is `[1..n]`. We define `productTo n` as an empty-range product for non-positive n, returning 1. If a specification calls it factorial, restrict its domain to non-negative integers or reject negative input separately; returning 1 does not make a negative factorial valid.
+
+</Step>
+
+<Step title="4. Check">
+
+For n = 3 the answer is 6. Replacing the seed by zero makes `1*(2*(3*0))` zero, exposing the defect. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`foldr (*) 0 [1..n]` is accepted by GHC but returns zero for every finite range. This is a semantic error, not a type error. Repair the seed to 1. `foldr * 1 [1..n]` does not pass an operator value: use `(*)`.
+
+### Practice with answer
+
+What seed and operator total a supplied list of factors, including an empty list?
+
+<details>
+<summary>Answer</summary>
+
+`foldr (*) 1 factors`. On `[]` it is 1; on `[2,0,7]` it is 0 because a data element, rather than the seed, is zero.
+
+</details>
+
+## 3. Change the result type: myLength
+
+Counting cells does not inspect their contents. An element may be a Boolean, a string or another list while the accumulated result is an `Int`. The fold's element type and result type need not be equal.
+
+**Template**
+
+```text
+size [] = 0
+size (x:xs) = 1 + size xs
+-- step ignores x and adds one to the tail count
+```
+
+Use `_` for the unused element and `acc` for the tail count. In `foldr :: (a -> b -> b) -> b -> [a] -> b`, choose `b = Int` while `a` remains arbitrary. Neither equality nor numeric operations on the elements are needed.
+
+### Worked variation: Boolean elements
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myLength; predict the result of the main call and justify the design.
+myLength :: [a] -> Int
+myLength = foldr (\_ acc -> 1 + acc) 0
+
+main :: IO ()
+main = print (myLength [True,False,True])
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+Three cons cells give `1+(1+(1+0))`, independent of the Boolean values.
+
+### Worked variation: String elements
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myLength; predict the result of the main call and justify the design.
+myLength :: [a] -> Int
+myLength = foldr (\_ acc -> 1 + acc) 0
+
+main :: IO ()
+main = print (myLength ["red","blue"])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+Count two outer cells, not the seven characters inside the strings.
+
+### Worked variation: Empty list
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myLength; predict the result of the main call and justify the design.
+myLength :: [a] -> Int
+myLength = foldr (\_ acc -> 1 + acc) 0
+
+main :: IO ()
+main = print (myLength ([] :: [Int]))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The signature of the input fixes its element type; the seed supplies the count.
+
+### Worked variation: Nested singleton
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myLength; predict the result of the main call and justify the design.
+myLength :: [a] -> Int
+myLength = foldr (\_ acc -> 1 + acc) 0
+
+main :: IO ()
+main = print (myLength [[1,2,3]])
+```
+
+```text
+1
+```
+
+</HaskellTryIt>
+
+The outer list has one element, itself a list. That inner length is irrelevant.
+
+### Exam question 3: Change the result type: myLength (6 marks)
+
+Write a polymorphic length function with `foldr`, without using `length`. Explain the type of its step.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The output counts cells, so choose `Int` as the accumulator type. The element is ignored; the step has type `a -> Int -> Int`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+myLength :: [a] -> Int
+myLength = foldr (\_ acc -> 1 + acc) 0
+```
+
+Use `_` for the unused element and `acc` for the tail count. In `foldr :: (a -> b -> b) -> b -> [a] -> b`, choose `b = Int` while `a` remains arbitrary. Neither equality nor numeric operations on the elements are needed.
+
+</Step>
+
+<Step title="4. Check">
+
+`myLength [False]` is `1 + 0 = 1`; the empty list gives zero. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`foldr (+) 0` adds numeric payloads rather than counting cells and cannot implement `[a] -> Int`. GHC reports `Couldn't match` under that signature. Use a step that ignores the payload.
+
+### Practice with answer
+
+Count the outer elements of `[[],[1],[2,3]]` without inspecting the inner lists.
+
+<details>
+<summary>Answer</summary>
+
+`myLength [[],[1],[2,3]]` is 3. The type is `[[Int]] -> Int` at this use, while the definition remains polymorphic.
+
+</details>
+
+## 4. Derive a conditional count
+
+A conditional count contributes one for a matching element and zero otherwise. The accumulator already counts matches in the tail; failing the predicate must preserve that count.
+
+**Template**
+
+```text
+count p [] = 0
+count p (x:xs) = if p x then 1 + count p xs else count p xs
+```
+
+Replace both occurrences of `count p xs` by the same `acc`. This gives `\x acc -> if p x then 1 + acc else acc`. Appendix C.3 specialises the predicate to `even`; thresholds, negative numbers and characters use the same design.
+
+### Worked variation: Mixed even and odd
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: conditional count; predict the result of the main call and justify the design.
+countBy :: (a -> Bool) -> [a] -> Int
+countBy p = foldr (\x acc -> if p x then 1 + acc else acc) 0
+
+countEvens :: [Int] -> Int
+countEvens = countBy even
+
+main :: IO ()
+main = print (countEvens [1,2,4,7])
+```
+
+```text
+2
+```
+
+</HaskellTryIt>
+
+Only 2 and 4 contribute one; 1 and 7 preserve the suffix count.
+
+### Worked variation: No matches
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: conditional count; predict the result of the main call and justify the design.
+countBy :: (a -> Bool) -> [a] -> Int
+countBy p = foldr (\x acc -> if p x then 1 + acc else acc) 0
+
+countEvens :: [Int] -> Int
+countEvens = countBy even
+
+main :: IO ()
+main = print (countEvens [1,3,5])
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+Every step returns the accumulator unchanged, so zero survives.
+
+### Worked variation: Empty input
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: conditional count; predict the result of the main call and justify the design.
+countBy :: (a -> Bool) -> [a] -> Int
+countBy p = foldr (\x acc -> if p x then 1 + acc else acc) 0
+
+countEvens :: [Int] -> Int
+countEvens = countBy even
+
+main :: IO ()
+main = print (countEvens [])
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+There are no tests; zero is the empty count.
+
+### Worked variation: Change the predicate and element type
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: conditional count; predict the result of the main call and justify the design.
+countBy :: (a -> Bool) -> [a] -> Int
+countBy p = foldr (\x acc -> if p x then 1 + acc else acc) 0
+
+countEvens :: [Int] -> Int
+countEvens = countBy even
+
+main :: IO ()
+main = print (countBy (== 'a') "banana")
+```
+
+```text
+3
+```
+
+</HaskellTryIt>
+
+The three occurrences of `a` contribute one each. The other letters contribute nothing.
+
+### Exam question 4: Derive a conditional count (6 marks)
+
+Using `foldr`, count marks at least 50. Retain a general helper for other predicates.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The word count requests an `Int`, not a list of passing marks. Start from zero and increment precisely when `m >= 50`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+countBy :: (a -> Bool) -> [a] -> Int
+countBy p = foldr (\x acc -> if p x then 1 + acc else acc) 0
+
+countEvens :: [Int] -> Int
+countEvens = countBy even
+```
+
+Replace both occurrences of `count p xs` by the same `acc`. This gives `\x acc -> if p x then 1 + acc else acc`. Appendix C.3 specialises the predicate to `even`; thresholds, negative numbers and characters use the same design.
+
+</Step>
+
+<Step title="4. Check">
+
+`countBy (>=50) [49,50,80]` is 2, checking the inclusive boundary. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`if p x then 1 + acc else 0` compiles but loses matches already counted in the tail. On `[1,2]` with `even`, the first failing element erases the count. Return `acc` in the false branch. A numeric predicate such as `(+1)` cannot stand in for a Boolean test; with an `Int` element GHC reports `Couldn't match`.
+
+### Practice with answer
+
+Count strictly negative numbers in `[-2,0,-1,4]`.
+
+<details>
+<summary>Answer</summary>
+
+`countBy (<0) [-2,0,-1,4]` is 2. Zero is excluded by the strict comparison.
+
+</details>
+
+## 5. Adapt the contribution: cube and weighted totals
+
+Changing a square total into a cube total changes only what each element contributes. The additive seed and tail-result role stay the same. This is the Appendix C.4 adaptation.
+
+**Template**
+
+```text
+totalContribution contribution = foldr (\x acc -> contribution x + acc) 0
+```
+
+The placeholder `contribution` computes one term; `acc` totals all later terms. A cube uses `x*x*x`; a weighted square uses `weight*x*x`. A range-based cube total uses `[1..n]`, with the same non-positive empty-range policy as `sumsq`.
+
+### Worked variation: Positive cube range
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumCubes; predict the result of the main call and justify the design.
+sumCubes :: Int -> Int
+sumCubes n = foldr (\x acc -> x*x*x + acc) 0 [1..n]
+
+cubeTotal :: [Int] -> Int
+cubeTotal = foldr (\x acc -> x*x*x + acc) 0
+
+main :: IO ()
+main = print (sumCubes 3)
+```
+
+```text
+36
+```
+
+</HaskellTryIt>
+
+The terms are 1, 8 and 27; nesting gives `1+(8+(27+0))`.
+
+### Worked variation: Zero range
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumCubes; predict the result of the main call and justify the design.
+sumCubes :: Int -> Int
+sumCubes n = foldr (\x acc -> x*x*x + acc) 0 [1..n]
+
+cubeTotal :: [Int] -> Int
+cubeTotal = foldr (\x acc -> x*x*x + acc) 0
+
+main :: IO ()
+main = print (sumCubes 0)
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+No cubes are generated, so the seed is returned.
+
+### Worked variation: Signed list rather than a range
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumCubes; predict the result of the main call and justify the design.
+sumCubes :: Int -> Int
+sumCubes n = foldr (\x acc -> x*x*x + acc) 0 [1..n]
+
+cubeTotal :: [Int] -> Int
+cubeTotal = foldr (\x acc -> x*x*x + acc) 0
+
+main :: IO ()
+main = print (cubeTotal [-2,1,3])
+```
+
+```text
+20
+```
+
+</HaskellTryIt>
+
+The contributions are -8, 1 and 27. Cubing preserves the sign of each input.
+
+### Worked variation: Negative range endpoint
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: sumCubes; predict the result of the main call and justify the design.
+sumCubes :: Int -> Int
+sumCubes n = foldr (\x acc -> x*x*x + acc) 0 [1..n]
+
+cubeTotal :: [Int] -> Int
+cubeTotal = foldr (\x acc -> x*x*x + acc) 0
+
+main :: IO ()
+main = print (sumCubes (-4))
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The range is empty. This differs from explicitly supplying a list containing negative values.
+
+### Exam question 5: Adapt the contribution: cube and weighted totals (6 marks)
+
+Adapt `sumsq` to `sumCubes` without `map`. Also explain a version over an arbitrary list.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Keep addition and zero; replace the element contribution `x*x` by `x*x*x`. Distinguish an endpoint from a supplied list.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+sumCubes :: Int -> Int
+sumCubes n = foldr (\x acc -> x*x*x + acc) 0 [1..n]
+
+cubeTotal :: [Int] -> Int
+cubeTotal = foldr (\x acc -> x*x*x + acc) 0
+```
+
+The placeholder `contribution` computes one term; `acc` totals all later terms. A cube uses `x*x*x`; a weighted square uses `weight*x*x`. A range-based cube total uses `[1..n]`, with the same non-positive empty-range policy as `sumsq`.
+
+</Step>
+
+<Step title="4. Check">
+
+`sumCubes 2` gives `1+8=9`; `cubeTotal [-2]` gives -8. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`(x + acc)^3` cubes the accumulated answer as well as the current element, changing the recurrence. GHC accepts this numeric expression, so check the specification on `[1,2]`: the intended answer is 9. Repair it to `x*x*x + acc`.
+
+### Practice with answer
+
+Write a fold adding twice each cube of `[1,2]`.
+
+<details>
+<summary>Answer</summary>
+
+`foldr (\x acc -> 2*x*x*x + acc) 0 [1,2]` gives 18. Do not double the accumulator at every step.
+
+</details>
+
+## 6. Derive a list-valued fold: mapping
+
+A fold can return a list. Mapping transforms the head and puts it before the already-transformed tail. This derives the definition rather than memorising a one-line rewrite from Folds and Function Composition.
+
+**Template**
+
+```text
+mapped f [] = []
+mapped f (x:xs) = f x : mapped f xs
+```
+
+The empty output is `[]`. The step is `\x acc -> f x : acc`; `acc` already has type `[b]`, so the step has type `a -> [b] -> [b]`. Use `(:)` to add one output element and preserve input order.
+
+### Worked variation: Numeric transformation
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: map as a fold; predict the result of the main call and justify the design.
+mapFold :: (a -> b) -> [a] -> [b]
+mapFold f = foldr (\x acc -> f x : acc) []
+
+main :: IO ()
+main = print (mapFold (\x -> x*x) [2,-3])
+```
+
+```text
+[4,9]
+```
+
+</HaskellTryIt>
+
+Square 2 and -3, then cons 4 before 9. The order is preserved.
+
+### Worked variation: Change the result type
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: map as a fold; predict the result of the main call and justify the design.
+mapFold :: (a -> b) -> [a] -> [b]
+mapFold f = foldr (\x acc -> f x : acc) []
+
+main :: IO ()
+main = print (mapFold even [1,2,3])
+```
+
+```text
+[False,True,False]
+```
+
+</HaskellTryIt>
+
+The element type is numeric and the output element type is Boolean.
+
+### Worked variation: Empty result
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: map as a fold; predict the result of the main call and justify the design.
+mapFold :: (a -> b) -> [a] -> [b]
+mapFold f = foldr (\x acc -> f x : acc) []
+
+main :: IO ()
+main = print (mapFold (+1) ([] :: [Int]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No function applications occur; the seed is the empty result list.
+
+### Worked variation: Nested elements
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: map as a fold; predict the result of the main call and justify the design.
+mapFold :: (a -> b) -> [a] -> [b]
+mapFold f = foldr (\x acc -> f x : acc) []
+
+main :: IO ()
+main = print (mapFold length ["a","","cat"])
+```
+
+```text
+[1,0,3]
+```
+
+</HaskellTryIt>
+
+Each whole string is one input element. Its length becomes one output element.
+
+### Exam question 6: Derive a list-valued fold: mapping (6 marks)
+
+Implement polymorphic `map` with `foldr`, deriving its step from recursive equations.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The command is implement, so include the type and definition. The recursive call already supplies a transformed tail; prepend only `f x`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+mapFold :: (a -> b) -> [a] -> [b]
+mapFold f = foldr (\x acc -> f x : acc) []
+```
+
+The empty output is `[]`. The step is `\x acc -> f x : acc`; `acc` already has type `[b]`, so the step has type `a -> [b] -> [b]`. Use `(:)` to add one output element and preserve input order.
+
+</Step>
+
+<Step title="4. Check">
+
+For `f = not` and `[True]`, the step constructs `False : []`. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`f x ++ acc` treats the transformed element as a list, narrowing the general type and flattening list-valued results. Under `(a -> b) -> [a] -> [b]`, GHC reports `Couldn't match`. Use `f x : acc`. Prepending with a left fold reverses order unless repaired.
+
+### Practice with answer
+
+Map `(+1)` over `[3,1]` with a fold, preserving order.
+
+<details>
+<summary>Answer</summary>
+
+`foldr (\x acc -> (x+1) : acc) [] [3,1]` is `[4,2]`.
+
+</details>
+
+## 7. Derive selection with a fold
+
+Lab 5 Q5 asks for `filter` using `foldr`. Selection either keeps the original head or drops it; both branches reuse the selected tail. The test does not transform the element.
+
+**Template**
+
+```text
+selected p [] = []
+selected p (x:xs) = if p x then x : selected p xs else selected p xs
+```
+
+The seed is `[]`, not zero. Replace `selected p xs` by `acc` in both branches to obtain the step. Because the retained value is `x`, input and output element types agree.
+
+### Worked variation: Some retained
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: filter as a fold; predict the result of the main call and justify the design.
+filterFold :: (a -> Bool) -> [a] -> [a]
+filterFold p = foldr (\x acc -> if p x then x : acc else acc) []
+
+main :: IO ()
+main = print (filterFold even [1,2,4,5])
+```
+
+```text
+[2,4]
+```
+
+</HaskellTryIt>
+
+The false branches for 1 and 5 retain their tail result; true branches prepend 2 and 4.
+
+### Worked variation: All retained with duplicates
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: filter as a fold; predict the result of the main call and justify the design.
+filterFold :: (a -> Bool) -> [a] -> [a]
+filterFold p = foldr (\x acc -> if p x then x : acc else acc) []
+
+main :: IO ()
+main = print (filterFold (>0) [2,2,1])
+```
+
+```text
+[2,2,1]
+```
+
+</HaskellTryIt>
+
+Passing does not remove duplicates or sort the list.
+
+### Worked variation: None retained
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: filter as a fold; predict the result of the main call and justify the design.
+filterFold :: (a -> Bool) -> [a] -> [a]
+filterFold p = foldr (\x acc -> if p x then x : acc else acc) []
+
+main :: IO ()
+main = print (filterFold (<0) [0,1,3])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+Each false branch returns `acc`; the final result remains the empty seed.
+
+### Worked variation: Empty input of another type
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: filter as a fold; predict the result of the main call and justify the design.
+filterFold :: (a -> Bool) -> [a] -> [a]
+filterFold p = foldr (\x acc -> if p x then x : acc else acc) []
+
+main :: IO ()
+main = print (filterFold not ([] :: [Bool]))
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No predicate call is needed on an empty list. The polymorphic definition works for Booleans too.
+
+### Exam question 7: Derive selection with a fold (6 marks)
+
+Lab 5 Q5: implement `filter` using `foldr`. Do not call `filter` inside the answer.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The restriction fixes the recursion scheme. The empty selected tail is `[]`; a true test adds `x`, while a false test adds nothing.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+filterFold :: (a -> Bool) -> [a] -> [a]
+filterFold p = foldr (\x acc -> if p x then x : acc else acc) []
+```
+
+The seed is `[]`, not zero. Replace `selected p xs` by `acc` in both branches to obtain the step. Because the retained value is `x`, input and output element types agree.
+
+</Step>
+
+<Step title="4. Check">
+
+For predicate `odd` on `[2,3,4]`, only `3 : []` survives, so the result is `[3]`. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`if p x then x : acc else []` discards later matches. GHC accepts it, but on `[1,2]` with `even` it returns `[]`. Repair the false branch to `acc`. Returning `p x : acc` maps tests instead of filtering; the general signature then gives `Couldn't match`.
+
+### Practice with answer
+
+Keep strings whose length is greater than one from `["a","ab","","cat"]`.
+
+<details>
+<summary>Answer</summary>
+
+`filterFold (\s -> length s > 1) ["a","ab","","cat"]` is `["ab","cat"]`.
+
+</details>
+
+## 8. Design ff and place the conversion
+
+The final mark gives the second test twice the weight of the first. The inputs are `Int`, but the result must retain a fraction. Conversion changes an integral value into a fractional numeric type before `/` is used.
+
+**Template**
+
+```text
+ff :: Int -> Int -> Double
+ff t1 t2 = fromIntegral (t1 + 2*t2) / 3
+```
+
+Weights 1 and 2 sum to 3, so divide the weighted numerator by 3, not by 2. The result signature fixes `fromIntegral` and `/` to `Double`. An alternative is `(fromIntegral t1 + 2 * fromIntegral t2) / 3`. For bounded marks both agree; converting each input before arithmetic also avoids overflow of the intermediate `Int` numerator for extreme inputs. `toInteger` alone does not supply the fractional type required by `/`.
+
+### Worked variation: Unequal test marks
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: ff weighted mean; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff t1 t2 = fromIntegral (t1 + 2*t2) / 3
+
+main :: IO ()
+main = print (ff 60 90)
+```
+
+```text
+80.0
+```
+
+</HaskellTryIt>
+
+The numerator is `60+180=240`; dividing by 3 gives the Double 80.0.
+
+### Worked variation: Fraction retained exactly in this case
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: ff weighted mean; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff t1 t2 = fromIntegral (t1 + 2*t2) / 3
+
+main :: IO ()
+main = print (ff 1 1)
+```
+
+```text
+1.0
+```
+
+</HaskellTryIt>
+
+The numerator is 3. A Double prints a decimal point even when its value is integral.
+
+### Worked variation: A non-integral final mark
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: ff weighted mean; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff t1 t2 = fromIntegral (t1 + 2*t2) / 3
+
+main :: IO ()
+main = print (ff 0 1)
+```
+
+```text
+0.6666666666666666
+```
+
+</HaskellTryIt>
+
+The numerator is 2. This is GHC's displayed Double approximation to two thirds.
+
+### Worked variation: Zero marks
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: ff weighted mean; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff t1 t2 = fromIntegral (t1 + 2*t2) / 3
+
+main :: IO ()
+main = print (ff 0 0)
+```
+
+```text
+0.0
+```
+
+</HaskellTryIt>
+
+The fixed denominator remains 3; this is not division by zero.
+
+### Exam question 8: Design ff and place the conversion (6 marks)
+
+Lab 4 Q2a: write `ff :: Int -> Int -> Double` for `(t1 + 2*t2)/3`, explaining the conversion.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The input types prohibit fractional division directly on `t1` and `t2`. Form the integral numerator and use `fromIntegral` before dividing.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+ff :: Int -> Int -> Double
+ff t1 t2 = fromIntegral (t1 + 2*t2) / 3
+```
+
+Weights 1 and 2 sum to 3, so divide the weighted numerator by 3, not by 2. The result signature fixes `fromIntegral` and `/` to `Double`. An alternative is `(fromIntegral t1 + 2 * fromIntegral t2) / 3`. For bounded marks both agree; converting each input before arithmetic also avoids overflow of the intermediate `Int` numerator for extreme inputs. `toInteger` alone does not supply the fractional type required by `/`.
+
+</Step>
+
+<Step title="4. Check">
+
+`ff 90 60` gives 70.0; swapping the marks changes their roles, confirming the unequal weights. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`ff t1 t2 = (t1 + 2*t2)/3` is incompatible with the stated signature: GHC reports `Couldn't match`. `fromIntegral ((t1+2*t2) `div` 3)` compiles but discards the fractional part first. Convert before `/`. Valid school marks are 0 through 100; the arithmetic helper itself does not validate that domain.
+
+### Practice with answer
+
+Give the final mark when t1 = 30 and t2 = 60, then write a conversion-first version.
+
+<details>
+<summary>Answer</summary>
+
+The numerator is 150, so the mark is 50.0. The alternative is `ff t1 t2 = (fromIntegral t1 + 2 * fromIntegral t2) / 3`.
+
+</details>
+
+## 9. Lift ff over two aligned lists
+
+Q2b applies one two-argument marking rule to corresponding positions. The calculation is already solved by `ff`; list traversal is a separate design decision.
+
+**Template**
+
+```text
+fmark :: [Int] -> [Int] -> [Double]
+fmark firstTests secondTests = zipWith ff firstTests secondTests
+```
+
+One output needs both test marks. Stop when either list ends: a missing mark is not the number zero. The equivalent point-free definition is `fmark = zipWith ff`. If every student must have both marks, validate lengths before using this helper instead of silently treating truncation as validation.
+
+### Worked variation: Equal lists
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fmark; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff a b = fromIntegral (a + 2*b) / 3
+
+fmark :: [Int] -> [Int] -> [Double]
+fmark = zipWith ff
+
+main :: IO ()
+main = print (fmark [60,30] [90,60])
+```
+
+```text
+[80.0,50.0]
+```
+
+</HaskellTryIt>
+
+Position one uses 60 and 90; position two uses 30 and 60. There is no cross product.
+
+### Worked variation: First list shortest
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fmark; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff a b = fromIntegral (a + 2*b) / 3
+
+fmark :: [Int] -> [Int] -> [Double]
+fmark = zipWith ff
+
+main :: IO ()
+main = print (fmark [60] [90,100])
+```
+
+```text
+[80.0]
+```
+
+</HaskellTryIt>
+
+Only the first position has both marks. The second-list surplus 100 is unused.
+
+### Worked variation: Second list shortest
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fmark; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff a b = fromIntegral (a + 2*b) / 3
+
+fmark :: [Int] -> [Int] -> [Double]
+fmark = zipWith ff
+
+main :: IO ()
+main = print (fmark [60,30] [90])
+```
+
+```text
+[80.0]
+```
+
+</HaskellTryIt>
+
+The unused first-list mark 30 has no partner.
+
+### Worked variation: An empty list
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fmark; predict the result of the main call and justify the design.
+ff :: Int -> Int -> Double
+ff a b = fromIntegral (a + 2*b) / 3
+
+fmark :: [Int] -> [Int] -> [Double]
+fmark = zipWith ff
+
+main :: IO ()
+main = print (fmark [] [90])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No complete pair exists, so `ff` is never applied.
+
+### Exam question 9: Lift ff over two aligned lists (6 marks)
+
+Lab 4 Q2b: use `zipWith` and `ff` to compute final marks from two lists. Explain unequal lengths.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The scalar function consumes two Ints; `zipWith` supplies one from each list. The output is `[Double]`, and its finite length is the minimum input length.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+ff :: Int -> Int -> Double
+ff a b = fromIntegral (a + 2*b) / 3
+
+fmark :: [Int] -> [Int] -> [Double]
+fmark = zipWith ff
+```
+
+One output needs both test marks. Stop when either list ends: a missing mark is not the number zero. The equivalent point-free definition is `fmark = zipWith ff`. If every student must have both marks, validate lengths before using this helper instead of silently treating truncation as validation.
+
+</Step>
+
+<Step title="4. Check">
+
+`fmark [30] [60]` is `[50.0]`; either list empty yields `[]`. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`map ff xs` creates a list of functions waiting for their second marks; it does not align two lists. Printing functions has no ordinary `Show` instance. `zipWith (ff a b) xs ys` supplies a Double where the combinator expects a function and GHC reports `Couldn't match`. Pass `ff` itself.
+
+### Practice with answer
+
+What is lost by `fmark [10,20,30] [40]`?
+
+<details>
+<summary>Answer</summary>
+
+Only one result is produced, 30.0. The first-list values 20 and 30 are unused; they do not receive assumed zero marks.
+
+</details>
+
+## 10. Replace the helper by a genuinely anonymous formula
+
+Q2c changes the way the rule is written, not the marking policy. A lambda binds both scalar marks and contains the arithmetic directly. Writing a lambda that only calls `ff` hides the name but does not replace its formula.
+
+**Template**
+
+```text
+zipWith (\first second -> formulaUsingBoth) firstList secondList
+```
+
+`first` and `second` are individual `Int` values, not lists. Substitute the complete `ff` body into the lambda; keep the conversion and denominator. A local named helper, an explicit lambda, and a partially applied `zipWith` are alternative spellings, but the requested anonymous formula must show the arithmetic.
+
+### Worked variation: Anonymous rule on two positions
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: anonymous weighted formula; predict the result of the main call and justify the design.
+fmarkLambda :: [Int] -> [Int] -> [Double]
+fmarkLambda = zipWith (\a b -> fromIntegral (a + 2*b) / 3)
+
+main :: IO ()
+main = print (fmarkLambda [0,90] [30,60])
+```
+
+```text
+[20.0,70.0]
+```
+
+</HaskellTryIt>
+
+The first numerator is 60 and the second is 210. Divide each separately by 3.
+
+### Worked variation: Singleton fractional mark
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: anonymous weighted formula; predict the result of the main call and justify the design.
+fmarkLambda :: [Int] -> [Int] -> [Double]
+fmarkLambda = zipWith (\a b -> fromIntegral (a + 2*b) / 3)
+
+main :: IO ()
+main = print (fmarkLambda [0] [1])
+```
+
+```text
+[0.6666666666666666]
+```
+
+</HaskellTryIt>
+
+The lambda is given both arguments before conversion and division.
+
+### Worked variation: Second list empty
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: anonymous weighted formula; predict the result of the main call and justify the design.
+fmarkLambda :: [Int] -> [Int] -> [Double]
+fmarkLambda = zipWith (\a b -> fromIntegral (a + 2*b) / 3)
+
+main :: IO ()
+main = print (fmarkLambda [100] [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No anonymous call is made without both marks.
+
+### Worked variation: Both lists empty
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: anonymous weighted formula; predict the result of the main call and justify the design.
+fmarkLambda :: [Int] -> [Int] -> [Double]
+fmarkLambda = zipWith (\a b -> fromIntegral (a + 2*b) / 3)
+
+main :: IO ()
+main = print (fmarkLambda [] [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The output is an empty list of Double, not `[0.0]`.
+
+### Exam question 10: Replace the helper by a genuinely anonymous formula (6 marks)
+
+Lab 4 Q2c: rewrite `fmark` with an anonymous function containing the weighted formula, without using `ff`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command is "rewrite": preserve the result while changing the required form. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The command rewrite preserves behaviour. Replace `ff` in `zipWith ff` by `\a b -> fromIntegral (a+2*b)/3`, binding both parameters.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+fmarkLambda :: [Int] -> [Int] -> [Double]
+fmarkLambda = zipWith (\a b -> fromIntegral (a + 2*b) / 3)
+```
+
+`first` and `second` are individual `Int` values, not lists. Substitute the complete `ff` body into the lambda; keep the conversion and denominator. A local named helper, an explicit lambda, and a partially applied `zipWith` are alternative spellings, but the requested anonymous formula must show the arithmetic.
+
+</Step>
+
+<Step title="4. Check">
+
+`fmarkLambda [60] [90]` is `[80.0]`, matching the named-helper version. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`\a -> fromIntegral (a+2)/3` has only one parameter and cannot combine two marks under the requested type; GHC reports `Couldn't match`. `\a b -> ff a b` is well typed but still depends on `ff`, so it fails the stated restriction. These are different kinds of mistake.
+
+### Practice with answer
+
+Write an anonymous equal-weight mean for two lists of Ints.
+
+<details>
+<summary>Answer</summary>
+
+Use `zipWith (\a b -> (fromIntegral a + fromIntegral b)/2) xs ys` with a `[Double]` result annotation. The denominator changes because the weights are now 1:1.
+
+</details>
+
+## 11. Derive zipWithx and every stopping case
+
+A three-list zipper emits one answer only when all three heads exist. Derive its type from that sentence: one element from each list may have a different type, and the rule returns a fourth type.
+
+**Template**
+
+```text
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+```
+
+The first argument is one curried function taking three elements. The remaining three arguments are lists. The base equations cover all seven combinations in which at least one list is empty; their overlaps agree. The recursive call keeps `f` and advances all three tails, decreasing the number of available complete triples. The finite result length is the minimum of the three lengths. Calling Prelude `zipWith3` computes the same defined finite results, but does not implement the recursion requested by Q3a.
+
+### Worked variation: First list ends first
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zipWithx; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (zipWithx (\a b c -> a+b+c) [1] [10,20] [100,200])
+```
+
+```text
+[111]
+```
+
+</HaskellTryIt>
+
+Emit `1+10+100`, then the first tail is empty, so equation one returns `[]`.
+
+### Worked variation: Second list ends first
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zipWithx; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (zipWithx (\a b c -> a+b+c) [1,2] [10] [100,200])
+```
+
+```text
+[111]
+```
+
+</HaskellTryIt>
+
+After one output, the second tail is empty. Equation two stops with the other tails still non-empty.
+
+### Worked variation: Third list ends first
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zipWithx; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (zipWithx (\a b c -> a+b+c) [1,2] [10,20] [100])
+```
+
+```text
+[111]
+```
+
+</HaskellTryIt>
+
+Equation three stops the recursive call. No second triple is fabricated.
+
+### Worked variation: Different input types
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zipWithx; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (zipWithx (\n s b -> (n,s,b)) [1,2] ["red","blue"] [True,False])
+```
+
+```text
+[(1,"red",True),(2,"blue",False)]
+```
+
+</HaskellTryIt>
+
+Here the element types are numeric, String and Bool, and the result element is a triple. No Num constraint belongs on the general zipper.
+
+### Exam question 11: Derive zipWithx and every stopping case (6 marks)
+
+Lab 4 Q3a: implement `zipWithx` recursively for three lists. Give its most general type and every empty-list case.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The command implement rules out merely calling `zipWith3`. Give the rule three element arguments and test each list for exhaustion before the all-cons case.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+```
+
+The first argument is one curried function taking three elements. The remaining three arguments are lists. The base equations cover all seven combinations in which at least one list is empty; their overlaps agree. The recursive call keeps `f` and advances all three tails, decreasing the number of available complete triples. The finite result length is the minimum of the three lengths. Calling Prelude `zipWith3` computes the same defined finite results, but does not implement the recursion requested by Q3a.
+
+</Step>
+
+<Step title="4. Check">
+
+Lengths 2, 1 and 3 give one output. When all lists are empty the first equation already applies. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+A signature `(a -> b -> c)` describes a two-argument rule, not a three-argument rule returning `d`; applying it three times leads to `Couldn't match`. Keeping only `zipWithx _ [] [] [] = []` leaves mixed empty/non-empty cases uncovered. GHC can warn `non-exhaustive` with pattern warnings enabled; forcing an uncovered call raises `Non-exhaustive patterns`.
+
+### Practice with answer
+
+Which equation handles `zipWithx f [1] [] []`, and which handles three empty lists?
+
+<details>
+<summary>Answer</summary>
+
+The second equation handles `[1],[],[]` because the first list is non-empty. With three empty lists the first equation wins. Both return `[]`; overlapping base cases are intentional.
+
+</details>
+
+## 12. Specialise the rule: fp and three-way addition
+
+Q3b defines the scalar rule separately from the traversal. `fp` adds three integers; its signature has three input arrows and one result. It can be passed to the general zipper without making that zipper numeric.
+
+**Template**
+
+```text
+fp :: Int -> Int -> Int -> Int
+fp x y z = x + y + z
+-- Then: zipWithx fp firstList secondList thirdList
+```
+
+Choose the scalar result first, then supply the lists. An equivalent rule is `\x y z -> x+y+z`. `(+)` alone accepts only two numbers, so it cannot replace `fp` in this position. `zipWith3 fp` is a useful reference result, not the recursive implementation.
+
+### Worked variation: Equal positive lists
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fp with zipWithx; predict the result of the main call and justify the design.
+fp :: Int -> Int -> Int -> Int
+fp x y z = x+y+z
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (zipWithx fp [1,2] [10,20] [100,200])
+```
+
+```text
+[111,222]
+```
+
+</HaskellTryIt>
+
+At the second position `fp 2 20 200` gives 222, independent of the first position.
+
+### Worked variation: Signed marks in an arithmetic test
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fp with zipWithx; predict the result of the main call and justify the design.
+fp :: Int -> Int -> Int -> Int
+fp x y z = x+y+z
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (zipWithx fp [-2] [3] [-4])
+```
+
+```text
+[-3]
+```
+
+</HaskellTryIt>
+
+This tests addition order with negative data: `-2+3-4=-3`. It is arithmetic, not a valid school-mark example.
+
+### Worked variation: A zero input
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fp with zipWithx; predict the result of the main call and justify the design.
+fp :: Int -> Int -> Int -> Int
+fp x y z = x+y+z
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (fp 0 7 0)
+```
+
+```text
+7
+```
+
+</HaskellTryIt>
+
+Zero is an ordinary scalar value, not an empty list or a missing argument.
+
+### Worked variation: Empty third input
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: fp with zipWithx; predict the result of the main call and justify the design.
+fp :: Int -> Int -> Int -> Int
+fp x y z = x+y+z
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+main :: IO ()
+main = print (zipWithx fp [1] [2] [])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The third stopping equation fires before `fp` can be called.
+
+### Exam question 12: Specialise the rule: fp and three-way addition (6 marks)
+
+Lab 4 Q3b: define `fp` to add three Ints and use your `zipWithx` with it. Explain why `(+)` is insufficient.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the scalar signature `Int -> Int -> Int -> Int`, then apply the general traversal to it. Addition must consume all three heads.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+fp :: Int -> Int -> Int -> Int
+fp x y z = x+y+z
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+```
+
+Choose the scalar result first, then supply the lists. An equivalent rule is `\x y z -> x+y+z`. `(+)` alone accepts only two numbers, so it cannot replace `fp` in this position. `zipWith3 fp` is a useful reference result, not the recursive implementation.
+
+</Step>
+
+<Step title="4. Check">
+
+`zipWithx fp [1] [2] [3]` is `[6]`; with an empty third list it is `[]`. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`zipWithx (+) [1] [2] [3]` asks a two-argument numeric result to be a function of a third argument. Under Int lists GHC reports `Couldn't match`. Use `fp` or a three-parameter lambda. `fp (x,y,z)` instead defines a tuple-consuming function and has the wrong calling shape for this zipper.
+
+### Practice with answer
+
+Define a three-input rule that subtracts the second and third from the first.
+
+<details>
+<summary>Answer</summary>
+
+`difference3 x y z = x-y-z`. Passing it to `zipWithx` gives `[-4]` on `[1] [2] [3]`. The rule, not the traversal, controls the arithmetic.
+
+</details>
+
+## 13. Derive a dot product in two stages
+
+Appendix C.5 requires pairwise multiplication followed by a fold total. These are different operations: `zipWith (*)` builds one product per matched position; `foldr (+) 0` combines those products into one number.
+
+**Template**
+
+```text
+dot xs ys = foldr (+) 0 (zipWith (*) xs ys)
+```
+
+The products obey `products (x:xs) (y:ys) = x*y : products xs ys`; their total obeys `total [] = 0` and `total (p:ps) = p + total ps`. The helper below deliberately truncates to the shortest list. A mathematical vector dot product normally requires equal dimensions; a caller enforcing that contract must reject unequal lengths separately.
+
+### Worked variation: Two matched positions
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: dot product; predict the result of the main call and justify the design.
+dot :: [Int] -> [Int] -> Int
+dot xs ys = foldr (+) 0 (zipWith (*) xs ys)
+
+main :: IO ()
+main = print (dot [2,3] [4,5])
+```
+
+```text
+23
+```
+
+</HaskellTryIt>
+
+The products are 8 and 15, and their fold total is 23.
+
+### Worked variation: Signed products
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: dot product; predict the result of the main call and justify the design.
+dot :: [Int] -> [Int] -> Int
+dot xs ys = foldr (+) 0 (zipWith (*) xs ys)
+
+main :: IO ()
+main = print (dot [-2,3] [4,-5])
+```
+
+```text
+-23
+```
+
+</HaskellTryIt>
+
+The products are -8 and -15. Sum them; do not take absolute values.
+
+### Worked variation: Empty list
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: dot product; predict the result of the main call and justify the design.
+dot :: [Int] -> [Int] -> Int
+dot xs ys = foldr (+) 0 (zipWith (*) xs ys)
+
+main :: IO ()
+main = print (dot [] [4,5])
+```
+
+```text
+0
+```
+
+</HaskellTryIt>
+
+The product list is empty and the additive seed is zero.
+
+### Worked variation: Unequal lists under the truncating policy
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: dot product; predict the result of the main call and justify the design.
+dot :: [Int] -> [Int] -> Int
+dot xs ys = foldr (+) 0 (zipWith (*) xs ys)
+
+main :: IO ()
+main = print (dot [2,3,100] [4,5])
+```
+
+```text
+23
+```
+
+</HaskellTryIt>
+
+Only 2*4 and 3*5 exist. The unmatched 100 is ignored by this helper.
+
+### Exam question 13: Derive a dot product in two stages (6 marks)
+
+Appendix C.5: implement a dot product using `zipWith` and `foldr`. State your length policy.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The command implement specifies two combinators. Pairwise multiplication gives a list; addition with seed zero reduces it. State truncation explicitly.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+dot :: [Int] -> [Int] -> Int
+dot xs ys = foldr (+) 0 (zipWith (*) xs ys)
+```
+
+The products obey `products (x:xs) (y:ys) = x*y : products xs ys`; their total obeys `total [] = 0` and `total (p:ps) = p + total ps`. The helper below deliberately truncates to the shortest list. A mathematical vector dot product normally requires equal dimensions; a caller enforcing that contract must reject unequal lengths separately.
+
+</Step>
+
+<Step title="4. Check">
+
+`dot [3] [7]` is 21 and `dot [] []` is zero. An equal-dimension interface must reject `[3]` against `[7,8]`. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`zipWith (+)` adds matching elements instead of multiplying them. `foldr (*) 1 (zipWith (*) xs ys)` multiplies the products rather than summing. Both compile, so a test such as `[2,3]` against `[4,5]` distinguishes 23 from 14 or 120.
+
+### Practice with answer
+
+Express a total purchase cost for prices `[5,2]` and quantities `[3,4]`.
+
+<details>
+<summary>Answer</summary>
+
+`dot [5,2] [3,4]` is 23: `5*3 + 2*4`. A missing quantity needs a stated policy before using truncation.
+
+</details>
+
+## 14. Generalise to three weighted tests
+
+Appendix C.6 gives weights 1:2:3. The denominator is their sum, 6. A scalar `final3` supplies the rule; `fmark3` supplies aligned traversal. Generalising the number of inputs does not change the need for conversion.
+
+**Template**
+
+```text
+final3 a b c = fromIntegral (a + 2*b + 3*c) / 6
+fmark3 as bs cs = zipWithx final3 as bs cs
+```
+
+The lists hold Ints and the result list holds Doubles. The general weight pattern is `(w1*a + w2*b + w3*c) / (w1+w2+w3)` after conversion. For non-negative weights require a positive total weight; all-zero weights do not define an average. Convert before multiplication if supporting large Int values. No rounding is requested by the lab.
+
+### Worked variation: Three different marks
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: three weighted tests; predict the result of the main call and justify the design.
+final3 :: Int -> Int -> Int -> Double
+final3 a b c = fromIntegral (a + 2*b + 3*c) / 6
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+fmark3 :: [Int] -> [Int] -> [Int] -> [Double]
+fmark3 = zipWithx final3
+
+main :: IO ()
+main = print (final3 30 60 90)
+```
+
+```text
+70.0
+```
+
+</HaskellTryIt>
+
+The numerator is `30+120+270=420`; `420/6=70.0`.
+
+### Worked variation: Same mark in every test
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: three weighted tests; predict the result of the main call and justify the design.
+final3 :: Int -> Int -> Int -> Double
+final3 a b c = fromIntegral (a + 2*b + 3*c) / 6
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+fmark3 :: [Int] -> [Int] -> [Int] -> [Double]
+fmark3 = zipWithx final3
+
+main :: IO ()
+main = print (final3 75 75 75)
+```
+
+```text
+75.0
+```
+
+</HaskellTryIt>
+
+The numerator is `6*75`, so division restores 75.0. This checks the denominator.
+
+### Worked variation: List pipeline
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: three weighted tests; predict the result of the main call and justify the design.
+final3 :: Int -> Int -> Int -> Double
+final3 a b c = fromIntegral (a + 2*b + 3*c) / 6
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+fmark3 :: [Int] -> [Int] -> [Int] -> [Double]
+fmark3 = zipWithx final3
+
+main :: IO ()
+main = print (fmark3 [30,60] [60,60] [90,60])
+```
+
+```text
+[70.0,60.0]
+```
+
+</HaskellTryIt>
+
+The first position is weighted to 70.0; equal marks at the second stay 60.0.
+
+### Worked variation: Shortest-list stopping
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: three weighted tests; predict the result of the main call and justify the design.
+final3 :: Int -> Int -> Int -> Double
+final3 a b c = fromIntegral (a + 2*b + 3*c) / 6
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+fmark3 :: [Int] -> [Int] -> [Int] -> [Double]
+fmark3 = zipWithx final3
+
+main :: IO ()
+main = print (fmark3 [30,100] [60] [90,100])
+```
+
+```text
+[70.0]
+```
+
+</HaskellTryIt>
+
+Only the first position has all three marks. The traversal does not pad missing tests.
+
+### Exam question 14: Generalise to three weighted tests (6 marks)
+
+Appendix C.6: derive `final3` and `fmark3` for weights 1:2:3. Explain the denominator and an empty input.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The scalar numerator uses the three weights, and their sum is 6. Use the already-derived three-list zipper to apply that scalar rule.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+final3 :: Int -> Int -> Int -> Double
+final3 a b c = fromIntegral (a + 2*b + 3*c) / 6
+
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+fmark3 :: [Int] -> [Int] -> [Int] -> [Double]
+fmark3 = zipWithx final3
+```
+
+The lists hold Ints and the result list holds Doubles. The general weight pattern is `(w1*a + w2*b + w3*c) / (w1+w2+w3)` after conversion. For non-negative weights require a positive total weight; all-zero weights do not define an average. Convert before multiplication if supporting large Int values. No rounding is requested by the lab.
+
+</Step>
+
+<Step title="4. Check">
+
+All three marks equal to 60 must give 60.0. If any list is empty then the list result is `[]`. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+Dividing by 3 gives a sum of weighted contributions scaled incorrectly: three marks of 60 would give 120.0. GHC accepts it, so the equal-marks check is essential. Rounding each contribution early also changes the specified mean.
+
+### Practice with answer
+
+What changes for weights 2:1:1?
+
+<details>
+<summary>Answer</summary>
+
+Use numerator `2*a+b+c` and denominator 4 after conversion. `30,60,90` then gives 52.5. The zipper is unchanged.
+
+</details>
+
+## 15. Build triples rather than arithmetic results
+
+Appendix C.7 uses the general zipper to construct triples. A tuple is one result value with three fields; it need not contain three values of the same type.
+
+**Template**
+
+```text
+zip3x :: [a] -> [b] -> [c] -> [(a,b,c)]
+zip3x = zipWithx (\x y z -> (x,y,z))
+```
+
+Set the result type variable `d` in `zipWithx` to `(a,b,c)`. Keep the three input types independent. Prelude `zip3` is the library alternative; the lambda shows exactly how your custom traversal builds each result.
+
+### Worked variation: Independent types
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zip3x; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+zip3x :: [a] -> [b] -> [c] -> [(a,b,c)]
+zip3x = zipWithx (\x y z -> (x,y,z))
+
+main :: IO ()
+main = print (zip3x [1,2] ["a","b"] [True,False])
+```
+
+```text
+[(1,"a",True),(2,"b",False)]
+```
+
+</HaskellTryIt>
+
+The numeric, string and Boolean elements occupy distinct fields.
+
+### Worked variation: First list empty
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zip3x; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+zip3x :: [a] -> [b] -> [c] -> [(a,b,c)]
+zip3x = zipWithx (\x y z -> (x,y,z))
+
+main :: IO ()
+main = print (zip3x ([] :: [Int]) [True] ["x"])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+No triple can be constructed; the output list is empty.
+
+### Worked variation: Second list shortest
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zip3x; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+zip3x :: [a] -> [b] -> [c] -> [(a,b,c)]
+zip3x = zipWithx (\x y z -> (x,y,z))
+
+main :: IO ()
+main = print (zip3x [1,2] [True] ["x","y"])
+```
+
+```text
+[(1,True,"x")]
+```
+
+</HaskellTryIt>
+
+The first triple is built, then the Boolean list ends.
+
+### Worked variation: Third list shortest
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: zip3x; predict the result of the main call and justify the design.
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+zip3x :: [a] -> [b] -> [c] -> [(a,b,c)]
+zip3x = zipWithx (\x y z -> (x,y,z))
+
+main :: IO ()
+main = print (zip3x [1,2] [True,False] ["x"])
+```
+
+```text
+[(1,True,"x")]
+```
+
+</HaskellTryIt>
+
+The string list determines the final output length here.
+
+### Exam question 15: Build triples rather than arithmetic results (6 marks)
+
+Appendix C.7: define `zip3x` by passing a tuple-producing lambda to `zipWithx`. Give the general type.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+The requested lambda consumes three heads and returns one triple. The traversal already handles stopping; do not add numeric constraints.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+zipWithx :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+zipWithx _ [] _ _ = []
+zipWithx _ _ [] _ = []
+zipWithx _ _ _ [] = []
+zipWithx f (x:xs) (y:ys) (z:zs) = f x y z : zipWithx f xs ys zs
+
+zip3x :: [a] -> [b] -> [c] -> [(a,b,c)]
+zip3x = zipWithx (\x y z -> (x,y,z))
+```
+
+Set the result type variable `d` in `zipWithx` to `(a,b,c)`. Keep the three input types independent. Prelude `zip3` is the library alternative; the lambda shows exactly how your custom traversal builds each result.
+
+</Step>
+
+<Step title="4. Check">
+
+`zip3x [False] [2] ["x"]` gives `[(False,2,"x")]`, demonstrating independent input types. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`\(x,y,z) -> (x,y,z)` takes one tuple argument, whereas the zipper supplies three separate arguments. GHC reports `Couldn't match` against the expected rule type. Use `\x y z -> (x,y,z)`. `[x,y,z]` is a homogeneous list, not a heterogeneous triple.
+
+### Practice with answer
+
+Construct student/name/pass triples from `[1]`, `["A"]` and `[True]`.
+
+<details>
+<summary>Answer</summary>
+
+`zip3x [1] ["A"] [True]` is `[(1,"A",True)]`. Quotes remain around the String when the tuple is printed.
+
+</details>
+
+## 16. Adapt the design back to two lists
+
+Appendix C.8 asks for a fresh two-list implementation. Deriving it from the three-list design removes one head, one tail, one input type and one stopping equation. This is a method for adapting recursion, not a request to copy a memorised definition.
+
+**Template**
+
+```text
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+```
+
+There are now two required heads, so either missing head stops the output. A lambda can mix input types, while an operator such as `(-)` exposes argument order. The comprehension alternative is `[f x y | (x,y) <- zip xs ys]`; it uses an existing traversal and would not satisfy an instruction to implement recursion.
+
+### Worked variation: Order-sensitive operator
+
+Start with a normal case.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myZipWith; predict the result of the main call and justify the design.
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+
+main :: IO ()
+main = print (myZipWith (-) [10,20] [1,4])
+```
+
+```text
+[9,16]
+```
+
+</HaskellTryIt>
+
+Use first-list values as left operands. Reversing the operands changes both signs.
+
+### Worked variation: Mixed element types
+
+Change the input shape or values.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myZipWith; predict the result of the main call and justify the design.
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+
+main :: IO ()
+main = print (myZipWith (\n s -> s ++ show n) [1,2] ["a","b"])
+```
+
+```text
+["a1","b2"]
+```
+
+</HaskellTryIt>
+
+Each number is shown and appended to its paired String.
+
+### Worked variation: First list empty
+
+Exercise a boundary or a different result shape.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myZipWith; predict the result of the main call and justify the design.
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+
+main :: IO ()
+main = print (myZipWith (+) ([] :: [Int]) [2])
+```
+
+```text
+[]
+```
+
+</HaskellTryIt>
+
+The first base equation returns the empty output.
+
+### Worked variation: Second list ends first
+
+Change the remaining edge case or input type.
+
+<HaskellTryIt>
+
+```haskell
+-- Question: myZipWith; predict the result of the main call and justify the design.
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+
+main :: IO ()
+main = print (myZipWith (*) [2,3] [4])
+```
+
+```text
+[8]
+```
+
+</HaskellTryIt>
+
+After `2*4`, the second tail is empty, so the remaining 3 is unused.
+
+### Exam question 16: Adapt the design back to two lists (6 marks)
+
+Appendix C.8: implement a polymorphic `myZipWith` recursively, explaining how the three-list design changes.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command asks for a definition and an explanation, so a final numeric answer alone is insufficient. The input and output types in the requested signature fix the roles of the arguments. Respect the stated restriction as well as the result.
+
+</Step>
+
+<Step title="2. Plan">
+
+Remove one list parameter and one rule argument. Keep one empty-list equation for each remaining input and recurse on both tails.
+
+</Step>
+
+<Step title="3. Solution">
+
+```haskell
+myZipWith :: (a -> b -> c) -> [a] -> [b] -> [c]
+myZipWith _ [] _ = []
+myZipWith _ _ [] = []
+myZipWith f (x:xs) (y:ys) = f x y : myZipWith f xs ys
+```
+
+There are now two required heads, so either missing head stops the output. A lambda can mix input types, while an operator such as `(-)` exposes argument order. The comprehension alternative is `[f x y | (x,y) <- zip xs ys]`; it uses an existing traversal and would not satisfy an instruction to implement recursion.
+
+</Step>
+
+<Step title="4. Check">
+
+On `[2]` and `[3,4]` with `(*)`, the result is `[6]`. Either empty input returns `[]`. The runnable variations above also test the boundary and changed-data cases; these checks support the design but do not constitute a universal proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Common errors and repairs
+
+`myZipWith f xs ys = f xs ys` applies the rule to entire lists rather than heads and does not implement the given type in general. GHC reports `Couldn't match` with the signature. Forgetting a stopping equation instead compiles with a possible `non-exhaustive` warning and can fail when lengths differ.
+
+### Practice with answer
+
+Define pair construction using `myZipWith`.
+
+<details>
+<summary>Answer</summary>
+
+`myZipWith (\x y -> (x,y)) [1,2] [True]` gives `[(1,True)]`. The result truncates at the shorter Boolean list.
+
+</details>
+
+## 17. A design and diagnostic checklist
+
+| Specification clue | Design decision | First check |
+|---|---|---|
+| Add transformed contributions | Fold with seed zero and transform inside the step | Empty input and one element |
+| Multiply contributions | Fold with seed one | An empty list and a list containing zero |
+| Count matches | Add one conditionally, otherwise keep the count | No matches and a boundary match |
+| Keep or transform elements | List-valued fold with seed `[]` | Order and duplicates |
+| Match two or three lists | Zipper with one stopping equation per list | Each list shortest in turn |
+| Return a weighted mean | Sum the weights in the denominator; convert before division | All marks equal and a fractional result |
+| Require equal dimensions | Validate lengths before truncating | A deliberately unequal input |
+
+A right fold groups combinations to the right; it does not imply that execution always begins at the last element. Use the lazy-evaluation lesson for demand, and Applying Higher-Order Functions by Hand for a full trace. Left and right folds are not interchangeable merely because the result type agrees. Even for an associative operation, a seed on opposite ends needs care: with append and seed `["z"]`, left and right placement can change the list. With append and its identity `[]`, both groupings agree on finite defined lists. Floating-point addition is not exactly associative.
+
+For a left-fold adaptation of a numeric contribution total, use `\acc x -> acc + contribution x`: the accumulator is the first parameter. Scans, seedless folds and their tracing rules belong to the prerequisite lessons; a seedless fold does not solve an empty-input requirement.
+
+### Distinguish four kinds of failure
+
+The deliberately rejected and crashing examples below are plain fences. They are not browser exercises.
+
+**Wrong rule arity.** Under the declared type, `f x y` has type `c`, so it cannot in general be applied to `z`. GHC's key phrase is `Couldn't match`.
+
+```haskell
+-- Incorrect: two-argument rule type but three applications.
+badArity :: (a -> b -> c) -> [a] -> [b] -> [c] -> [c]
+badArity f (x:xs) (y:ys) (z:zs) = f x y z : []
+```
+
+Repair the rule type to `a -> b -> c -> d`, the result to `[d]`, and supply the full recursive equations from section 11.
+
+**Wrong operator argument.** Parenthesise an operator to pass it as a function. The following expression can parse as infix multiplication with `zipWith` on the left; it is not the intended application. Its list application is ill typed, giving GHC's key phrase `Couldn't match`. Do not assume every unparenthesised operator produces a parse error.
+
+```haskell
+-- Incorrect: pass (*) rather than a bare *.
+badProducts = zipWith * [1,2] [3,4]
+```
+
+With `zipWith (*)` the operator is a two-argument function. With `zipWithx (+)` the syntax is valid but its arity is wrong for Int lists. A malformed lambda missing `->` is instead a syntax error, with the key phrase `parse error`. Syntax and type failures require different repairs.
+
+**Incomplete patterns and partial output.** This version handles only the all-empty combination.
+
+```haskell
+-- Incorrect: this main deliberately reaches an uncovered pattern.
+badZip :: (a -> b -> c -> d) -> [a] -> [b] -> [c] -> [d]
+badZip _ [] [] [] = []
+badZip f (x:xs) (y:ys) (z:zs) =
+  f x y z : badZip f xs ys zs
+
+main :: IO ()
+main = print (badZip (\x y z -> x+y+z) [1,2] [10] [100,200])
+```
+
+The first cons cell exists and contains 111. The remaining call is `badZip f [2] [] [200]`, which matches neither equation. As printing demands the tail, evaluation raises `Non-exhaustive patterns`. A prefix of the printed list can already have been produced before failure; there is no complete printed list value, so do not report `[111]` as the result. Exact interleaving of buffered stdout and the exception on stderr is not a deterministic transcript. Repair all three stopping cases, and re-test each list shortest.
+
+**Wrong answer with no GHC diagnostic.** A zero product seed, division by the wrong weight sum, or replacing the false branch of a filter step by `[]` can type-check. Test a counterexample tied to the specification; successful compilation does not establish correctness.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Read the empty case to choose the seed. Replace the recursive tail result by an accumulator to derive the step. A list-valued fold uses `[]`, while sums use zero and products use one. Weighted Int inputs need conversion before fractional division. A zipper needs a stopping case for each required input list, and its rule's arity must match the number of heads. State truncation, negative-range and validation policies explicitly.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does sumsq not need map?">
+
+Its fold step computes `x*x + acc`, combining transformation and addition in one recursive shape.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is the seed not necessarily the element type?">
+
+The accumulator stores the result for a suffix. For length it is an Int even when the elements are strings or Booleans.
+
+</CheckQuestion>
+
+<CheckQuestion question="What seven empty-list combinations must a three-list zipper handle?">
+
+First only, second only, third only, first and second, first and third, second and third, and all three. Three wildcard stopping equations cover them.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does converting after div give a different final mark?">
+
+Integral division has already discarded a fraction. Conversion cannot recover it; convert before using `/`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does implementing zipWithx as zipWith3 satisfy a recursive implementation question?">
+
+It gives the library behaviour but omits the requested recursive design, so it does not demonstrate the required method.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
