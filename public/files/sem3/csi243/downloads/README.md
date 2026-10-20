@@ -687,6 +687,58 @@ For a bundle directory, run `runghc -iBundleName BundleName/Main.hs` from its pa
 | `Spec_QuantifierV2.hs` | Show that swapping universal and existential changes meaning |
 | `Spec_QuantifierV3.hs` | Quantify over words including an empty word |
 
+## Standard type classes
+
+| File | Question |
+| --- | --- |
+| `Class_BoundedEnumRange.hs` | Enumerate a bounded type using both necessary constraints |
+| `Class_BoundedEnumRangeV2.hs` | Obtain endpoints without requiring enumeration |
+| `Class_BoundedEnumRangeV3.hs` | Take a bounded enumeration prefix with an explicit count policy |
+| `Class_EnumBoundarySafe.hs` | Guard succ at the upper Boolean endpoint |
+| `Class_EnumBoundarySafeV2.hs` | Guard pred at the lower Ordering endpoint |
+| `Class_EnumBoundarySafeV3.hs` | Validate a Boolean enumeration index before toEnum |
+| `Class_EnumBoundarySafeV4.hs` | Use Enum on Integer without assuming finite bounds |
+| `Class_NumericHierarchyMethods.hs` | Choose Num, Integral and Fractional from the methods used |
+| `Class_NumericHierarchyMethodsV2.hs` | Choose Real and RealFrac for conversion and decomposition |
+| `Class_NumericHierarchyMethodsV3.hs` | Distinguish Floating methods from RealFloat classification |
+| `Class_OrdLawConsistency.hs` | Check ordering and equality consistency on finite values |
+| `Class_OrdLawConsistencyV2.hs` | Compare lexicographic keys and resolve ties |
+| `Class_OrdLawConsistencyV3.hs` | Find generic bounds and check the min and max laws |
+| `Class_ReadShowContext.hs` | Read integers safely and check a Show round trip |
+| `Class_ReadShowContextV2.hs` | Read Boolean values with an explicit result context |
+| `Class_ReadShowContextV3.hs` | Read integer lists and reject malformed list syntax |
+| `Class_ReadShowContextV4.hs` | Read tuples using their field types as context |
+
+## Operators and lexical rules
+
+| File | Question |
+| --- | --- |
+| `Operator_ConstructorLists.hs` | Use a constructor operator in prefix and infix form |
+| `Operator_ConstructorListsV2.hs` | Match a constructor operator and handle the empty list |
+| `Operator_ConstructorListsV3.hs` | Use right-associated cons patterns to swap a list prefix |
+| `Operator_DefinitionSymbolic.hs` | Define a symbolic difference operator |
+| `Operator_DefinitionSymbolicV2.hs` | Define a decimal-combining symbolic operator |
+| `Operator_DefinitionSymbolicV3.hs` | Define a non-commutative scaled difference operator |
+| `Operator_FixityLeft.hs` | Trace left fixity for subtraction scaled by 1 |
+| `Operator_FixityLeftV2.hs` | Trace left fixity for subtraction scaled by 2 |
+| `Operator_FixityLeftV3.hs` | Trace left fixity for subtraction scaled by 3 |
+| `Operator_FixityLeftV4.hs` | Trace left fixity for subtraction scaled by 4 |
+| `Operator_FixityNonAssoc.hs` | Trace nonassoc fixity for subtraction scaled by 1 |
+| `Operator_FixityNonAssocV2.hs` | Trace nonassoc fixity for subtraction scaled by 2 |
+| `Operator_FixityNonAssocV3.hs` | Trace nonassoc fixity for subtraction scaled by 3 |
+| `Operator_FixityNonAssocV4.hs` | Trace nonassoc fixity for subtraction scaled by 4 |
+| `Operator_FixityRight.hs` | Trace right fixity for subtraction scaled by 1 |
+| `Operator_FixityRightV2.hs` | Trace right fixity for subtraction scaled by 2 |
+| `Operator_FixityRightV3.hs` | Trace right fixity for subtraction scaled by 3 |
+| `Operator_FixityRightV4.hs` | Trace right fixity for subtraction scaled by 4 |
+| `Operator_LegacyPatternOffset.hs` | Rewrite the legacy successor pattern using an ordinary guard |
+| `Operator_LegacyPatternOffsetV2.hs` | Rewrite a legacy plus-two pattern with a boundary check |
+| `Operator_LegacyPatternOffsetV3.hs` | Rewrite a legacy plus-three pattern without an extension |
+| `Operator_LegacyPatternOffsetV4.hs` | Rewrite a legacy plus-four pattern and test its exact boundary |
+| `Operator_NameRepairIdentifiers.hs` | Repair a capitalised function and retain an underscore binding |
+| `Operator_NameRepairIdentifiersV2.hs` | Repair a reserved word and discard a tuple component |
+| `Operator_NameRepairIdentifiersV3.hs` | Repair an underscore name and distinguish scope from type errors |
+
 ## First programs and the first lab
 
 | File | Note |
