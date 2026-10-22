@@ -88,23 +88,5 @@ export const quizData = [
     options: ["$12$", "$13$", "$36$", "$61$"],
     correctIndex: 2,
     explanation: "$\\operatorname{Var}(Y)=3^2\\operatorname{Var}(X)=9(4)=36$; the added constant does not affect variance."
-  },
-  {
-    question: "Two independent components with reliabilities 0.9 and 0.8 are in series. What is system reliability?",
-    options: ["$0.72$", "$0.90$", "$0.98$", "$1.70$"],
-    correctIndex: 0,
-    explanation: "Both series components must work, so multiply: $0.9(0.8)=0.72$."
-  },
-  {
-    question: "The same two components are in parallel. What is system reliability?",
-    options: ["$0.72$", "$0.80$", "$0.90$", "$0.98$"],
-    correctIndex: 3,
-    explanation: "Parallel fails only if both fail: $1-(0.1)(0.2)=0.98$."
-  },
-  {
-    question: "What is the hazard function in terms of the PDF and reliability function?",
-    options: ["$h(t)=f(t)R(t)$", "$h(t)=f(t)/R(t)$", "$h(t)=R(t)/f(t)$", "$h(t)=1-f(t)$"],
-    correctIndex: 1,
-    explanation: "$h(t)=f(t)/R(t)$ is the instantaneous failure rate conditional on having survived to time $t$."
   }
 ];

@@ -86,13 +86,5 @@ export const flashcardData = [
   {
     front: "If $X\\sim N(\\mu,\\sigma^2)$ and $Y=aX+b$, what is Y's distribution?",
     back: "$Y\\sim N(a\\mu+b,a^2\\sigma^2)$. Normal distributions remain normal under linear transformations."
-  },
-  {
-    front: "What are reliability and hazard?",
-    back: "$R(t)=P(T>t)=1-F(t)$ is survival probability. $h(t)=f(t)/R(t)$ is the instantaneous failure rate conditional on survival to $t$."
-  },
-  {
-    front: "How do independent series and parallel reliabilities differ?",
-    back: "Series: all must work, so multiply reliabilities, $R_s=\\prod R_i$. Parallel: at least one must work, so complement all failing, $R_p=1-\\prod(1-R_i)$."
   }
 ];
