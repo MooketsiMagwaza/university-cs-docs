@@ -76,7 +76,7 @@ const probes = [
   { name: 'Scanner(System.in).nextInt() (typical student program)', code: 'import java.util.Scanner;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        System.out.println(n * 2);\n    }\n}\n', expectError: true, note: 'no stdin: expected to fail, but must fail readably' },
   { name: 'BufferedReader(System.in)', code: 'import java.io.*;\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader r = new BufferedReader(new InputStreamReader(System.in));\n        System.out.println(r.readLine());\n    }\n}\n', expectContains: 'null' },
   { name: 'Scanner over a String', code: 'import java.util.Scanner;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner("3 4");\n        System.out.println(sc.nextInt() + sc.nextInt());\n    }\n}\n', expect: '7' },
-  { name: 'Random with a seed', code: wrap('java.util.Random r = new java.util.Random(42);\nSystem.out.println(r.nextInt(100));'), expect: '0' },
+  { name: 'Random with a seed', code: wrap('java.util.Random r = new java.util.Random(42);\nSystem.out.println(r.nextInt(100));'), expect: '30' },
   { name: 'Math.random', code: wrap('double d = Math.random();\nSystem.out.println(d >= 0 && d < 1);'), expect: 'true' },
   { name: 'System.currentTimeMillis and nanoTime', code: wrap('long a = System.currentTimeMillis(); long b = System.nanoTime();\nSystem.out.println(a > 0 && b != 0);'), expect: 'true' },
   { name: 'LocalDate', code: wrap('System.out.println(java.time.LocalDate.of(2026, 10, 20).getDayOfWeek());'), expect: 'TUESDAY' },

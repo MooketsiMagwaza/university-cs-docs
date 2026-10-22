@@ -550,3 +550,244 @@ export function stdinConstant(text: string): string {
   }
   return `\nfinal class __Stdin {\n    static final String TEXT = "${literal}";\n}\n`;
 }
+
+/** Math.round, Math.rint and Math.log10 as the JDK computes them (TeaVM rounds -2.5 to -3 and gives log10(1000) = 2.9999999999999996). */
+export const MATH_SHIM = `
+final class __Math {
+    static long round(double x) {
+        if (Double.isNaN(x)) {
+            return 0;
+        }
+        double f = Math.floor(x);
+        long r = (long) f;
+        if (x - f >= 0.5) {
+            r++;
+        }
+        return r;
+    }
+
+    static int round(float x) {
+        return (int) round((double) x);
+    }
+
+    static double rint(double x) {
+        if (Double.isNaN(x) || Double.isInfinite(x) || Math.abs(x) >= 4503599627370496.0) {
+            return x;
+        }
+        double f = Math.floor(x);
+        double d = x - f;
+        double r;
+        if (d < 0.5) {
+            r = f;
+        } else if (d > 0.5) {
+            r = f + 1;
+        } else {
+            r = (f % 2 == 0) ? f : f + 1;
+        }
+        if (r == 0 && (x < 0 || (x == 0 && 1 / x < 0))) {
+            return -0.0;
+        }
+        return r;
+    }
+
+    static double log10(double x) {
+        double r = Math.log(x) / Math.log(10);
+        double n = rint(r);
+        if (Math.abs(r - n) < 1e-9 && Math.pow(10, n) == x) {
+            return n;
+        }
+        return r;
+    }
+}
+`;
+
+/** java.util.Random with the JDK's generator, so a seeded program prints what it prints on a real JVM. */
+export const RANDOM_SHIM = `
+class Random {
+    private long seed;
+    private double nextNextGaussian;
+    private boolean haveNextNextGaussian = false;
+    private static long uniquifier = 8682522807148012L;
+
+    Random() {
+        this(System.nanoTime() ^ (uniquifier = uniquifier * 1181783497276652981L));
+    }
+
+    Random(long seed) {
+        this.seed = (seed ^ 0x5DEECE66DL) & ((1L << 48) - 1);
+    }
+
+    public void setSeed(long seed) {
+        this.seed = (seed ^ 0x5DEECE66DL) & ((1L << 48) - 1);
+        haveNextNextGaussian = false;
+    }
+
+    protected int next(int bits) {
+        seed = (seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1);
+        return (int) (seed >>> (48 - bits));
+    }
+
+    public int nextInt() {
+        return next(32);
+    }
+
+    public int nextInt(int bound) {
+        if (bound <= 0) {
+            throw new IllegalArgumentException("bound must be positive");
+        }
+        int r = next(31);
+        int m = bound - 1;
+        if ((bound & m) == 0) {
+            r = (int) ((bound * (long) r) >> 31);
+        } else {
+            for (int u = r; u - (r = u % bound) + m < 0; u = next(31)) {
+            }
+        }
+        return r;
+    }
+
+    public int nextInt(int origin, int bound) {
+        if (origin >= bound) {
+            throw new IllegalArgumentException("bound must be greater than origin");
+        }
+        int r = nextInt();
+        int n = bound - origin;
+        int m = n - 1;
+        if ((n & m) == 0) {
+            r = (r & m) + origin;
+        } else if (n > 0) {
+            for (int u = r >>> 1; u + m - (r = u % n) < 0; u = nextInt() >>> 1) {
+            }
+            r += origin;
+        } else {
+            while (r < origin || r >= bound) {
+                r = nextInt();
+            }
+        }
+        return r;
+    }
+
+    public long nextLong() {
+        return ((long) next(32) << 32) + next(32);
+    }
+
+    public boolean nextBoolean() {
+        return next(1) != 0;
+    }
+
+    public float nextFloat() {
+        return next(24) / ((float) (1 << 24));
+    }
+
+    public double nextDouble() {
+        return (((long) next(26) << 27) + next(27)) * (1.0 / (1L << 53));
+    }
+
+    public double nextGaussian() {
+        if (haveNextNextGaussian) {
+            haveNextNextGaussian = false;
+            return nextNextGaussian;
+        }
+        double v1;
+        double v2;
+        double s;
+        do {
+            v1 = 2 * nextDouble() - 1;
+            v2 = 2 * nextDouble() - 1;
+            s = v1 * v1 + v2 * v2;
+        } while (s >= 1 || s == 0);
+        double multiplier = Math.sqrt(-2 * Math.log(s) / s);
+        nextNextGaussian = v2 * multiplier;
+        haveNextNextGaussian = true;
+        return v1 * multiplier;
+    }
+}
+
+final class __Util {
+    static void shuffle(java.util.List<?> list, Random rnd) {
+        for (int i = list.size(); i > 1; i--) {
+            java.util.Collections.swap(list, i - 1, rnd.nextInt(i));
+        }
+    }
+}
+`;
+
+/** Integer.parseInt and Long.parseLong with the JDK's exception message. */
+export const NUMBER_SHIM = `
+final class __Num {
+    static int parseInt(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            throw new NumberFormatException(s == null ? "Cannot parse null string" : "For input string: " + quote(s));
+        }
+    }
+
+    static int parseInt(String s, int radix) {
+        try {
+            return Integer.parseInt(s, radix);
+        } catch (NumberFormatException e) {
+            throw new NumberFormatException(s == null ? "Cannot parse null string" : "For input string: " + quote(s) + (radix == 10 ? "" : " under radix " + radix));
+        }
+    }
+
+    static long parseLong(String s) {
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            throw new NumberFormatException(s == null ? "Cannot parse null string" : "For input string: " + quote(s));
+        }
+    }
+
+    private static String quote(String s) {
+        return "\\"" + s + "\\"";
+    }
+}
+`;
+
+/** java.util.StringJoiner, which the compile-time class library lacks. */
+export const JOINER_SHIM = `
+final class StringJoiner {
+    private final String delimiter;
+    private final String prefix;
+    private final String suffix;
+    private StringBuilder value;
+    private String emptyValue;
+
+    StringJoiner(CharSequence delimiter) {
+        this(delimiter, "", "");
+    }
+
+    StringJoiner(CharSequence delimiter, CharSequence prefix, CharSequence suffix) {
+        this.delimiter = String.valueOf(delimiter);
+        this.prefix = String.valueOf(prefix);
+        this.suffix = String.valueOf(suffix);
+    }
+
+    public StringJoiner setEmptyValue(CharSequence emptyValue) {
+        this.emptyValue = String.valueOf(emptyValue);
+        return this;
+    }
+
+    public StringJoiner add(CharSequence part) {
+        if (value == null) {
+            value = new StringBuilder();
+        } else {
+            value.append(delimiter);
+        }
+        value.append(String.valueOf(part));
+        return this;
+    }
+
+    public int length() {
+        return toString().length();
+    }
+
+    public String toString() {
+        if (value == null) {
+            return emptyValue != null ? emptyValue : prefix + suffix;
+        }
+        return prefix + value.toString() + suffix;
+    }
+}
+`;
