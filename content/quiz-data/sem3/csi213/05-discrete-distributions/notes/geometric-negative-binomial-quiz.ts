@@ -163,5 +163,56 @@ export const quizData = [
     ],
     correctIndex: 1,
     explanation: "Since the random variable $X$ counts failures starting from 0, achieving exactly $x$ failures requires multiplying the failure probability $q$ exactly $x$ times."
+  },
+  {
+    question: "Let $X$ be the total number of trials required for the $r$-th success. Which PMF is correct?",
+    options: [
+      "$P(X=x)=\\binom{x-1}{r-1}p^r(1-p)^{x-r}$ for $x=r,r+1,\\ldots$",
+      "$P(X=x)=\\binom{x+r-1}{r-1}p^r(1-p)^x$ for $x=r,r+1,\\ldots$",
+      "$P(X=x)=\\binom xr p^r(1-p)^{x-r}$ for $x=0,1,\\ldots$",
+      "$P(X=x)=\\binom rx p^x(1-p)^{r-x}$"
+    ],
+    correctIndex: 0,
+    explanation: "The final trial is fixed as the $r$-th success. The first $x-1$ trials contain $r-1$ successes and $x-r$ failures, producing the coefficient $\\binom{x-1}{r-1}$."
+  },
+  {
+    question: "Under the total-trials convention, what are $E[X]$ and $\\operatorname{Var}(X)$ for $X\\sim\\operatorname{NB}(r,p)$?",
+    options: [
+      "$E[X]=r/p$ and $\\operatorname{Var}(X)=r(1-p)/p^2$",
+      "$E[X]=r(1-p)/p$ and $\\operatorname{Var}(X)=r(1-p)/p^2$",
+      "$E[X]=rp$ and $\\operatorname{Var}(X)=rp(1-p)$",
+      "$E[X]=1/p$ and $\\operatorname{Var}(X)=(1-p)/p^2$"
+    ],
+    correctIndex: 0,
+    explanation: "Total trials include both successes and failures, so the mean is $r/p$. The smaller mean $r(1-p)/p$ belongs to the failures-only convention."
+  },
+  {
+    question: "If $X$ counts total trials and $Y$ counts failures before the same $r$-th success, which relationship is always true?",
+    options: ["$Y=X+r$", "$Y=X-r$", "$Y=r-X$", "$Y=rX$"],
+    correctIndex: 1,
+    explanation: "Every completed experiment contains exactly $r$ successes, so total trials equal failures plus $r$: $X=Y+r$, hence $Y=X-r$."
+  },
+  {
+    question: "Let $X$ be the total number of trials required to obtain $r$ successes and let $B_k\\sim\\operatorname{Bin}(k,p)$. Which event equals $P(X>k)$?",
+    options: ["$P(B_k=r)$", "$P(B_k\\le r-1)$", "$P(B_k\\ge r)$", "$P(B_k>r)$"],
+    correctIndex: 1,
+    explanation: "Needing more than $k$ trials means the $r$-th success has not occurred in the first $k$ trials, so those trials contain at most $r-1$ successes."
+  },
+  {
+    question: "A question says that the third success occurs 'by trial 8'. Which mathematical event matches the wording if $X$ counts total trials?",
+    options: ["$X=8$", "$X<8$", "$X\\le8$", "$X>8$"],
+    correctIndex: 2,
+    explanation: "'By trial 8' includes every stopping trial up to and including 8. 'On trial 8' would mean the exact event $X=8$."
+  },
+  {
+    question: "For $r=3$, $p=0.4$ and the total-trials convention, which expression gives the probability that the third success occurs on trial 7?",
+    options: [
+      "$\\binom72(0.4)^3(0.6)^4$",
+      "$\\binom62(0.4)^3(0.6)^4$",
+      "$\\binom63(0.4)^4(0.6)^3$",
+      "$\\binom42(0.4)^3(0.6)^2$"
+    ],
+    correctIndex: 1,
+    explanation: "Trial 7 is the fixed third success. Choose the other two successes among the first six trials, leaving four failures: $\\binom62(0.4)^3(0.6)^4$."
   }
 ];

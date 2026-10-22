@@ -1,124 +1,335 @@
 ---
 title: "Geometric and Negative Binomial Distributions"
-description: "Modeling the number of failures before achieving a specific number of successes."
+description: "A complete guide to waiting for the first or r-th success: definitions, both counting conventions, formulas, proofs, cumulative shortcuts and worked exam-style applications."
 ---
 
 import { quizData } from '@/content/quiz-data/sem3/csi213/05-discrete-distributions/notes/geometric-negative-binomial-quiz';
 
-
 ## 5.3 Geometric and Negative Binomial Distributions
 
-Unlike the Binomial distribution, which fixes the number of trials and counts successes, the Geometric and Negative Binomial distributions fix the number of successes and count the number of **failures** required to achieve them. *(Note: This aligns with the "failures before success" convention).*
+The binomial and negative binomial distributions use the same Bernoulli ingredients but answer opposite questions. A **binomial** experiment fixes the number of trials and counts successes. A **negative binomial** experiment fixes the required number of successes and counts how long we must wait.
+
+<ComparisonTable
+  columns={[
+    { header: 'Model', key: 'model' },
+    { header: 'What is fixed?', key: 'fixed' },
+    { header: 'What is random?', key: 'random' },
+    { header: 'Stopping rule', key: 'stop' }
+  ]}
+  rows={[
+    { model: 'Binomial', fixed: 'Number of trials n', random: 'Number of successes X', stop: 'After trial n' },
+    { model: 'Geometric', fixed: 'One required success', random: 'Waiting time', stop: 'At the first success' },
+    { model: 'Negative binomial', fixed: 'r required successes', random: 'Waiting time', stop: 'At the r-th success' }
+  ]}
+  highlightCol="fixed"
+/>
+
+The geometric distribution is the special case $r=1$ of the negative binomial distribution. The only persistent source of confusion is **what the random variable counts**. Some questions count total trials; others count failures. Both conventions are correct, but their supports, formulas and means are shifted.
+
+## 1. Conditions for the model
 
 <Card>
 
-### Definition 5.3.1 (Geometric Distribution)
+### Definition 5.3.1 — Negative binomial experiment
 
-A random variable $X$ follows a **Geometric Distribution** with parameter $p$ (probability of success), denoted $X \sim \text{Geo}(p)$, if it counts the number of **failures** before the 1st success.
+A sequence of trials forms a negative binomial experiment when all four conditions hold:
 
-**Probability Mass Function (PMF):**
-$$
-p(x) = p(1-p)^x \quad \text{for } x = 0, 1, 2, \dots
-$$
-Let $q = 1-p$. The PMF is often written as $p(x) = p q^x$.
+1. Every trial has exactly two relevant outcomes: success or failure.
+2. Trials are independent.
+3. The probability of success is constant, $P(S)=p$, so $P(F)=q=1-p$.
+4. Trials continue until the $r$-th success occurs, where $r$ is a fixed positive integer.
+
+If the probability changes from trial to trial, or one outcome affects the next, the standard formula does not apply.
 
 </Card>
+
+<Checklist title="Model-selection check" rules={[
+  { type: 'must', text: 'I can identify what counts as a success and state p.' },
+  { type: 'must', text: 'The trials are independent and use the same p.' },
+  { type: 'must', text: 'The experiment stops at a specified success, not after a fixed number of trials.' },
+  { type: 'must', text: 'I have written whether X counts total trials or failures.' },
+]} />
+
+## 2. Convention A: total trials until the r-th success
+
+This is the convention used in the CSI213 negative binomial lecture. Let
+
+$$
+X=\text{the total number of trials required to obtain the }r\text{-th success}.
+$$
+
+The smallest possible value is $r$, because obtaining $r$ successes requires at least $r$ trials. Therefore
+
+$$X\in\{r,r+1,r+2,\ldots\}.$$
 
 <HighlightCard
   variant="neutral"
-  title="Theorem 5.3.1: Geometric Survival Function"
-  description="A critical exam concept: The probability of observing at least $x$ failures before the first success."
+  title="Theorem 5.3.1 — Negative binomial PMF (total-trials convention)"
+  description="If X is the trial number on which the r-th success occurs, then the probability is the number of valid arrangements multiplied by the probability of each arrangement."
 >
 
 $$
-P(X \ge x) = q^x \quad \text{where } q = 1-p
+P(X=x)=\binom{x-1}{r-1}p^r(1-p)^{x-r},
+\qquad x=r,r+1,\ldots
 $$
-*(Exam Warning: Because $x$ counts failures starting at $0$, the exponent is exactly $x$, **not** $x-1$.)*
+
+For $x<r$, $P(X=x)=0$.
 
 </HighlightCard>
 
+### Why the coefficient is $\binom{x-1}{r-1}$
+
+If the $r$-th success occurs on trial $x$, then trial $x$ is already fixed as a success. Among the first $x-1$ trials there must be exactly $r-1$ successes and $x-r$ failures. We choose the locations of those $r-1$ earlier successes:
+
+$$
+\underbrace{\binom{x-1}{r-1}}_{\text{arrangements}}
+\underbrace{p^{r-1}(1-p)^{x-r}}_{\text{first }x-1\text{ trials}}
+\underbrace{p}_{\text{final success}}
+=\binom{x-1}{r-1}p^r(1-p)^{x-r}.
+$$
+
+<Callout type="warn" title="The final trial is not free to move">
+Do not use $\binom{x}{r}$. That would allow the $r$ successes to occur anywhere among all $x$ trials, including arrangements where the $r$-th success happened before trial $x$. The stopping rule forces trial $x$ to be a success, so only the first $x-1$ positions are chosen.
+</Callout>
+
+<HighlightCard
+  variant="neutral"
+  title="Theorem 5.3.2 — Mean, variance and standard deviation"
+  description="For the total number of trials X needed to obtain r successes, the expected waiting time is r times the geometric waiting time."
+>
+
+$$
+E[X]=\frac{r}{p},\qquad
+\operatorname{Var}(X)=\frac{r(1-p)}{p^2},\qquad
+\operatorname{SD}(X)=\frac{\sqrt{r(1-p)}}{p}.
+$$
+
+</HighlightCard>
+
+One way to understand these moments is to write $X=G_1+\cdots+G_r$, where each $G_i$ is the number of trials from one success to the next. Each $G_i$ is geometric with mean $1/p$ and variance $(1-p)/p^2$. Independence then gives
+
+$$
+E[X]=\sum_{i=1}^rE[G_i]=\frac{r}{p},
+\qquad
+\operatorname{Var}(X)=\sum_{i=1}^r\operatorname{Var}(G_i)=\frac{r(1-p)}{p^2}.
+$$
+
+### Worked example 1 — exactly the seventh trial
+
 <StepByStep>
-  <StepByStepTitle>Proof: Geometric Survival Function</StepByStepTitle>
+  <StepByStepTitle>Three successes are required and each trial succeeds with probability 0.4. Find the probability that the third success occurs on trial 7.</StepByStepTitle>
 
   <Step number={1}>
-    <StepTitle>State the Goal</StepTitle>
+    <StepTitle>Define the variable and parameters</StepTitle>
 
-    Prove that $P(X \ge x) = \sum_{k=x}^\infty p q^k = q^x$.
+    Let $X$ be the total number of trials to the third success. Then $X\sim\operatorname{NB}(r=3,p=0.4)$ under the total-trials convention, and the question asks for $P(X=7)$.
   </Step>
 
   <Step number={2}>
-    <StepTitle>Apply the Infinite Geometric Series Formula</StepTitle>
+    <StepTitle>Translate the stopping rule</StepTitle>
 
-    The sum is a geometric series with first term $a = p q^x$ (when $k=x$) and common ratio $r = q$.
-    Since $0 < q < 1$, the series converges.
+    Trial 7 must be a success. The first 6 trials must contain exactly 2 successes and $6-2=4$ failures. There are $\binom62$ valid arrangements.
   </Step>
 
   <Step number={3}>
-    <StepTitle>Evaluate the Sum</StepTitle>
+    <StepTitle>Substitute into the PMF</StepTitle>
 
-    $P(X \ge x) = \frac{a}{1 - r} = \frac{p q^x}{1 - q}$
+    $$
+    P(X=7)=\binom{7-1}{3-1}(0.4)^3(0.6)^{7-3}
+    =\binom62(0.4)^3(0.6)^4.
+    $$
   </Step>
 
   <Step number={4}>
-    <StepTitle>Simplify</StepTitle>
+    <StepTitle>Evaluate and interpret</StepTitle>
 
-    Since $1 - q = p$, the expression simplifies to:
-    $P(X \ge x) = \frac{p q^x}{p} = q^x$. $\blacksquare$
+    $$P(X=7)=15(0.064)(0.1296)=\boxed{0.124416}.$$
+
+    There is about a $12.44\%$ chance that the third success occurs precisely on trial 7.
   </Step>
 </StepByStep>
 
-<Card>
+## 3. Convention B: failures before the r-th success
 
-### Definition 5.3.2 (Negative Binomial Distribution)
+Let
 
-A random variable $X$ follows a **Negative Binomial Distribution** with parameters $r$ (target number of successes) and $p$ (probability of success), denoted $X \sim \text{NB}(r, p)$, if it counts the number of **failures** before the $r$-th success.
+$$Y=\text{the number of failures observed before the }r\text{-th success}.$$
 
-**Probability Mass Function (PMF):**
+Now the support starts at zero:
+
+$$Y\in\{0,1,2,\ldots\}.$$
+
+Because total trials consist of $r$ successes plus $Y$ failures,
+
+$$X=Y+r\qquad\text{and}\qquad Y=X-r.$$
+
+<HighlightCard
+  variant="neutral"
+  title="Theorem 5.3.3 — Negative binomial PMF (failures convention)"
+  description="If Y counts failures before the r-th success, substitute x=y+r into the total-trials formula."
+>
+
 $$
-p(x) = \binom{x+r-1}{r-1} p^r (1-p)^x \quad \text{for } x = 0, 1, 2, \dots
+P(Y=y)=\binom{y+r-1}{r-1}p^r(1-p)^y,
+\qquad y=0,1,2,\ldots
 $$
 
-**Combinatorial Intuition:** To have exactly $x$ failures before the $r$-th success, the final trial (trial number $x+r$) **must** be a success (probability $p$). The preceding $x+r-1$ trials must contain exactly $r-1$ successes and $x$ failures. The number of ways to arrange these is $\binom{x+r-1}{r-1}$ (or equivalently $\binom{x+r-1}{x}$).
+$$
+E[Y]=\frac{r(1-p)}{p},\qquad
+\operatorname{Var}(Y)=\frac{r(1-p)}{p^2}.
+$$
 
-</Card>
+</HighlightCard>
+
+The variances are identical because adding or subtracting the constant $r$ shifts every value without changing spread. The means differ by $r$:
+
+$$E[Y]=E[X-r]=\frac rp-r=\frac{r(1-p)}p.$$
+
+### Worked example 2 — translate the wording before calculating
 
 <StepByStep>
-  <StepByStepTitle>Example: Applying the Negative Binomial PMF</StepByStepTitle>
+  <StepByStepTitle>A player makes a free throw with probability 0.8. Find the probability of exactly 2 misses before the third successful throw.</StepByStepTitle>
 
   <Step number={1}>
-    <StepTitle>Problem Statement</StepTitle>
+    <StepTitle>Choose the convention from the noun being counted</StepTitle>
 
-    A basketball player makes free throws with probability $p = 0.8$. What is the probability that she misses exactly 2 free throws before making her 3rd successful free throw?
+    The question explicitly counts **misses**, which are failures. Therefore use $Y$ with $y=2$, $r=3$, $p=0.8$ and $q=0.2$.
   </Step>
 
   <Step number={2}>
-    <StepTitle>Identify Parameters</StepTitle>
+    <StepTitle>Describe the required sequence structure</StepTitle>
 
-    We are counting failures ($x$) before the $r$-th success.
-    $r = 3$ (target successes), $x = 2$ (failures), $p = 0.8$, $q = 0.2$.
+    Before the final successful throw there are 4 throws containing 2 successes and 2 failures. The fifth throw is the required third success.
   </Step>
 
   <Step number={3}>
-    <StepTitle>Apply the PMF</StepTitle>
+    <StepTitle>Substitute and evaluate</StepTitle>
 
-    $P(X = 2) = \binom{2+3-1}{3-1} (0.8)^3 (0.2)^2$
-    $P(X = 2) = \binom{4}{2} (0.512) (0.04)$
-    $P(X = 2) = 6 \times 0.512 \times 0.04 = 0.12288$
+    $$
+    P(Y=2)=\binom{2+3-1}{3-1}(0.8)^3(0.2)^2
+    =\binom42(0.512)(0.04)
+    =\boxed{0.12288}.
+    $$
   </Step>
 </StepByStep>
 
----
+## 4. Cumulative probabilities: use a binomial bridge
 
+Adding many negative binomial PMF terms is valid, but a binomial reformulation is usually faster and less error-prone.
 
+Let $X$ be the total trial count to the $r$-th success, and let $B_k\sim\operatorname{Bin}(k,p)$ count successes in the first $k$ trials.
+
+<HighlightCard
+  variant="neutral"
+  title="Theorem 5.3.4 — Negative-binomial/binomial bridge"
+  description="Waiting longer than k trials means that fewer than r successes have occurred in the first k trials. Finishing by k means at least r successes have occurred."
+>
+
+$$P(X>k)=P(B_k\le r-1),$$
+
+$$P(X\le k)=P(B_k\ge r)=1-P(B_k\le r-1).$$
+
+</HighlightCard>
+
+These are the same experiment viewed in two ways. The negative binomial view asks **when** success number $r$ arrives; the binomial view freezes the first $k$ trials and asks **how many** successes they contain.
+
+### Worked example 3 — probability of waiting more than five trials
+
+<StepByStep>
+  <StepByStepTitle>Each trial succeeds with probability 0.8. Find the probability that more than 5 trials are needed to obtain 3 successes.</StepByStepTitle>
+
+  <Step number={1}>
+    <StepTitle>Translate the event</StepTitle>
+
+    $X>5$ means the third success has not occurred by the end of trial 5. Therefore the first 5 trials contain 0, 1 or 2 successes.
+  </Step>
+
+  <Step number={2}>
+    <StepTitle>Introduce the binomial count</StepTitle>
+
+    Let $B_5\sim\operatorname{Bin}(5,0.8)$. Then $P(X>5)=P(B_5\le2)$.
+  </Step>
+
+  <Step number={3}>
+    <StepTitle>Expand the cumulative probability</StepTitle>
+
+    $$P(B_5\le2)=\sum_{j=0}^{2}\binom5j(0.8)^j(0.2)^{5-j}.$$
+  </Step>
+
+  <Step number={4}>
+    <StepTitle>Evaluate</StepTitle>
+
+    $$
+    0.2^5+5(0.8)(0.2)^4+10(0.8)^2(0.2)^3
+    =0.00032+0.0064+0.0512
+    =\boxed{0.05792}.
+    $$
+  </Step>
+</StepByStep>
+
+## 5. The geometric distribution as $r=1$
+
+<Card>
+
+### Definition 5.3.2 — Geometric distribution
+
+The geometric distribution models the wait to the **first** success.
+
+If $G$ counts total trials, then
+
+$$P(G=k)=(1-p)^{k-1}p,\quad k=1,2,\ldots,$$
+
+$$P(G>k)=(1-p)^k,\quad E[G]=\frac1p,\quad
+\operatorname{Var}(G)=\frac{1-p}{p^2}.$$
+
+If $H=G-1$ counts failures before the first success, then
+
+$$P(H=h)=(1-p)^hp,\quad h=0,1,2,\ldots,$$
+
+$$P(H\ge h)=(1-p)^h,\quad E[H]=\frac{1-p}{p},\quad
+\operatorname{Var}(H)=\frac{1-p}{p^2}.$$
+
+</Card>
+
+The geometric distribution is memoryless:
+
+$$P(G>s+t\mid G>s)=P(G>t).$$
+
+The negative binomial distribution with $r>1$ does not have this simple memoryless property, because how many successes have already occurred matters.
+
+## 6. Reading exam wording correctly
+
+| Wording | Variable and event |
+|---|---|
+| “The $r$-th success occurs on trial $x$” | Total-trials convention: $P(X=x)$ |
+| “Exactly $y$ failures occur before the $r$-th success” | Failures convention: $P(Y=y)$ |
+| “More than $k$ trials are required” | $P(X>k)=P(B_k\le r-1)$ |
+| “The $r$-th success occurs by trial $k$” | $P(X\le k)=P(B_k\ge r)$ |
+| “The first success is on trial $k$” | Geometric: $(1-p)^{k-1}p$ |
+| “At least $h$ failures before the first success” | Geometric failures convention: $(1-p)^h$ |
+
+<Callout type="info" title="A reliable four-line solution template">
+Write: (1) what $X$ counts, (2) the distribution and parameters, (3) the symbolic probability statement, and only then (4) the substituted formula. Most negative binomial errors happen before the arithmetic.
+</Callout>
+
+## 7. Common mistakes and how to diagnose them
+
+| Mistake | Why it is wrong | Repair |
+|---|---|---|
+| Using $\binom{x}{r}$ | It does not force trial $x$ to be the $r$-th success | Fix the last trial, then choose $r-1$ successes among the first $x-1$ |
+| Using support $0,1,2,\ldots$ with the total-trials PMF | Total trials cannot be less than $r$ | Write the variable definition and support before the PMF |
+| Using $E[X]=r(1-p)/p$ for total trials | That is the failures-only mean | Use $r/p$ for total trials; subtract $r$ for failures |
+| Treating “by trial $k$” as “on trial $k$” | “By” is cumulative; “on” is exact | Translate to $X\le k$ versus $X=k$ |
+| Using a binomial model when the stopping time is random | Binomial fixes the trial count | Use negative binomial for an exact stopping trial; use the binomial bridge only for cumulative events |
 
 ---
 
 ### Explore it
 
-These count failures, as in this lesson, so the values start at 0. Change $p$ and $r$, and notice that the geometric is the negative binomial with $r = 1$.
+The explorer below uses the failures convention, so values start at $0$. Set $r=1$ to see the geometric distribution as a special case, then increase $r$ and watch the centre move to the right.
 
 <DistributionExplorer families={["geometric", "negative-binomial"]} convention="failures" start={{ p: 0.3, r: 3 }} />
 
-## Topic Assessment
+## Topic assessment
 
-<Quiz title="Geometric Negative Binomial Assessment" questions={quizData} />
+<Quiz title="Geometric and Negative Binomial Assessment" questions={quizData} />
