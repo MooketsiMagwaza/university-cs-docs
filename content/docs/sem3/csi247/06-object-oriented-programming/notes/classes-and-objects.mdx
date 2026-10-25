@@ -1,0 +1,253 @@
+---
+title: "Classes & objects"
+description: "The two words everything else in Java is built on: a blueprint, and the things you build from it."
+---
+
+<LearningObjectives items={[
+  "What a class is, what an object is, and how they relate.",
+  "The three kinds of class member: fields, constructors and methods.",
+  "What `new`, `this` and `null` mean.",
+  "Why variables hold *references* to objects, and why that changes how `=` and `==` behave.",
+  "What `static` really means.",
+]} />
+
+<ConceptFrame>
+
+<FrameBox label="The idea">
+
+A **class** is a cookie cutter. An **object** is a cookie. One cutter makes many cookies, all the same shape, but each cookie can have its own icing.
+
+</FrameBox>
+
+<FrameBox label="The definition">
+
+A class defines a new type: the fields (state) and methods (behaviour) its objects will have. An object is an *instance* of a class, created while the program runs with `new`, with its own copy of the fields.
+
+</FrameBox>
+
+<FrameBox label="Why it works">
+
+Real programs model real things: accounts, students, cars. Describing such a thing once, with its data and the operations on that data side by side, keeps related code together where it's easy to find and change.
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+Write the description once, then create as many independent objects as you need. One class can produce a million objects with zero duplicated code.
+
+</FrameBox>
+
+</ConceptFrame>
+
+## Class versus object
+
+A **class** exists in your source code. It is a description: "a car has a colour and a speed, and it can accelerate and brake". It doesn't hold any particular colour or speed itself. An **object** exists only while the program is running. It is one concrete car, with an actual colour (red) and an actual current speed (60 km/h). The words *object* and *instance* mean the same thing; "an instance of `Car`" just means "an object made from the `Car` class". Creating an object is called *instantiating* the class.
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/classes-and-objects" id="classes-objects-1">
+
+**Figure 6.1** One class, many objects. Every object has the same *shape* (the same fields and methods), but its own *values*.
+
+</SvgFigure>
+
+## The three kinds of member
+
+The things declared inside a class are called its **members**. There are three main kinds:
+
+- **Fields** (also called *instance variables* or *attributes*) are variables declared inside the class but outside any method. Each object gets its own separate copy. Unlike local variables, fields get a default value automatically: `0`, `false` or `null`.
+- **Constructors** are special methods that have the same name as the class and *no return type at all* (not even `void`). A constructor runs exactly once for each object, at the moment it is created, and its job is to put the new object into a sensible starting state.
+- **Methods** are the object's behaviour. A method without `static` is an *instance method*: it is called on a particular object and can read and change that object's fields.
+
+### Writing a class
+
+```java title="Car.java"
+// Car.java — a class is a blueprint: it describes state + behaviour
+public class Car {
+
+    // ── FIELDS (state) ── every Car object gets its OWN copy of these
+    private String color;
+    private int speed;              // km/h
+
+    // ── CONSTRUCTOR ── same name as the class, no return type.
+    //    Runs once, at the moment `new Car(...)` is evaluated.
+    public Car(String color) {
+        this.color = color;         // this.color = the FIELD; color = the PARAMETER
+        this.speed = 0;             // every new car starts parked
+    }
+
+    // ── METHODS (behaviour) ── they work on THIS object's fields
+    public void accelerate(int amount) {
+        speed += amount;            // short for this.speed = this.speed + amount
+    }
+
+    public void brake() {
+        speed = 0;
+    }
+
+    public String describe() {
+        return color + " car going " + speed + " km/h";
+    }
+}
+```
+
+The word `private` on the fields means that only code inside the `Car` class may touch them directly. That is the subject of the next page, Encapsulation. The word `public` on the constructor and methods means any other class may call them.
+
+### Creating and using objects
+
+```java title="Main.java"
+public class Main {
+    public static void main(String[] args) {
+        Car car1 = new Car("red");     // 1. allocate memory  2. run the constructor  3. give back a reference
+        Car car2 = new Car("blue");    // a second, completely independent object
+
+        car1.accelerate(60);           // the dot means "on this object, call this method"
+                                       // only car1's speed changes
+        System.out.println(car1.describe());   // red car going 60 km/h
+        System.out.println(car2.describe());   // blue car going 0 km/h
+    }
+}
+```
+
+The expression `new Car("red")` does three things in order. First it reserves memory for a new `Car` object, large enough for all its fields, and sets them to their defaults. Then it runs the constructor with the argument `"red"`, which fills the fields in. Finally it produces a **reference** to the new object, which is stored in the variable `car1`. To call a method on an object you write the variable, a dot, and the method call: `car1.accelerate(60)`.
+
+### The keyword `this`
+
+Inside an instance method or constructor, `this` means "the object this code is currently running for". When you call `car1.accelerate(60)`, then inside `accelerate`, `this` *is* `car1`; when you call `car2.accelerate(10)`, `this` is `car2`. That is how one method definition can update a different object each time.
+
+You usually only need to write `this.` when a parameter has the same name as a field. In the constructor above, plain `color` means the parameter (the closest declaration wins), so we write `this.color` to mean the field.
+
+<Callout type="mistake">
+
+Writing `color = color;` in the constructor. That assigns the parameter to itself and leaves the field at its default, `null`. The program compiles, then prints "null car going 0 km/h". Always write `this.color = color;`.
+
+</Callout>
+
+### Several constructors (overloading)
+
+A class may have more than one constructor, as long as their parameter lists differ. Java picks the one whose parameters match the arguments you pass. One constructor can call another with `this(…)` as its very first statement, which avoids repeating code. If you write no constructor at all, Java quietly provides an empty one with no parameters, called the *default constructor*. As soon as you write any constructor yourself, that free one disappears.
+
+```java title="Car.java (extra constructor)"
+public Car() {
+    this("white");      // delegate to Car(String): every car with no colour given is white
+}
+// new Car()         → white car going 0 km/h
+// new Car("black")  → black car going 0 km/h
+```
+
+## Variables hold references, not objects
+
+This is the single most misunderstood fact in beginner Java, and it explains several later surprises. Memory in a running Java program is divided into two main areas. Local variables and parameters live in method frames on the **stack** (the call stack from the previous page). Objects live in a separate, larger area called the **heap**.
+
+A variable whose type is a class, such as `Car a`, does not contain the car. It contains a **reference**: think of it as an arrow, or the address of the place on the heap where the car lives. Variables of primitive types (`int`, `double`…) are different: they hold the value itself.
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/classes-and-objects" id="classes-objects-2">
+
+**Figure 6.2** After `Car b = a;` both arrows point to the *same* object, so a change made through `b` is visible through `a`. `c` points to a different object that merely looks similar, so `a == c` is `false`.
+
+</SvgFigure>
+
+```java title="References.java"
+Car a = new Car("red");
+Car b = a;                  // copies the REFERENCE (the arrow), not the object
+b.accelerate(50);           // drives the one shared car
+
+System.out.println(a.describe());   // red car going 50 km/h   ← a sees it too!
+System.out.println(a == b);         // true  — == compares arrows: same object?
+
+Car c = new Car("red");
+System.out.println(a == c);         // false — looks the same, but a different object
+```
+
+So for objects, `==` asks "do these two arrows point at the very same object?". This is called comparing **identity**. To ask "do these two objects hold equal data?" (comparing **equality**), classes provide an `equals` method. `String` already has one, which is why you must compare text with `.equals`. [Appendix D](/docs/sem3/csi247/resources#appendix-d--the-object-class-equals-hashcode-tostring) shows how to write `equals` for your own classes.
+
+### `null`: an arrow pointing nowhere
+
+A reference variable can hold the special value `null`, meaning "this variable does not currently refer to any object". Fields of class type start out as `null`. Calling a method through a `null` reference has no object to run on, so Java stops with a `NullPointerException`, probably the most famous error in Java.
+
+```java title="NullDemo.java"
+Car parked = null;           // no car yet
+// parked.brake();           // ✗ run time: NullPointerException
+if (parked != null) {        // ✓ check first when a reference might be null
+    parked.brake();
+}
+```
+
+<Callout type="note" title="Garbage collection">
+
+When no variable refers to an object any more, the program can never reach it again. The JVM's **garbage collector** notices such unreachable objects and frees their memory automatically. Unlike some languages, Java never asks you to delete objects yourself.
+
+</Callout>
+
+## `static`: belonging to the class, not to an object
+
+Ordinary (instance) fields exist once *per object*. A field marked `static` exists exactly *once*, attached to the class itself and shared by every object of that class. Likewise, a `static` method belongs to the class: you call it on the class name (`Math.max(3, 7)`, `Arrays.toString(a)`) and it has no `this`, because it isn't running for any particular object. That is why `main` is static: when the program starts, no objects exist yet.
+
+```java title="Ticket.java"
+public class Ticket {
+    private static int issued = 0;   // ONE counter, shared by all tickets
+    private final int number;        // each ticket has its OWN number
+
+    public Ticket() {
+        issued++;                    // every constructor call bumps the shared counter
+        this.number = issued;
+    }
+
+    public int getNumber() { return number; }
+
+    public static int totalIssued() {   // static: ask the CLASS — no object needed
+        return issued;                  // can't use `this` or `number` here: which ticket would it be?
+    }
+}
+
+// Ticket t1 = new Ticket();   t1.getNumber() → 1
+// Ticket t2 = new Ticket();   t2.getNumber() → 2
+// Ticket.totalIssued()        → 2
+```
+
+|   | Instance member (no `static`) | Static member |
+| --- | --- | --- |
+| How many copies | One per object | One for the whole class |
+| How you use it | `myTicket.getNumber()` | `Ticket.totalIssued()` |
+| Has `this`? | Yes | No |
+| Typical use | An object's own data and behaviour | Shared counters, constants, utility methods like `Math.sqrt` and our sorting methods |
+
+<Callout type="note">
+
+The searching and sorting methods later in this course are written as `static` methods. They don't need any object state: you hand them an array and they work on it. That is a perfectly good design for utility methods, and it is exactly how Java's own `Arrays.sort` works.
+
+</Callout>
+
+<Callout type="key">
+
+A class is a blueprint (fields + constructors + methods); an object is an instance made with `new`. A class-typed variable holds a *reference*, so copying the variable copies the arrow, and `==` compares arrows. `static` means one per class instead of one per object.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={"What is the difference between a class and an object?"}>
+
+A class is a description in the source code of the fields and methods a type of thing has. An object is a concrete instance of that class, created while the program runs with `new`, holding its own values for those fields.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>After <code>Car b = a; b.brake();</code> has <code>a</code>'s speed changed?</>}>
+
+Yes. `b = a` copied the reference, so `a` and `b` point to the same object. Braking through `b` brakes the one shared car.
+
+</CheckQuestion>
+
+<CheckQuestion question={"How can you tell a constructor apart from a normal method?"}>
+
+It has exactly the same name as the class and no return type at all, not even `void`. It runs automatically when `new` creates an object.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why can't a <code>static</code> method use <code>this</code>?</>}>
+
+Because a static method is called on the class, not on an object. There is no "current object" for `this` to refer to.
+
+</CheckQuestion>
+
+</CheckQuestions>

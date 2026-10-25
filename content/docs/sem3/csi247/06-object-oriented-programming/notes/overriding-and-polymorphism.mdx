@@ -1,114 +1,168 @@
 ---
-title: "Overriding and Polymorphism"
-description: "Separate reference type from runtime object type, then trace dynamic dispatch across Shape, Circle, and Rectangle."
+title: "Polymorphism"
+description: "\"Polymorphism\" is Greek for \"many forms\": one method call can behave differently depending on which kind of object actually receives it."
 ---
 
-Polymorphism lets one superclass/interface reference refer to different compatible runtime objects. An overridden instance-method call is selected from the runtime object's class.
+<LearningObjectives items={[
+  "The difference between a variable's reference type and the object's actual type.",
+  "How dynamic dispatch picks which overridden method runs.",
+  "Upcasting, downcasting and `instanceof`.",
+  "The difference between overriding and overloading.",
+]} />
 
-## 1. Two types to track
+<ConceptFrame>
 
-~~~java
-Shape item = new Circle("Blue", 2.0);
-~~~
+<FrameBox label="The idea">
 
-<div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
-  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/5 p-4"><strong>Reference type: Shape</strong><p className="mb-0 mt-2 text-sm">Controls which member names the compiler allows.</p></div>
-  <div className="rounded-xl border-2 border-emerald-600 bg-emerald-500/5 p-4"><strong>Runtime type: Circle</strong><p className="mb-0 mt-2 text-sm">Controls which overridden instance-method body runs.</p></div>
-</div>
+Say "speak!" to a room full of animals. You give one instruction, and each animal responds in its own way.
 
-## 2. Override the same contract
+</FrameBox>
 
-~~~java
-public class Circle extends Shape {
-    // ... radius and constructor ...
+<FrameBox label="The definition">
 
-    @Override
-    public double getArea() {
-        return Math.PI * radius * radius;
-    }
+A variable of a **supertype** can refer to an object of any of its **subtypes**. When you call an overridden method, Java runs the version belonging to the object's *actual* class, decided while the program runs. This is called **dynamic dispatch**.
+
+</FrameBox>
+
+<FrameBox label="Why it works">
+
+The calling code depends only on the general type (`Animal`). New subtypes can be added later without touching that code; it simply works with them.
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+It replaces long `if (type == DOG) … else if (type == CAT) …` chains, so code can be extended with new types without being modified.
+
+</FrameBox>
+
+</ConceptFrame>
+
+## A subclass object can sit in a superclass variable
+
+Because a `Dog` *is an* `Animal`, Java lets you store a reference to a `Dog` in a variable of type `Animal`:
+
+```java title="Upcast"
+Animal a = new Dog("Rex");   // legal: every Dog is an Animal
+```
+
+This line involves two different types, and keeping them apart is the key to the whole topic:
+
+- The **reference type** (also called the *declared* or *static* type) is `Animal`: the type written on the variable. The *compiler* looks only at this. It decides which methods you are *allowed* to call.
+- The **object type** (also called the *actual* or *run-time* type) is `Dog`: the class of the object that really exists in memory. The *JVM* looks at this while the program runs. It decides *which version* of an overridden method runs.
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/overriding-and-polymorphism" id="polymorphism-1">
+
+**Figure 9.1** The compiler uses the reference type to check that a call is *legal*; the JVM uses the object type to decide *which code runs*.
+
+</SvgFigure>
+
+## One loop, many behaviours
+
+```java title="Zoo.java"
+Animal[] zoo = { new Dog("Rex"), new Cat("Tom"), new Animal("Generic") };
+
+for (Animal a : zoo) {
+    // ONE line of code, THREE different behaviours.
+    // On each iteration the JVM checks the real object and runs ITS speak().
+    System.out.println(a.speak());
+}
+// Adding `class Cow extends Animal` later needs ZERO changes to this loop.
+```
+
+```text
+Woof!
+... Meow
+...
+```
+
+The loop was written knowing only about `Animal`. It has no idea dogs or cats exist. Yet each object answers in its own way. If someone adds a `Cow` class next year, this loop will print "Moo" without being edited or even recompiled. Code that is *open for extension but closed for modification* is one of the main goals of good design, and polymorphism is how Java achieves it.
+
+## Upcasting, downcasting and `instanceof`
+
+Treating a `Dog` as an `Animal` is called **upcasting** (moving up the hierarchy). It's automatic and always safe, because every dog really is an animal. Going the other way, **downcasting**, needs an explicit cast and can fail, because not every animal is a dog. The `instanceof` operator tests an object's actual type at run time, so you can check before you cast.
+
+```java title="Casting.java"
+Animal a = new Dog("Rex");      // upcast: automatic and always safe
+
+// a.fetch();                   // ✗ compile error: the reference type Animal has no fetch()
+
+if (a instanceof Dog d) {       // Java 16+: test the type AND create a Dog variable d in one step
+    d.fetch();                  // ✓ inside this block, d is a Dog → Rex fetches the ball.
 }
 
-public class Rectangle extends Shape {
-    // ... width, height and constructor ...
-
-    @Override
-    public double getArea() {
-        return width * height;
-    }
+// The older style, still common:
+if (a instanceof Dog) {
+    Dog d2 = (Dog) a;           // explicit downcast — safe because we just checked
+    d2.fetch();
 }
-~~~
 
-<Mermaid chart={`flowchart TD
-  C["call item.getArea()"] --> R{"runtime object type?"}
-  R -- Circle --> CA["Circle.getArea()<br/>πr²"]
-  R -- Rectangle --> RA["Rectangle.getArea()<br/>width × height"]`} caption="The same source-level call can dispatch to different overridden implementations." />
+Animal b = new Cat("Tom");
+// Dog x = (Dog) b;             // ✗ compiles, but throws ClassCastException at run time: Tom is a Cat
+```
 
-## 3. Dynamic dispatch trace
+<Callout type="tip">
 
-~~~java
-Shape[] shapes = {
-    new Circle("Blue", 2.0),
-    new Rectangle("Red", 3.0, 4.0)
-};
+If you find yourself writing lots of `instanceof` checks followed by casts, it's often a sign the behaviour should be a method overridden in each subclass instead. Let polymorphism make the decision for you.
 
-for (Shape shape : shapes) {
-    System.out.println(shape.getArea());
+</Callout>
+
+## Overriding versus overloading
+
+These two words sound alike but mean very different things, and the difference comes down to *when* the decision is made.
+
+- **Overriding**: a subclass provides its own version of an inherited method with the *same* name and the *same* parameters. Which version runs is decided at **run time** from the object's actual type. This is the polymorphism described above.
+- **Overloading**: one class has several methods with the same name but *different* parameter lists. Which one runs is decided at **compile time** from the types of the arguments you write. It's really just a naming convenience.
+
+|   | Overriding | Overloading |
+| --- | --- | --- |
+| Where | A subclass redefines a parent's method | Usually within the same class |
+| Parameters | Identical | Different (number or types) |
+| Decided | At run time, by the object's type | At compile time, by the argument types |
+| Marked with | `@Override` | nothing |
+| Example | `Dog.speak()` replaces `Animal.speak()` | `add(int, int)` and `add(double, double)` |
+
+```java title="Calculator.java"
+public class Calculator {
+    // Same name, different parameter lists → OVERLOADING.
+    // The compiler picks one by looking at the types of the arguments.
+    public int    add(int a, int b)        { return a + b; }
+    public double add(double a, double b)  { return a + b; }
+    public int    add(int a, int b, int c) { return a + b + c; }
 }
-~~~
+// calc.add(2, 3)      → the int version     → 5
+// calc.add(2.5, 1.0)  → the double version  → 3.5
+// calc.add(1, 2, 3)   → the 3-arg version   → 6
+```
 
-| Iteration | Reference type | Runtime type | Selected body | Result |
-|---:|---|---|---|---:|
-| 1 | Shape | Circle | <code>Circle.getArea</code> | about 12.57 |
-| 2 | Shape | Rectangle | <code>Rectangle.getArea</code> | 12.0 |
+<Callout type="note">
 
-No manual type test is needed; each object knows its behaviour.
+The return type alone can't distinguish overloads. `int f(int x)` and `double f(int x)` in the same class won't compile, because a call `f(5)` wouldn't tell the compiler which one you mean.
 
-## 4. Overriding versus overloading
+</Callout>
 
-| Feature | Overriding | Overloading |
-|---|---|---|
-| Relationship | subclass replaces inherited instance method | same class/name, different parameter lists |
-| Selection | runtime object type | compile-time argument types |
-| Signature | same compatible signature | different signatures |
-| Annotation | <code>@Override</code> recommended | no override annotation |
-| Common label | dynamic polymorphism | static/compile-time polymorphism |
+<Callout type="key">
 
-## 5. Upcasting and downcasting
+Supertype variable, subtype object. The compiler checks *whether* you may call a method (reference type); the JVM chooses *which version* runs (object type). Overriding is decided at run time, overloading at compile time.
 
-Assigning a Circle to Shape is an automatic upcast. A downcast asks Java to treat a general reference as a more specific type and can fail at runtime.
+</Callout>
 
-~~~java
-Shape shape = new Circle("Blue", 2.0); // Safe upcast.
+## Check your understanding
 
-if (shape instanceof Circle circle) {
-    System.out.println(circle.getRadius()); // Safe narrowed variable.
-}
-~~~
+<CheckQuestions>
 
-Do not downcast merely to call behaviour that should be declared in the common abstraction.
+<CheckQuestion question={<>Given <code>Animal a = new Dog("Rex");</code>, which <code>speak()</code> runs, and why does <code>a.fetch()</code> not compile?</>}>
 
-## 6. A polymorphic algorithm
+`Dog`'s `speak()` runs, because dispatch uses the object's actual type. `a.fetch()` fails because the compiler only allows methods declared on the reference type, `Animal`, which has no `fetch()`.
 
-~~~java
-public static Shape larger(Shape first, Shape second) {
-    // Each call dispatches to the runtime object's getArea implementation.
-    if (first.getArea() >= second.getArea()) {
-        return first;
-    }
-    return second;
-}
-~~~
+</CheckQuestion>
 
-The algorithm depends on the Shape contract, not on every concrete subclass. New Shape subclasses can participate without modifying this method.
+<CheckQuestion question={<>Is <code>println</code> printing an <code>int</code> in one call and a <code>String</code> in another an example of overriding or overloading?</>}>
 
-## 7. Exam-style practice
+Overloading. `PrintStream` has several `println` methods with different parameter types, and the compiler picks one from the argument's type.
 
-1. For five declarations, label reference and runtime types. [10]
-2. Trace a Shape array and state the exact overridden method called. [8]
-3. Distinguish overloading and overriding using signatures and selection time. [6]
-4. Repair an unsafe cast with pattern matching <code>instanceof</code>. [6]
-5. Design a polymorphic <code>totalArea</code> method. [8]
+</CheckQuestion>
+
+</CheckQuestions>
 
 <QuizRef src="sem3/csi247/06-object-oriented-programming/notes/overriding-and-polymorphism" id="polymorphism" />
-
-Continue with [Encapsulation and Abstraction](/docs/sem3/csi247/06-object-oriented-programming/notes/encapsulation-and-abstraction).

@@ -1,0 +1,261 @@
+---
+title: "Comparable & Comparator"
+description: "Where the OOP section meets the sorting section: interfaces and polymorphism let one sorting method order any kind of object."
+---
+
+<LearningObjectives items={[
+  "Why a sort only needs to know how to compare two elements.",
+  "How to give a class a natural order with `Comparable` and `compareTo`.",
+  "How to define any number of other orders with `Comparator`, lambdas and method references.",
+  "How to use Java's built-in sorting methods, and the mistakes to avoid.",
+  "How to write your own generic sort that works on any type.",
+]} />
+
+<ConceptFrame>
+
+<FrameBox label="The idea">
+
+A sorting algorithm only ever asks one question: "does *a* come before *b*?". Teach your objects to answer it, and every sort in Java works for them.
+
+</FrameBox>
+
+<FrameBox label="The definition">
+
+`Comparable<T>` gives a class its **natural order** through a `compareTo` method written inside the class. `Comparator<T>` is a separate object that defines an **external order** through `compare(a, b)`.
+
+</FrameBox>
+
+<FrameBox label="Why it works">
+
+Abstraction and polymorphism: Java's sort methods are written against these interfaces, so they never need to know what a `Student` is. They just call the comparison method.
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+One natural order per class, plus unlimited alternative orders (by mark, by age, reversed, with tie-breakers), without editing the class.
+
+</FrameBox>
+
+</ConceptFrame>
+
+## The comparison contract
+
+Both interfaces use the same convention for their answer. The method returns an `int`, and only its **sign** matters:
+
+<SvgFigure src="sem3/csi247/04-sorting-and-searching/notes/comparable-and-comparator" id="comparable-1">
+
+**Figure 23.1** Only the sign matters, not the size. Returning −1 or −999 means exactly the same thing.
+
+</SvgFigure>
+
+A useful way to remember it: `a.compareTo(b)` behaves like "`a − b`" for numbers. If *a* is smaller, the result is negative. (But don't actually *compute* it by subtraction; see the mistakes section below.) Java's own classes already follow this contract: `Integer` compares numerically, `String` compares alphabetically (strictly, by character codes, so all capital letters come before all small letters), and dates compare chronologically.
+
+## `Comparable`: a natural order, inside the class
+
+```java title="Student.java"
+public class Student implements Comparable<Student> {   // "Students know how to compare themselves"
+    private final String name;
+    private final double mark;
+    private final int age;
+
+    public Student(String name, double mark, int age) {
+        this.name = name;
+        this.mark = mark;
+        this.age = age;
+    }
+
+    public String getName() { return name; }
+    public double getMark() { return mark; }
+    public int    getAge()  { return age; }
+
+    // NATURAL ORDER: alphabetical by name
+    @Override
+    public int compareTo(Student other) {
+        return this.name.compareTo(other.name);   // reuse String's own natural order
+        //  < 0 → this comes first,   0 → tie,   > 0 → other comes first
+    }
+
+    @Override
+    public String toString() {                    // controls how println shows a Student
+        return name + "(" + mark + ", " + age + ")";
+    }
+}
+```
+
+The `<Student>` after `Comparable` is a generic type parameter saying "Students are comparable to other Students", which is why `compareTo` receives a `Student` rather than a general `Object`. Overriding `toString` (inherited from `Object`) makes printed lists readable.
+
+## `Comparator`: any order, outside the class
+
+A class has only one natural order, but you often want others: by mark, by age, highest first. You can't keep rewriting `compareTo`, and sometimes you can't edit the class at all (it may come from a library). A `Comparator` is a separate object whose only job is to compare two objects. You pass it to the sort method.
+
+Modern Java makes comparators very short to write, using two features:
+
+- A **lambda expression** is a compact way to write a small, nameless method inline: `(a, b) -> Integer.compare(a.getAge(), b.getAge())` reads as "given *a* and *b*, return the comparison of their ages".
+- A **method reference** such as `Student::getMark` is shorthand for "call `getMark` on the object", meaning the same as the lambda `s -> s.getMark()`.
+
+The `Comparator` interface has ready-made helper methods that build comparators from these: `Comparator.comparing(…)` to compare by a key, `.reversed()` to flip an order, and `.thenComparing(…)` to add a tie-breaker that's used only when the first comparison gives 0.
+
+## Sorting with the library
+
+```java title="SortingDemo.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+public class SortingDemo {
+    public static void main(String[] args) {
+        List<Student> list = new ArrayList<>(Arrays.asList(
+                new Student("Mpho", 68.0, 20),
+                new Student("Ann",  91.5, 22),
+                new Student("Kabo", 68.0, 19)));
+
+        // 1) Natural order — uses Student.compareTo (by name)
+        Collections.sort(list);
+        System.out.println(list);    // [Ann(91.5, 22), Kabo(68.0, 19), Mpho(68.0, 20)]
+
+        // 2) A Comparator built from a key: lowest mark first
+        list.sort(Comparator.comparingDouble(Student::getMark));
+        System.out.println(list);    // [Kabo(68.0, 19), Mpho(68.0, 20), Ann(91.5, 22)]
+                                     //  Kabo stays before Mpho: the sort is STABLE
+
+        // 3) Reversed: highest mark first
+        list.sort(Comparator.comparingDouble(Student::getMark).reversed());
+
+        // 4) Tie-breaker: mark high→low, then age low→high
+        list.sort(Comparator.comparingDouble(Student::getMark).reversed()
+                            .thenComparingInt(Student::getAge));
+        System.out.println(list);    // [Ann(91.5, 22), Kabo(68.0, 19), Mpho(68.0, 20)]
+
+        // 5) A hand-written lambda: youngest first
+        list.sort((a, b) -> Integer.compare(a.getAge(), b.getAge()));
+
+        // 6) Arrays
+        int[] nums = {5, 2, 9, 1};
+        Arrays.sort(nums);                                   // primitives → [1, 2, 5, 9]
+        Integer[] boxed = {5, 2, 9, 1};
+        Arrays.sort(boxed, Comparator.reverseOrder());       // objects + comparator → [9, 5, 2, 1]
+        String[] words = {"pear", "Apple", "fig"};
+        Arrays.sort(words, String.CASE_INSENSITIVE_ORDER);   // [Apple, fig, pear]
+        System.out.println(Arrays.toString(boxed) + " " + Arrays.toString(words));
+    }
+}
+```
+
+```text
+[Ann(91.5, 22), Kabo(68.0, 19), Mpho(68.0, 20)]
+[Kabo(68.0, 19), Mpho(68.0, 20), Ann(91.5, 22)]
+[Ann(91.5, 22), Kabo(68.0, 19), Mpho(68.0, 20)]
+[9, 5, 2, 1] [Apple, fig, pear]
+```
+
+| Method | Sorts | Algorithm used | Stable |
+| --- | --- | --- | --- |
+| `Arrays.sort(int[])` (and other primitive arrays) | primitive arrays | Dual-Pivot Quicksort | — (equal primitives are indistinguishable) |
+| `Arrays.sort(T[])`, `Arrays.sort(T[], cmp)` | object arrays | TimSort (merge + insertion) | Yes |
+| `Collections.sort(list)`, `list.sort(cmp)` | lists | TimSort | Yes |
+
+Passing `null` as the comparator to `list.sort(null)` means "use the natural order". [Appendix C](/docs/sem3/csi247/resources#appendix-c--how-javas-built-in-sorts-work) describes the two built-in algorithms in more detail.
+
+## Writing your own generic sort
+
+Here is insertion sort from its own page, rewritten to sort *any* type. The declaration `<T extends Comparable<T>>` means "this works for any type T, as long as T can compare itself to other Ts": the interface is acting as a contract the compiler checks. The second version takes a `Comparator`, so the caller chooses the order. It's an algorithm powered by all four OOP pillars at once.
+
+```java title="GenericSort.java"
+import java.util.Comparator;
+
+public class GenericSort {
+
+    // Version 1: natural order. Works for String, Integer, Student, LocalDate, …
+    public static <T extends Comparable<T>> void insertionSort(T[] a) {
+        for (int i = 1; i < a.length; i++) {
+            T key = a[i];
+            int j = i - 1;
+            while (j >= 0 && a[j].compareTo(key) > 0) {   // "a[j] > key", the object-oriented way
+                a[j + 1] = a[j];
+                j--;
+            }
+            a[j + 1] = key;
+        }
+    }
+
+    // Version 2 (an overload): the caller supplies the ordering
+    public static <T> void insertionSort(T[] a, Comparator<? super T> cmp) {
+        for (int i = 1; i < a.length; i++) {
+            T key = a[i];
+            int j = i - 1;
+            while (j >= 0 && cmp.compare(a[j], key) > 0) {
+                a[j + 1] = a[j];
+                j--;
+            }
+            a[j + 1] = key;
+        }
+    }
+}
+// GenericSort.insertionSort(students);                                          // by name
+// GenericSort.insertionSort(students, Comparator.comparingInt(Student::getAge)); // by age
+```
+
+<Callout type="note" title="What does ? super T mean?">
+
+`Comparator<? super T>` accepts a comparator for `T` *or for any supertype of T*. A comparator that can compare any two `Animal`s can certainly compare two `Dog`s, so it should be allowed when sorting dogs. The `?` is called a *wildcard*.
+
+</Callout>
+
+## Common mistakes
+
+<Callout type="mistake" title="Never compare by subtracting">
+
+`(a, b) -> a - b` looks clever but is broken: with large values the subtraction overflows and the sign flips. For example, `Integer.MIN_VALUE - 1` wraps around to a huge *positive* number, claiming the smallest possible int comes after 1. Always use `Integer.compare(a, b)`, `Long.compare` or `Double.compare`.
+
+</Callout>
+
+<Callout type="mistake" title="Doubles and casting">
+
+`(int) (a.getMark() - b.getMark())` turns a difference of 0.5 into 0, wrongly reporting a tie. Use `Double.compare`.
+
+</Callout>
+
+<Callout type="caution" title="Consistency with equals">
+
+Ideally, `compareTo` returns 0 exactly when `equals` returns true. Sorting doesn't care, but sorted collections such as `TreeSet` and `TreeMap` treat a 0 result as "the same element", so two different students with the same name would be considered duplicates and one would be silently dropped.
+
+</Callout>
+
+<Callout type="caution" title="Be consistent">
+
+A comparator must give consistent answers: if *a* \< *b* and *b* \< *c*, then *a* \< *c*. A comparator that breaks these rules can make TimSort throw *"Comparison method violates its general contract!"*.
+
+</Callout>
+
+<Callout type="key">
+
+`Comparable` = one natural order, written inside the class (`compareTo`). `Comparator` = any number of orders, outside the class; build them with `comparing`, `reversed()` and `thenComparing`. Only the sign of the result matters. Never subtract to compare. Java's object sorts are stable.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={"Sort students by mark from highest to lowest, then by name A→Z for equal marks."}>
+
+`list.sort(Comparator.comparingDouble(Student::getMark).reversed().thenComparing(Student::getName));`
+
+</CheckQuestion>
+
+<CheckQuestion question={<><code>"apple".compareTo("banana")</code> — negative, zero or positive?</>}>
+
+Negative, because "apple" comes before "banana" alphabetically.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>When would you use a <code>Comparator</code> rather than implementing <code>Comparable</code>?</>}>
+
+When you need an order other than the natural one, need several different orders, or can't modify the class (for example, it comes from a library).
+
+</CheckQuestion>
+
+</CheckQuestions>

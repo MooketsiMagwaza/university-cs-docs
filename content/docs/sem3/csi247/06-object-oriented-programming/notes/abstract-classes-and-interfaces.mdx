@@ -1,141 +1,198 @@
 ---
-title: "Abstract Classes and Interfaces"
-description: "Choose between shared base implementation and a capability contract, then trace concrete implementations and interface references."
+title: "Abstraction"
+description: "Show what something does."
 ---
 
-An abstract class models a partially implemented family. An interface specifies a capability or role that possibly unrelated classes can promise.
+Hide how it does it.
 
-<div className="not-prose my-6 grid gap-4 sm:grid-cols-2">
-  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/5 p-5"><strong>Abstract class</strong><p className="mb-0 mt-2 text-sm">Shared state + implemented methods + abstract requirements; one class superclass.</p></div>
-  <div className="rounded-xl border-2 border-emerald-600 bg-emerald-500/5 p-5"><strong>Interface</strong><p className="mb-0 mt-2 text-sm">Capability contract; a class can implement several interfaces.</p></div>
-</div>
+<LearningObjectives items={[
+  "What abstraction means and why it reduces complexity.",
+  "How to write and use an abstract class with abstract methods.",
+  "How to write and implement an interface, including default methods.",
+  "How to choose between an abstract class and an interface.",
+]} />
 
-## 1. Abstract Shape
+<ConceptFrame>
 
-“A general Shape has an area” is meaningful, but calculating it requires concrete dimensions.
+<FrameBox label="The idea">
 
-~~~java
+You drive a car with a steering wheel and two pedals. You don't need to understand fuel injection; that's hidden beneath the surface.
+
+</FrameBox>
+
+<FrameBox label="The definition">
+
+Abstraction means exposing only the essential operations of a type and hiding the details. Java's two tools are **abstract classes** (partial blueprints with some unfinished methods) and **interfaces** (pure contracts listing what a type can do).
+
+</FrameBox>
+
+<FrameBox label="Why it works">
+
+If calling code depends only on a small contract, the implementations behind it can be swapped, improved or multiplied without callers ever noticing. Less to know means less to break.
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+Managing complexity in large systems, and "plug-in" designs. For example, any class that implements `Comparable` can be sorted by Java's sort methods.
+
+</FrameBox>
+
+</ConceptFrame>
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/abstract-classes-and-interfaces" id="abstraction-1">
+
+**Figure 10.1** Abstraction as an iceberg. Callers write code against the tip, `area()`. The bulk of the logic is underwater and can change freely.
+
+</SvgFigure>
+
+## Abstract classes
+
+Some classes describe ideas that should never exist on their own. There's no such thing as "just a shape"; every real shape is a circle, a rectangle, or something specific. Mark such a class `abstract`, and Java will refuse to let anyone write `new Shape(…)`.
+
+An abstract class can contain **abstract methods**: method headers with no body, ending in a semicolon. Each one is a promise: "every concrete (non-abstract) subclass *must* provide this method". Alongside them, an abstract class can contain ordinary fields, constructors and fully written methods that all subclasses share.
+
+```java title="Shape.java"
+// abstract → a partial blueprint.  `new Shape(...)` will NOT compile.
 public abstract class Shape {
-    private String colour;
+    private final String label;
 
-    protected Shape(String colour) {
-        this.colour = colour;
+    protected Shape(String label) {     // abstract classes still have constructors; subclasses call them
+        this.label = label;
     }
 
-    public String getColour() {
-        return colour;
+    // ABSTRACT METHOD: a promise with no body. Every concrete subclass MUST implement it.
+    public abstract double area();
+
+    // CONCRETE METHOD: shared code every shape gets for free
+    public String summary() {
+        return label + " with area " + String.format("%.2f", area());
+        //                                            ↑ calls the SUBCLASS's area() — polymorphism!
     }
-
-    // Every concrete Shape must supply this operation.
-    public abstract double getArea();
 }
-~~~
+```
 
-<Mermaid chart={`classDiagram
-  class Shape {
-    <<abstract>>
-    -String colour
-    +getColour() String
-    +getArea()* double
-  }
-  class Circle {
-    -double radius
-    +getArea() double
-  }
-  class Rectangle {
-    -double width
-    -double height
-    +getArea() double
-  }
-  Shape <|-- Circle
-  Shape <|-- Rectangle`} caption="The abstract operation has no Shape-level formula; concrete subclasses complete it." />
-
-An abstract class cannot be instantiated, but an abstract-class reference can refer to a concrete subclass object.
-
-~~~java
-Shape shape = new Circle("Blue", 2.0); // Legal.
-// Shape impossible = new Shape("Blue"); // Illegal: abstract class.
-~~~
-
-## 2. Interfaces specify capabilities
-
-~~~java
-public interface Measurable {
-    double measure(); // public abstract by default.
-}
-
-public interface Labelled {
-    String label();
-}
-
-public class Parcel implements Measurable, Labelled {
-    private double mass;
-
-    public Parcel(double mass) {
-        this.mass = mass;
-    }
+```java title="Circle.java · Rectangle.java"
+public class Circle extends Shape {
+    private final double r;
+    public Circle(double r) { super("Circle"); this.r = r; }
 
     @Override
-    public double measure() {
-        return mass;
-    }
+    public double area() { return Math.PI * r * r; }   // fulfils the promise
+}
+
+public class Rectangle extends Shape {
+    private final double w, h;
+    public Rectangle(double w, double h) { super("Rectangle"); this.w = w; this.h = h; }
 
     @Override
-    public String label() {
-        return "Parcel " + mass + " kg";
+    public double area() { return w * h; }
+}
+```
+
+`String.format("%.2f", x)` turns a number into text with exactly two digits after the decimal point. Notice how `summary()` is written once, in `Shape`, yet calls `area()`, which only the subclasses define. When `summary()` runs on a `Circle`, dynamic dispatch calls `Circle`'s `area()`. The general class supplies the overall procedure; the subclasses fill in the specific step. (This arrangement is a well-known design pattern called the *template method*.)
+
+## Interfaces
+
+An **interface** is a pure statement of capability: "any class that implements me *can* do these things". It lists method headers, and a class signs the contract by writing `implements` and providing a body for each one. Interfaces can't have instance fields or constructors, and you can't create an object of an interface type directly.
+
+The big difference from classes: a class can `extend` only one class, but it can `implement` **any number** of interfaces. This gives many of the benefits of multiple inheritance (one type belonging to several families) without the confusion of inheriting conflicting fields from several parents.
+
+Since Java 8, an interface may also contain `default` methods (methods with a body, built on top of the abstract ones) and `static` helper methods. Since Java 9 it may contain `private` helper methods too.
+
+```java title="Drawable.java · Square.java"
+// A contract. Its methods are automatically public and abstract.
+public interface Drawable {
+    void draw();
+
+    default void drawTwice() {          // Java 8+: a ready-made method built on the contract
+        draw();
+        draw();
     }
 }
-~~~
 
-<div className="not-prose my-6 flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-fd-border p-5">
-  <div className="rounded-lg border border-blue-500 p-3 font-mono">Measurable</div><span>↘</span><div className="rounded-lg border-2 border-fd-foreground p-4 font-mono font-bold">Parcel</div><span>↗</span><div className="rounded-lg border border-emerald-600 p-3 font-mono">Labelled</div>
-</div>
+// extends ONE class, implements ANY number of interfaces
+public class Square extends Shape implements Drawable {
+    private final double side;
+    public Square(double side) { super("Square"); this.side = side; }
 
-A class extends at most one class but can implement multiple interfaces.
-
-## 3. Concrete-class obligation
-
-A concrete subclass/implementation must supply every inherited abstract method. An incomplete class must itself remain abstract.
-
-| Type | Implements all required methods? | May instantiate? |
-|---|---:|---:|
-| abstract Shape | no | no |
-| abstract partial subclass | not necessarily | no |
-| concrete Circle | yes | yes |
-| interface Measurable | signature only | no |
-| concrete Parcel | yes | yes |
-
-## 4. Interface polymorphism
-
-~~~java
-public static double total(Measurable[] items) {
-    double sum = 0.0;
-    for (Measurable item : items) {
-        sum += item.measure(); // Runtime object chooses implementation.
+    @Override public double area() { return side * side; }    // owed to Shape
+    @Override public void draw()   {                          // owed to Drawable
+        System.out.println("[] a square with side " + side);
     }
-    return sum;
 }
-~~~
+```
 
-The algorithm knows only the capability. A Parcel, Circle adapter, or future class can participate when it implements Measurable.
+```java title="ShapesDemo.java"
+import java.util.Arrays;
+import java.util.List;
 
-## 5. Choosing the mechanism
+// Program to the abstraction, not the implementation:
+List<Shape> shapes = Arrays.asList(new Circle(1), new Rectangle(2, 3), new Square(4));
 
-| Need | Prefer |
-|---|---|
-| shared state and base implementation for one family | abstract class |
-| a capability across unrelated classes | interface |
-| several independent roles on one class | interfaces |
-| construct the general type directly | concrete class, not abstract/interface |
+for (Shape s : shapes) {
+    System.out.println(s.summary());    // this loop has no idea which shapes exist
+}
 
-## 6. Exam-style practice
+Drawable d = new Square(2);             // an interface type can hold any implementing object
+d.drawTwice();
+```
 
-1. Convert Shape to an abstract class and implement two concrete areas. [12]
-2. Explain why an abstract reference may hold a Circle although Shape cannot be instantiated. [6]
-3. Design two interfaces and one class implementing both. [10]
-4. Trace runtime dispatch through a Measurable array. [8]
-5. Choose abstract class or interface for five scenarios and justify each. [10]
+```text
+Circle with area 3.14
+Rectangle with area 6.00
+Square with area 16.00
+[] a square with side 2.0
+[] a square with side 2.0
+```
+
+<Callout type="note" title={"New syntax: List and <Shape>"}>
+
+`List<Shape>` is a list that holds `Shape` references. `List` itself is an interface from Java's library, and the part in angle brackets is a *type parameter* saying what kind of elements it holds; this feature is called **generics**. `Arrays.asList(…)` creates a list of fixed size containing the given items (Java 8 has no `List.of`). You'll see generics again on the Comparable & Comparator page.
+
+</Callout>
+
+## Abstract class or interface?
+
+|   | Abstract class | Interface |
+| --- | --- | --- |
+| Keywords | `abstract class`, used with `extends` | `interface`, used with `implements` |
+| How many a class can have | One | Many |
+| Fields | Any, including instance fields (state) | Only constants (`public static final`) |
+| Constructors | Yes | No |
+| Methods | Abstract and concrete, any access level | Abstract, `default`, `static`, and `private` helpers |
+| Use it when… | Closely related classes share state and code | Possibly unrelated classes share a *capability* (`Comparable`, `Runnable`) |
+
+*Table 10.1 — A quick rule: "is a kind of" → abstract class; "can do" → interface.*
+
+<Callout type="mistake">
+
+A concrete class that "forgets" one of the abstract methods it inherits won't compile: *"Square is not abstract and does not override abstract method area() in Shape"*. Either implement the method or mark the class `abstract` as well.
+
+</Callout>
+
+<Callout type="key">
+
+Abstraction = expose *what*, hide *how*. Abstract class: shared state and partial code, single inheritance. Interface: a pure capability, and a class may implement many.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>Can you write <code>Shape s = new Shape("x");</code> if <code>Shape</code> is abstract? Can you write <code>Shape s = new Circle(2);</code>?</>}>
+
+No to the first: abstract classes can't be instantiated. Yes to the second: a variable of the abstract type can refer to an object of any concrete subclass.
+
+</CheckQuestion>
+
+<CheckQuestion question={"When would you choose an interface over an abstract class?"}>
+
+When unrelated classes need to share a capability, or a class needs several capabilities at once (a class can implement many interfaces but extend only one class), and no shared instance state is needed.
+
+</CheckQuestion>
+
+</CheckQuestions>
 
 <QuizRef src="sem3/csi247/06-object-oriented-programming/notes/abstract-classes-and-interfaces" id="abstraction-contracts" />
-
-Continue with [Generics](/docs/sem3/csi247/07-generics).

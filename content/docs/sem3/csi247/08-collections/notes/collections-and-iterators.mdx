@@ -1,0 +1,200 @@
+---
+title: "Collections & iterators"
+description: "Arrays are fixed in size and have no built-in tools."
+---
+
+Java's Collection Framework is a family of ready-made, generic data structures (lists, stacks, queues, sets) plus the interfaces that tie them together. This page gives you the map; the next pages explore each structure.
+
+<LearningObjectives items={[
+  "How the `Arrays` utility class sorts, prints and searches arrays for you.",
+  "What a collection, the Java Collection Framework and an Abstract Data Type are.",
+  "The framework's family tree: `Iterable` → `Collection` → `List` / `Queue` / `Set`.",
+  "Three ways to loop through a collection, including an `Iterator`.",
+]} />
+
+## The `Arrays` utility class
+
+Before collections, a quick win. We've written our own sorting and searching methods, but Java already has them. `Arrays` (in `java.util`) is a **utility class**: a class full of `static` methods you call on the class name, as `Arrays.methodName(…)`, without creating any object.
+
+```java title="Testing.java"
+import java.util.Arrays;
+
+public class Testing {
+    public static void main(String[] args) {
+        Integer[] arr = {73, 64, 59, 15, 91, 27, 82};
+        Arrays.sort(arr);                                      // sorts in ascending order, in place
+        System.out.println("Integer Array is: " + Arrays.toString(arr));   // a readable version of the array
+    }
+}
+```
+
+```text
+Integer Array is: [15, 27, 59, 64, 73, 82, 91]
+```
+
+| Method | What it does | Time |
+| --- | --- | --- |
+| `Arrays.sort(a)` | Sorts ascending. Primitives use a tuned quick sort; objects use a merge-sort variant (TimSort). Objects must be `Comparable`. | O(*n* log *n*) |
+| `Arrays.toString(a)` | Returns text like `[15, 27, 59]` | O(*n*) |
+| `Arrays.binarySearch(a, key)` | Binary search on a *sorted* array (see [the library page](/docs/sem3/csi247/04-sorting-and-searching/notes/searching-with-the-java-library)) | O(log *n*) |
+| `Arrays.asList(a)` | Views an array as a `List` | O(1) |
+
+*Table 26.1 — No loop needed, no algorithm to write. (One slide says "time complexity of sort: O(log n)" next to `binarySearch`; O(log n) is binarySearch's cost. Sorting is O(n log n).)*
+
+And sorting objects? `equals` can't help: it only answers "same or not", never "which comes first". For that, a class implements `Comparable` (covered on the [Comparable & Comparator](/docs/sem3/csi247/04-sorting-and-searching/notes/comparable-and-comparator) page and again on the [ArrayList](/docs/sem3/csi247/08-collections/notes/lists-and-arraylist) page).
+
+## Collections and the framework
+
+<KeyTerm title="Collection">
+
+An object that groups many related items into one unit, together with operations to store, retrieve and manipulate them. The array is the first collection you met.
+
+</KeyTerm>
+
+<KeyTerm title="Java Collection Framework (JCF)">
+
+A set of interfaces and classes in `java.util` for storing and manipulating collections in various data structures.
+
+</KeyTerm>
+
+<KeyTerm title="Abstract Data Type (ADT)">
+
+A description of a collection of data and the operations allowed on it, saying *what* the operations do but not *how*. "List" is an ADT; `ArrayList` and `LinkedList` are two different ways of building it. It's [abstraction](/docs/sem3/csi247/06-object-oriented-programming/notes/abstract-classes-and-interfaces) applied to data.
+
+</KeyTerm>
+
+### The family tree
+
+<SvgFigure src="sem3/csi247/08-collections/notes/collections-and-iterators" id="collections-1">
+
+**Figure 26.1** The part of the hierarchy in this course. Purple boxes are interfaces: you can't create them with `new`. Blue boxes are classes that implement them. `LinkedList` implements both `List` and `Queue`.
+
+</SvgFigure>
+
+- **`Iterable`** (in `java.lang`) is the root. Anything `Iterable` can be looped through.
+- **`Collection`** extends `Iterable`. No class implements it directly; classes implement its sub-interfaces.
+- **`List`**: an ordered sequence that allows duplicates. Implemented by `ArrayList` and `LinkedList`.
+- **`Queue`**: items wait in line. Implemented by `LinkedList`, `PriorityQueue` and others.
+- **`Set`**: no duplicates allowed. Implemented by `HashSet` and `TreeSet` (not examined here).
+
+The lecture's plan for learning each one: *learn the API* (what methods exist), *use the existing implementation*, then *build the ADT yourself*, with efficiency in mind. The next pages do exactly that for lists, stacks and queues.
+
+## Three ways to loop through a collection
+
+### a) The ordinary `for` or `while` loop
+
+```java title="IndexLoop.java"
+for (int i = 0; i < b.length; i++) {   // YOU say how to move from one element to the next: i++
+    System.out.println(b[i]);
+}
+```
+
+This needs an index. That works for arrays and `ArrayList`, but many collections (sets, queues) have no index at all.
+
+### b) The for-each loop (enhanced `for`)
+
+```java title="ForEach.java"
+int[] grades = {85, 12, 69, 74, 48, 52};
+System.out.println("Using for-each loop:");
+for (int mark : grades) {              // read as: "for each int mark in grades"
+    System.out.println("[ " + mark + " ]");
+}
+```
+
+Syntax: `for (dataType item : collectionName)`. Each time round, the next element is copied into `item`. You don't say *how* to move to the next element; behind the scenes, for a collection, Java uses an `Iterator`.
+
+### c) An `Iterator`
+
+<KeyTerm title="Iterator">
+
+An object that walks through a collection one element at a time, only forwards. Every collection can give you one by calling its `iterator()` method. `Iterator<E>` is a generic interface in `java.util`.
+
+</KeyTerm>
+
+| Method | What it does |
+| --- | --- |
+| `boolean hasNext()` | `true` if there is another element ahead |
+| `E next()` | moves past the next element and returns it |
+| `void remove()` | removes the element that the last `next()` returned |
+| `forEachRemaining(action)` | does `action` to every element still ahead |
+
+The easiest way to picture an iterator is as a **cursor that sits *between* elements**, like the text cursor when you type. `next()` jumps the cursor over one element and hands you the element it jumped over.
+
+<SvgFigure src="sem3/csi247/08-collections/notes/collections-and-iterators" id="collections-2">
+
+**Figure 26.2** The lecture's example. After three `next()` calls the cursor sits between 12 and 81. Further `next()` calls return 81, 54, 16. Calling `remove()` instead deletes 12, the element most recently returned, giving `[51, 35, 81, 54, 16]`.
+
+</SvgFigure>
+
+```java title="IteratorDemo.java"
+import java.util.ArrayList;
+import java.util.Iterator;
+
+public class IteratorDemo {
+    public static void main(String[] args) {
+        ArrayList<Integer> nums = new ArrayList<Integer>();
+        nums.add(73);
+        nums.add(92);
+        nums.add(58);
+        nums.add(60);
+
+        Iterator<Integer> iterate = nums.iterator();   // ask the list for an iterator (cursor before 73)
+        while (iterate.hasNext()) {                    // anything left?
+            System.out.print(iterate.next() + ", ");   // jump over the next element and print it
+        }
+    }
+}
+```
+
+```text
+73, 92, 58, 60,
+```
+
+<Callout type="mistake">
+
+Removing items with the list's own `remove` inside a for-each loop, e.g. `for (Integer x : list) if (x == 5) list.remove(x);`. The hidden iterator notices that the list changed behind its back and throws `ConcurrentModificationException`. To delete while looping, use an explicit `Iterator` and call *its* `remove()`.
+
+</Callout>
+
+### The `Iterable` interface
+
+Every collection implements `Iterable`, which is what makes the for-each loop work on it. Its main method is the one we just used:
+
+```java title="Iterable.java (simplified)"
+public interface Iterable<T> {
+    Iterator<T> iterator();               // "give me a new cursor at the start"
+    // (plus forEach and spliterator, which have default versions)
+}
+```
+
+Your own classes can implement `Iterable` too. Then they also work in for-each loops.
+
+<Callout type="key">
+
+`Arrays` gives static helpers for arrays. A collection groups items into one object; the JCF is Java's library of them; an ADT says what, not how. `Iterable` → `Collection` → `List`/`Queue`/`Set`. Loop with an index, a for-each, or an `Iterator` (`hasNext`, `next`, `remove`).
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>Why can't you write <code>new List&lt;Integer&gt;()</code>?</>}>
+
+`List` is an interface: a list of method signatures with no implementation. You must create an object of a class that implements it, e.g. `List<Integer> marks = new ArrayList<Integer>();`.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>A list holds <code>[4, 7, 1]</code>. An iterator calls <code>next()</code> twice, then <code>remove()</code>. What's in the list?</>}>
+
+`[4, 1]`. The second `next()` returned 7, so `remove()` deletes 7.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>What is the difference between <code>Collection</code> and <code>Collections</code>?</>}>
+
+`Collection` (singular) is the interface at the top of the family. `Collections` (plural) is a utility class of static methods such as `Collections.sort(list)`, in the same way `Arrays` is for arrays.
+
+</CheckQuestion>
+
+</CheckQuestions>
