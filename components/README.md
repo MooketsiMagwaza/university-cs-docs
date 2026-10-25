@@ -324,6 +324,21 @@ The questions live in JSON under `content/predict-data/`, mirroring the path of 
 
 If the points have the same x, or there are fewer than two, the plot says why there is no line, and when every y is equal the correlation is reported as not defined.
 
+## Java lesson pieces
+
+The CSI247 lessons (written in the style of the "Java Foundations" reference course, see [docs/plans/csi247-java-foundations-handoff.md](../docs/plans/csi247-java-foundations-handoff.md)) add four pieces to the standard elements. Their styles are in `app/styles/java-lessons.css` (class names `jf-*`).
+
+| Piece | Use | Props and data |
+|---|---|---|
+| `ConceptFrame` with `FrameBox` | The four-box opening of a lesson: the idea, the definition, why it works, what it is for | `label` on each `FrameBox`; the children are Markdown |
+| `TraceTable` | A Markdown table whose rows are hidden until the reader reveals them (next row, all, hide again), for tracing by hand | wrap an ordinary table; blank lines around it |
+| `SvgFigure` | A hand-drawn SVG figure with a caption | `src` (the page path without `.json`) and `id`; the SVG is stored in `content/figure-data/<page path>.json` as `{ "<id>": { "alt": "...", "svg": "<svg>...</svg>" } }`, and the caption is the children. The SVG uses the classes `f-b`, `f-g`, `ln`, `h`, `s`, `m` ... defined for `.jf-figure`, so it follows the theme |
+| `MemoryDiagram` | The exam memory diagram: stack left, heap right, addresses and arrows, old values crossed out | `scenario` (one of 13 ids in `lib/csi247/memory-scenarios.ts`: `basics student course marks shape alist llbuild lltrav book alstudents llslide llq dll`) and `static` for the finished diagram only. By default it steps through the Java one line at a time |
+
+A memory-diagram scenario is a short builder script: `memoryBuilder().code([...lines])`, then `v` (a stack variable), `arr`, `obj`, `val` (a String or boxed value) and `node` (a linked-list node) to create things, `set` and `sv` to change a slot or a variable (the old value is kept and crossed out), `unv` and `drop` to remove one, `clean` to forget the crossings, and `snap(line, note)` once per line of code. An object nothing points to is drawn faded with "unreachable, garbage". `npm run test:memory-diagram` builds every scenario and draws every step. `LearningObjectives` items may contain `inline code` in backticks.
+
+`node scripts/convert-java-foundations.mjs <java-foundations.html>` converts the reference course into these pieces; the handoff file explains how its output was placed in the chapters.
+
 ## Decoding the questions
 
 Every review page ends with a `## Decoding the questions` section that teaches how to read a question before answering it. `<CommandWords />` shows the shared table of command words (define, explain, compare and so on), and `<DecodeQuestion>` works through a real question from the topic. Course-specific dictionaries live in `content/decoding/<course>.json`.

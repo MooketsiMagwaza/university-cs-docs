@@ -46,6 +46,8 @@ const NOTES_COMPONENTS = new Set([
   // "Explore it" pictures (TRY-05): the reader moves something and sees the result.
   'DistributionExplorer', 'Simulation', 'VennDiagram', 'ProbabilityTree', 'CountingCalculator',
   'Visualise', 'PredictReveal', 'RegressionPlot',
+  // Java lesson pieces (CSI247): the four-box opening, a table revealed row by row, an SVG figure, the memory diagram.
+  'ConceptFrame', 'FrameBox', 'TraceTable', 'SvgFigure', 'MemoryDiagram',
 ]);
 
 // Assessment components belong on assessment pages, never inside notes.

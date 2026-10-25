@@ -19,11 +19,18 @@ export function LessonIntroduction({
   );
 }
 
+/** An item is plain text; `backticked` words become inline code. */
+function withCode(text: string) {
+  return text.split(/(`[^`\n]+`)/g).map((part, index) =>
+    part.length > 2 && part.startsWith('`') && part.endsWith('`') ? <code key={index}>{part.slice(1, -1)}</code> : part,
+  );
+}
+
 export function LearningObjectives({ items }: { items: string[] }) {
   return (
     <section className="learning-list learning-objectives">
       <h2><Target size={19} /> Learning objectives</h2>
-      <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul>
+      <ul>{items.map((item) => <li key={item}>{withCode(item)}</li>)}</ul>
     </section>
   );
 }
