@@ -1,5 +1,7 @@
 # Handoff: CSI247 in the style of "Java Foundations" (updated 2026-10-25)
 
+> **Superseded by [csi247-master-handoff.md](csi247-master-handoff.md)** (2026-10-26), which has the full context, the owner's rules, the current state and the ordered next steps. Keep reading this file only for the first day's detail on the converter and the components.
+
 The owner asked for two things: continue the open work orders, and make the CSI247 content "like" `java-foundations.html` (a copy is in the owner's Downloads and in the vault under `Semester_3_Vault/Current/CSI247/Revision/`). The work is on branch `feat/csi247-java-foundations` (worktree `C:/wt/csi247-foundations`, cut from `origin/main` at 37c28ce). It is committed locally and not pushed. Work orders CSI247-11 and CSI247-12 in `WORK_ORDERS.md` track it.
 
 ## What the reference is
