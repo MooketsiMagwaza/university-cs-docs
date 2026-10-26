@@ -301,7 +301,43 @@ function readNode(src, pos) {
   return { id, text, shape, end: p };
 }
 
-const EDGE = /^\s*(?:(-->|---|-\.->|-\.-|==>|===)(?:\|([^|]*)\|)?|--\s+([^-]+?)\s+(-->|---)|-\.\s+([^-]+?)\s+\.->)/;
+/**
+ * Reads one edge operator at the start of `src`, in the forms Mermaid allows:
+ *   an operator (a double dash and an arrow head, three dashes, a dotted arrow, a thick arrow), optionally followed by |label|;
+ *   an operator with its label written inside it ("-- label -->" or "-. label .->").
+ * Returns { length, op, label } or null. Written as plain steps rather than one pattern, so each form is easy to see.
+ */
+const PLAIN_OPERATORS = ['-.->', '-.-', '-->', '---', '==>', '==='];
+function readEdge(src) {
+  const start = src.length - src.trimStart().length;
+  const s = src.slice(start);
+  for (const op of PLAIN_OPERATORS) {
+    if (!s.startsWith(op)) continue;
+    let length = op.length;
+    let label = '';
+    if (s[length] === '|') {
+      const close = s.indexOf('|', length + 1);
+      if (close > 0) {
+        label = s.slice(length + 1, close);
+        length = close + 1;
+      }
+    }
+    return { length: start + length, op, label: label.trim().replace(/^"|"$/g, '') };
+  }
+  const inline = [
+    { open: '-- ', ends: [' -->', ' ---'] },
+    { open: '-. ', ends: [' .->'] },
+  ];
+  for (const { open, ends } of inline) {
+    if (!s.startsWith(open)) continue;
+    for (const end of ends) {
+      const at = s.indexOf(end, open.length);
+      if (at < 0) continue;
+      return { length: start + at + end.length, op: end.trim(), label: s.slice(open.length, at).trim().replace(/^"|"$/g, '') };
+    }
+  }
+  return null;
+}
 
 export function parseFlowchart(text) {
   const lines = text.split('\n').map((l) => l.replace(/%%.*$/, '').trim()).filter(Boolean);
@@ -346,14 +382,14 @@ export function parseFlowchart(text) {
       }
       pos = node.end;
       const rest = line.slice(pos);
-      const m = EDGE.exec(rest);
+      const m = readEdge(rest);
       if (!m) {
         pos = line.length;
         break;
       }
-      pos += m[0].length;
-      const label = (m[2] ?? m[3] ?? m[5] ?? '').trim().replace(/^"|"$/g, '');
-      const op = m[1] ?? m[4] ?? '.->';
+      pos += m.length;
+      const label = m.label;
+      const op = m.op;
       while (line[pos] === ' ') pos++;
       const next = readNode(line, pos);
       if (!next) throw new Error(`cannot read the node after an edge in: ${line}`);
@@ -363,15 +399,15 @@ export function parseFlowchart(text) {
       pos = next.end;
       let last = next;
       while (true) {
-        const chain = EDGE.exec(line.slice(pos));
+        const chain = readEdge(line.slice(pos));
         if (!chain) break;
-        pos += chain[0].length;
+        pos += chain.length;
         while (line[pos] === ' ') pos++;
         const after = readNode(line, pos);
         if (!after) throw new Error(`cannot read a chained node in: ${line}`);
         touch(after);
-        const lab = (chain[2] ?? chain[3] ?? chain[5] ?? '').trim().replace(/^"|"$/g, '');
-        const o = chain[1] ?? chain[4] ?? '.->';
+        const lab = chain.label;
+        const o = chain.op;
         edges.push({ from: last.id, to: after.id, label: lab || undefined, dashed: o.includes('.'), arrow: !/^---$|^-\.-$/.test(o) });
         last = after;
         pos = after.end;
