@@ -153,19 +153,33 @@ const config = {
         ['time-complexity', '03-time-complexity', []],
         ['sorting-and-searching', '04-sorting-and-searching', ['/notes/binary-search', '/notes/bubble-and-selection-sort', '/notes/bubble-sort', '/notes/choosing-an-algorithm', '/notes/insertion-sort', '/notes/linear-search', '/notes/merge-sort', '/notes/selection-sort', '/cheat-sheet']],
         ['packages', '05-packages', ['/notes/built-in-packages-and-imports', '/notes/compiling-and-running', '/notes/creating-a-package', '/cheat-sheet']],
-        ['object-oriented-programming', '06-object-oriented-programming', ['/notes/abstract-classes-and-interfaces', '/notes/encapsulation-and-abstraction', '/notes/inheritance-and-super', '/notes/overriding-and-polymorphism']],
+        ['object-oriented-programming', '06-object-oriented-programming', ['/notes/abstract-classes-and-interfaces', '/notes/inheritance-and-super', '/notes/overriding-and-polymorphism']],
         ['generics', '07-generics', ['/notes/bounds-and-comparable', '/notes/generic-classes', '/notes/generic-methods-and-interfaces', '/notes/why-generics', '/notes/wildcards-and-variance']],
         ['collections', '08-collections', ['/notes/choosing-a-collection', '/notes/core-interfaces', '/notes/framework-and-generics', '/notes/iteration-and-algorithms']],
         ['linked-lists-traversals', '09-linked-lists-traversals', []],
         ['stacks-and-queues', '10-stacks-and-queues', []],
-        ['hash-tables', '11-hash-tables', []],
-        ['trees', '12-trees', []],
-        ['graphs', '13-graphs', []],
       ].flatMap(([oldFolder, newFolder, extraPages]) => ['', '/review', '/questions', '/resources', ...extraPages].map((page) => ({
         source: `/docs/sem3/csi247/${oldFolder}${page}`,
         destination: `/docs/sem3/csi247/${newFolder}${page}`,
         permanent: true,
       }))),
+      // CSI247 stops at stacks and queues. Hash tables, trees and graphs moved to CSI323 (Semester V), under both the old
+      // unnumbered folder names and the numbered ones. Each row: CSI247 folder names, CSI323 topic, lessons that moved.
+      ...[
+        [['hash-tables', '11-hash-tables'], '03-hash-tables', ['hash-tables-in-java', 'hash-tables-by-example']],
+        [['trees', '12-trees'], '01-trees-and-bsts', ['trees-and-bsts']],
+        [['graphs', '13-graphs'], '04-graphs', ['graphs-and-traversals']],
+      ].flatMap(([oldFolders, topic, lessons]) => oldFolders.flatMap((oldFolder) => ['', '/review', '/questions', '/resources', '/cheat-sheet', ...lessons.map((l) => `/notes/${l}`)].map((page) => ({
+        source: `/docs/sem3/csi247/${oldFolder}${page}`,
+        destination: `/docs/sem5/csi323/${topic}${page}`,
+        permanent: true,
+      })))),
+      // Encapsulation and Abstraction became Encapsulation; abstraction is taught in Abstract Classes and Interfaces.
+      ...['/docs/sem3/csi247/object-oriented-programming', '/docs/sem3/csi247/06-object-oriented-programming'].map((base) => ({
+        source: `${base}/notes/encapsulation-and-abstraction`,
+        destination: '/docs/sem3/csi247/06-object-oriented-programming/notes/encapsulation',
+        permanent: true,
+      })),
       // The overview and resources of the legacy Linear Structures folder repeated the linked-list and stack chapters.
       {
         source: '/docs/sem3/csi247/linear-structures',

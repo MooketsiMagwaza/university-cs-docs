@@ -1,0 +1,356 @@
+---
+title: "Lists & ArrayList"
+description: "An ArrayList is a list that grows and shrinks by itself."
+---
+
+Inside, it's an ordinary array plus a counter. Once you see the memory diagram, every one of its strengths and weaknesses makes sense.
+
+<LearningObjectives items={[
+  "Why a full array is a problem, and how ArrayList solves it.",
+  "The List ADT and the ArrayList methods you need, with their costs.",
+  "How an ArrayList works in memory: `size`, capacity, growing, and shifting. Step by step, with memory diagrams.",
+  "How to sort a list with `Collections.sort` and `Comparable`.",
+]} />
+
+## The problem: arrays can't grow
+
+Recall the marks example from the lecture. We create an array of four `Integer` marks and fill it:
+
+<MemoryDiagram scenario="marks" />
+
+Now a fifth mark, 70, arrives. Where does it go? Nowhere: an array's length is fixed when it's created, and `marks[4] = 70;` crashes with `ArrayIndexOutOfBoundsException`. Our options:
+
+1. **Make a bigger array by hand**, copy all the old elements across, then add the new one. It works, but you have to write that code every time, and if you make it much bigger, the spare slots are wasted space.
+2. **Use an `ArrayList`**, which does exactly that for you automatically, and hides the details.
+
+## The List ADT
+
+A **list** is a linear sequence of elements: it has a first element, a second, and so on. Elements are normally added at the end; duplicates are allowed; and you can add or remove at any position. In Java, `List<E>` is an *interface* (it extends `Collection<E>`), so it says what a list can do but not how. Two classes implement it in two different ways:
+
+- `ArrayList`: keeps the elements in an array (this page).
+- `LinkedList`: keeps them in a chain of nodes ([next page](/docs/sem3/csi247/09-linked-lists-traversals/notes/linked-lists-explained)).
+
+## Using an `ArrayList`
+
+`ArrayList` is a generic class in `java.util`. In angle brackets you say what type it stores:
+
+```java title="Creating.java"
+import java.util.ArrayList;
+
+ArrayList<Integer> nums   = new ArrayList<Integer>();      // a list of Integers
+ArrayList<String>  fruits = new ArrayList<String>();       // a list of Strings
+ArrayList<Dog>     dogs   = new ArrayList<Dog>();          // a list of your own objects
+ArrayList<String>  bList  = new ArrayList<String>(20);     // optional: starting capacity of 20
+```
+
+| Method | What it does | Cost |
+| --- | --- | --- |
+| `boolean add(E e)` | Adds `e` at the end. May need to grow. | O(1) usually\* |
+| `void add(int i, E e)` | Inserts `e` at index `i`; everything from `i` on shifts one place right. | O(*n*) |
+| `E get(int i)` | Returns the element at index `i`. | O(1) |
+| `E set(int i, E e)` | Replaces the element at index `i` with `e`; returns the old one. | O(1) |
+| `E remove(int i)` | Removes and returns the element at index `i`; everything after shifts one place left. | O(*n*) |
+| `boolean remove(Object o)` | Finds the first `o` (using `equals`) and removes it. | O(*n*) |
+| `int indexOf(Object o)` | Index of the first `o`, or −1 (a linear search). | O(*n*) |
+| `int size()` | How many elements are stored. | O(1) |
+| `boolean isEmpty()` | `true` if there are no elements. | O(1) |
+
+*Table 27.1 — Methods that take an index throw `IndexOutOfBoundsException` if the index is out of range. \"Amortised" O(1): see the growing step below.*
+
+### The lecture's snippet, traced
+
+```java title="ListDemo.java"
+import java.util.List;
+import java.util.ArrayList;
+
+List<Integer> marks = new ArrayList<Integer>();   // List variable, ArrayList object
+marks.add(84);
+marks.add(62);
+System.out.println(marks);
+marks.add(2, 73);
+marks.add(73);
+System.out.println(marks.size());
+System.out.println(marks.isEmpty());
+marks.remove(84);
+```
+
+<TraceTable>
+
+| Statement | List afterwards | Output / result |
+| --- | --- | --- |
+| `marks.add(84)` | `[84]` |   |
+| `marks.add(62)` | `[84, 62]` |   |
+| `println(marks)` | `[84, 62]` | `[84, 62]` |
+| `marks.add(2, 73)` | `[84, 62, 73]` | allowed: see the note below |
+| `marks.add(73)` | `[84, 62, 73, 73]` | duplicates are fine in a list |
+| `println(marks.size())` |   | `4` |
+| `println(marks.isEmpty())` |   | `false` |
+| `marks.remove(84)` | unchanged | **crash**: `IndexOutOfBoundsException: Index 84 out of bounds for length 4` |
+
+</TraceTable>
+
+<Callout type="caution" title={"Two subtle points (the slide asks \"Why?\")"}>
+
+**`add(2, 73)`**: the slide marks this as an error, but when the list holds 2 items, index 2 is exactly the end, and inserting at `size()` is allowed: it's the same as `add(73)`. It *would* be an error with index 3 or more, or on an empty list (e.g. if it ran first). Rule: valid indexes for `add(i, e)` are 0 to `size()`; for `get`, `set` and `remove`, 0 to `size() − 1`.
+
+**`remove(84)`**: there are two `remove` methods, `remove(int index)` and `remove(Object o)`. Given a plain `int`, Java picks the *index* version, so it tries to delete position 84. To remove the *value* 84, pass an object: `marks.remove(Integer.valueOf(84));`.
+
+</Callout>
+
+### Fixing the marks problem
+
+```java title="GrowMarks.java"
+import java.util.Arrays;
+import java.util.ArrayList;
+
+Integer[] marks = {73, 81, 69, 60};                       // a full array of 4
+System.out.println("Marks : " + Arrays.toString(marks));
+
+ArrayList<Integer> myList = new ArrayList<Integer>(Arrays.asList(marks));   // copy the array into a list
+myList.add(70);                                           // the list simply grows
+marks = myList.toArray(marks);                            // back to an array (a new, bigger one)
+System.out.println("Marks : " + Arrays.toString(marks));
+```
+
+```text
+Marks : [73, 81, 69, 60]
+Marks : [73, 81, 69, 60, 70]
+```
+
+*The slide version has two typos (a stray `(Arrays.asList(marks));` line and `aList` instead of `myList`); this is the working version.*
+
+## How it works inside: memory diagrams
+
+An `ArrayList` object holds two things: a hidden array (Java calls the field `elementData`) and a counter `size`. Two numbers to keep apart:
+
+- **capacity**: the length of the hidden array, i.e. how many slots exist;
+- **size**: how many of those slots are actually in use.
+
+The first free slot is always at index `size`. Step through the whole life of a small list, including growing, inserting in the middle and removing from the front:
+
+<MemoryDiagram scenario="alist" />
+
+<Callout type="note" title="About the numbers in the slots">
+
+Strictly, an `ArrayList<Integer>`'s array holds *addresses* of `Integer` objects, as in the `Integer[] marks` diagram at the top of this page. To keep the picture readable we've written the numbers straight into the slots, which is the usual shortcut. If a question asks for full detail, draw each number as its own small object.
+
+</Callout>
+
+### The growing rule
+
+When `add` finds no free slot (`size == capacity`), it: (1) creates a new array twice as big, (2) copies every element across, (3) points `elementData` at the new array, and (4) adds the element. The old array becomes garbage.
+
+<Callout type="note">
+
+The lecture says "twice the size", which is the classic textbook rule. Java's real `ArrayList` grows by about 1.5 times and starts with capacity 10. The idea, and the cost, are the same.
+
+</Callout>
+
+Copying *n* elements costs O(*n*), so why do we call `add` O(1)? Because growing is rare. With doubling, after a grow of size *n* there are *n* free slots, so the next *n* adds are instant. Spread over all those adds, the occasional copy costs only a constant amount per add. This is called **amortised O(1)**.
+
+### The shifting rule
+
+An array has no gaps, so inserting at index `i` means shifting every element from `i` onwards one place right (starting from the end, so nothing gets overwritten), and removing at `i` means shifting everything after it one place left. That's why the lecture lists:
+
+**Efficient (no shifting)**
+
+- `get(i)`: jump straight to slot `i`
+- `set(i, e)`: overwrite slot `i`
+- `add(e)` at the end
+
+**Inefficient (shifting)**
+
+- `add(i, e)`: shifts up to *n* elements
+- `remove(i)`: shifts up to *n* elements
+
+Worst at the front, free at the back.
+
+### A simplified ArrayList you can read
+
+Here's a cut-down ArrayList of `int`s that does exactly what the diagrams show. It's a good revision exercise to trace it.
+
+```java title="MyArrayList.java"
+import java.util.Arrays;
+
+public class MyArrayList {
+    private int[] data;    // the hidden array
+    private int size;      // how many slots are in use
+
+    public MyArrayList() {
+        data = new int[4]; // capacity 4
+        size = 0;          // nothing stored yet
+    }
+
+    public void add(int value) {                 // add at the end
+        if (size == data.length) {               // full?
+            grow();
+        }
+        data[size] = value;                      // first free slot is at index size
+        size++;
+    }
+
+    public void add(int i, int value) {          // insert at index i
+        if (i < 0 || i > size) throw new IndexOutOfBoundsException("Index: " + i + ", Size: " + size);
+        if (size == data.length) grow();
+        for (int k = size; k > i; k--) {         // shift right, starting from the END
+            data[k] = data[k - 1];
+        }
+        data[i] = value;
+        size++;
+    }
+
+    public int remove(int i) {                   // remove at index i
+        if (i < 0 || i >= size) throw new IndexOutOfBoundsException("Index: " + i + ", Size: " + size);
+        int old = data[i];
+        for (int k = i; k < size - 1; k++) {     // shift left, starting from the FRONT
+            data[k] = data[k + 1];
+        }
+        size--;
+        return old;
+    }
+
+    public int get(int i) {                      // O(1)
+        if (i < 0 || i >= size) throw new IndexOutOfBoundsException("Index: " + i + ", Size: " + size);
+        return data[i];
+    }
+
+    public int size() { return size; }
+
+    private void grow() {
+        int[] bigger = new int[data.length * 2]; // 1. new array, twice as big
+        for (int k = 0; k < size; k++) {
+            bigger[k] = data[k];                 // 2. copy everything across
+        }
+        data = bigger;                           // 3. switch to the new array
+    }
+
+    @Override
+    public String toString() { return Arrays.toString(Arrays.copyOf(data, size)); }
+}
+```
+
+## An ArrayList of objects
+
+With objects, the hidden array holds addresses, exactly like a `Student[]` array. `get(0)` hands you the *address* of the object, so calling a setter on it changes the object that the list points to.
+
+<MemoryDiagram scenario="alstudents" />
+
+## Sorting a list: `Collections.sort`
+
+`Collections` is a utility class (like `Arrays`) for collections. `Collections.sort(list)` sorts any `List` in ascending order using a merge sort, O(*n* log *n*). The elements must be `Comparable`: Integer and String already are.
+
+```java title="UsingCollectionsClass.java"
+import java.util.*;
+
+public class UsingCollectionsClass {
+    public static void main(String[] args) {
+        List<Integer> nums = new ArrayList<Integer>(Arrays.asList(4, 7, 1, 5));
+        System.out.println("List before sorting: " + nums);
+        Collections.sort(nums);
+        System.out.println("List after sorting: " + nums);
+    }
+}
+```
+
+```text
+List before sorting: [4, 7, 1, 5]
+List after sorting: [1, 4, 5, 7]
+```
+
+### Making your own class sortable: `Comparable`
+
+For your own class, Java can't guess the order, so the class must implement the generic interface `Comparable<T>` and its one method `int compareTo(T obj)`. The rule for the number it returns:
+
+| `this.compareTo(other)` returns | Meaning |
+| --- | --- |
+| a negative number | `this` comes **before** `other` |
+| 0 | they are equal in order |
+| a positive number | `this` comes **after** `other` |
+
+```java title="Book.java + Tester.java"
+import java.util.*;
+
+class Book implements Comparable<Book> {      // "a Book can be compared with another Book"
+    String title;
+    int year;
+
+    Book(String n, int a) { title = n; year = a; }
+
+    public int compareTo(Book bk) {           // order books by year
+        if (year == bk.year)
+            return 0;                         // same year: equal in order
+        else if (year > bk.year)
+            return 1;                         // this book is newer → comes after
+        else
+            return -1;                        // this book is older → comes first
+    }
+}
+
+public class Tester {
+    public static void main(String[] args) {
+        ArrayList<Book> myBooks = new ArrayList<Book>();
+        myBooks.add(new Book("Java Programming", 2003));
+        myBooks.add(new Book("Learn Java", 2014));
+        myBooks.add(new Book("Java is Fun", 2000));
+        Collections.sort(myBooks);            // works because Book implements Comparable
+        for (Book bk : myBooks) {
+            System.out.println(bk.title + " " + bk.year);
+        }
+    }
+}
+```
+
+```text
+Java is Fun 2000
+Java Programming 2003
+Learn Java 2014
+```
+
+The lecture adds that `compareTo` should be *consistent with `equals`*: `a.compareTo(b) == 0` should be true exactly when `a.equals(b)` is. `String` follows this: `"CSI247".compareTo("CSI247") == 0` is `true`, and so is `"CSI247".equals("CSI247")`. More on ordering (including `Comparator`) is on the [Comparable & Comparator](/docs/sem3/csi247/04-sorting-and-searching/notes/comparable-and-comparator) page.
+
+## Array or ArrayList?
+
+|   | Array | `ArrayList` |
+| --- | --- | --- |
+| Size | Fixed when created | Grows and shrinks automatically |
+| Holds primitives? | Yes: `int[]` | No, objects only: `ArrayList<Integer>` |
+| Read / write element | `a[i]`, `a[i] = x` | `list.get(i)`, `list.set(i, x)` |
+| Length | `a.length` (a field) | `list.size()` (a method) |
+| Insert / delete in the middle | Write the shifting yourself | `add(i, x)`, `remove(i)` (still O(*n*)) |
+| Printing | `Arrays.toString(a)` | `System.out.println(list)` |
+
+<Callout type="key">
+
+ArrayList = hidden array + `size`. First free slot is index `size`. Full → make a twice-as-big array, copy, switch. `get`/`set`/add-at-end are fast; adding or removing anywhere else shifts elements, O(*n*). `remove(int)` removes by index, `remove(Object)` by value.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>A list is <code>[5, 9, 2]</code>. What is it after <code>add(1, 7)</code>, then <code>remove(0)</code>, then <code>set(2, 4)</code>?</>}>
+
+`[5, 7, 9, 2]` → `[7, 9, 2]` → `[7, 9, 4]`.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Capacity 4, size 4. How many element copies does the next <code>add</code> cause?</>}>
+
+4: growing copies the four existing elements into the new array of 8. (Then the new element is stored, which isn't a copy.)
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why is <code>get(i)</code> O(1) for an ArrayList?</>}>
+
+Array slots sit side by side in memory, so the computer can calculate exactly where slot `i` is (start + `i` × slot size) and jump straight there, whatever `i` is.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Write the line that removes the <em>value</em> 62 from a <code>List&lt;Integer&gt;</code>.</>}>
+
+`marks.remove(Integer.valueOf(62));` Passing an `Integer` object chooses `remove(Object)`.
+
+</CheckQuestion>
+
+</CheckQuestions>

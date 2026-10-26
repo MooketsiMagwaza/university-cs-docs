@@ -1,0 +1,267 @@
+---
+title: "Exam drill: sorting"
+description: "Lecture 9's exercises: sort 63 29 72 85 18 with bubble, selection and insertion sort using the lecturer's exact code, and merge sort the 8-element array."
+---
+
+Questions usually say "show the array contents at the end of each pass", so that is how every answer is laid out.
+
+<LearningObjectives items={[
+  "How to trace the lecture's bubble, selection and insertion sort pass by pass.",
+  "How the lecture's versions differ from the ones on the earlier pages.",
+  "How to draw the divide-and-merge diagram for merge sort, including the merge step itself.",
+]} />
+
+<Callout type="tip">
+
+A **pass** means one run of the outer loop. To answer "show the array after each pass", trace the inner loop on scrap paper, then write only the array as it stands when the outer loop finishes that pass.
+
+</Callout>
+
+## Bubble sort
+
+```java title="Lecture: bubbleSort"
+public void bubbleSort(int arr[]) {                  // ascending order
+    int temp;
+    for (int i = 0; i < arr.length; i++) {           // passes: i = 0, 1, 2, 3, 4
+        for (int j = 0; j < arr.length - 1; j++) {   // compare neighbours j and j+1
+            if (arr[j] > arr[j + 1]) {               // wrong order?
+                temp = arr[j];                       // swap them using a temporary box
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+}
+```
+
+Two differences from the [Bubble sort](/docs/sem3/csi247/04-sorting-and-searching/notes/bubble-sort) page: this version always does all *n* passes (no "stop if no swaps" check), and every pass compares all the way to the end (it doesn't skip the already-sorted tail). So it is O(*n*²) even on an already-sorted array. Same answers, just more comparisons.
+
+### Pass 1 in detail (`i` = 0)
+
+<TraceTable>
+
+| `j` | Compare | Swap? | Array afterwards |
+| --- | --- | --- | --- |
+| 0 | 63 \> 29? | yes | `29 63 72 85 18` |
+| 1 | 63 \> 72? | no | `29 63 72 85 18` |
+| 2 | 72 \> 85? | no | `29 63 72 85 18` |
+| 3 | 85 \> 18? | yes | `29 63 72 18 85` |
+
+</TraceTable>
+
+### Array at the end of each pass
+
+<TraceTable>
+
+| Pass (`i`) | Array after the pass | Swaps | What happened |
+| --- | --- | --- | --- |
+| start | `63 29 72 85 18` | — |   |
+| 1 (0) | `29 63 72 18 85` | 2 | 85, the largest, bubbled to the end |
+| 2 (1) | `29 63 18 72 85` | 1 | 72 joins it |
+| 3 (2) | `29 18 63 72 85` | 1 | 18 moves one step left each pass |
+| 4 (3) | `18 29 63 72 85` | 1 | sorted |
+| 5 (4) | `18 29 63 72 85` | 0 | no change, but this version still does the pass |
+
+</TraceTable>
+
+<Callout type="note">
+
+Notice how the small value 18 crawls left only *one place per pass*, while the big value 85 jumped all the way right in one pass. Small values at the end are bubble sort's worst enemy.
+
+</Callout>
+
+## Selection sort
+
+```java title="Lecture: selectionSort"
+public void selectionSort(int arr[]) {
+    int minIndex, temp;
+    for (int i = 0; i < arr.length - 1; i++) {       // position being filled: 0, 1, 2, 3
+        minIndex = i;                                // guess: the smallest is at i
+        for (int j = i + 1; j < arr.length; j++) {   // look at everything after i
+            if (arr[j] < arr[minIndex])
+                minIndex = j;                        // found something smaller: remember WHERE
+        }
+        temp = arr[minIndex];                        // swap the smallest into position i
+        arr[minIndex] = arr[i];
+        arr[i] = temp;
+    }
+}
+```
+
+<TraceTable>
+
+| Pass (`i`) | Search area | Smallest found (`minIndex`) | Swap | Array after the pass |
+| --- | --- | --- | --- | --- |
+| start |   |   |   | `63 29 72 85 18` |
+| 1 (0) | \[0..4\] | 18 (index 4) | 63 ↔ 18 | `18 29 72 85 63` |
+| 2 (1) | \[1..4\] | 29 (index 1) | none needed (swaps with itself) | `18 29 72 85 63` |
+| 3 (2) | \[2..4\] | 63 (index 4) | 72 ↔ 63 | `18 29 63 85 72` |
+| 4 (3) | \[3..4\] | 72 (index 4) | 85 ↔ 72 | `18 29 63 72 85` |
+
+</TraceTable>
+
+Only *n* − 1 = 4 passes: once the first four positions hold the four smallest values, the last one must be the largest. In pass 2 the lecturer's code still runs the three swap lines, swapping `arr[1]` with itself, which changes nothing.
+
+## Insertion sort
+
+```java title="Lecture: insertionSort"
+public void insertionSort(int arr[]) {
+    int temp, j;
+    for (int i = 1; i < arr.length; ++i) {      // start from index 1: index 0 alone is "sorted"
+        j = i;
+        temp = arr[i];                          // pick up the item to insert
+        while (j > 0 && temp < arr[j - 1]) {    // bigger items to its left…
+            arr[j] = arr[j - 1];                // …shift one place right (a copy, not a swap)
+            j--;
+        }
+        arr[j] = temp;                          // drop the item into the gap
+    }
+}
+```
+
+<Callout type="caution" title="Two slips on the slide">
+
+The slide's line `arr[j] = arr[j-1] )` has a stray `)` and won't compile; it should end with `;`. Its comment also says "swap adjacent items", but the line is a *shift*: it copies one value right and leaves the picked-up item in `temp` until the end.
+
+</Callout>
+
+<TraceTable>
+
+| Pass (`i`) | `temp` | Shifted right | Final `j` | Array after the pass |
+| --- | --- | --- | --- | --- |
+| start |   |   |   | `63 29 72 85 18` |
+| 1 (1) | 29 | 63 | 0 | `29 63 72 85 18` |
+| 2 (2) | 72 | none (63 \< 72) | 2 | `29 63 72 85 18` |
+| 3 (3) | 85 | none (72 \< 85) | 3 | `29 63 72 85 18` |
+| 4 (4) | 18 | 85, 72, 63, 29 | 0 | `18 29 63 72 85` |
+
+</TraceTable>
+
+The green part is the sorted portion, growing by one each pass. Passes 2 and 3 cost one comparison each because those items were already in the right place: that's why insertion sort is fast on nearly-sorted lists.
+
+## Merge sort
+
+```java title="Lecture: mergeSort + merge"
+public static void mergeSort(int arr[], int start, int end) {
+    if (start < end) {                         // 2 or more elements? (1 element is already sorted)
+        int mid = (start + end) / 2;           // middle index
+        mergeSort(arr, start, mid);            // sort the left half
+        mergeSort(arr, mid + 1, end);          // sort the right half
+        merge(arr, start, mid, end);           // combine the two sorted halves
+    }
+}
+
+// The merge step (left to the lab in the lecture):
+public static void merge(int arr[], int start, int mid, int end) {
+    int[] temp = new int[end - start + 1];     // room for both halves
+    int i = start, j = mid + 1, k = 0;         // i walks the left half, j the right half, k the temp array
+    while (i <= mid && j <= end) {             // both halves still have items
+        if (arr[i] <= arr[j]) temp[k++] = arr[i++];   // take the smaller front item
+        else                  temp[k++] = arr[j++];
+    }
+    while (i <= mid) temp[k++] = arr[i++];     // copy whatever is left in the left half
+    while (j <= end) temp[k++] = arr[j++];     // …or in the right half
+    for (k = 0; k < temp.length; k++)
+        arr[start + k] = temp[k];              // copy back into the original array
+}
+```
+
+### The lecture's small example: `20 36 54 13`
+
+<KeyTerm label="Divide, then merge" tone="green">
+
+**Divide**
+
+```text
+20 36 54 13
+20 36  │  54 13
+20  │  36  │  54  │  13
+```
+
+**Merge**
+
+```text
+20 36  │  13 54
+13 20 36 54
+```
+
+</KeyTerm>
+
+### The exercise: `63 29 72 85 18 49 3 54`
+
+<KeyTerm label="Model answer" tone="green">
+
+**Divide** (halve until every piece has one element)
+
+```text
+63 29 72 85 18 49 3 54
+63 29 72 85  │  18 49 3 54
+63 29  │  72 85  │  18 49  │  3 54
+63 │ 29 │ 72 │ 85  │  18 │ 49 │ 3 │ 54
+```
+
+**Merge** (pairs back together, in order)
+
+```text
+29 63  │  72 85  │  18 49  │  3 54
+29 63 72 85  │  3 18 49 54
+3 18 29 49 54 63 72 85
+```
+
+</KeyTerm>
+
+### The last merge, step by step
+
+Merging `29 63 72 85` with `3 18 49 54`. Each step compares the two front items and takes the smaller:
+
+<TraceTable>
+
+| Left front | Right front | Take | Result so far |
+| --- | --- | --- | --- |
+| 29 | 3 | 3 (right) | `3` |
+| 29 | 18 | 18 (right) | `3 18` |
+| 29 | 49 | 29 (left) | `3 18 29` |
+| 63 | 49 | 49 (right) | `3 18 29 49` |
+| 63 | 54 | 54 (right) | `3 18 29 49 54` |
+| 63 | — | right half used up: copy 63, 72, 85 | `3 18 29 49 54 63 72 85` |
+
+</TraceTable>
+
+### Odd-sized arrays
+
+With `63 29 72 85 18`, `mid = (0 + 4) / 2 = 2`, so the left half gets three elements (`63 29 72`) and the right half two (`85 18`). The left half then splits into `63 29` and `72`. Merges: `29 63`, then `29 63 72`; `18 85`; finally `18 29 63 72 85`.
+
+## Summary from the lecture
+
+| Algorithm | Idea in one line | Time |
+| --- | --- | --- |
+| Bubble | swap out-of-order neighbours; the biggest bubbles to the end each pass | O(*n*²) |
+| Selection | find the smallest remaining value, swap it into the next position | O(*n*²) |
+| Insertion | take the next item and slide it into place in the sorted part | O(*n*²), but a bit better than bubble |
+| Merge | halve until single items, then merge sorted halves | O(*n* log *n*) |
+
+Why is merge sort O(*n* log *n*)? Halving 8 elements down to single items takes log₂ 8 = 3 levels, and each level of merging handles all *n* elements once: 3 levels × 8 elements = 24 steps. In general, log *n* levels × *n* work per level.
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>Using the lecturer's bubble sort, show the array after each pass for <code>5 1 4 2</code>.</>}>
+
+Pass 1: `1 4 2 5`. Pass 2: `1 2 4 5`. Passes 3 and 4: `1 2 4 5` (no swaps, but the passes still run).
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Selection sort on <code>4 3 2 1</code>: show the array after each pass.</>}>
+
+Pass 1: smallest is 1 → swap with 4 → `1 3 2 4`. Pass 2: smallest of `3 2 4` is 2 → `1 2 3 4`. Pass 3: smallest of `3 4` is 3, already in place → `1 2 3 4`.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Insertion sort on <code>4 3 2 1</code>: how many shifts in total?</>}>
+
+1 + 2 + 3 = 6. Each new item is smaller than everything before it, so it shifts all of them: the worst case.
+
+</CheckQuestion>
+
+</CheckQuestions>

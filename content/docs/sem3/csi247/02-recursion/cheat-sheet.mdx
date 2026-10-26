@@ -1,0 +1,275 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for writing, tracing and fixing recursive Java methods: the base case and recursive case, the termination checklist, the trace table, branching recursion and converting a loop."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/02-recursion) for the explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `method` | The name of the recursive method | `factorial`, `sum`, `power` |
+| `param` | The value that shrinks on each call | `n`, `index`, `lo`/`hi` |
+| `baseCondition` | The test that is true for the smallest input | `n == 0`, `index == a.length`, `lo > hi` |
+| `baseValue` | What the method returns at the base case, with no further call | `1` for `factorial(0)`, `0` for `sum(0)` |
+| `smaller` | The argument of the recursive call, closer to the base case | `n - 1`, `index + 1`, `n / 2` |
+| `combine` | How the answer of the smaller call becomes the answer for this call | `n * ...`, `... + a[index]` |
+
+## 2. The anatomy of a recursive method
+
+Every recursive method has exactly two parts: a **base case** that returns directly, and a **recursive case** that calls the method again on something smaller and uses the answer.
+
+**Template:**
+
+```java
+static ReturnType method(ParamType param) {
+    if (baseCondition) {
+        return baseValue;                    // base case: no further call
+    }
+    return combine(method(smaller));         // recursive case: a smaller problem
+}
+```
+
+**Example:**
+
+```java title="Factorial.java"
+public class Factorial {
+    static int factorial(int n) {
+        if (n == 0) {
+            return 1;                        // base case
+        }
+        return n * factorial(n - 1);         // recursive case
+    }
+
+    public static void main(String[] args) {
+        System.out.println(factorial(5));
+        System.out.println(factorial(0));
+    }
+}
+```
+
+```text
+120
+1
+```
+
+**Watch for:** the base case is tested **first**. Putting the recursive call before the test means the method never reaches the base case.
+
+## 3. The termination checklist
+
+Ask three questions of every recursive call before calling the method finished:
+
+| Check | Question to ask | Fails when |
+|---|---|---|
+| Base case exists | Is there an input that returns a value with no further call? | Every path makes another call |
+| Argument shrinks | Does every recursive call pass a different, smaller argument? | `sum(n)` calls `sum(n)` |
+| Shrinks toward the base case | Does the change move the argument closer to a base case that exists? | `factorial(-3)` counts down by 1, away from `0`, forever |
+
+All three must hold together. "The argument changes" is not enough: `n - 1` shrinks `n` whether `n` is `5` or `-3`, but only one of those is heading anywhere.
+
+**What happens when it fails:** the calls pile up on the stack until Java throws a `StackOverflowError`.
+
+```java title="Overflow.java"
+public class Overflow {
+    static int broken(int n) {
+        return n + broken(n - 1);            // no base case
+    }
+
+    public static void main(String[] args) {
+        try {
+            broken(5);
+        } catch (StackOverflowError e) {
+            System.out.println("StackOverflowError: no base case was ever reached");
+        }
+    }
+}
+```
+
+```text
+StackOverflowError: no base case was ever reached
+```
+
+## 4. Recursion over a counter, a range, an array and a string
+
+The same two parts fit every shape. Only `param`, `baseCondition` and `smaller` change.
+
+| Recursing over | `baseCondition` | `smaller` | Example |
+|---|---|---|---|
+| A counter `n` | `n == 0` | `n - 1` | `factorial(n)`, `sum(n)` |
+| A halving counter | `n <= 1` | `n / 2` | `digitsOf(n)`, `power(x, n)` by squaring |
+| An index into an array | `index == a.length` | `index + 1` | `sumFrom(a, index)` |
+| A range `lo..hi` | `lo > hi` | `lo + 1` or `hi - 1` or a half | recursive binary search |
+| A string | `s.isEmpty()` | `s.substring(1)` | `reverse(s)` |
+
+```java title="Shapes.java"
+public class Shapes {
+    // over an index: add a[index] to the sum of the rest
+    static int sumFrom(int[] a, int index) {
+        if (index == a.length) {
+            return 0;
+        }
+        return a[index] + sumFrom(a, index + 1);
+    }
+
+    // over a string: the last character goes first
+    static String reverse(String s) {
+        if (s.isEmpty()) {
+            return "";
+        }
+        return reverse(s.substring(1)) + s.charAt(0);
+    }
+
+    // over a halving counter: x^n using fewer multiplications
+    static long power(long x, int n) {
+        if (n == 0) {
+            return 1;
+        }
+        long half = power(x, n / 2);
+        return n % 2 == 0 ? half * half : half * half * x;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(sumFrom(new int[] {4, 8, 15, 16}, 0));
+        System.out.println(reverse("Kago"));
+        System.out.println(power(2, 10));
+    }
+}
+```
+
+```text
+43
+ogaK
+1024
+```
+
+## 5. Tracing a recursive method: the trace table
+
+A recursive trace has two directions: the calls go **down** until the base case, then the answers come **back up**. Fill the first four columns top to bottom, then the last column bottom to top.
+
+| `n` | Call | `n == 1`? | Returned | Result |
+|---|---|---|---|---|
+| 4 | `mystery(4)` | false | `4 + mystery(3)` | 4 + 6 = **10** |
+| 3 | `mystery(3)` | false | `3 + mystery(2)` | 3 + 3 = 6 |
+| 2 | `mystery(2)` | false | `2 + mystery(1)` | 2 + 1 = 3 |
+| 1 | `mystery(1)` | true | `1` | 1 |
+
+```java title="Mystery.java"
+public class Mystery {
+    static int mystery(int n) {
+        if (n == 1) {
+            return 1;
+        }
+        return n + mystery(n - 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(mystery(4));
+    }
+}
+```
+
+```text
+10
+```
+
+**Check an answer quickly:** `mystery(n)` is `1 + 2 + ... + n`, which equals `n(n + 1) / 2`. For `n = 4` that is `4 * 5 / 2 = 10`.
+
+## 6. Linear recursion and a branching call tree
+
+`factorial` calls itself **once** per step, so its calls form a chain. `fib(n) = fib(n - 1) + fib(n - 2)` calls itself **twice**, so its calls branch into a tree, and identical sub-calls such as `fib(2)` are recomputed every time they reappear.
+
+| Property | Naive `fib` (branching) | Loop or accumulator (linear) |
+|---|---|---|
+| Recursive calls per step | Two | One, or none |
+| Shape of the calls | A tree | A chain |
+| Repeated sub-calls | Yes, `fib(2)` many times | No |
+| Calls for `fib(30)` | About 2.7 million | 30 |
+
+```java title="Fib.java"
+public class Fib {
+    static int calls = 0;
+
+    static int fib(int n) {
+        calls++;
+        if (n <= 1) {
+            return n;                        // two base cases: fib(0) = 0 and fib(1) = 1
+        }
+        return fib(n - 1) + fib(n - 2);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(fib(10) + " after " + calls + " calls");
+        calls = 0;
+        System.out.println(fib(20) + " after " + calls + " calls");
+    }
+}
+```
+
+```text
+55 after 177 calls
+6765 after 21891 calls
+```
+
+`fib(n)` reaches back **two** steps, so it needs answers for both `0` and `1`. Count how far back the recursive step reaches: that is how many base cases you need.
+
+## 7. Converting a loop into recursion (and back)
+
+| Loop part | Recursive part |
+|---|---|
+| Loop counter starts at `start` | The first call passes `start` |
+| Loop condition `i <= n` | The base case is the opposite: `i > n` |
+| Loop body updates the total | The recursive case combines the total with the rest |
+| `i++` | The recursive call passes `i + 1` |
+
+```java title="LoopToRecursion.java"
+public class LoopToRecursion {
+    // loop version
+    static int sumLoop(int n) {
+        int sum = 0;
+        for (int i = 1; i <= n; i++) {
+            sum += i;
+        }
+        return sum;
+    }
+
+    // recursive version: the same sum, built from the end
+    static int sumRec(int n) {
+        if (n == 0) {
+            return 0;
+        }
+        return n + sumRec(n - 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(sumLoop(10) + " " + sumRec(10));
+    }
+}
+```
+
+```text
+55 55
+```
+
+## 8. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| No base case | `StackOverflowError` | Add a test for the smallest input before the call |
+| Base case after the recursive call | Same: the call runs first | Put the test first |
+| Argument does not shrink | `StackOverflowError` | Pass `n - 1`, `index + 1` or a smaller range |
+| Shrinks away from the base case | `StackOverflowError` for negative `n` | Guard the input (`if (n < 0) throw ...`) or use `<=` in the test |
+| One base case where two are needed | Wrong answers or an exception | Count how far back the step reaches |
+| Forgetting to use the returned value | The answer is thrown away | `return n * factorial(n - 1);`, not just `factorial(n - 1);` |
+| Naive `fib` for large `n` | Takes minutes | Use a loop, or store computed values |
+
+## 9. Cost
+
+| Method | Calls | Time | Extra memory (the call stack) |
+|---|---|---|---|
+| `factorial(n)`, `sum(n)` | `n + 1` | O(n) | O(n) |
+| `power(x, n)` by halving | about `log2 n` | O(log n) | O(log n) |
+| Naive `fib(n)` | about `1.6^n` | O(2^n) | O(n) |
+| Recursive binary search | at most `log2 n + 1` | O(log n) | O(log n) |
+
+Each pending call keeps its own copy of the parameters on the stack, so depth matters: very deep recursion (tens of thousands of calls) overflows even when it is correct.

@@ -56,7 +56,7 @@ for (const file of mdxFiles) {
 const officialChapters = [
   '01-java-fundamentals', '02-recursion', '03-time-complexity', '04-sorting-and-searching',
   '05-packages', '06-object-oriented-programming', '07-generics', '08-collections',
-  '09-linked-lists-traversals', '10-stacks-and-queues', '11-hash-tables', '12-trees', '13-graphs',
+  '09-linked-lists-traversals', '10-stacks-and-queues',
 ];
 for (const chapter of officialChapters) {
   if (!existsSync(join(courseRoot, chapter, 'meta.json')) || !existsSync(join(courseRoot, chapter, 'index.mdx'))) {

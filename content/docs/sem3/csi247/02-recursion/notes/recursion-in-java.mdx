@@ -1,117 +1,96 @@
 ---
-title: "Recursion in Java"
-description: "Understand a recursive method as stacked unfinished calls, then trace, design, and compare it with iteration."
+title: "Recursion"
+description: "A method that solves a problem by calling itself on a smaller version of the same problem."
 ---
 
-Recursion is not “a method magically calling itself.” It is a sequence of **separate method calls**, each with its own parameters and local variables, waiting on the call stack.
+Binary search, merge sort and quick sort are all naturally written this way.
 
-## 1. The smallest complete model
+<LearningObjectives items={[
+  "What recursion is and the two parts every recursive method needs.",
+  "How the call stack makes recursion work, traced step by step.",
+  "What a `StackOverflowError` is and how to avoid it.",
+  "What \"divide and conquer\" means.",
+]} />
 
-Every correct recursive method needs:
+<Callout type="analogy">
 
-1. a **base case** that answers a small problem directly;
-2. a **recursive case** that moves toward the base case;
-3. a way to combine the smaller answer into the current answer.
+You're in a long queue and want to know your position. You ask the person in front, "what's your position?" They don't know either, so they ask the person in front of them, and so on. The person at the very front knows without asking: "I'm number 1". Then each answer travels back: "I'm 2", "I'm 3"… until it reaches you. Each person did one small step and trusted someone else with the smaller problem.
 
-~~~java
-public static int sumTo(int n) {
-    if (n <= 0) {           // Base case: stop making calls.
-        return 0;
+</Callout>
+
+## The two parts of every recursive method
+
+1. **A base case**: a version of the problem small enough to answer directly, with no further calls. (The person at the front of the queue.)
+2. **A recursive case**: a rule that solves the problem by calling the same method on a *smaller* input, then uses that answer. Each call must move closer to the base case.
+
+The classic example is the **factorial** of a whole number, written *n*!, which is the product of all whole numbers from 1 to *n*: 4! = 4 × 3 × 2 × 1 = 24. Notice that 4! = 4 × 3!, and in general *n*! = *n* × (*n*−1)!. That's a smaller version of the same problem, so it maps directly onto recursion.
+
+```java title="Factorial.java"
+public static long factorial(int n) {
+    if (n <= 1) {                    // BASE CASE: 1! (and 0!) is 1 — answer directly
+        return 1;
     }
-
-    return n + sumTo(n - 1); // Smaller input: n moves toward 0.
+    return n * factorial(n - 1);     // RECURSIVE CASE: n! = n × (n−1)!   (n−1 is smaller → progress)
 }
-~~~
+// factorial(4) → 24
+```
 
-<div className="not-prose my-6 grid gap-3 sm:grid-cols-3">
-  <div className="rounded-xl border-2 border-red-500 bg-red-500/5 p-4"><strong>Stop</strong><p className="mb-0 mt-2 text-sm"><code>n &lt;= 0</code> returns directly</p></div>
-  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/5 p-4"><strong>Shrink</strong><p className="mb-0 mt-2 text-sm"><code>n - 1</code> is closer to stop</p></div>
-  <div className="rounded-xl border-2 border-emerald-600 bg-emerald-500/5 p-4"><strong>Combine</strong><p className="mb-0 mt-2 text-sm">add current <code>n</code> on return</p></div>
-</div>
+## How it actually runs
 
-## 2. Full call-stack trace: sumTo(3)
+Recursion isn't magic; it uses the same call stack as any other method call. Each call to `factorial` gets its own stack frame with its own separate `n`. A call can't finish until the call it made returns, so frames pile up on the way down and are removed on the way back up.
 
-### Calls go down
+<SvgFigure src="sem3/csi247/02-recursion/notes/recursion-in-java" id="recursion-1">
 
-<div className="not-prose my-6 mx-auto max-w-xl space-y-2 font-mono">
-  {[
-    ['sumTo(3)','waiting for 3 + sumTo(2)'],
-    ['sumTo(2)','waiting for 2 + sumTo(1)'],
-    ['sumTo(1)','waiting for 1 + sumTo(0)'],
-    ['sumTo(0)','base case returns 0']
-  ].map(([call,state],i) => <div key={call} className={`rounded-xl border-2 p-3 ${i===3?'border-red-500 bg-red-500/5':'border-blue-500'}`}><strong>{call}</strong><span className="ml-3 text-sm text-fd-muted-foreground">{state}</span></div>)}
-</div>
+**Figure 13.1** Four frames are stacked before anything is multiplied. Once the base case answers, each waiting frame finishes its multiplication and returns to the one above it.
 
-### Returns unwind upward
+</SvgFigure>
 
-| Returning frame | Expression can now finish | Returns |
-|---|---|---:|
-| <code>sumTo(0)</code> | base answer | 0 |
-| <code>sumTo(1)</code> | <code>1 + 0</code> | 1 |
-| <code>sumTo(2)</code> | <code>2 + 1</code> | 3 |
-| <code>sumTo(3)</code> | <code>3 + 3</code> | 6 |
+## When recursion goes wrong
 
-The answer is built during **unwinding**, not while calls are still descending.
+If there's no base case, or the recursive call doesn't make the problem smaller, the method calls itself forever. Each call adds a frame, the stack's memory runs out, and Java stops with a **`StackOverflowError`**. The same error can happen with a correct method if the recursion is simply too deep (typically many thousands of nested calls), which is why algorithms that recurse *n* levels deep on large inputs are a problem, as you'll see with quick sort's worst case.
 
-## 3. Recursive array search
-
-~~~java
-public static int find(int[] data, int target, int index) {
-    if (index == data.length) { // No cells remain.
-        return -1;
-    }
-    if (data[index] == target) { // Current cell matches.
-        return index;
-    }
-    return find(data, target, index + 1); // Search the suffix.
+```java title="Broken.java"
+static int broken(int n) {
+    return n * broken(n - 1);   // ✗ no base case → calls never stop → StackOverflowError
 }
-~~~
+```
 
-| Call | condition checked | decision |
-|---|---|---|
-| <code>find([8,3,6], 6, 0)</code> | <code>8 == 6</code> false | recurse with 1 |
-| <code>find(..., 1)</code> | <code>3 == 6</code> false | recurse with 2 |
-| <code>find(..., 2)</code> | <code>6 == 6</code> true | return 2 |
+## Divide and conquer
 
-## 4. Recursive versus iterative
+Many fast algorithms use a recursive strategy called **divide and conquer**:
 
-~~~java
-public static int iterativeSumTo(int n) {
-    int total = 0;
-    for (int value = 1; value <= n; value++) {
-        total += value;
-    }
-    return total;
-}
-~~~
+1. **Divide** the problem into smaller pieces of the same kind.
+2. **Conquer** each piece by solving it recursively (tiny pieces are base cases).
+3. **Combine** the pieces' answers into an answer for the whole.
 
-| Question | Recursive | Iterative |
-|---|---|---|
-| Where is unfinished work stored? | call-stack frames | explicit loop variables |
-| Extra space for sumTo(N) | O(N) | O(1) |
-| Time | O(N) | O(N) |
-| Natural fit | recursive structures/divide-and-conquer | straightforward repetition |
+Binary search divides the array in half and only needs to conquer one half. Merge sort divides in half, sorts both halves, and combines them by merging. Quick sort divides around a pivot and sorts both sides; its combine step is free. Whenever a problem is halved at every level, there are about log₂ *n* levels, which is where the "log *n*" in their running times comes from.
 
-Java does not guarantee tail-call optimisation. A tail-recursive Java method may still consume one frame per call.
+<Callout type="tip">
 
-## 5. How to design one
+When writing a recursive method, don't try to follow every call in your head. Make sure the base case is right, then *trust* that the recursive call correctly solves the smaller problem, and only ask: "given that answer, how do I solve my problem?" This mental leap is sometimes called the "recursive leap of faith".
 
-1. State what the method returns for one input.
-2. Write the smallest valid input and answer it directly.
-3. Express the current answer using a strictly smaller input.
-4. Prove the smaller input reaches the base case.
-5. Trace calls downward and returns upward separately.
+</Callout>
 
-<CommonMistake title="A base case that is never reached">
-If <code>n</code> starts positive but the recursive call uses <code>n + 1</code>, the method moves away from <code>n == 0</code> and eventually throws <code>StackOverflowError</code>.
-</CommonMistake>
+<Callout type="key">
 
-## 6. Exam-style practice
+Every recursive method needs a base case and a recursive case that makes the problem smaller. Each call gets its own stack frame. No base case means `StackOverflowError`. Halving at each level gives log *n* levels.
 
-1. Draw every stack frame and return value for <code>sumTo(4)</code>. [10]
-2. Trace recursive search for a present target and an absent target. [10]
-3. Write recursive and iterative factorial methods and compare time and auxiliary space. [12]
-4. Diagnose a missing base case and a non-progressing recursive case. [8]
-5. Explain why merge sort uses O(log N) recursive depth but O(N) merge storage. [8]
+</Callout>
 
-Continue with [Practice Questions](/docs/sem3/csi247/02-recursion/questions).
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>Write a recursive method <code>sum(n)</code> that returns 1 + 2 + … + n.</>}>
+
+`static int sum(int n) { if (n == 0) return 0; return n + sum(n - 1); }` — base case `n == 0`, and each call reduces `n` by one.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>How many frames are on the stack at the deepest point of <code>factorial(5)</code>?</>}>
+
+Five: `factorial(5)`, `(4)`, `(3)`, `(2)` and `(1)`, plus whichever method called `factorial(5)` in the first place.
+
+</CheckQuestion>
+
+</CheckQuestions>

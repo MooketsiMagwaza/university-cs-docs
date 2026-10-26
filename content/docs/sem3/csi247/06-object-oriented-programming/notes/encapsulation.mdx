@@ -1,0 +1,166 @@
+---
+title: "Encapsulation"
+description: "Hide the data."
+---
+
+Expose a few safe doors. Check the rules at every door.
+
+<LearningObjectives items={[
+  "What encapsulation is and the problem it prevents.",
+  "How the access modifiers `private` and `public` enforce it.",
+  "What getters, setters and invariants are, and when not to write a setter.",
+]} />
+
+<ConceptFrame>
+
+<FrameBox label="The idea">
+
+An object is like a vending machine. You press buttons (call methods); you never open it up and grab the cash box (the fields).
+
+</FrameBox>
+
+<FrameBox label="The definition">
+
+Encapsulation means making fields `private` and allowing access only through `public` methods that enforce the object's rules, called its **invariants**.
+
+</FrameBox>
+
+<FrameBox label="Why it works">
+
+If any code anywhere can write `balance = -500`, no single place guarantees the data is valid. Funnel every change through one method and the rule only has to be checked in one place.
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+It keeps objects from ever getting into an invalid state, and lets you change how data is stored inside a class without breaking any code that uses it.
+
+</FrameBox>
+
+</ConceptFrame>
+
+## The problem without encapsulation
+
+Imagine a bank account class whose `balance` field is `public`. Anywhere in a large program, someone can write `acc.balance = -500;` by mistake. The account is now in a state that should be impossible, and when it's finally noticed, the faulty line could be anywhere. Worse, if you later decide to store the balance in cents (as a `long`) to avoid decimal rounding errors, every one of those scattered lines breaks.
+
+## Access modifiers are the walls
+
+Java lets you mark each member with an **access modifier** that controls which other code may use it. There are four levels; for encapsulation you mainly need the two extremes:
+
+- `private`: only code inside this same class can see it. Use this for fields.
+- `public`: any code anywhere can see it. Use this for the methods that form the class's "front panel".
+
+The other two levels, `protected` and package-private (no keyword), are covered on the Inheritance page and in the [full table in Appendix B](/docs/sem3/csi247/resources#appendix-b--access-modifiers).
+
+<KeyTerm title="Invariant">
+
+A condition that must be true at every moment that outside code can observe the object. For a bank account, "the balance is never negative". Encapsulation exists to protect invariants.
+
+</KeyTerm>
+
+**Getters** (also called *accessors*) are methods that let outside code *read* a value, conventionally named `getSomething()`. **Setters** (also called *mutators*) let outside code *change* a value, conventionally `setSomething(value)`, and should validate the new value before accepting it. A field with a getter but no setter is read-only to the outside world.
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/encapsulation" id="encapsulation-1">
+
+**Figure 7.1** Outside code can only get in through the public methods (green). Each method checks the rules before touching the private state. Direct access to a private field (red) is rejected by the compiler.
+
+</SvgFigure>
+
+## Example: an account that can't go negative
+
+```java title="BankAccount.java"
+public class BankAccount {
+    // private → only code INSIDE this class can read or write these
+    private final String owner;     // final → assigned once in the constructor, never changed
+    private double balance;         // INVARIANT: balance >= 0 at all times
+
+    public BankAccount(String owner, double opening) {
+        if (opening < 0) {          // protect the invariant from the very first moment
+            throw new IllegalArgumentException("Opening balance can't be negative");
+        }
+        this.owner = owner;
+        this.balance = opening;
+    }
+
+    // GETTERS — read-only windows onto private state
+    public double getBalance() { return balance; }
+    public String getOwner()   { return owner; }
+
+    // Controlled change #1 — rule: the amount must be positive
+    public void deposit(double amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Deposit must be greater than 0");
+        }
+        balance += amount;
+    }
+
+    // Controlled change #2 — rule: you can't take out more than is there
+    public boolean withdraw(double amount) {
+        if (amount <= 0 || amount > balance) {
+            return false;           // refuse; balance untouched → invariant still holds
+        }
+        balance -= amount;
+        return true;
+    }
+
+    // Deliberately NO setBalance(...): money may only move via deposit and withdraw.
+}
+```
+
+```java title="Using it"
+BankAccount acc = new BankAccount("Thato", 100);
+acc.deposit(50);                        // ✓ balance is 150
+boolean ok = acc.withdraw(500);         // ✓ refused: returns false, balance still 150
+// acc.balance = -500;                  // ✗ compile error: balance has private access in BankAccount
+System.out.println(acc.getBalance());   // 150.0
+```
+
+Notice `throw new IllegalArgumentException(…)`. `throw` stops the method immediately and reports an error (an **exception**) to whoever called it. It's the standard way to refuse invalid input that should never have been sent. `withdraw` instead returns `false`, because asking for more money than you have is an ordinary, expected situation rather than a programming error. Choosing between the two is a design decision.
+
+<Callout type="analogy">
+
+A pharmacy counter. You may ask for medicine (call a method), and the pharmacist checks your prescription (validation) before handing anything over. You can't walk behind the counter and help yourself (access the private fields).
+
+</Callout>
+
+## Encapsulation lets the inside change
+
+Because nothing outside `BankAccount` can see `balance`, we could later change it to `private long cents;` and rewrite the methods to convert. Every line of code that uses `deposit`, `withdraw` and `getBalance` keeps working unchanged. This freedom to change the hidden details is often called **information hiding**, and it's what makes large programs maintainable.
+
+<Callout type="mistake">
+
+Generating a getter *and* a setter for every field without thinking. A public `setBalance(double)` with no checks is just a public field with extra typing. Only add a setter when outside code truly needs to change that value, and validate inside it.
+
+</Callout>
+
+<Callout type="mistake" title="Leaking internals">
+
+Returning a private array or list directly from a getter. The caller receives a reference to your actual internal object and can modify it behind your back. Return a copy instead, for example `return items.clone();` for an array or `return List.copyOf(items);` for a list.
+
+</Callout>
+
+<Callout type="key">
+
+Fields `private`, behaviour `public`. Every change goes through a method that checks the invariant. Add setters only when they're genuinely needed.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={"Why make a field private if you then add a public getter for it?"}>
+
+The getter allows reading but not writing, so the invariant can't be broken from outside. It also hides how the value is stored, so the internal representation can change later without changing any calling code.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>What is an invariant? Give one for a <code>Student</code> class with a <code>mark</code> field.</>}>
+
+A condition that must always be true for the object. For example: "mark is between 0 and 100". A `setMark` method would reject values outside that range.
+
+</CheckQuestion>
+
+</CheckQuestions>
+
+<QuizRef src="sem3/csi247/06-object-oriented-programming/notes/encapsulation" id="encapsulation" />

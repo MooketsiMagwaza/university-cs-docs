@@ -1,0 +1,158 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for counting steps, writing T(n), reading Big-O from loop shapes, the growth-rate order and the cost of the operations used across the course."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/03-time-complexity) for the explanations. This page is for lookup.
+
+## 1. Placeholders used on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `n` | The size of the input | the array length, the number in the loop bound |
+| `T(n)` | The number of basic steps for input size `n` | `3n + 2` |
+| `c1, c2, ...` | The constant cost of one line, each time it runs | `c1` for `int sum = 0;` |
+| `O(f(n))` | An upper bound on the growth of `T(n)`, with constants and small terms dropped | `O(n)`, `O(n^2)` |
+
+## 2. Growth rates, slowest growth first
+
+| Name | Big-O | Typical code | Doubling `n` makes it |
+|---|---|---|---|
+| Constant | O(1) | `a[i]`, `list.get(i)`, a `push` | the same |
+| Logarithmic | O(log n) | halving: binary search | one more step |
+| Linear | O(n) | one loop over the data | twice as long |
+| Linearithmic | O(n log n) | merge sort, good quick sort | a little more than twice |
+| Quadratic | O(n^2) | two nested loops over the data | four times as long |
+| Exponential | O(2^n) | naive recursive `fib` | squares the work |
+
+## 3. Counting steps: the template
+
+Count each line as a constant `c` multiplied by the number of times it runs, then add the lines. Then keep the fastest-growing term and drop its coefficient.
+
+| Code shape | Times the line runs |
+|---|---|
+| A statement outside any loop | 1 |
+| `for (int i = 0; i < n; i++)` header | init 1, test `n + 1`, update `n` |
+| The body of that loop | `n` |
+| The body of a loop nested inside it (also to `n`) | `n * n` |
+| The body of a loop whose bound is `i` | `0 + 1 + ... + (n - 1) = n(n - 1) / 2` |
+| A loop that halves (`i = i / 2`) | about `log2 n` |
+| `if` / `else` | the test, plus the more expensive branch |
+
+**Worked count.** For the method below, set every `c` to 1:
+
+```java title="CountSteps.java"
+public class CountSteps {
+    static int addNums(int n) {
+        int sum = 0;                          // c1: 1 time
+        for (int i = 1; i <= n; i++) {        // c2: n + 1 tests (and n updates)
+            sum += i;                         // c3: n times
+        }
+        return sum;                           // c4: 1 time
+    }
+
+    public static void main(String[] args) {
+        System.out.println(addNums(100));
+    }
+}
+```
+
+```text
+5050
+```
+
+`T(n) = c1 + c2(n + 1) + c3 n + c4`, which is `1 + (n + 1) + n + 1 = 2n + 3` when every `c` is 1. Counting the `n` updates of `i++` as a separate line gives `3n + 3` instead. The fastest-growing term is `n` either way, so `T(n)` is **O(n)**. Different counting conventions change the exact formula but never the Big-O, which is why the exam asks for the order.
+
+## 4. Reading Big-O straight from the loops
+
+| Loop shape | Cost | Why |
+|---|---|---|
+| One loop to `n` | O(n) | the body runs `n` times |
+| Two loops one after the other | O(n) + O(n) = O(n) | add, then drop the constant |
+| A loop nested in a loop, both to `n` | O(n^2) | `n` times `n` |
+| Inner bound is the outer counter `i` | O(n^2) | `1 + 2 + ... + n` is about `n^2 / 2` |
+| Loop with `i = i * 2` or `i = i / 2` | O(log n) | halving `n` reaches 1 in `log2 n` steps |
+| Loop to `n` with a halving loop inside | O(n log n) | `n` times `log n` |
+| Loop to a fixed number like `10` | O(1) | the bound does not depend on `n` |
+
+```java title="Shapes.java"
+public class Shapes {
+    public static void main(String[] args) {
+        int n = 16;
+        int linear = 0, nested = 0, halving = 0;
+
+        for (int i = 0; i < n; i++) {
+            linear++;                                 // n times: O(n)
+        }
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                nested++;                             // n * n times: O(n^2)
+            }
+        }
+        for (int i = n; i > 1; i = i / 2) {
+            halving++;                                // log2 n times: O(log n)
+        }
+        System.out.println(linear + " " + nested + " " + halving);
+    }
+}
+```
+
+```text
+16 256 4
+```
+
+For `n = 16`, the counts are 16, 256 and 4: `n`, `n^2` and `log2 n`.
+
+## 5. Simplifying T(n) to Big-O
+
+Two rules, in this order:
+
+1. **Keep only the fastest-growing term.** `3n^2 + 4n + 2` becomes `3n^2`.
+2. **Drop its constant coefficient.** `3n^2` becomes `n^2`.
+
+| `T(n)` | Big-O |
+|---|---|
+| `5` | O(1) |
+| `3n + 7` | O(n) |
+| `n^2 + 100n` | O(n^2) |
+| `2n log n + n` | O(n log n) |
+| `n + log n` | O(n) |
+| `2^n + n^3` | O(2^n) |
+
+## 6. Best, worst and average case
+
+| Algorithm | Best | Average | Worst | What decides it |
+|---|---|---|---|---|
+| Linear search | O(1) | O(n) | O(n) | where (or whether) the target is |
+| Binary search | O(1) | O(log n) | O(log n) | the array must be sorted |
+| Bubble sort with early exit | O(n) | O(n^2) | O(n^2) | already sorted data exits after one pass |
+| Insertion sort | O(n) | O(n^2) | O(n^2) | nearly sorted data is fast |
+| Merge sort | O(n log n) | O(n log n) | O(n log n) | always splits in half |
+| Quick sort | O(n log n) | O(n log n) | O(n^2) | a bad pivot gives uneven splits |
+
+Say which case you mean. "Linear search is O(n)" means the **worst** case unless stated otherwise.
+
+## 7. Cost of the operations used across the course
+
+| Structure | Access by position | Search | Insert | Delete |
+|---|---|---|---|---|
+| Array | O(1) | O(n), O(log n) if sorted | O(n) (shift) | O(n) (shift) |
+| `ArrayList` | O(1) | O(n) | O(1) amortised at the end, O(n) elsewhere | O(n) |
+| `LinkedList` | O(n) | O(n) | O(1) at an end or once positioned | O(1) once positioned |
+| Stack / queue | top or front only, O(1) | O(n) | O(1) | O(1) |
+| Hash table | by key | O(1) average, O(n) worst | O(1) average | O(1) average |
+| Balanced BST | by key | O(log n) | O(log n) | O(log n) |
+| Skewed BST | by key | O(n) | O(n) | O(n) |
+
+**Amortised O(1):** an `ArrayList` doubles its array when full. One `add` occasionally costs O(n) (the copy), but spread over all the `add` calls the cost per call is constant.
+
+## 8. Common errors
+
+| Mistake | Correction |
+|---|---|
+| Counting only the loop body and ignoring the loop header | The test runs `n + 1` times, one more than the body |
+| Writing `O(3n)` or `O(n + 5)` | Drop constants: `O(n)` |
+| Calling two nested loops O(n) because each is "just a loop" | Multiply nested loops: O(n^2) |
+| Saying binary search is O(log n) on unsorted data | It needs sorted data; sorting first costs O(n log n) |
+| Mixing up the best case with the cost of the algorithm | State the case; the default is the worst |
+| Treating `n` in `T(n)` and the value in the loop bound as unrelated | `n` is whatever the bound depends on |

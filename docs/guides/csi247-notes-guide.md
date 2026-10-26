@@ -4,6 +4,8 @@ This guide is for whoever builds out CSI247 Data Structures (a Codex agent or a 
 
 Read this alongside [`components/README.md`](../../components/README.md) (component reference) and [`CONTRIBUTING.md`](../../CONTRIBUTING.md) (content and provenance rules).
 
+**Read [csi243-depth-model.md](csi243-depth-model.md) first.** It records, with measurements, how CSI243 reaches exam depth (a template, three or more worked variations, an exam question answered step by step and the common errors for every concept, plus a cheat sheet, review, practice and downloadable files), and what each CSI247 chapter still needs. This guide is the older, shorter description of the page types; where the two differ, the depth model wins.
+
 ## 1. Where things stand
 
 CSI247 lives in `content/docs/sem3/csi247/`. Each topic folder currently holds only four pages (`index`, `questions`, `review`, `resources`). There are no lesson notes and no cheat sheets, so the course reads as an outline with practice attached.
@@ -20,10 +22,10 @@ CSI247 lives in `content/docs/sem3/csi247/`. Each topic folder currently holds o
 | `08-collections` | index, notes, questions, review, resources |
 | `09-linked-lists-traversals` | index, questions, review, resources |
 | `10-stacks-and-queues` | index, questions, review, resources |
-| `11-hash-tables`, `12-trees`, `13-graphs` | index, questions, review, resources |
+| (moved 2026-10-26) | `11-hash-tables`, `12-trees` and `13-graphs` now live in CSI323 (`content/docs/sem5/csi323/03-hash-tables`, `01-trees-and-bsts`, `04-graphs`) |
 | `linear-structures`, `arrays-and-arraylists` | Hidden legacy folders (review and questions still to move) |
 
-The table shows which pages each folder has now (2026-10-17); a folder with no `notes` page is still waiting for its lessons.
+The table shows the state on 2026-10-17 and is out of date: since then every folder gained a `notes/` folder and, on 2026-10-25 to 26, the Java Foundations lessons, memory diagrams and trace tables (chapters 1, 2, 3, 4, 6, 8, 9, 10) and a cheat sheet in most chapters. The legacy folders were removed. Chapters 11 to 13 still have one short lesson each.
 
 The goal is to give every topic the same shape CSI243 chapters have, with real lesson notes at the centre.
 
@@ -65,7 +67,7 @@ content/docs/sem3/csi247/<topic>/
 
 Rules for folders and names:
 
-- **The thirteen topic folders are fixed** (decided 2026-10-17, CSI247-01): `01-java-fundamentals`, `02-recursion`, `03-time-complexity`, `04-sorting-and-searching`, `05-packages`, `06-object-oriented-programming`, `07-generics`, `08-collections`, `09-linked-lists-traversals`, `10-stacks-and-queues`, `11-hash-tables`, `12-trees`, `13-graphs`. Do not rename them without agreeing first: renaming changes public URLs, and quiz and flashcard data paths mirror the folder names. If you do rename, add redirects in `next.config.mjs` and aliases in `content/progress/aliases.json`, update every internal link, and move the matching data files.
+- **The ten topic folders are fixed** (decided 2026-10-17, CSI247-01; narrowed 2026-10-26, when `11-hash-tables`, `12-trees` and `13-graphs` moved to CSI323 in Semester V, because CSI247 ends at stacks and queues): `01-java-fundamentals`, `02-recursion`, `03-time-complexity`, `04-sorting-and-searching`, `05-packages`, `06-object-oriented-programming`, `07-generics`, `08-collections`, `09-linked-lists-traversals`, `10-stacks-and-queues`. Do not rename them without agreeing first: renaming changes public URLs, and quiz and flashcard data paths mirror the folder names. If you do rename, add redirects in `next.config.mjs` and aliases in `content/progress/aliases.json`, update every internal link, and move the matching data files.
 - Lesson files use kebab-case names that say what the lesson teaches. **Do not number the title.** Write `title: "Writing Recursive Functions"`: the sidebar adds the topic and lesson number from the folder name and the order in `notes/meta.json` (`6.3 Writing Recursive Functions`, docs/content-standard.md section 2.1.1).
 - Add each new folder or page to the right `meta.json`, otherwise it will not appear in the sidebar. The legacy folders `linear-structures` and `arrays-and-arraylists` are not in the course `meta.json` and stay hidden only until their review and practice questions have moved into chapters 08, 09 and 10 (see CSI247-10 in WORK_ORDERS.md); then delete them. Do not leave two copies of the same material live.
 
@@ -81,7 +83,7 @@ Every chapter Overview follows the topic Overview layout in `docs/content-standa
 - `## Visual study map` with the chapter's canvas, when it has one, and an optional `## Key ideas`.
 - `## Pages in this topic`: a two-column table with one row for every lesson in `notes/meta.json` (in order, with the question it answers), then Cheat sheet, Review, Practice and Resources where they exist.
 
-See `content/docs/sem3/csi243/05-recursion/index.mdx` and `content/docs/sem3/csi247/12-trees/index.mdx`.
+See `content/docs/sem3/csi243/05-recursion/index.mdx` and `content/docs/sem5/csi323/01-trees-and-bsts/index.mdx`.
 
 ### Lesson notes (`notes/*.mdx`)
 
@@ -134,7 +136,7 @@ These are habits, not decoration. They are what make the course usable.
 - **Check the Java version the course uses** before you start. The existing CSI247 text mentions Java 8 in one place, and JDK 21 is common on student machines. Compile with `javac --release 8` if the course targets Java 8, and avoid features newer than the course version (`var`, records, text blocks, switch expressions) unless a lesson is explicitly about them.
 - Use the course's input style where input is taught (`Scanner`), but keep most examples input-free so the output is deterministic and checkable.
 - Draw structures with `<SiteDiagram>`: array layout, linked-list nodes and references, stack and queue states, binary trees and recursion call trees. A diagram should show state at a moment in time, not just a box labelled "linked list".
-- There is **no in-browser Java runner**, because Java cannot run in the browser without a server or a large runtime. Do not use `<HaskellTryIt>`. Make examples self-contained and show the exact output so the student can compare it with their own run. Describe the compile-and-run commands once per chapter.
+- The site has an in-browser Java runner (`<JavaTryIt>`, a TeaVM compiler running as WebAssembly), but it supports only a subset of the JDK (one `public class Main`, input through an Input box, no threads or files; see TRY-08 in `WORK_ORDERS.md` and `docs/plans/java-runner-support.md`). Use `<JavaTryIt>` for a complete program the runner is known to handle, and a plain `java` fence with a `text` output otherwise. Do not use `<HaskellTryIt>`. Always show the exact output, taken from a real run (`node scripts/verify-csi247-listings.mjs` compiles every complete program with `javac --release 8` and compares the output).
 - Algorithm lessons (sorting, searching, linked lists, stacks, queues) should each include: the idea in one sentence, pseudocode or a trace on a small input, the Java implementation, the cost analysis, a complete runnable program with its output, and the common mistakes (off-by-one errors, null handling, modifying a collection while iterating).
 
 ## 6. Quizzes and flashcards

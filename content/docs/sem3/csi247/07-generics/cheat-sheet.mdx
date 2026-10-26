@@ -1,0 +1,189 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for Java generics: generic classes, methods and interfaces, bounded type parameters, wildcards and the rule of thumb for choosing them, type erasure and what it forbids."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/07-generics) for the explanations. This page is for lookup.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `T` | A type parameter: "some type, chosen by the user" | `Box<T>` |
+| `E` | A type parameter naming an element | `List<E>` |
+| `K`, `V` | Key and value types | `Map<K, V>` |
+| `N` | A number type | `<N extends Number>` |
+| `Bound` | A type the parameter must extend or implement | `Comparable<T>` |
+
+By convention one capital letter: `T` type, `E` element, `K` key, `V` value, `N` number.
+
+## 2. A generic class
+
+```java
+public class Box<T> {                  // T is declared once, after the class name
+    private T item;
+    public void set(T item) { this.item = item; }
+    public T get() { return item; }
+}
+
+Box<String> b = new Box<String>();     // T becomes String for this object
+Box<Integer> n = new Box<>();          // the diamond <> lets the compiler infer it
+```
+
+A type argument must be a **reference type**: `Box<Integer>`, never `Box<int>`. Autoboxing converts between `int` and `Integer` for you.
+
+## 3. A generic method
+
+The type parameter goes **before the return type**.
+
+```java
+public static <T> void printAll(T[] items) { ... }
+public static <T> T firstOf(List<T> list) { return list.get(0); }
+```
+
+The compiler infers `T` from the arguments, so you normally call `firstOf(names)` with no angle brackets.
+
+## 4. A generic interface
+
+```java
+public interface Pair<K, V> {
+    K getKey();
+    V getValue();
+}
+```
+
+An implementing class either fixes the types (`class Entry implements Pair<String, Integer>`) or stays generic (`class Entry<K, V> implements Pair<K, V>`).
+
+## 5. Bounded type parameters
+
+`<T extends Bound>` restricts `T` to `Bound` and its subtypes, and lets you call `Bound`'s methods on a `T`. For an interface bound the keyword is still `extends`. Several bounds use `&`: `<T extends Number & Comparable<T>>`.
+
+```java title="Bounds.java"
+import java.util.Arrays;
+import java.util.List;
+
+public class Bounds {
+    // T must be Comparable to itself, so compareTo can be called
+    static <T extends Comparable<T>> T max(List<T> list) {
+        T best = list.get(0);
+        for (T item : list) {
+            if (item.compareTo(best) > 0) {
+                best = item;
+            }
+        }
+        return best;
+    }
+
+    // N must be a Number, so doubleValue() can be called
+    static <N extends Number> double sum(List<N> list) {
+        double total = 0;
+        for (N n : list) {
+            total += n.doubleValue();
+        }
+        return total;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(max(Arrays.asList(7, 3, 11, 5)));
+        System.out.println(max(Arrays.asList("pear", "apple", "plum")));
+        System.out.println(sum(Arrays.asList(1, 2, 3)));
+        System.out.println(sum(Arrays.asList(1.5, 2.5)));
+    }
+}
+```
+
+```text
+11
+plum
+6.0
+4.0
+```
+
+`max(Arrays.asList(new Object(), new Object()))` does not compile: `Object` is not `Comparable<Object>`, so the bound is not met.
+
+## 6. Wildcards
+
+`?` means "some unknown type". Use it when you only **read** from, or only **write** to, a generic parameter and the exact type does not matter.
+
+| Form | Meaning | You can | You cannot |
+|---|---|---|---|
+| `List<?>` | a list of unknown type | read as `Object`; check size | add anything except `null` |
+| `List<? extends Number>` | a list of `Number` or a subtype (`Integer`, `Double`...) | **read** items as `Number` | add (the real type is unknown) |
+| `List<? super Integer>` | a list of `Integer` or a supertype (`Number`, `Object`) | **add** an `Integer` | read as anything but `Object` |
+
+**Rule of thumb (PECS): Producer Extends, Consumer Super.** If the parameter produces values you read, use `extends`. If it consumes values you write, use `super`.
+
+`List<Integer>` is **not** a `List<Number>`, even though `Integer` is a `Number`: generics are invariant. If it were allowed, you could add a `Double` through the `List<Number>` view and corrupt the `List<Integer>`. A `List<? extends Number>` is the type that accepts both.
+
+```java title="Wildcards.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+public class Wildcards {
+    static double total(List<? extends Number> numbers) {       // producer: only reads
+        double sum = 0;
+        for (Number n : numbers) {
+            sum += n.doubleValue();
+        }
+        return sum;
+    }
+
+    static void fillWithInts(List<? super Integer> sink) {      // consumer: only writes
+        for (int i = 1; i <= 3; i++) {
+            sink.add(i);
+        }
+    }
+
+    public static void main(String[] args) {
+        List<Integer> ints = Arrays.asList(1, 2, 3);
+        List<Double> doubles = Arrays.asList(0.5, 1.5);
+        System.out.println(total(ints) + " " + total(doubles));
+
+        List<Number> numbers = new ArrayList<>();
+        List<Object> objects = new ArrayList<>();
+        fillWithInts(numbers);
+        fillWithInts(objects);
+        System.out.println(numbers + " " + objects);
+    }
+}
+```
+
+```text
+6.0 2.0
+[1, 2, 3] [1, 2, 3]
+```
+
+## 7. Type erasure and what it forbids
+
+The compiler checks generic types and then **erases** them: at run time a `Box<String>` and a `Box<Integer>` are both just `Box`, and a bare `T` becomes its bound (or `Object`).
+
+| Not allowed | Why |
+|---|---|
+| `new T()` | the class of `T` is not known at run time |
+| `new T[10]` | arrays need their element type at run time |
+| `new ArrayList<String>[10]` | generic array creation |
+| `x instanceof List<String>` | the `<String>` is erased; use `x instanceof List<?>` |
+| `static T value;` | a static member is shared by all `Box<...>` types |
+| `class E<T> extends Exception` | generic exceptions are not allowed |
+| `catch (T e)` | the type is erased |
+| `Box<int>` | type arguments must be reference types |
+| overloads `f(List<String>)` and `f(List<Integer>)` | both erase to `f(List)` |
+
+Workaround for a generic array: `T[] items = (T[]) new Object[n];` with `@SuppressWarnings("unchecked")`, or use an `ArrayList<T>`.
+
+## 8. Raw types
+
+`List list = new ArrayList();` (no `<...>`) is a **raw type**. It compiles with a warning, accepts anything, and moves every type error from compile time to a run-time `ClassCastException`. Always write the type argument.
+
+## 9. Common errors
+
+| Mistake | What the compiler says | Repair |
+|---|---|---|
+| `List<int>` | unexpected type; required reference | `List<Integer>` |
+| `List<Number> n = new ArrayList<Integer>();` | incompatible types | `List<? extends Number>` |
+| Adding to a `List<? extends Number>` | cannot add | use `List<Number>` or `List<? super Integer>` |
+| Calling `compareTo` on an unbounded `T` | cannot find symbol | `<T extends Comparable<T>>` |
+| `<T>` placed after the return type | illegal start of type | `public static <T> T method(...)` |
+| `new T[]` | generic array creation | `(T[]) new Object[n]` or `ArrayList<T>` |
+| Raw `List` | unchecked warning, later `ClassCastException` | add the type argument |
