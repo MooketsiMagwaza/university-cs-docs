@@ -122,7 +122,7 @@ Notes use only these. Everything else is either retired or rendered through one 
 |---|---|---|
 | Prose, `##`, `###`, lists | Teaching | |
 | Code block with `title="File.java"`, then an `Output` block | Programs and their output | separate unlabelled input and output blocks |
-| Figure with caption (`SiteDiagram`, image, `Mermaid`) | Diagrams | |
+| Figure with caption (`SvgFigure`, `SiteDiagram`, image) | Diagrams | `Mermaid` (retired: it loaded a library and ignored the theme) |
 | Table | Comparisons, traces | `ComparisonTable` (renders as a table) |
 | `Callout` with `note`, `tip`, `caution`, `mistake`, `key`, `analogy` | Asides, one meaning each | `PresetCard`, `HighlightCard`, `CommonMistake`, `RecognitionStrategy` |
 | `KeyTerm` | A definition or theorem | `Card`, `ConceptBlock`, `TheoremBlock`, MAT221 `Concept` and `Theorem` |

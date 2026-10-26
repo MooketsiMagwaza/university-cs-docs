@@ -38,7 +38,7 @@ const TOPIC_FOLDER = /^\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
 // Components a notes page may use.
 const NOTES_COMPONENTS = new Set([
   'Callout', 'KeyTerm', 'Steps', 'Step', 'LearningObjectives', 'Prerequisites', 'CheckQuestions', 'CheckQuestion',
-  'ComparisonTable', 'SiteDiagram', 'Mermaid', 'SafeImage', 'GraphViewer', 'FormulaBlock', 'Tabs', 'Tab',
+  'ComparisonTable', 'SiteDiagram', 'SafeImage', 'GraphViewer', 'FormulaBlock', 'Tabs', 'Tab',
   'JavaTryIt', 'HaskellTryIt', 'CodeTryIt', 'JavaPlayground', 'HaskellPlayground', 'CodePlayground',
   'InsertionSortStory', 'LinearSearchStory', 'BinarySearchStory', 'BubbleSortStory', 'SelectionSortStory',
   'MergeSortStory', 'MergeFrontWorkbench', 'MergeRecursionExplorer', 'MergeComplexityFigure',

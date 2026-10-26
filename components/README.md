@@ -19,7 +19,7 @@ Every course page is built from the same small set of components. The page struc
 | `Steps` and `Step` | A procedure or a worked example | `title` on `Steps`; `title` on each `Step` |
 | `Callout` | An aside with one meaning | `type`: `note`, `tip`, `caution`, `mistake`, `key`, `analogy`; optional `title` |
 | `CheckQuestions` and `CheckQuestion` | "Check your understanding" at the end of a notes page | `question` on each `CheckQuestion`; the answer is its children |
-| `SiteDiagram`, `Mermaid`, `SafeImage` | Figures | see the component |
+| `SvgFigure`, `SiteDiagram`, `SafeImage` | Figures | `SvgFigure` shows a drawn SVG kept as data (see Java lesson pieces); `SiteDiagram` draws a simple flowchart from text; `SafeImage` an image |
 | `ExcalidrawCanvas` | A drawn map of a whole topic, read-only, with pan, zoom and full screen. Overview pages only | `src` (a file under `public/diagrams`), `title`, `expectedMB` (the file size). At 3 MB or more it loads on a click; smaller files load as they scroll into view |
 | `ComparisonTable` | A comparison (renders as a table) | |
 | `JavaTryIt`, `HaskellTryIt`, `CodeTryIt` and the algorithm stories | Running or watching code | see the component |
@@ -353,6 +353,7 @@ These still work, because each one renders through a standard element, but new c
 
 | Retired | Use instead |
 |---|---|
+| `Mermaid` | `SvgFigure` (a drawn SVG; `node scripts/convert-mermaid-figures.mjs <folder> --write` converts a flowchart) or `SiteDiagram`. Mermaid loaded a diagram library in the browser and drew the default Mermaid look, which does not follow the site theme. No page uses it any more |
 | `Card`, `HighlightCard`, `ConceptBlock`, `TheoremBlock` | `KeyTerm` (`label="Theorem" tone="purple"` for a theorem) |
 | `PresetCard`, `CommonMistake`, `RecognitionStrategy` | `Callout` |
 | `StepByStep`, `MethodSteps`, `InteractiveStepper`, `FumaSteps` | `Steps` |
