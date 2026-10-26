@@ -1,6 +1,13 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
 test.use({reducedMotion:'reduce'});
 test.setTimeout(150_000);
+
+// Resizing the window re-lays the page out over a few frames, and a measurement taken in the same instant could catch it
+// half-way (the run on main failed three different pages that passed on the next run). Wait up to five seconds for the
+// page to settle; a page that really scrolls sideways still fails.
+async function expectNoSideScroll(page:Page) {
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),{timeout:5000}).toBe(true);
+}
 
 test('full chapters inherit site fonts and surface tokens in both themes',async({page})=>{
   await page.goto('/docs/sem3/csi247/04-sorting-and-searching/notes/merge-sort');
@@ -33,7 +40,7 @@ test('full chapters inherit site fonts and surface tokens in both themes',async(
   await page.evaluate(()=>{location.hash='merge-sort-merge-mechanics-lab';});
   await expect(page.locator('#merge-sort-merge-mechanics-lab > details')).toHaveAttribute('open','');
   await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  await expectNoSideScroll(page);
   await page.screenshot({path:'tmp/csi247-themed-mobile.png',fullPage:false});
 });
 
@@ -62,7 +69,7 @@ test('merge value trees and final decisions preserve both fronts and build one o
   await expect(diagrams.first()).toHaveAttribute('aria-label',/29 > 3: copy 3 from the right\. 29 stays at the front/);
   await expect(diagrams.nth(2)).toHaveAttribute('aria-label',/29 ≤ 49: copy 29 from the left\. 49 stays at the front/);
   await page.setViewportSize({width:390,height:844});
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  await expectNoSideScroll(page);
 });
 
 for(const [chapter,folder] of [['sorting-and-searching','04-sorting-and-searching'],['packages','05-packages']]) for(const support of ['cheat-sheet','questions','review','resources']) {
@@ -72,6 +79,6 @@ for(const [chapter,folder] of [['sorting-and-searching','04-sorting-and-searchin
     expect((await article.innerText()).length).toBeGreaterThan(2200);
     await expect(article.locator('h2')).not.toHaveCount(0);
     await page.setViewportSize({width:390,height:844});
-    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+    await expectNoSideScroll(page);
   });
 }
