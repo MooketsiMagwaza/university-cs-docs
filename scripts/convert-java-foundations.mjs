@@ -139,10 +139,17 @@ const slugger = (text) =>
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, '')
     .replace(/ /g, '-');
+/** Removes anything that looks like a tag, repeating until none is left, so `<<b>b>` cannot leave a tag behind. */
+const stripTags = (s) => {
+  let previous;
+  do {
+    previous = s;
+    s = s.replace(/<[^>]*>/g, '');
+  } while (s !== previous);
+  return s;
+};
 const refSlug = (s) =>
-  s
-    .toLowerCase()
-    .replace(/<[^>]+>/g, '')
+  stripTags(s.toLowerCase())
     .replace(/&[a-z]+;/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
@@ -221,7 +228,8 @@ const escJsx = (s) =>
 function codeSpan(text, o = {}) {
   let t = noMarks(text).replace(/\s*\n\s*/g, ' ');
   if (!t) return '';
-  if (o.cell) t = t.replace(/\|/g, '\\|');
+  // In a table cell a pipe ends the cell and a backslash before it is ambiguous, so write such code as HTML.
+  if (o.cell && /[|\\]/.test(t)) return `<code>${escJsx(t).replace(/\|/g, '&#124;')}</code>`;
   const max = Math.max(0, ...(t.match(/`+/g) ?? []).map((r) => r.length));
   const fence = '`'.repeat(max + 1);
   const pad = t.startsWith('`') || t.endsWith('`') ? ' ' : '';
