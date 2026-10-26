@@ -14,11 +14,11 @@ Measured on `main` plus the CSI247 branch (2026-10-26).
 | Worked exam questions (`### Exam question`, each with the four-step answer) | 784 | 0 |
 | `Steps` blocks (worked reasoning) | 820 | 7 |
 | Check-your-understanding questions | 263 | 86 |
-| Cheat sheets | 10 of 10 chapters (6 to 10 KB each) | 2 of 13 before this work |
+| Cheat sheets | 10 of 10 chapters (6 to 10 KB each) | 2 of 10 before this work |
 | Flashcards | 251 | 187 |
 | Quiz questions | 424 | 193 |
 | Downloadable runnable files (question at the top, completed and starter) | about 1,300 files in `public/files/sem3/csi243/downloads` | 0 |
-| Chapters 11 to 13 (hash tables, trees, graphs) | n/a | 3 KB each, one lesson |
+| Hash tables, trees, graphs | n/a | 3 KB each, one lesson; moved to CSI323 (Semester V) on 2026-10-26 |
 
 A single CSI243 concept lesson such as `case-by-example` is 66 KB: 20 `##` sections, 98 `###` worked variations, 74 runnable examples, 17 exam questions. The whole CSI247 sorting and searching chapter, the deepest one, is 168 KB; hash tables, trees and graphs are 3 KB each.
 
@@ -109,17 +109,17 @@ The concept lists below are the starting point for the CSI247 gap audit. They ar
 | 08 Collections | `List`, `Set`, `Map`, `Queue`, `Deque`; iterators and `ConcurrentModificationException`; `Collections` utilities; sorting collections; choosing a collection | choose and justify, trace operations, fix the bug |
 | 09 Linked lists | insert and delete at each position; dummy head; tail pointer; reverse; middle; cycle; merge two sorted lists; doubly and circular lists | pointer-by-pointer trace, write the method, memory diagram |
 | 10 Stacks and queues | array and linked implementations; circular queue; deque; priority queue; brackets, postfix, infix to postfix; next greater element | trace the contents, write the class, apply to a problem |
-| 11 Hash tables | hash functions; chaining and probing (linear, quadratic, double hashing); deletion; load factor and rehash; `equals`/`hashCode`; `HashMap` use | insert a key list into a table, count probes, write `hashCode` |
-| 12 Trees | binary tree vocabulary; all four traversals; BST search, insert, delete; height, size, leaves; balance and rotations (check the syllabus); heaps (check the syllabus) | traverse, build a BST from a list, delete, count |
-| 13 Graphs | representations; BFS and DFS traces; components; cycles; topological order; shortest paths (check the syllabus) | trace a search, build the representation, choose an algorithm |
+| CSI323 03 Hash tables (was CSI247 11) | hash functions; chaining and probing (linear, quadratic, double hashing); deletion; load factor and rehash; `equals`/`hashCode`; `HashMap` use | insert a key list into a table, count probes, write `hashCode` |
+| CSI323 01 Trees (was CSI247 12) | binary tree vocabulary; all four traversals; BST search, insert, delete; height, size, leaves; balance and rotations (check the syllabus); heaps (check the syllabus) | traverse, build a BST from a list, delete, count |
+| CSI323 04 Graphs (was CSI247 13) | representations; BFS and DFS traces; components; cycles; topological order; shortest paths (check the syllabus) | trace a search, build the representation, choose an algorithm |
 
-**Check the syllabus before writing.** The vault lists lectures 1 to 13 ending at the Java Collection Framework; chapters 9 to 13 come from the course outline and `Data Structures Full Notes.pdf`. Audit `C:\Users\Nido\Desktop\Semester_3_Vault\Current\CSI247` (lectures, the outline, the full notes, quizzes, labs) the way the CSI243 gap audit did, before deciding how deep the later chapters go.
+**Check the syllabus before writing.** The vault lists lectures 1 to 13 ending at the Java Collection Framework; chapters 9 and 10 come from the course outline and `Data Structures Full Notes.pdf`. Audit `C:\Users\Nido\Desktop\Semester_3_Vault\Current\CSI247` (lectures, the outline, the full notes, quizzes, labs) the way the CSI243 gap audit did, before deciding how deep the later chapters go.
 
 ## 9. Order of work
 
 1. Write the CSI247 gap audit (`docs/plans/csi247-vault-gap-audit.md`) from the vault, and a brief (`docs/plans/csi247-exam-depth-brief.md`) that adapts sections 2 to 7 of the CSI243 brief to Java.
-2. Cheat sheets for all 13 chapters (done for 02, 03, 04, 05, 09, 10, 11, 12, 13 on 2026-10-26; 01, 06, 07, 08 follow).
-3. By-example and exam-practice lessons, chapter by chapter, starting with the thinnest: 11, 12, 13, then 02, 03, 09, 10, 07, 08, 06, 01.
+2. Cheat sheets for all 10 chapters (done on 2026-10-26; the hash tables, trees and graphs sheets moved to CSI323 with their lessons).
+3. By-example and exam-practice lessons, chapter by chapter, starting with the thinnest: 02, 03, 09, 10, 07, 08, 06, 01. **Scope (decided 2026-10-26): CSI247 ends at stacks and queues, so this work covers chapters 1 to 10.** Hash tables, trees and graphs are written in CSI323, which is marked work in progress.
 4. Review and practice pages brought up to CSI243's size: flashcards that test distinctions, quiz questions with a reason for every wrong option, practice questions with marks and model answers.
 5. Downloadable `.java` files (completed and starter) for every example, with a checker like `verify-haskell-files.mjs`.
 6. A depth rule in the audit: report any concept section with fewer than three examples, and any chapter without a cheat sheet, an exam-practice lesson or downloads.

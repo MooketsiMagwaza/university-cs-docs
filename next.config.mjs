@@ -158,14 +158,22 @@ const config = {
         ['collections', '08-collections', ['/notes/choosing-a-collection', '/notes/core-interfaces', '/notes/framework-and-generics', '/notes/iteration-and-algorithms']],
         ['linked-lists-traversals', '09-linked-lists-traversals', []],
         ['stacks-and-queues', '10-stacks-and-queues', []],
-        ['hash-tables', '11-hash-tables', []],
-        ['trees', '12-trees', []],
-        ['graphs', '13-graphs', []],
       ].flatMap(([oldFolder, newFolder, extraPages]) => ['', '/review', '/questions', '/resources', ...extraPages].map((page) => ({
         source: `/docs/sem3/csi247/${oldFolder}${page}`,
         destination: `/docs/sem3/csi247/${newFolder}${page}`,
         permanent: true,
       }))),
+      // CSI247 stops at stacks and queues. Hash tables, trees and graphs moved to CSI323 (Semester V), under both the old
+      // unnumbered folder names and the numbered ones. Each row: CSI247 folder names, CSI323 topic, lessons that moved.
+      ...[
+        [['hash-tables', '11-hash-tables'], '03-hash-tables', ['hash-tables-in-java', 'hash-tables-by-example']],
+        [['trees', '12-trees'], '01-trees-and-bsts', ['trees-and-bsts']],
+        [['graphs', '13-graphs'], '04-graphs', ['graphs-and-traversals']],
+      ].flatMap(([oldFolders, topic, lessons]) => oldFolders.flatMap((oldFolder) => ['', '/review', '/questions', '/resources', '/cheat-sheet', ...lessons.map((l) => `/notes/${l}`)].map((page) => ({
+        source: `/docs/sem3/csi247/${oldFolder}${page}`,
+        destination: `/docs/sem5/csi323/${topic}${page}`,
+        permanent: true,
+      })))),
       // Encapsulation and Abstraction became Encapsulation; abstraction is taught in Abstract Classes and Interfaces.
       ...['/docs/sem3/csi247/object-oriented-programming', '/docs/sem3/csi247/06-object-oriented-programming'].map((base) => ({
         source: `${base}/notes/encapsulation-and-abstraction`,
