@@ -1,0 +1,286 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for hash tables in Java: from key to bucket, separate chaining and linear probing traced by hand, the equals and hashCode contract, load factor and resizing, HashMap and HashSet, and the costs."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/11-hash-tables/notes) for the explanations. This page is for lookup.
+
+## 1. Placeholders used on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `key` | The value you look things up by | `"CSI247"`, a student number |
+| `hash` | The integer the key's `hashCode()` produces | `key.hashCode()` |
+| `m` | The number of buckets (the table length) | `7` |
+| `index` | The bucket chosen for a key | `hash % m` |
+| `load factor` | Entries divided by buckets | `5 / 7 = 0.71` |
+
+## 2. From key to bucket
+
+```java
+int index = (key.hashCode() & 0x7fffffff) % m;   // never negative
+```
+
+`hashCode()` can be negative, and `%` of a negative number is negative, which is not a valid index. Clearing the sign bit with `& 0x7fffffff` (or `Math.abs`, which fails for `Integer.MIN_VALUE`) keeps `index` in `0..m-1`.
+
+| Key | `hash` | `m` | `index` |
+|---|---|---|---|
+| a number whose hash is 31 | 31 | 7 | 31 % 7 = **3** |
+| a number whose hash is 18 | 18 | 7 | 18 % 7 = **4** |
+| a number whose hash is 10 | 10 | 7 | 10 % 7 = **3** (collision with 31) |
+
+## 3. Two ways to handle a collision
+
+Two different keys can choose the same bucket. That is normal, and the table must still find both.
+
+| | Separate chaining | Linear probing (open addressing) |
+|---|---|---|
+| Where a colliding key goes | into a list at that bucket | into the next free bucket: `index + 1`, `index + 2`, ... (wrapping) |
+| Lookup | hash, then compare along the chain with `equals` | hash, then probe forward until the key or an empty slot |
+| Delete | remove from the chain | mark the slot **deleted** (a tombstone); emptying it would break later lookups |
+| Load factor | can exceed 1 | must stay below 1 |
+| Weakness | extra memory for the lists | clusters of full slots slow down probing |
+
+### Trace: insert into 7 buckets (`hash % 7`)
+
+Insert the keys with hashes 31, 18, 10, 24, in that order.
+
+**Separate chaining**
+
+| Bucket | Chain |
+|---|---|
+| 0 | |
+| 1 | |
+| 2 | |
+| 3 | 31 → 10 → 24 |
+| 4 | 18 |
+| 5 | |
+| 6 | |
+
+31, 10 and 24 all have `hash % 7 = 3`, so they share one chain, in the order they arrived. A lookup of 24 hashes to bucket 3 and compares along the chain: 31, 10, then 24, which is three comparisons.
+
+**Linear probing** (bucket → key)
+
+| Step | Key | Home bucket | Probes | Placed in |
+|---|---|---|---|---|
+| 1 | 31 | 3 | 3 free | 3 |
+| 2 | 18 | 4 | 4 free | 4 |
+| 3 | 10 | 3 | 3 full, 4 full, 5 free | 5 |
+| 4 | 24 | 3 | 3, 4, 5 full, 6 free | 6 |
+
+Final table: `[ _ , _ , _ , 31, 18, 10, 24 ]` for buckets 0 to 6. Lookup of 24 hashes to 3 and probes 3, 4, 5, 6: four comparisons.
+
+## 4. A chained hash table in Java
+
+```java title="ChainedTable.java"
+import java.util.LinkedList;
+
+public class ChainedTable {
+    private static class Entry {
+        final String key;
+        int value;
+        Entry(String key, int value) { this.key = key; this.value = value; }
+    }
+
+    private final LinkedList<Entry>[] buckets;
+    private int size = 0;
+
+    @SuppressWarnings("unchecked")
+    ChainedTable(int capacity) {
+        buckets = (LinkedList<Entry>[]) new LinkedList[capacity];
+    }
+
+    private int indexOf(String key) {
+        return (key.hashCode() & 0x7fffffff) % buckets.length;
+    }
+
+    void put(String key, int value) {
+        int i = indexOf(key);
+        if (buckets[i] == null) {
+            buckets[i] = new LinkedList<>();
+        }
+        for (Entry e : buckets[i]) {
+            if (e.key.equals(key)) {           // equal key: replace the value
+                e.value = value;
+                return;
+            }
+        }
+        buckets[i].add(new Entry(key, value));  // new key: add to the chain
+        size++;
+    }
+
+    Integer get(String key) {
+        LinkedList<Entry> chain = buckets[indexOf(key)];
+        if (chain != null) {
+            for (Entry e : chain) {
+                if (e.key.equals(key)) {
+                    return e.value;
+                }
+            }
+        }
+        return null;                            // not present
+    }
+
+    double loadFactor() {
+        return (double) size / buckets.length;
+    }
+
+    public static void main(String[] args) {
+        ChainedTable table = new ChainedTable(7);
+        table.put("CSI247", 4);
+        table.put("CSI243", 3);
+        table.put("CSI213", 5);
+        table.put("CSI247", 6);                 // same key: the value is replaced
+        System.out.println(table.get("CSI247") + " " + table.get("CSI243") + " " + table.get("MAT111"));
+        System.out.println(table.size + " entries, load factor " + String.format("%.2f", table.loadFactor()));
+    }
+}
+```
+
+```text
+6 3 null
+3 entries, load factor 0.43
+```
+
+## 5. The equals and hashCode contract
+
+| Rule | Meaning |
+|---|---|
+| Equal objects have equal hashes | if `a.equals(b)` then `a.hashCode() == b.hashCode()` |
+| Equal hashes do not mean equal objects | collisions exist |
+| Same object, same hash | `hashCode()` must not change while the object is a key |
+| Override both together | overriding `equals` alone breaks lookups in `HashMap` and `HashSet` |
+
+**Template:**
+
+```java
+@Override
+public boolean equals(Object other) {
+    if (this == other) return true;                    // same reference
+    if (other == null || getClass() != other.getClass()) return false;
+    Type that = (Type) other;                          // safe cast after the check
+    return field1 == that.field1 && field2.equals(that.field2);
+}
+
+@Override
+public int hashCode() {
+    return java.util.Objects.hash(field1, field2);     // the same fields as equals
+}
+```
+
+```java title="StudentKey.java"
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
+public class StudentKey {
+    private final String number;
+
+    StudentKey(String number) { this.number = number; }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (other == null || getClass() != other.getClass()) return false;
+        return number.equals(((StudentKey) other).number);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(number);
+    }
+
+    public static void main(String[] args) {
+        Map<StudentKey, String> names = new HashMap<>();
+        names.put(new StudentKey("S100"), "Kago");
+        System.out.println(names.get(new StudentKey("S100")));   // a different object, an equal key
+        System.out.println(new StudentKey("S100").equals(new StudentKey("S100")));
+        System.out.println(new StudentKey("S100") == new StudentKey("S100"));
+    }
+}
+```
+
+```text
+Kago
+true
+false
+```
+
+Without the `equals` and `hashCode` overrides the first line would print `null`: each `new StudentKey` would be a different key, found in a different bucket.
+
+**Keys must not change.** If a key's fields change after it is stored, its hash changes, and the table searches the new bucket while the entry stays in the old one.
+
+## 6. Load factor and resizing
+
+`load factor = entries / buckets`. Java's `HashMap` resizes (doubles the buckets and re-places every entry) when the load factor passes **0.75**.
+
+| Entries | Buckets | Load factor | Action |
+|---|---|---|---|
+| 5 | 7 | 0.71 | fine |
+| 6 | 7 | 0.86 | resize: 7 buckets would give long chains |
+| 6 | 16 | 0.38 | after the resize |
+
+A resize costs O(n) (every entry is hashed again, because the index depends on the table length), but it happens rarely, so `put` is O(1) amortised.
+
+## 7. HashMap and HashSet in Java
+
+| Task | Code |
+|---|---|
+| Create | `Map<String, Integer> m = new HashMap<>();` |
+| Add or replace | `m.put(key, value);` |
+| Look up (or `null`) | `m.get(key)` |
+| Look up with a default | `m.getOrDefault(key, 0)` |
+| Test for a key | `m.containsKey(key)` |
+| Remove | `m.remove(key);` |
+| Count occurrences | `m.merge(key, 1, Integer::sum);` |
+| Loop over entries | `for (Map.Entry<String, Integer> e : m.entrySet())` |
+| A set of unique values | `Set<String> s = new HashSet<>(); s.add(x)` returns `false` if already present |
+
+```java title="WordCount.java"
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
+
+public class WordCount {
+    public static void main(String[] args) {
+        String[] words = {"stack", "queue", "stack", "tree", "stack", "queue"};
+        Map<String, Integer> counts = new HashMap<>();
+        for (String w : words) {
+            counts.merge(w, 1, Integer::sum);          // add 1, starting from nothing
+        }
+        // HashMap order is not specified; copy to a TreeMap to print in key order
+        System.out.println(new TreeMap<>(counts));
+        System.out.println(counts.getOrDefault("graph", 0));
+        System.out.println(counts.containsKey("tree"));
+    }
+}
+```
+
+```text
+{queue=2, stack=3, tree=1}
+0
+true
+```
+
+**Iteration order:** `HashMap` and `HashSet` give no promise about order. Use `LinkedHashMap` for insertion order and `TreeMap` for sorted order. Never write a test or an answer that depends on `HashMap` order.
+
+## 8. Cost
+
+| Operation | Average | Worst | Why the worst case happens |
+|---|---|---|---|
+| `put`, `get`, `remove`, `containsKey` | O(1) | O(n) | every key in one bucket |
+| Resize | O(n) | O(n) | every entry is re-placed |
+| Iterate all entries | O(n + m) | | visits every bucket |
+| Search by **value** | O(n) | O(n) | the table is organised by key |
+
+## 9. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| Overriding `equals` without `hashCode` | equal keys land in different buckets; `get` returns `null` | override both, from the same fields |
+| `hashCode` uses fields `equals` ignores (or the reverse) | equal objects get different hashes | use the same fields in both |
+| Using `==` to compare keys | compares references, not contents | use `equals` |
+| Using a mutable object as a key and changing it | the entry can no longer be found | use immutable keys, or never change them while stored |
+| `hash % m` with a negative hash | negative index, `ArrayIndexOutOfBoundsException` | clear the sign bit first |
+| Emptying a slot on delete in linear probing | a later lookup stops too early | mark the slot as deleted |
+| Expecting `HashMap` to iterate in insertion order | order looks random | use `LinkedHashMap` or `TreeMap` |

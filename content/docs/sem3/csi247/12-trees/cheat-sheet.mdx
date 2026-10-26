@@ -1,0 +1,295 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for trees and binary search trees in Java: vocabulary, the node, the four traversals, search, insert and delete, height and counting, and how the shape of the tree decides the cost."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/12-trees/notes) for the explanations. This page is for lookup.
+
+## 1. Vocabulary, from one tree
+
+```text
+        50          root: 50 (no parent)
+       /  \
+     30    70       30 and 70 are siblings; 30 is the parent of 20 and 40
+    / \   /  \
+  20  40 60  80     leaves: 20, 40, 60, 80 (no children)
+```
+
+| Term | Meaning | In the tree above |
+|---|---|---|
+| Root | the top node, with no parent | 50 |
+| Parent / child | a node and the nodes directly below it | 30 is the parent of 20 and 40 |
+| Siblings | children of the same parent | 20 and 40 |
+| Leaf | a node with no children | 20, 40, 60, 80 |
+| Subtree | a node and everything below it | the subtree rooted at 70 is 70, 60, 80 |
+| Depth of a node | edges from the root to it | depth of 20 is 2 |
+| Height of a tree | edges on the longest root-to-leaf path | **2** (edges convention) |
+| Level | all nodes at the same depth | level 1 is 30 and 70 |
+
+State whether height counts **edges** (a single node has height 0) or **nodes** (a single node has height 1) when the question does not say. A one-node tree: 0 by edges, 1 by nodes. An empty tree: -1 by edges, 0 by nodes.
+
+A binary tree node has at most two children, called **left** and **right**. A **binary search tree** (BST) adds the rule: every key in the left subtree is smaller than the node, and every key in the right subtree is larger.
+
+## 2. The node
+
+```java title="TreeNode.java"
+public class TreeNode {
+    int key;
+    TreeNode left;      // null when there is no left child
+    TreeNode right;
+
+    TreeNode(int key) {
+        this.key = key;
+    }
+}
+```
+
+## 3. The four traversals
+
+| Traversal | Order | For the tree above | Typical use |
+|---|---|---|---|
+| Preorder | node, left, right | 50 30 20 40 70 60 80 | copy a tree, print its structure |
+| Inorder | left, node, right | 20 30 40 50 60 70 80 | **sorted order** from a BST |
+| Postorder | left, right, node | 20 40 30 60 80 70 50 | delete a tree, evaluate children first |
+| Level order | one level at a time | 50 30 70 20 40 60 80 | nearest nodes first (uses a queue) |
+
+The three depth-first orders differ only in **where the node is visited**: before (pre), between (in) or after (post) the two recursive calls.
+
+```java title="Traversals.java"
+import java.util.ArrayDeque;
+import java.util.Queue;
+
+public class Traversals {
+    static class TreeNode {
+        int key;
+        TreeNode left, right;
+        TreeNode(int key) { this.key = key; }
+    }
+
+    static void preorder(TreeNode n) {
+        if (n == null) return;                       // base case: the empty tree
+        System.out.print(n.key + " ");               // visit BEFORE the children
+        preorder(n.left);
+        preorder(n.right);
+    }
+
+    static void inorder(TreeNode n) {
+        if (n == null) return;
+        inorder(n.left);
+        System.out.print(n.key + " ");               // visit BETWEEN the children
+        inorder(n.right);
+    }
+
+    static void postorder(TreeNode n) {
+        if (n == null) return;
+        postorder(n.left);
+        postorder(n.right);
+        System.out.print(n.key + " ");               // visit AFTER the children
+    }
+
+    static void levelOrder(TreeNode root) {
+        Queue<TreeNode> queue = new ArrayDeque<>();
+        queue.offer(root);
+        while (!queue.isEmpty()) {
+            TreeNode n = queue.poll();
+            System.out.print(n.key + " ");
+            if (n.left != null) queue.offer(n.left);
+            if (n.right != null) queue.offer(n.right);
+        }
+    }
+
+    public static void main(String[] args) {
+        TreeNode root = new TreeNode(50);
+        root.left = new TreeNode(30);
+        root.right = new TreeNode(70);
+        root.left.left = new TreeNode(20);
+        root.left.right = new TreeNode(40);
+        root.right.left = new TreeNode(60);
+        root.right.right = new TreeNode(80);
+
+        preorder(root);   System.out.println();
+        inorder(root);    System.out.println();
+        postorder(root);  System.out.println();
+        levelOrder(root); System.out.println();
+    }
+}
+```
+
+```text
+50 30 20 40 70 60 80
+20 30 40 50 60 70 80
+20 40 30 60 80 70 50
+50 30 70 20 40 60 80
+```
+
+## 4. Binary search tree: search, insert, delete
+
+**Search** compares the target with the current node and goes left or right, discarding one whole subtree each step.
+
+| Compare | Action |
+|---|---|
+| `target == key` | found |
+| `target < key` | go left |
+| `target > key` | go right |
+| reached `null` | not present |
+
+**Insert** is a search that ends at `null`: put the new node there. Equal keys are usually ignored (or counted), so say which you assume.
+
+**Delete** has three cases:
+
+| Case | Action |
+|---|---|
+| The node is a leaf | remove it (its parent's link becomes `null`) |
+| The node has one child | replace the node by that child |
+| The node has two children | copy in the **inorder successor** (the smallest key in the right subtree), then delete that successor from the right subtree (the largest in the left subtree also works) |
+
+```java title="Bst.java"
+public class Bst {
+    static class TreeNode {
+        int key;
+        TreeNode left, right;
+        TreeNode(int key) { this.key = key; }
+    }
+
+    static TreeNode insert(TreeNode n, int key) {
+        if (n == null) return new TreeNode(key);              // found the empty spot
+        if (key < n.key) n.left = insert(n.left, key);
+        else if (key > n.key) n.right = insert(n.right, key);
+        return n;                                             // equal keys are ignored
+    }
+
+    static boolean contains(TreeNode n, int key) {
+        while (n != null) {
+            if (key == n.key) return true;
+            n = key < n.key ? n.left : n.right;
+        }
+        return false;
+    }
+
+    static TreeNode delete(TreeNode n, int key) {
+        if (n == null) return null;
+        if (key < n.key) n.left = delete(n.left, key);
+        else if (key > n.key) n.right = delete(n.right, key);
+        else {
+            if (n.left == null) return n.right;               // leaf or only a right child
+            if (n.right == null) return n.left;               // only a left child
+            TreeNode successor = n.right;                     // two children: smallest on the right
+            while (successor.left != null) successor = successor.left;
+            n.key = successor.key;
+            n.right = delete(n.right, successor.key);
+        }
+        return n;
+    }
+
+    static void inorder(TreeNode n, StringBuilder out) {
+        if (n == null) return;
+        inorder(n.left, out);
+        out.append(n.key).append(' ');
+        inorder(n.right, out);
+    }
+
+    static String show(TreeNode root) {
+        StringBuilder sb = new StringBuilder();
+        inorder(root, sb);
+        return sb.toString().trim();
+    }
+
+    public static void main(String[] args) {
+        TreeNode root = null;
+        for (int k : new int[] {50, 30, 70, 20, 40, 60, 80}) {
+            root = insert(root, k);
+        }
+        System.out.println(show(root));
+        System.out.println(contains(root, 60) + " " + contains(root, 65));
+        root = delete(root, 20);                  // a leaf
+        System.out.println(show(root));
+        root = delete(root, 70);                  // two children (60 and 80): 80 takes its place
+        System.out.println(show(root));
+        root = delete(root, 50);                  // the root, two children
+        System.out.println(show(root) + " | root is now " + root.key);
+    }
+}
+```
+
+```text
+20 30 40 50 60 70 80
+true false
+30 40 50 60 70 80
+30 40 50 60 80
+30 40 60 80 | root is now 60
+```
+
+An **inorder** traversal of a BST always lists the keys in increasing order. If it does not, the tree is not a BST.
+
+## 5. Height, size and leaves
+
+All three are recursive in the same way: ask each child, combine, add the node itself.
+
+| Quantity | Empty tree | Combine |
+|---|---|---|
+| Size (number of nodes) | 0 | `1 + size(left) + size(right)` |
+| Height (edges) | -1 | `1 + max(height(left), height(right))` |
+| Leaves | 0 | `1` if both children are `null`, else `leaves(left) + leaves(right)` |
+
+```java title="Measure.java"
+public class Measure {
+    static class TreeNode {
+        int key;
+        TreeNode left, right;
+        TreeNode(int key) { this.key = key; }
+    }
+
+    static int size(TreeNode n) {
+        return n == null ? 0 : 1 + size(n.left) + size(n.right);
+    }
+
+    static int height(TreeNode n) {                    // height in edges
+        return n == null ? -1 : 1 + Math.max(height(n.left), height(n.right));
+    }
+
+    static int leaves(TreeNode n) {
+        if (n == null) return 0;
+        if (n.left == null && n.right == null) return 1;
+        return leaves(n.left) + leaves(n.right);
+    }
+
+    public static void main(String[] args) {
+        TreeNode root = new TreeNode(50);
+        root.left = new TreeNode(30);
+        root.right = new TreeNode(70);
+        root.left.left = new TreeNode(20);
+        System.out.println(size(root) + " " + height(root) + " " + leaves(root));
+    }
+}
+```
+
+```text
+4 2 2
+```
+
+## 6. Shape decides the cost
+
+| Shape | Height | `search`, `insert`, `delete` |
+|---|---|---|
+| Balanced (full, or nearly) | about `log2 n` | O(log n) |
+| Random insertion order | about `log n` on average | O(log n) on average |
+| Skewed (a chain: keys inserted in sorted order) | `n - 1` | O(n) |
+
+Inserting 10, 20, 30, 40, 50 in that order gives a tree that is just a right-leaning chain of height 4: every search walks the whole chain, no better than a linked list. A balanced tree with the same keys has height 2.
+
+| Count | Value |
+|---|---|
+| Most nodes in a binary tree of height `h` (edges) | `2^(h+1) - 1` |
+| Fewest levels for `n` nodes | `ceil(log2(n + 1))` |
+
+## 7. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| Forgetting the `null` base case | `NullPointerException` | `if (n == null) return ...;` first |
+| Not assigning the result of a recursive `insert` or `delete` | the tree never changes | `n.left = insert(n.left, key);` |
+| Deleting a node with two children by removing it outright | a whole subtree is lost | replace its key with the inorder successor, then delete that |
+| Mixing up height by edges and by nodes | off-by-one answer | state the convention; empty tree is -1 (edges) |
+| Writing the traversal order from the picture by eye | wrong order for unbalanced trees | apply the rule at every node, from the root down |
+| Assuming a BST is balanced | the cost is O(n) for sorted input | say "balanced" only when the shape is given |
+| Checking each node only against its parent when testing for a BST | accepts a tree with 12 in the left subtree of 10 | pass a lower and an upper bound down the recursion: every key must obey all its ancestors |

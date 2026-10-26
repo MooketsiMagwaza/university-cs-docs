@@ -1,0 +1,268 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for graphs in Java: vocabulary, adjacency list and adjacency matrix, breadth-first and depth-first search, fewest-edges paths, connected components and cycle detection, and the costs."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/13-graphs/notes) for the explanations. This page is for lookup.
+
+## 1. Vocabulary, from one graph
+
+```text
+A --- B
+|     |
+C --- D --- E
+```
+
+| Term | Meaning | In the graph above |
+|---|---|---|
+| Vertex (node) | a point | A, B, C, D, E (`V = 5`) |
+| Edge | a link between two vertices | AB, AC, BD, CD, DE (`E = 5`) |
+| Neighbours (adjacent) | vertices joined to one vertex | neighbours of D: B, C, E |
+| Degree | the number of edges at a vertex | degree of D is 3 |
+| Path | a sequence of vertices joined by edges | A → B → D → E (3 edges) |
+| Cycle | a path that returns to its start | A → B → D → C → A |
+| Connected | there is a path between every pair of vertices | yes |
+| Directed edge | goes one way only: `A → B` does not give `B → A` | |
+| Weighted edge | carries a cost such as a distance | |
+| Tree | a connected graph with no cycles (`E = V - 1`) | |
+
+In an **undirected** graph the sum of all degrees is `2E`.
+
+## 2. Representations
+
+| | Adjacency matrix | Adjacency list |
+|---|---|---|
+| Storage | `V x V` table | for each vertex, a list of its neighbours |
+| Memory | O(V^2) | O(V + E) |
+| Is there an edge `u-v`? | O(1) | O(degree of u) |
+| List the neighbours of `u` | O(V) | O(degree of u) |
+| Best for | dense graphs, quick edge tests | sparse graphs, traversal |
+
+For the graph above (vertices A..E as 0..4), the matrix is:
+
+| | A | B | C | D | E |
+|---|---|---|---|---|---|
+| **A** | 0 | 1 | 1 | 0 | 0 |
+| **B** | 1 | 0 | 0 | 1 | 0 |
+| **C** | 1 | 0 | 0 | 1 | 0 |
+| **D** | 0 | 1 | 1 | 0 | 1 |
+| **E** | 0 | 0 | 0 | 1 | 0 |
+
+An undirected graph's matrix is symmetric. For a directed graph, `matrix[u][v]` means an edge from `u` to `v`.
+
+```java title="BuildGraph.java"
+import java.util.ArrayList;
+import java.util.List;
+
+public class BuildGraph {
+    public static void main(String[] args) {
+        int vertices = 5;                                   // A=0, B=1, C=2, D=3, E=4
+        int[][] edges = {{0, 1}, {0, 2}, {1, 3}, {2, 3}, {3, 4}};
+
+        List<List<Integer>> adjacency = new ArrayList<>();
+        for (int i = 0; i < vertices; i++) {
+            adjacency.add(new ArrayList<>());
+        }
+        for (int[] e : edges) {
+            adjacency.get(e[0]).add(e[1]);                  // undirected: add BOTH directions
+            adjacency.get(e[1]).add(e[0]);
+        }
+        for (int v = 0; v < vertices; v++) {
+            System.out.println((char) ('A' + v) + " -> " + adjacency.get(v));
+        }
+    }
+}
+```
+
+```text
+A -> [1, 2]
+B -> [0, 3]
+C -> [0, 3]
+D -> [1, 2, 4]
+E -> [3]
+```
+
+## 3. Breadth-first search (BFS): a queue
+
+BFS visits vertices in order of their **distance from the start** (fewest edges first). Mark a vertex visited when you **add it to the queue**, not when you take it out, so no vertex is queued twice.
+
+**Template:**
+
+```java
+Queue<Integer> queue = new ArrayDeque<>();
+boolean[] visited = new boolean[vertices];
+queue.offer(start);
+visited[start] = true;
+while (!queue.isEmpty()) {
+    int v = queue.poll();
+    // visit v
+    for (int next : adjacency.get(v)) {
+        if (!visited[next]) {
+            visited[next] = true;      // mark when queued
+            queue.offer(next);
+        }
+    }
+}
+```
+
+## 4. Depth-first search (DFS): recursion or a stack
+
+DFS follows one branch as far as it goes, then backs up.
+
+**Template:**
+
+```java
+static void dfs(int v, List<List<Integer>> adjacency, boolean[] visited) {
+    visited[v] = true;
+    // visit v
+    for (int next : adjacency.get(v)) {
+        if (!visited[next]) {
+            dfs(next, adjacency, visited);
+        }
+    }
+}
+```
+
+Both searches visit every vertex reachable from the start exactly once and look at every edge, so each costs **O(V + E)** with an adjacency list (O(V^2) with a matrix). The visit order depends on the order of each neighbour list, so state the order you assume (usually alphabetical).
+
+```java title="Searches.java"
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
+
+public class Searches {
+    static List<List<Integer>> adjacency = new ArrayList<>();
+
+    static void addEdge(int u, int v) {
+        adjacency.get(u).add(v);
+        adjacency.get(v).add(u);
+    }
+
+    static String name(int v) { return String.valueOf((char) ('A' + v)); }
+
+    static void bfs(int start) {
+        Queue<Integer> queue = new ArrayDeque<>();
+        boolean[] visited = new boolean[adjacency.size()];
+        StringBuilder order = new StringBuilder();
+        queue.offer(start);
+        visited[start] = true;
+        while (!queue.isEmpty()) {
+            int v = queue.poll();
+            order.append(name(v)).append(' ');
+            for (int next : adjacency.get(v)) {
+                if (!visited[next]) {
+                    visited[next] = true;
+                    queue.offer(next);
+                }
+            }
+        }
+        System.out.println("BFS: " + order.toString().trim());
+    }
+
+    static void dfs(int v, boolean[] visited, StringBuilder order) {
+        visited[v] = true;
+        order.append(name(v)).append(' ');
+        for (int next : adjacency.get(v)) {
+            if (!visited[next]) {
+                dfs(next, visited, order);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        for (int i = 0; i < 5; i++) adjacency.add(new ArrayList<>());
+        addEdge(0, 1); addEdge(0, 2); addEdge(1, 3); addEdge(2, 3); addEdge(3, 4);   // A-B A-C B-D C-D D-E
+
+        bfs(0);
+        StringBuilder order = new StringBuilder();
+        dfs(0, new boolean[5], order);
+        System.out.println("DFS: " + order.toString().trim());
+    }
+}
+```
+
+```text
+BFS: A B C D E
+DFS: A B D C E
+```
+
+### Trace: BFS from A (neighbours in alphabetical order)
+
+| Step | Removed | Newly queued | Queue after |
+|---|---|---|---|
+| 1 | A | B, C | B C |
+| 2 | B | D | C D |
+| 3 | C | (D already queued) | D |
+| 4 | D | E | E |
+| 5 | E | | (empty) |
+
+BFS order: A B C D E. The distance from A is 0 for A, 1 for B and C, 2 for D, 3 for E.
+
+## 5. What each search is good for
+
+| Task | Use | Why |
+|---|---|---|
+| Fewest edges between two vertices | BFS | it reaches vertices in order of distance |
+| Is a vertex reachable? | either | both visit everything reachable |
+| Connected components | either, started from each unvisited vertex | count how many starts are needed |
+| Detect a cycle (undirected) | DFS | reaching a visited vertex that is not the parent means a cycle |
+| Topological order (directed, no cycles) | DFS finish order reversed, or Kahn's algorithm | every edge points forward |
+| Explore every path (puzzles, mazes) | DFS with backtracking | follows one branch fully |
+
+```java title="Components.java"
+import java.util.ArrayList;
+import java.util.List;
+
+public class Components {
+    public static void main(String[] args) {
+        int n = 7;
+        int[][] edges = {{0, 1}, {1, 2}, {3, 4}};            // vertices 5 and 6 are alone
+        List<List<Integer>> adjacency = new ArrayList<>();
+        for (int i = 0; i < n; i++) adjacency.add(new ArrayList<>());
+        for (int[] e : edges) {
+            adjacency.get(e[0]).add(e[1]);
+            adjacency.get(e[1]).add(e[0]);
+        }
+
+        boolean[] visited = new boolean[n];
+        int components = 0;
+        for (int v = 0; v < n; v++) {
+            if (!visited[v]) {                               // a new start means a new component
+                components++;
+                markReachable(v, adjacency, visited);
+            }
+        }
+        System.out.println(components + " components");
+    }
+
+    static void markReachable(int v, List<List<Integer>> adjacency, boolean[] visited) {
+        visited[v] = true;
+        for (int next : adjacency.get(v)) {
+            if (!visited[next]) {
+                markReachable(next, adjacency, visited);
+            }
+        }
+    }
+}
+```
+
+```text
+4 components
+```
+
+## 6. Why `visited` is essential
+
+In the cycle A–B–D–C–A a traversal without `visited` goes round the cycle forever (infinite loop, or a `StackOverflowError` in DFS). The `visited` set changes the question from "is this a neighbour?" to "is this a **new** neighbour?".
+
+## 7. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| No `visited` marking | infinite loop or stack overflow on a cycle | mark each vertex the first time you reach it |
+| Marking visited when **removing** from the BFS queue | the same vertex is queued several times | mark when adding to the queue |
+| Adding only one direction of an undirected edge | the graph is treated as directed | add `u → v` **and** `v → u` |
+| Using BFS order as DFS order (or the reverse) | wrong trace | BFS uses a queue, DFS a stack or recursion |
+| Not stating the neighbour order | the trace cannot be marked | say "neighbours in alphabetical order" |
+| Starting one search and assuming the whole graph is visited | misses other components | loop over all vertices and start from each unvisited one |
+| Using an adjacency matrix for a large sparse graph | O(V^2) memory | use adjacency lists |

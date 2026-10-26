@@ -1,0 +1,214 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for the Java Collection Framework: the interfaces, which class to choose, the operations of List, Set, Map and Queue, iterating safely, sorting with Comparable and Comparator, and the costs."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/08-collections/notes) for the explanations. This page is for lookup.
+
+## 1. The shape of the framework
+
+```text
+Iterable
+  Collection
+    List        ordered, duplicates allowed, indexed     ArrayList, LinkedList
+    Set         no duplicates                            HashSet, LinkedHashSet, TreeSet
+    Queue       processed from one end                   LinkedList, ArrayDeque, PriorityQueue
+      Deque     both ends                                ArrayDeque, LinkedList
+Map (not a Collection)   key -> value, unique keys       HashMap, LinkedHashMap, TreeMap
+```
+
+You program to the **interface** and choose the class when you create the object: `List<String> names = new ArrayList<>();`. Changing the class later changes one line.
+
+## 2. Which one do I choose?
+
+| Need | Choose | Why |
+|---|---|---|
+| A sequence with fast access by position | `ArrayList` | O(1) `get(i)` |
+| Many inserts and removals at the ends | `ArrayDeque` (or `LinkedList`) | O(1) at both ends |
+| Remove duplicates, order does not matter | `HashSet` | O(1) average |
+| Remove duplicates and keep insertion order | `LinkedHashSet` | |
+| Remove duplicates and keep sorted order | `TreeSet` | O(log n) |
+| Look up a value by key | `HashMap` | O(1) average |
+| A map that iterates in sorted key order | `TreeMap` | O(log n) |
+| A map that iterates in insertion order | `LinkedHashMap` | |
+| Always take the smallest (or largest) next | `PriorityQueue` | O(log n) |
+| Stack | `ArrayDeque` | `push`, `pop`, `peek` |
+
+## 3. Operations you are asked for
+
+| Interface | Operation | Method |
+|---|---|---|
+| `Collection` | add, remove, test | `add(x)`, `remove(x)`, `contains(x)` |
+| | size, empty | `size()`, `isEmpty()` |
+| | remove everything | `clear()` |
+| `List` | by position | `get(i)`, `set(i, x)`, `add(i, x)`, `remove(i)` |
+| | search | `indexOf(x)`, `lastIndexOf(x)` |
+| | slice (a view) | `subList(from, to)` |
+| `Set` | add returns | `true` if it was new, `false` if already there |
+| `Map` | store, read | `put(k, v)`, `get(k)`, `getOrDefault(k, d)` |
+| | test | `containsKey(k)`, `containsValue(v)` |
+| | remove | `remove(k)` |
+| | views | `keySet()`, `values()`, `entrySet()` |
+| `Queue` | add, remove, look | `offer(x)`, `poll()`, `peek()` |
+
+**Careful with `remove` on a `List<Integer>`:** `list.remove(1)` removes the element at **index** 1; `list.remove(Integer.valueOf(1))` removes the **value** 1.
+
+```java title="Operations.java"
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.Map;
+
+public class Operations {
+    public static void main(String[] args) {
+        List<Integer> list = new ArrayList<>();
+        list.add(10);
+        list.add(20);
+        list.add(30);
+        list.add(1, 15);                              // insert at index 1
+        list.remove(0);                               // by INDEX
+        list.remove(Integer.valueOf(30));             // by VALUE
+        System.out.println(list + " " + list.indexOf(20));
+
+        Set<String> seen = new HashSet<>();
+        System.out.println(seen.add("a") + " " + seen.add("b") + " " + seen.add("a") + " " + seen.size());
+
+        Map<String, Integer> marks = new TreeMap<>();
+        marks.put("Naledi", 71);
+        marks.put("Kago", 64);
+        marks.put("Naledi", 78);                      // same key: the value is replaced
+        System.out.println(marks + " " + marks.get("Thato") + " " + marks.getOrDefault("Thato", 0));
+        for (Map.Entry<String, Integer> e : marks.entrySet()) {
+            System.out.println(e.getKey() + " = " + e.getValue());
+        }
+    }
+}
+```
+
+```text
+[15, 20] 1
+true true false 2
+{Kago=64, Naledi=78} null 0
+Kago = 64
+Naledi = 78
+```
+
+## 4. Iterating
+
+| Way | Use when | Warning |
+|---|---|---|
+| for-each: `for (T x : c)` | you only read | never add or remove inside it |
+| Index loop: `for (int i = 0; i < list.size(); i++)` | you need the index (lists only) | O(n^2) on a `LinkedList` |
+| `Iterator<T> it = c.iterator();` with `hasNext()`, `next()`, `it.remove()` | you remove while iterating | call `next()` before `remove()` |
+| `removeIf(predicate)` | you remove by a condition | Java 8 |
+
+Changing a collection **inside a for-each over it** (other than through the iterator) throws `ConcurrentModificationException`.
+
+```java title="SafeRemove.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
+public class SafeRemove {
+    public static void main(String[] args) {
+        List<Integer> marks = new ArrayList<>(Arrays.asList(45, 72, 38, 90, 51));
+
+        try {
+            for (Integer m : marks) {
+                if (m < 50) {
+                    marks.remove(m);                  // changes the list during the loop
+                }
+            }
+        } catch (java.util.ConcurrentModificationException e) {
+            System.out.println("ConcurrentModificationException");
+        }
+
+        List<Integer> second = new ArrayList<>(Arrays.asList(45, 72, 38, 90, 51));
+        Iterator<Integer> it = second.iterator();
+        while (it.hasNext()) {
+            if (it.next() < 50) {
+                it.remove();                          // the iterator may remove safely
+            }
+        }
+        System.out.println(second);
+
+        List<Integer> third = new ArrayList<>(Arrays.asList(45, 72, 38, 90, 51));
+        third.removeIf(m -> m < 50);
+        System.out.println(third);
+    }
+}
+```
+
+```text
+ConcurrentModificationException
+[72, 90, 51]
+[72, 90, 51]
+```
+
+## 5. Sorting
+
+| Need | Code |
+|---|---|
+| Natural order (the class implements `Comparable<T>`) | `Collections.sort(list);` or `list.sort(null);` |
+| An order you choose | `list.sort(comparator);` |
+| Reverse | `list.sort(Collections.reverseOrder());` |
+| By a field | `list.sort(Comparator.comparing(Student::getName));` |
+| By a number field | `list.sort(Comparator.comparingInt(Student::getAge));` |
+| Then break ties | `.thenComparing(...)` |
+| Highest first | `.reversed()` |
+
+`compare(a, b)` and `compareTo` return **negative** if `a` comes first, **zero** if they tie, **positive** if `b` comes first. Use `Integer.compare(x, y)`, not `x - y`, which can overflow. Sorting an `ArrayList` is stable: equal elements keep their order.
+
+```java title="Sorting.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+public class Sorting {
+    public static void main(String[] args) {
+        List<String> names = new ArrayList<>(Arrays.asList("Thato", "Kago", "Naledi", "Ann"));
+        Collections.sort(names);
+        System.out.println(names);
+        names.sort(Comparator.comparing(String::length).thenComparing(Comparator.naturalOrder()));
+        System.out.println(names);
+        names.sort(Collections.reverseOrder());
+        System.out.println(names);
+    }
+}
+```
+
+```text
+[Ann, Kago, Naledi, Thato]
+[Ann, Kago, Thato, Naledi]
+[Thato, Naledi, Kago, Ann]
+```
+
+## 6. Cost
+
+| Operation | `ArrayList` | `LinkedList` | `HashSet` / `HashMap` | `TreeSet` / `TreeMap` | `ArrayDeque` | `PriorityQueue` |
+|---|---|---|---|---|---|---|
+| `get(i)` | O(1) | O(n) | | | | |
+| `add` at the end | O(1) amortised | O(1) | O(1) average | O(log n) | O(1) | O(log n) |
+| `add` / `remove` at the front | O(n) | O(1) | | | O(1) | |
+| `contains` | O(n) | O(n) | O(1) average | O(log n) | O(n) | O(n) |
+| `remove(x)` | O(n) | O(n) | O(1) average | O(log n) | O(n) | O(n) |
+| Smallest / first element | O(n) | O(1) first | | O(log n) | O(1) | O(1) |
+| Iteration order | insertion | insertion | none (do not rely on it) | sorted | insertion | not sorted |
+
+## 7. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| Removing from a collection inside a for-each | `ConcurrentModificationException` | use the iterator's `remove()`, or `removeIf` |
+| `list.remove(1)` meaning "the value 1" | removes the element at index 1 | `list.remove(Integer.valueOf(1))` |
+| Putting a class without `equals`/`hashCode` in a `HashSet` or as a `HashMap` key | duplicates; lookups fail | override both |
+| Putting a class without `Comparable` in a `TreeSet` | `ClassCastException` | implement `Comparable`, or pass a `Comparator` |
+| Relying on `HashMap` order | order looks random and may change | `LinkedHashMap` or `TreeMap` |
+| `get(i)` loop over a `LinkedList` | O(n^2) | use for-each or an iterator |
+| Using a `List` where a `Set` was needed | duplicates stay | choose the interface by the rule, not by habit |
+| `for (int x : listOfIntegers)` with a `null` element | `NullPointerException` on unboxing | avoid `null` elements |

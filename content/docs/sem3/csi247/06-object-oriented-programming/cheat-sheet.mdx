@@ -1,0 +1,264 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for object-oriented Java: the class skeleton, constructors and this, access modifiers, static, inheritance and super, overriding against overloading, polymorphism, abstract classes and interfaces, equals/hashCode/toString, casting, and what the compiler accepts."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/06-object-oriented-programming/notes) for the explanations. This page is for lookup.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `Parent` / `Child` | A superclass and a subclass | `Shape` / `Circle` |
+| `Iface` | An interface | `Drawable` |
+| `field` | An instance variable | `radius` |
+| `method` | An instance method | `getArea` |
+| `Type` | Any class or primitive type | `double`, `String`, `Shape` |
+
+## 2. The class skeleton
+
+```java
+public class Child extends Parent implements Iface {
+    private Type field;                      // state, private by default
+    private static int count = 0;            // shared by all objects
+
+    public Child(Type field) {               // constructor: same name, no return type
+        super(...);                          // first statement, if the parent needs arguments
+        this.field = field;                  // this.field is the field, field is the parameter
+        count++;
+    }
+
+    @Override
+    public ReturnType method() { ... }       // behaviour, overriding the parent's
+
+    public Type getField() { return field; } // getter
+    public void setField(Type field) {       // setter that protects the object
+        this.field = field;
+    }
+}
+```
+
+## 3. The four pillars
+
+| Pillar | One line | Mechanism |
+|---|---|---|
+| Encapsulation | hide the data, expose safe operations | `private` fields, `public` methods that check their input |
+| Inheritance | reuse and specialise | `extends`; a subclass **is a** superclass |
+| Polymorphism | one name, many behaviours | a `Parent` variable holds a `Child` object; the **object's** class decides which override runs |
+| Abstraction | what, not how | abstract classes and interfaces |
+
+## 4. Access modifiers
+
+| Modifier | Same class | Same package | Subclass elsewhere | Everywhere |
+|---|---|---|---|---|
+| `private` | Yes | No | No | No |
+| (none) package-private | Yes | Yes | No | No |
+| `protected` | Yes | Yes | Yes (through inheritance) | No |
+| `public` | Yes | Yes | Yes | Yes |
+
+## 5. Constructors and `super`
+
+- If you write no constructor, Java supplies a default one with no parameters. Once you write any constructor, the default is gone.
+- Every constructor starts by calling a parent constructor. If you do not write `super(...)`, Java inserts `super()`, which fails to compile when the parent has no no-argument constructor.
+- `this(...)` calls another constructor of the same class. `super(...)` and `this(...)` must be the **first** statement, and only one of them.
+- Order when you write `new Child()`: fields of `Parent`, `Parent`'s constructor body, fields of `Child`, `Child`'s constructor body.
+
+```java title="Construction.java"
+public class Construction {
+    static class Shape {
+        protected String colour;
+        Shape(String colour) {
+            this.colour = colour;
+            System.out.println("Shape constructor: " + colour);
+        }
+    }
+
+    static class Circle extends Shape {
+        private double radius;
+        Circle(String colour, double radius) {
+            super(colour);                           // must come first
+            this.radius = radius;
+            System.out.println("Circle constructor: " + radius);
+        }
+    }
+
+    public static void main(String[] args) {
+        Shape s = new Circle("red", 2.5);
+        System.out.println(s.colour);
+    }
+}
+```
+
+```text
+Shape constructor: red
+Circle constructor: 2.5
+red
+```
+
+## 6. Overriding against overloading
+
+| | Overriding | Overloading |
+|---|---|---|
+| Where | a subclass redefines a parent method | the same class (or a subclass) has several methods with one name |
+| Signature | **identical** name and parameter types; return type same or narrower | **different** parameter lists |
+| Decided | at run time, by the object's class | at compile time, by the argument types |
+| Marker | `@Override` (the compiler checks it) | none |
+| Cannot override | `private`, `static` and `final` methods | |
+
+## 7. Polymorphism: two types for every object
+
+```java
+Parent p = new Child();
+```
+
+| Question | Answered by | Example |
+|---|---|---|
+| Which methods may I **call**? (does it compile?) | the **reference** type, `Parent` | `p.childOnly()` does not compile |
+| Which version **runs**? | the **object** type, `Child` | `p.describe()` runs `Child`'s override |
+| Which **field** is read? | the reference type (fields are not overridden) | `p.name` reads `Parent`'s field |
+
+```java title="Dispatch.java"
+public class Dispatch {
+    static class Animal {
+        String name = "animal";
+        String sound() { return "..."; }
+        static String kind() { return "Animal"; }
+    }
+
+    static class Dog extends Animal {
+        String name = "dog";
+        @Override String sound() { return "Woof"; }
+        static String kind() { return "Dog"; }
+        void fetch() { System.out.println("fetching"); }
+    }
+
+    public static void main(String[] args) {
+        Animal a = new Dog();
+        System.out.println(a.sound());               // run time: Dog's override
+        System.out.println(a.name);                  // compile time: Animal's field
+        System.out.println(a.kind());                // static: the reference type
+        ((Dog) a).fetch();                           // a cast is needed to call fetch
+        Animal plain = new Animal();
+        System.out.println(plain instanceof Dog);
+        System.out.println(a instanceof Animal);
+    }
+}
+```
+
+```text
+Woof
+animal
+Animal
+fetching
+false
+true
+```
+
+## 8. Abstract classes and interfaces
+
+| | Abstract class | Interface |
+|---|---|---|
+| Declared | `abstract class A { ... }` | `interface I { ... }` |
+| Instantiate | never (`new A()` does not compile) | never |
+| Methods | abstract (no body) and concrete | abstract; `default` and `static` with a body (Java 8) |
+| Fields | any | constants only (`public static final`) |
+| A class may | extend **one** class | implement **many** interfaces |
+| Use for | related classes sharing state and code ("is a") | a capability unrelated classes share ("can do") |
+
+A concrete subclass must implement **every** abstract method it inherits, or be declared `abstract` itself.
+
+## 9. equals, hashCode and toString
+
+| Method | Default in `Object` | Override when |
+|---|---|---|
+| `toString()` | `ClassName@hexhash` | you print or concatenate the object |
+| `equals(Object)` | same reference (`==`) | two objects with equal contents should be equal |
+| `hashCode()` | derived from the address | you override `equals` (always together) |
+
+```java title="Point.java"
+import java.util.Objects;
+
+public class Point {
+    private final int x, y;
+
+    Point(int x, int y) { this.x = x; this.y = y; }
+
+    @Override
+    public String toString() { return "(" + x + ", " + y + ")"; }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;                        // same reference
+        if (other == null || getClass() != other.getClass()) return false;
+        Point that = (Point) other;                            // safe after the check
+        return x == that.x && y == that.y;
+    }
+
+    @Override
+    public int hashCode() { return Objects.hash(x, y); }
+
+    public static void main(String[] args) {
+        Point a = new Point(1, 2);
+        Point b = new Point(1, 2);
+        System.out.println(a + " " + b);
+        System.out.println(a == b);
+        System.out.println(a.equals(b));
+        System.out.println(a.hashCode() == b.hashCode());
+    }
+}
+```
+
+```text
+(1, 2) (1, 2)
+false
+true
+true
+```
+
+## 10. Casting and `instanceof`
+
+| | Upcast | Downcast |
+|---|---|---|
+| Direction | `Child` to `Parent` | `Parent` to `Child` |
+| Needs a cast? | no, automatic | yes: `(Child) p` |
+| Can fail? | never | yes, `ClassCastException` if the object is not a `Child` |
+| Safe pattern | | `if (p instanceof Child) { Child c = (Child) p; ... }` |
+
+`x instanceof Type` is `false` when `x` is `null`. The compiler rejects a cast between unrelated classes; it accepts a downcast and leaves the check to run time.
+
+## 11. Composition against inheritance
+
+| Question | Answer | Use |
+|---|---|---|
+| Is a `Circle` a `Shape`? | yes | inheritance (`extends`) |
+| Does a `Car` have an `Engine`? | yes | composition (a field) |
+| Can a `Duck` fly? | a capability | an interface |
+| In doubt | | prefer composition: it is easier to change |
+
+## 12. Valid or not valid?
+
+Check these in order for any "valid or not valid" question:
+
+| Check | Not valid when |
+|---|---|
+| Does the reference type declare the method? | the method exists only in the subclass |
+| Is the class abstract? | `new` is used on it |
+| Does an override keep the signature? | the parameter types differ (that is an overload, and `@Override` fails) |
+| Is access reduced in the override? | a `public` method is overridden as `protected` or `private` |
+| Does the subclass constructor call a parent constructor that exists? | the parent has no no-argument constructor and `super(...)` is missing |
+| Is a `private` member used outside its class? | always not valid, even in a subclass |
+| Is a `final` class extended, or a `final` method overridden? | always not valid |
+| Is an abstract method left unimplemented in a concrete class? | not valid |
+
+## 13. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| Forgetting `super(...)` when the parent needs arguments | compile error: constructor cannot be applied | call `super(args)` first |
+| `equals` overridden without `hashCode` | equal objects behave as different keys in a `HashMap` | override both |
+| `equals(Point p)` instead of `equals(Object o)` | that is an overload; collections ignore it | use `Object` and `@Override` |
+| Comparing objects with `==` | compares references | `equals` |
+| Downcasting without `instanceof` | `ClassCastException` | test first |
+| Calling a subclass-only method on a `Parent` variable | compile error | cast, or declare the method in `Parent` |
+| Making fields `public` | any code can break the object's rules | `private` plus getters and setters |
+| Overriding with weaker access | compile error | keep or widen the access |
