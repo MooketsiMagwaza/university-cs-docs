@@ -1,0 +1,933 @@
+---
+title: "Queue Implementations by Example"
+description: "Perform queue operations by hand, use Java's Queue, build the Lecture 16 linked queue and array queue method by method, draw their memory, and find the overflow flaw of the array queue."
+---
+
+A queue adds at one end, the tail, and removes at the other, the front, so the first element in is the first element out (FIFO). Lecture 16 implements it twice: with a singly linked list that keeps `front` and `tail` references, and with an array that keeps `front` and `tail` indexes. This lesson works through both with the lecture's Exercise 1, the memory after each operation, Java's own `Queue` and `PriorityQueue`, the errors in the lecture's code, and the flaw in the array queue that the lecture warns about. It follows [Stack Implementations by Example](/docs/sem3/csi247/10-stacks-and-queues/notes/stack-implementations-by-example).
+
+<LearningObjectives items={[
+  'Perform enqueue and dequeue operations by hand and state the order of the dequeued values, the length, the front and the tail',
+  'Name the types of queue and use Java\'s Queue, LinkedList, ArrayDeque and PriorityQueue',
+  'Write a linked queue with front and tail references, including the empty-queue cases',
+  'Write an array queue with front and tail indexes and say what enqueue and dequeue do to them',
+  'Draw the memory diagram of a linked queue and of an array queue after a sequence of operations',
+  'Explain why the array queue can overflow while it has free slots, and repair the lecture\'s code',
+]} />
+
+<Prerequisites items={[
+  'The linked list class and the stack implementations from the previous lessons',
+  'Arrays and generics from the earlier chapters',
+]} />
+
+## 1. The templates
+
+```text
+Queue rule (FIFO):  enqueue adds at the tail; dequeue removes the front element and returns it; peek returns the front without removing it.
+                    Elements leave in the order they joined.
+
+Linked queue:       front and tail are REFERENCES (both null when empty).
+                    enqueue: oldTail = tail; tail = new node; if the queue was empty front = tail, else oldTail.next = tail
+                    dequeue: save front.data; front = front.next; if the queue is now empty tail = null
+
+Array queue:        front and tail are INDEXES (both -1 when empty).
+                    enqueue: if the queue is empty front = tail = 0, else tail++; then queue[tail] = element
+                    dequeue: take queue[front], then front++        size = tail - front + 1 (0 when front is -1)
+```
+
+The four kinds of queue in the lecture:
+
+| Type | Rule |
+|---|---|
+| Normal queue | FIFO: insert at the tail, remove from the front |
+| Circular queue | the last element is connected to the first, forming a circle |
+| Double-ended queue (deque) | insertions and deletions at both the front and the tail |
+| Priority queue | items are ordered by key value; the item with the lowest (or highest) key is always in front, and insertions keep the ordering |
+
+## 2. Performing operations by hand
+
+The lecture's Exercise 1: on an empty queue perform `enqueue(52)`, `enqueue(96)`, `enqueue(63)`, `dequeue()`, `enqueue(28)`, `enqueue(86)`, `dequeue()`, `enqueue(69)` and `dequeue()`. Which values are dequeued, how long is the queue afterwards, and which item is in front and at the tail? The classes used to check the answer are built in sections 4 and 5.
+
+| Operation | Queue (front at the left, tail at the right) | Dequeued |
+|---|---|---|
+| `enqueue(52)`, `enqueue(96)`, `enqueue(63)` | 52, 96, 63 | |
+| `dequeue()` | 96, 63 | 52 |
+| `enqueue(28)`, `enqueue(86)` | 96, 63, 28, 86 | |
+| `dequeue()` | 63, 28, 86 | 96 |
+| `enqueue(69)` | 63, 28, 86, 69 | |
+| `dequeue()` | 28, 86, 69 | 63 |
+
+The dequeued sequence is 52, 96, 63, which is the order of the first three enqueues: a queue returns the elements in the order they joined. Three elements are left, 28 is in front and 69 is at the tail.
+
+## 3. Java's Queue
+
+`Queue<E>` is an interface in `java.util` that extends `Collection<E>`, so you cannot create a `Queue` object: a concrete class must implement it. The lecture names `LinkedList`, `PriorityQueue` and `ArrayDeque`. The common methods are `add` (insert), `remove` (remove and return the front element; it throws an exception when the queue is empty) and `peek` (return the front element without removing it; `null` when empty).
+
+```java title="JavaQueueDemo.java"
+import java.util.ArrayDeque;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.PriorityQueue;
+import java.util.Queue;
+
+public class JavaQueueDemo {
+    // Question (Lecture 13 and 16): use a LinkedList and an ArrayDeque as queues, and the lecture's PriorityQueue.
+    public static void main(String[] args) {
+        Queue<String> list = new LinkedList<String>();
+        list.add("Kago");
+        list.add("Naledi");
+        list.add("Thato");
+        System.out.println(list + " peek " + list.peek());
+        System.out.println("remove " + list.remove() + ", then " + list);
+
+        Queue<Integer> deque = new ArrayDeque<Integer>();
+        deque.add(5);
+        deque.add(9);
+        System.out.println("ArrayDeque remove " + deque.remove() + ", peek " + deque.peek());
+
+        Queue<String> empty = new LinkedList<String>();
+        System.out.println("peek on an empty queue: " + empty.peek());
+        try {
+            empty.remove();
+        } catch (java.util.NoSuchElementException e) {
+            System.out.println("remove on an empty queue: " + e.getClass().getName());
+        }
+
+        Queue<String> pQueue = new PriorityQueue<String>();
+        pQueue.add("Maths");
+        pQueue.add("Chemistry");
+        pQueue.add("Physics");
+        System.out.println(pQueue);
+        System.out.println("Queue has " + pQueue.size() + " elements");
+        pQueue.remove();
+        System.out.println(pQueue);
+        System.out.println("Queue has " + pQueue.size() + " elements");
+        Iterator<String> iterator = pQueue.iterator();
+        while (iterator.hasNext()) {
+            System.out.print(iterator.next() + " ");
+        }
+        System.out.println();
+    }
+}
+```
+
+```text
+[Kago, Naledi, Thato] peek Kago
+remove Kago, then [Naledi, Thato]
+ArrayDeque remove 5, peek 9
+peek on an empty queue: null
+remove on an empty queue: java.util.NoSuchElementException
+[Chemistry, Maths, Physics]
+Queue has 3 elements
+[Maths, Physics]
+Queue has 2 elements
+Maths Physics
+```
+
+A `LinkedList` or an `ArrayDeque` used as a queue gives FIFO order: the first element added (Kago) is the one removed. `peek` on an empty queue returns `null`, but `remove` throws `NoSuchElementException`. The `PriorityQueue` is different: it keeps the items ordered by their natural order, so the string that comes first alphabetically (Chemistry) is in front and is the one `remove()` takes, whatever the order of the `add` calls. Printing a `PriorityQueue` does not show the items in sorted order; only the front is guaranteed to be the lowest.
+
+### Priority queue order
+
+```java title="PriorityOrder.java"
+import java.util.PriorityQueue;
+import java.util.Queue;
+
+public class PriorityOrder {
+    // Question: in what order does a priority queue of integers give its elements back?
+    public static void main(String[] args) {
+        Queue<Integer> pq = new PriorityQueue<Integer>();
+        int[] values = {40, 10, 30, 20};
+        for (int v : values) {
+            pq.add(v);
+        }
+        StringBuilder out = new StringBuilder();
+        while (!pq.isEmpty()) {
+            out.append(pq.remove()).append(" ");
+        }
+        System.out.println("added 40 10 30 20; removed " + out.toString().trim());
+    }
+}
+```
+
+```text
+added 40 10 30 20; removed 10 20 30 40
+```
+
+Removing the front repeatedly gives the integers lowest first: 10, 20, 30, 40, although they were added in a different order. The lecture says a priority queue is normally represented with a heap, but it can also use an array or a linked list.
+
+## 4. The linked queue
+
+The linked queue is a singly linked list with a `front` reference (where elements leave) and a `tail` reference (where they join). There is no size limit, so `isFull()` does not apply. The lecture calls the class `Queue1` and stores `String` values; here it is `LinkedQueue`, so that it can sit beside the array queue.
+
+<MemoryDiagram scenario="queuelinked" />
+
+```java title="LinkedQueue.java"
+public class LinkedQueue {
+    private class Node {
+        String data;                          // the node's data part
+        Node next;                            // a pointer to the next node in the queue
+
+        Node(String data) {
+            this.data = data;
+            this.next = null;                 // the last node of the queue
+        }
+    }
+
+    public Node front;                        // keeps track of the front node
+    public Node tail;                         // keeps track of the last node
+
+    public LinkedQueue() {                    // initially the queue is empty
+        front = null;
+        tail = null;
+    }
+
+    public boolean isEmpty() {
+        return front == null;
+    }
+
+    public int size() {                       // the lecture's take-home method: count the nodes
+        int count = 0;
+        for (Node cur = front; cur != null; cur = cur.next) {
+            count++;
+        }
+        return count;
+    }
+
+    public void enqueue(String data) {
+        Node oldTail = tail;
+        tail = new Node(data);                // the new tail
+        if (isEmpty()) {
+            front = tail;                     // the first node is also the front
+        } else {
+            oldTail.next = tail;
+        }
+    }
+
+    public String dequeue() {
+        if (isEmpty()) {
+            return null;                      // nothing to remove
+        }
+        String data = front.data;
+        front = front.next;
+        if (isEmpty()) {
+            tail = null;                      // the queue became empty: tail must not keep the old node
+        }
+        return data;
+    }
+
+    public String peek() {
+        if (!isEmpty()) {
+            return front.data;
+        }
+        return null;                          // no element in the queue
+    }
+
+    public boolean contains(String key) {
+        for (Node cur = front; cur != null; cur = cur.next) {
+            if (cur.data.equals(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public String getFront() {
+        return front == null ? null : front.data;
+    }
+
+    public String getTail() {
+        return tail == null ? null : tail.data;
+    }
+}
+```
+
+### Exercise 1 with the linked queue
+
+```java title="QueueExercise1.java"
+public class QueueExercise1 {
+    // Question (Lecture 16, Exercise 1): perform the operations; which values are dequeued, how long is the queue, what is in front and at the tail?
+    public static void main(String[] args) {
+        LinkedQueue q = new LinkedQueue();
+        StringBuilder out = new StringBuilder();
+        q.enqueue("52");
+        q.enqueue("96");
+        q.enqueue("63");
+        out.append(q.dequeue()).append(" ");
+        q.enqueue("28");
+        q.enqueue("86");
+        out.append(q.dequeue()).append(" ");
+        q.enqueue("69");
+        out.append(q.dequeue());
+        System.out.println("dequeued: " + out);
+        System.out.println("length: " + q.size());
+        System.out.println("front: " + q.getFront() + ", tail: " + q.getTail());
+    }
+}
+```
+
+```text
+dequeued: 52 96 63
+length: 3
+front: 28, tail: 69
+```
+
+### The lecture's tester and its new methods
+
+The lecture's tester enqueues five course codes, looks at the front, enqueues another, dequeues three, and asks for the size. It also asks for `contains(String)`, `getFront()` and `getTail()`.
+
+```java title="LinkedQueueTester.java"
+public class LinkedQueueTester {
+    // Question (Lecture 16 tester): enqueue five codes, peek, enqueue one more, dequeue three, then size, contains, front, tail.
+    public static void main(String[] args) {
+        LinkedQueue que = new LinkedQueue();
+        que.enqueue("CSI247");
+        que.enqueue("CSI243");
+        que.enqueue("CSI261");
+        que.enqueue("CSI141");
+        que.enqueue("CSI142");
+        System.out.println("Front has: " + que.peek());
+        que.enqueue("CSI392");
+        System.out.println("dequeued " + que.dequeue() + ", " + que.dequeue() + ", " + que.dequeue());
+        System.out.println("Queue size: " + que.size());
+        System.out.println("contains CSI141: " + que.contains("CSI141") + ", contains CSI247: " + que.contains("CSI247"));
+        System.out.println("front " + que.getFront() + ", tail " + que.getTail());
+    }
+}
+```
+
+```text
+Front has: CSI247
+dequeued CSI247, CSI243, CSI261
+Queue size: 3
+contains CSI141: true, contains CSI247: false
+front CSI141, tail CSI392
+```
+
+### Emptying the queue
+
+```java title="EmptyingQueue.java"
+public class EmptyingQueue {
+    // Question: what happens to front and tail when the last element is dequeued, and can the queue be used again?
+    public static void main(String[] args) {
+        LinkedQueue q = new LinkedQueue();
+        System.out.println("empty queue: dequeue " + q.dequeue() + ", peek " + q.peek());
+        q.enqueue("Kago");
+        System.out.println("one element: front " + q.getFront() + ", tail " + q.getTail());
+        System.out.println("dequeue " + q.dequeue());
+        System.out.println("now: empty " + q.isEmpty() + ", front " + q.getFront() + ", tail " + q.getTail());
+        q.enqueue("Mpho");
+        System.out.println("enqueue again: front " + q.getFront() + ", tail " + q.getTail() + ", size " + q.size());
+    }
+}
+```
+
+```text
+empty queue: dequeue null, peek null
+one element: front Kago, tail Kago
+dequeue Kago
+now: empty true, front null, tail null
+enqueue again: front Mpho, tail Mpho, size 1
+```
+
+With one element, `front` and `tail` refer to the same node. After the dequeue `front` is `null`, and the line `tail = null` makes `tail` agree with it. If that line were missing, `tail` would still refer to the removed node: `getTail()` would return its data for an empty queue, and the old node could not be garbage collected.
+
+### The lecture's dequeue, as printed
+
+The lecture prints `dequeue()` with `String data` declared inside the `if (!isEmpty())` block and `return data;` after the closing brace:
+
+```java
+public String dequeue() {
+    if (! isEmpty()) {
+        String data = front.data;
+        front = front.next;
+        if (isEmpty())
+            tail = null;
+    }
+    return data;
+}
+```
+
+`javac` reports `error: cannot find symbol` for `data` in the `return` line, because a variable declared in a block exists only inside that block. The repair is to return inside the block and to return `null` for the empty queue, as in `LinkedQueue` above. The lecture's tester also mixes `Queue1`, `Queue2`, `q`, `q1` and `e` for the same object; make the class name and the variable consistent before compiling.
+
+<Callout type="mistake" title="Common error">
+
+Forgetting that the first `enqueue` must set **both** references. On an empty queue `oldTail` is `null`, so `oldTail.next = tail` would throw `NullPointerException`; the lecture's `enqueue` therefore tests `isEmpty()` and sets `front = tail` instead.
+
+</Callout>
+
+### Exam question 1: perform the operations (6 marks)
+
+On an empty queue perform `enqueue(10)`, `enqueue(20)`, `dequeue()`, `enqueue(30)`, `enqueue(40)`, `dequeue()`, `dequeue()` and `enqueue(50)`. State the sequence of dequeued values, the length of the queue, and the front and the tail. Say which of the values would be popped first if the same operations were done on a stack, with `push` and `pop` in place of `enqueue` and `dequeue`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Perform" asks for the queue after each operation. A queue removes the oldest element, at the front, and adds at the tail. The last part compares the same operations with the stack rule.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the queue with the front at the left. `dequeue` removes the left-most element. For the stack comparison, apply `pop` to the right-most element.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Operation | Queue (front at the left) | Dequeued |
+|---|---|---|
+| `enqueue(10)`, `enqueue(20)` | 10, 20 | |
+| `dequeue()` | 20 | 10 |
+| `enqueue(30)`, `enqueue(40)` | 20, 30, 40 | |
+| `dequeue()` | 30, 40 | 20 |
+| `dequeue()` | 40 | 30 |
+| `enqueue(50)` | 40, 50 | |
+
+The dequeued sequence is 10, 20, 30. Two elements are left, so the length is 2; the front is 40 and the tail is 50.
+
+</Step>
+
+<Step title="4. Check">
+
+On a stack the same operations (pushing instead of enqueuing) would pop 20, then 40, then 30, because each `pop` takes the newest element at that moment: the first `pop` happens after 10 and 20 have been pushed, so it returns 20. A queue returns 10 first. The queue's dequeued values (10, 20, 30) are in the order they were enqueued; a stack's are not.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. The array queue
+
+The array queue stores the elements in an array and keeps two indexes, `front` and `tail`. Initially the queue is empty and both indexes are -1, smaller than the smallest array index. Because the array has a fixed size, an `enqueue` on a full queue must be refused, and the lecture warns: "Careful: Overflow!!! (ArrayIndexOutOfBounds)".
+
+<MemoryDiagram scenario="queuearray" />
+
+```java title="ArrayQueue.java"
+public class ArrayQueue {
+    private String[] queue;                   // an array to store the queue elements
+    private int front;                        // the index of the front element
+    private int tail;                         // the index of the tail element
+
+    public ArrayQueue(int n) {
+        queue = new String[n];                // an array of the specified size
+        front = -1;                           // -1 for an empty queue
+        tail = -1;
+    }
+
+    public int size() {                       // the lecture's take-home method
+        if (front < 0) {
+            return 0;                         // nothing has been enqueued yet
+        }
+        return tail - front + 1;              // 0 when front has moved past tail
+    }
+
+    public boolean isEmpty() {
+        return size() == 0;
+    }
+
+    public boolean isFull() {                 // the lecture's test: all array slots occupied
+        return size() == queue.length;
+    }
+
+    public boolean isFullAtBack() {           // a repair for this design: no room after the tail
+        return tail == queue.length - 1;
+    }
+
+    public void enqueue(String elem) {
+        if (isFull()) {
+            System.out.println("Full!!");
+        } else {
+            if (isEmpty()) {
+                front = tail = 0;             // index 0
+            } else {
+                tail++;                       // advance tail
+            }
+            queue[tail] = elem;               // store the data
+        }
+    }
+
+    public String dequeue() {
+        if (isEmpty()) {
+            return null;
+        }
+        String ele = queue[front];
+        front++;                              // the element leaves the queue, not the array
+        return ele;
+    }
+
+    public String peek() {
+        if (!isEmpty()) {
+            return queue[front];
+        }
+        return null;                          // queue empty: no front element
+    }
+
+    public boolean contains(String key) {
+        if (isEmpty()) {
+            System.out.println("Empty.");
+        } else {
+            for (int i = front; i <= tail; i++) {   // only the slots that are in the queue
+                if (queue[i].equals(key)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("front=" + front + " tail=" + tail + " [");
+        for (int i = 0; i < queue.length; i++) {
+            sb.append(queue[i]);
+            if (i < queue.length - 1) {
+                sb.append(", ");
+            }
+        }
+        return sb.append("]").toString();
+    }
+}
+```
+
+### The effect of enqueue and dequeue on front and tail
+
+```java title="FrontAndTail.java"
+public class FrontAndTail {
+    // Question (Lecture 16 pictures): enqueue 26, 69, 48 into an array of 6, then dequeue three times, then enqueue 52.
+    public static void main(String[] args) {
+        ArrayQueue q = new ArrayQueue(6);
+        System.out.println("new:          " + q + " size " + q.size());
+        q.enqueue("26");
+        System.out.println("enqueue 26:   " + q + " size " + q.size());
+        q.enqueue("69");
+        q.enqueue("48");
+        System.out.println("enqueue 69, 48: " + q + " size " + q.size());
+        System.out.println("dequeue " + q.dequeue() + ":   " + q + " size " + q.size());
+        System.out.println("dequeue " + q.dequeue() + ":   " + q + " size " + q.size());
+        System.out.println("dequeue " + q.dequeue() + ":   " + q + " size " + q.size() + ", empty " + q.isEmpty());
+        q.enqueue("52");
+        System.out.println("enqueue 52:   " + q + " size " + q.size());
+    }
+}
+```
+
+```text
+new:          front=-1 tail=-1 [null, null, null, null, null, null] size 0
+enqueue 26:   front=0 tail=0 [26, null, null, null, null, null] size 1
+enqueue 69, 48: front=0 tail=2 [26, 69, 48, null, null, null] size 3
+dequeue 26:   front=1 tail=2 [26, 69, 48, null, null, null] size 2
+dequeue 69:   front=2 tail=2 [26, 69, 48, null, null, null] size 1
+dequeue 48:   front=3 tail=2 [26, 69, 48, null, null, null] size 0, empty true
+enqueue 52:   front=0 tail=0 [52, 69, 48, null, null, null] size 1
+```
+
+The first `enqueue` sets `front = tail = 0`; every further one moves `tail` forwards by one. A `dequeue` removes the item from the **queue**, not from the array: it only moves `front` forwards, so the old strings stay in the array (the printed array still shows `26`, `69` and `48` after they were dequeued). `front` keeps increasing until it passes `tail`; at that moment `size()` is `tail - front + 1 = 0` and the queue is empty. The next `enqueue` sees an empty queue and sets both indexes back to 0, overwriting the stale `26` with `52`.
+
+### The lecture's tester
+
+```java title="ArrayQueueTester.java"
+public class ArrayQueueTester {
+    // Question (Lecture 16 tester): a queue of capacity 4; fill it, try one more, peek, dequeue three times, size and contains.
+    public static void main(String[] args) {
+        ArrayQueue q = new ArrayQueue(4);
+        q.enqueue("CSI247");
+        q.enqueue("CSI243");
+        q.enqueue("CSI262");
+        q.enqueue("CSI142");
+        System.out.println("size " + q.size() + ", empty " + q.isEmpty() + ", full " + q.isFull());
+        q.enqueue("CSI141");
+        System.out.println("size " + q.size() + ", peek " + q.peek());
+        q.dequeue();
+        q.dequeue();
+        q.dequeue();
+        System.out.println("Size: " + q.size());
+        System.out.println("Found CSI142: " + q.contains("CSI142"));
+        System.out.println("Found CSI247: " + q.contains("CSI247"));
+    }
+}
+```
+
+```text
+size 4, empty false, full true
+Full!!
+size 4, peek CSI247
+Size: 1
+Found CSI142: true
+Found CSI247: false
+```
+
+When the queue holds four elements in an array of four, `isFull()` is `true`, so the fifth `enqueue` prints "Full!!" and stores nothing. After three dequeues only the last element remains. `contains("CSI247")` is `false` although the string is still in slot 0 of the array: `contains` searches only from `front` to `tail`, the slots that belong to the queue.
+
+### The flaw: overflow with free slots
+
+The lecture's `isFull()` compares the **number of elements** with the length of the array. But `enqueue` always moves `tail` forwards, and a `dequeue` moves `front` forwards without freeing the slots behind it. So a queue can have free slots in front of `front` and still run out of array behind `tail`.
+
+```java title="ArrayQueueFlaw.java"
+public class ArrayQueueFlaw {
+    // Question: enqueue A, B, C, D into an array of 4, dequeue one, then enqueue E. What happens?
+    public static void main(String[] args) {
+        ArrayQueue q = new ArrayQueue(4);
+        String[] letters = {"A", "B", "C", "D"};
+        for (String s : letters) {
+            q.enqueue(s);
+        }
+        System.out.println("dequeue " + q.dequeue() + ": size " + q.size() + ", isFull " + q.isFull() + ", isFullAtBack " + q.isFullAtBack());
+        try {
+            q.enqueue("E");
+        } catch (ArrayIndexOutOfBoundsException e) {
+            System.out.println("enqueue E: " + e.getClass().getName());
+        }
+        System.out.println(q);
+    }
+}
+```
+
+```text
+dequeue A: size 3, isFull false, isFullAtBack true
+enqueue E: java.lang.ArrayIndexOutOfBoundsException
+front=1 tail=4 [A, B, C, D]
+```
+
+After one dequeue the queue holds three elements in an array of four, so the lecture's `isFull()` says there is room. But `tail` is already the last index (3), so `tail++` makes it 4 and `queue[4]` throws `ArrayIndexOutOfBoundsException`. The failed call has also left the queue damaged: `tail++` ran before the store, so `tail` is now 4, outside the array (the last line of the output). One repair for this design is to test whether there is room **after the tail**, `tail == queue.length - 1`, which is what `isFullAtBack()` does; the cost is that the free slot in front is wasted until the queue empties. The queue types in the lecture's list include the **circular queue**, in which the last element is connected to the first, precisely so that the slots at the start can be reused.
+
+### Exam question 2: front, tail and size (6 marks)
+
+An array queue has capacity 6. Starting empty, the operations `enqueue(26)`, `enqueue(69)`, `enqueue(48)`, `dequeue()` and `dequeue()` are performed. State the value of `front`, `tail` and `size()` after each, say what the array contains at the end, and say what the next `enqueue` does if a third `dequeue()` is performed first. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three values after each of five operations, the content of the array, and a prediction. `front` and `tail` start at -1, the first `enqueue` sets both to 0, and `size()` is `tail - front + 1`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Make a table with one row per operation. `enqueue` moves `tail` (the first one sets both), `dequeue` moves `front`. Remember that nothing is erased from the array.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Operation | `front` | `tail` | `size()` |
+|---|---|---|---|
+| start | -1 | -1 | 0 |
+| `enqueue(26)` | 0 | 0 | 1 |
+| `enqueue(69)` | 0 | 1 | 2 |
+| `enqueue(48)` | 0 | 2 | 3 |
+| `dequeue()` returns 26 | 1 | 2 | 2 |
+| `dequeue()` returns 69 | 2 | 2 | 1 |
+
+The array still holds `26`, `69`, `48` in slots 0 to 2 and `null` in slots 3 to 5; the queue contains only slot 2 (`48`). If a third `dequeue()` is done, `front` becomes 3 and `size()` is 2 - 3 + 1 = 0, so the queue is empty; the next `enqueue` then sets `front = tail = 0` and stores in slot 0.
+
+</Step>
+
+<Step title="4. Check">
+
+The step-by-step diagram above gives the same values: after the second `dequeue()` both `front` and `tail` are 2, and after the third `front` is 3, one past `tail`. The output of `FrontAndTail` agrees with the table.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: why the queue overflows (6 marks)
+
+An array queue of capacity 4 holds the elements A, B, C and D. A is dequeued, and then `enqueue("E")` is called. Explain what happens and why, although the queue holds only three elements. Give one repair. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The queue has three elements, so a test that counts elements says "not full". The question is about where `tail` is, not how many elements there are.
+
+</Step>
+
+<Step title="2. Plan">
+
+Follow the indexes: four enqueues put `front = 0` and `tail = 3`. The dequeue makes `front = 1`. `enqueue` then does `tail++`.
+
+</Step>
+
+<Step title="3. Solution">
+
+`isFull()` compares `size()` (3) with `queue.length` (4), so it is `false` and `enqueue` goes ahead. It executes `tail++`, so `tail` becomes 4, and `queue[tail] = elem` stores outside the array: `ArrayIndexOutOfBoundsException`. Slot 0 is free but unreachable, because `tail` only moves forwards. **Repair:** refuse the `enqueue` when `tail == queue.length - 1` (no room after the tail), or use a circular queue in which `tail` wraps round to the start.
+
+</Step>
+
+<Step title="4. Check">
+
+The program above printed the exception for this exact sequence, and `isFullAtBack()` was `true` at the same moment. The flaw does not occur when the queue becomes empty, because the next `enqueue` resets `front` and `tail` to 0.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: dequeue in the linked queue (6 marks)
+
+Write `dequeue()` for a linked queue with `front` and `tail` references. Explain why it sets `tail = null` in one case, and say what `javac` reports for the lecture's version that returns `data` outside the `if`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A method, an explanation and a compiler message. The method removes the front node and returns its data, and the empty queue has no front node.
+
+</Step>
+
+<Step title="2. Plan">
+
+If the queue is empty, return `null`. Otherwise save `front.data`, move `front` to `front.next`, and, if the queue is now empty, set `tail` to `null` as well. Return the saved data.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java
+public String dequeue() {
+    if (isEmpty()) {
+        return null;
+    }
+    String data = front.data;
+    front = front.next;
+    if (isEmpty()) {
+        tail = null;
+    }
+    return data;
+}
+```
+
+When the last node is removed, `front` becomes `null` but `tail` would still refer to the removed node; setting `tail = null` keeps the two references consistent. In the lecture's version `data` is declared inside the `if` block and returned after it, so `javac` reports `error: cannot find symbol` (`symbol: variable data`).
+
+</Step>
+
+<Step title="4. Check">
+
+The `EmptyingQueue` program showed `front` and `tail` both `null` after the last dequeue, and the queue accepting a new element afterwards. A queue of one element is the case that needs the extra line; for two or more elements `tail` is unchanged.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Generic queues
+
+The lecture asks for a generic linked-list queue tested with UB student names and with `Dog` objects, and for an array-based queue that works with any type. Only the data type changes; `contains` must use `equals`.
+
+```java title="Dog.java"
+public class Dog {
+    private String name;
+
+    public Dog(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof Dog && ((Dog) other).name.equals(name);
+    }
+
+    @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "Dog(" + name + ")";
+    }
+}
+```
+
+```java title="GenQueue.java"
+public class GenQueue<T> {
+    private class Node {
+        T data;
+        Node next;
+
+        Node(T data) {
+            this.data = data;
+        }
+    }
+
+    private Node front;
+    private Node tail;
+
+    public boolean isEmpty() {
+        return front == null;
+    }
+
+    public void enqueue(T data) {
+        Node n = new Node(data);
+        if (isEmpty()) {
+            front = n;
+        } else {
+            tail.next = n;
+        }
+        tail = n;
+    }
+
+    public T dequeue() {
+        if (isEmpty()) {
+            return null;
+        }
+        T data = front.data;
+        front = front.next;
+        if (front == null) {
+            tail = null;
+        }
+        return data;
+    }
+
+    public boolean contains(T key) {
+        for (Node cur = front; cur != null; cur = cur.next) {
+            if (cur.data.equals(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+```
+
+```java title="GenArrayQueue.java"
+public class GenArrayQueue<T> {
+    private T[] queue;
+    private int front = -1;
+    private int tail = -1;
+
+    @SuppressWarnings("unchecked")
+    public GenArrayQueue(int n) {
+        queue = (T[]) new Object[n];          // an array of T cannot be created directly
+    }
+
+    public int size() {
+        return front < 0 ? 0 : tail - front + 1;
+    }
+
+    public boolean isFullAtBack() {
+        return tail == queue.length - 1;
+    }
+
+    public boolean enqueue(T elem) {
+        if (isFullAtBack()) {
+            return false;
+        }
+        if (size() == 0) {
+            front = tail = 0;
+        } else {
+            tail++;
+        }
+        queue[tail] = elem;
+        return true;
+    }
+
+    public T dequeue() {
+        if (size() == 0) {
+            return null;
+        }
+        return queue[front++];
+    }
+}
+```
+
+```java title="GenQueueTest.java"
+public class GenQueueTest {
+    // Question (Lecture 16 exercises): test the generic queues with student names and with Dog objects.
+    public static void main(String[] args) {
+        GenQueue<String> students = new GenQueue<String>();
+        students.enqueue("Kago Molefe");
+        students.enqueue("Naledi Sebego");
+        System.out.println("dequeue " + students.dequeue() + ", contains Naledi Sebego: " + students.contains("Naledi Sebego"));
+
+        GenQueue<Dog> dogs = new GenQueue<Dog>();
+        dogs.enqueue(new Dog("Rex"));
+        dogs.enqueue(new Dog("Tau"));
+        System.out.println("contains Dog(Tau): " + dogs.contains(new Dog("Tau")) + ", dequeue " + dogs.dequeue());
+
+        GenArrayQueue<Double> marks = new GenArrayQueue<Double>(2);
+        System.out.println(marks.enqueue(61.5) + " " + marks.enqueue(78.0) + " " + marks.enqueue(55.0) + ", dequeue " + marks.dequeue());
+    }
+}
+```
+
+```text
+dequeue Kago Molefe, contains Naledi Sebego: true
+contains Dog(Tau): true, dequeue Dog(Rex)
+true true false, dequeue 61.5
+```
+
+The third `enqueue` into the array queue of capacity 2 returns `false`: there is no room after the tail. The `Object[]` cast is needed because Java does not allow `new T[n]`; the compiler warns about the unchecked cast, which the annotation acknowledges.
+
+## 7. Linked queue or array queue?
+
+| | Linked queue | Array queue |
+|---|---|---|
+| `front` and `tail` are | references to nodes | indexes |
+| Empty when | `front == null` | `front == -1`, or `front` is past `tail` |
+| Capacity | none: grows and shrinks dynamically | fixed by the array size |
+| `isFull()` | not applicable | needed (and the design can overflow as shown) |
+| `enqueue`, `dequeue`, `peek` | O(1) | O(1) |
+| Per element | the value and a reference (a node) | the value |
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A queue joins at the tail and leaves at the front (FIFO): elements come out in the order they went in. A linked queue keeps `front` and `tail` references; the first `enqueue` sets both, and the dequeue that empties the queue must set `tail` to `null` as well. An array queue keeps `front` and `tail` indexes (both -1 when empty): `enqueue` moves `tail`, `dequeue` moves `front` and erases nothing, and `size()` is `tail - front + 1`. Because both indexes only move forwards, the array queue can run out of room behind `tail` while it has free slots in front; a circular queue is the type that reuses them. Java's `Queue` is an interface (`LinkedList`, `ArrayDeque`, `PriorityQueue`): `add`, `remove` (throws when empty) and `peek` (`null` when empty); a priority queue keeps the lowest key in front.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="After enqueue(7), enqueue(3), dequeue(), enqueue(9), what is the queue and what is dequeued next?">
+
+The queue is 3, 9 (front at the left), and the next `dequeue()` returns 3. The first `dequeue()` removed 7, the oldest element.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does the first enqueue on an empty linked queue set front as well as tail?">
+
+With one node, that node is both the first and the last. If `front` stayed `null` the queue would still look empty, and `oldTail.next` would throw `NullPointerException` because `oldTail` is `null`.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does dequeue do to the array of an array queue?">
+
+Nothing: it returns `queue[front]` and moves `front` forwards. The element leaves the queue but stays in the array until a later `enqueue` overwrites it.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does Queue.remove() throw an exception on an empty queue while peek() returns null?">
+
+`remove()` must return the removed element and cannot do so, so it reports the error; `peek()` only looks at the front and returns `null` when there is none.
+
+</CheckQuestion>
+
+<CheckQuestion question="In which order does a PriorityQueue of integers give back the values 40, 10, 30, 20?">
+
+Lowest first: 10, 20, 30, 40. The item with the lowest key is always in front, whatever the order of the insertions.
+
+</CheckQuestion>
+
+</CheckQuestions>

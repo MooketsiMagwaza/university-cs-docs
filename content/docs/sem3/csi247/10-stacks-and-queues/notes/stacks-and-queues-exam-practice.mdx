@@ -1,0 +1,511 @@
+---
+title: "Stacks and Queues Exam Practice"
+description: "Eight stack and queue exam questions from Lectures 13, 15 and 16: compare LIFO and FIFO, draw the memory of an array stack, a linked stack and a linked queue, write size for an array queue, and repair the lecture's code."
+---
+
+This lesson has no new teaching. It is eight questions in the forms Lectures 15 and 16 and their exercises use, each answered the way a marker wants to see it. Memory diagrams come early because they are a large part of the assessments. Cover the answer, work the question on paper, then open the answer and compare. The ideas are in [Stack Implementations by Example](/docs/sem3/csi247/10-stacks-and-queues/notes/stack-implementations-by-example) and [Queue Implementations by Example](/docs/sem3/csi247/10-stacks-and-queues/notes/queue-implementations-by-example).
+
+<LearningObjectives items={[
+  'Apply the same operations to a stack and to a queue and state what comes out and what remains',
+  'Draw the memory diagram of an array stack, a linked stack and a linked queue',
+  'Write the size method of an array queue and handle the empty cases',
+  'Choose a stack, a queue or a priority queue for an application',
+  'State the compile errors in the lecture\'s code and repair them',
+]} />
+
+## 1. How to earn the marks
+
+| Command word | What the marker wants |
+|---|---|
+| Perform / trace | The structure after every operation (a column for a stack with the top marked, a row for a queue with the front and tail marked), and the values removed, in order |
+| Draw | Stack on the left, heap on the right. The object that holds `top` (or `front` and `tail`), the array or the nodes with their addresses, each reference as an arrow, changed values crossed out, unreachable nodes marked as garbage |
+| Write | The signature, the check for the empty (and full) structure, the index or pointer changes in a safe order, and a test on a small input |
+| Explain / state | The rule in one or two sentences: LIFO or FIFO, where the change happens, what `top`, `front` and `tail` mean |
+
+Check the empty structure, one element and the full structure in every answer.
+
+## 2. Stack against queue
+
+### Exam question 1: the same operations on both (6 marks)
+
+Add the values 5, 12 and 7 in that order, then remove two values, add 3, and remove one more. Give the values removed and the structure that is left, first for a stack (using `push` and `pop`) and then for a queue (using `enqueue` and `dequeue`). (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The same sequence of adds and removes, applied to two structures. A stack removes the **newest** element and a queue removes the **oldest**. Four removals in all: two, then one.
+
+</Step>
+
+<Step title="2. Plan">
+
+Track each structure after every operation. For the stack the removed element is the right-most (top); for the queue it is the left-most (front).
+
+</Step>
+
+<Step title="3. Solution">
+
+| Operation | Stack (top at the right) | Removed | Queue (front at the left) | Removed |
+|---|---|---|---|---|
+| add 5, 12, 7 | 5, 12, 7 | | 5, 12, 7 | |
+| remove | 5, 12 | 7 | 12, 7 | 5 |
+| remove | 5 | 12 | 7 | 12 |
+| add 3 | 5, 3 | | 7, 3 | |
+| remove | 5 | 3 | 3 | 7 |
+
+```java title="StackVsQueue.java"
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.Stack;
+
+public class StackVsQueue {
+    // Question: the same operations on a Stack and on a Queue.
+    public static void main(String[] args) {
+        Stack<Integer> stack = new Stack<Integer>();
+        Queue<Integer> queue = new LinkedList<Integer>();
+        int[] first = {5, 12, 7};
+        for (int v : first) {
+            stack.push(v);
+            queue.add(v);
+        }
+        String stackOut = stack.pop() + " " + stack.pop();
+        String queueOut = queue.remove() + " " + queue.remove();
+        stack.push(3);
+        queue.add(3);
+        stackOut += " " + stack.pop();
+        queueOut += " " + queue.remove();
+        System.out.println("stack removed: " + stackOut + ", left: " + stack);
+        System.out.println("queue removed: " + queueOut + ", left: " + queue);
+    }
+}
+```
+
+```text
+stack removed: 7 12 3, left: [5]
+queue removed: 5 12 7, left: [3]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The stack removed 7, 12, 3 (last in, first out) and keeps 5; the queue removed 5, 12, 7 (first in, first out) and keeps 3. The queue's removed values are in the order they were added; the stack's are not.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Drawing memory: three questions
+
+### Exam question 2: an array stack (6 marks)
+
+A stack of capacity 5 is implemented with an array and a `top` index. Draw the memory after `new Stack1(5)`, `push(27)`, `push(38)`, `push(92)`, `pop()` and `push(46)`. State what the array contains and the value of `top` at the end. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The stack object holds two things: a reference to the array and the integer `top`. The array is on the heap, with 5 slots, all `null` to begin with. `push` is `stack[++top] = num` and `pop` is `return stack[top--]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`top` starts at -1. Each push raises `top` first and then stores. The pop returns the top element and lowers `top`, but does not clear the slot. The next push overwrites the stale slot.
+
+</Step>
+
+<Step title="3. Solution">
+
+<MemoryDiagram scenario="stackarray" />
+
+</Step>
+
+<Step title="4. Check">
+
+At the end `top` is 2 (the crossed-out values in its box record where it has been: -1, 0, 1, 2, 1) and the array holds 27, 38, 46, `null`, `null`. The 92 was returned by `pop()`; it stayed in slot 2 until the push of 46 overwrote it. The stack has three elements: `size()` is `top + 1 = 3`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: a linked stack (6 marks)
+
+A stack is implemented with nodes and a `top` reference. Draw the memory after `new Stack2()`, `push("CSI247")`, `push("CSI243")`, `push("CSI141")` and `pop()`. Say which node is garbage at the end and what the stack contains. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The stack object holds only `top`. Each push puts a new node in front of the list; each pop moves `top` to the next node.
+
+</Step>
+
+<Step title="2. Plan">
+
+The first push makes `top` refer to the only node. Each later push links the new node to the old top first, then moves `top`. The pop saves the data and sets `top = top.next`.
+
+</Step>
+
+<Step title="3. Solution">
+
+<MemoryDiagram scenario="stacklinked" />
+
+</Step>
+
+<Step title="4. Check">
+
+At the end `top` holds 200, the CSI243 node, whose `next` is 100, the CSI247 node, whose `next` is `null`. The CSI141 node (300) was the top; after `top = top.next` nothing refers to it, so it is garbage. The stack contains CSI243 on top of CSI247, and `size()` is 2.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: a linked queue (6 marks)
+
+A queue is implemented with nodes and `front` and `tail` references. Draw the memory after `new Queue1()`, `enqueue("19")`, `enqueue("28")`, `enqueue("35")` and then `dequeue()` three times. Explain what `front` and `tail` hold after each `dequeue()`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The queue object holds two references. `enqueue` works at the tail and `dequeue` at the front. The third `dequeue` empties the queue, which is the special case.
+
+</Step>
+
+<Step title="2. Plan">
+
+The first `enqueue` sets both references. Later ones link the old tail to the new node and move `tail`. Each `dequeue` moves `front` to the next node. When `front` becomes `null`, `tail` must be set to `null` too.
+
+</Step>
+
+<Step title="3. Solution">
+
+<MemoryDiagram scenario="queuelinked" />
+
+| After | `front` | `tail` |
+|---|---|---|
+| `enqueue("19")` | 100 | 100 |
+| `enqueue("28")` | 100 | 200 |
+| `enqueue("35")` | 100 | 300 |
+| first `dequeue()` (returns 19) | 200 | 300 |
+| second `dequeue()` (returns 28) | 300 | 300 |
+| third `dequeue()` (returns 35) | `null` | `null` |
+
+</Step>
+
+<Step title="4. Check">
+
+Each node removed from the front is isolated and becomes garbage, so at the end all three nodes are garbage and the queue is empty. `tail` changes during a `dequeue` only in the last step: while elements remain, `tail` still refers to the newest node.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Writing a method: one question
+
+### Exam question 5: size of an array queue (6 marks)
+
+An array queue keeps `front` and `tail` indexes, both -1 when the queue is empty, and `dequeue` only moves `front` forwards. Write `size()` and give its value for (`front`, `tail`) equal to (-1, -1), (0, 0), (2, 4) and (3, 2). (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The elements of the queue are in the slots from `front` to `tail` inclusive. The state (-1, -1) is the queue that has never held an element. The state (3, 2) has `front` one past `tail`, which is what the last `dequeue` of a queue leaves.
+
+</Step>
+
+<Step title="2. Plan">
+
+If `front` is negative the queue is empty: 0. Otherwise the number of slots from `front` to `tail` is `tail - front + 1`, which is 0 when `front` is one past `tail`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="SizeCases.java"
+public class SizeCases {
+    // Question: size() of an array queue from its front and tail indexes.
+    static int size(int front, int tail) {
+        if (front < 0) {
+            return 0;                         // nothing has been enqueued yet
+        }
+        return tail - front + 1;              // slots front to tail inclusive
+    }
+
+    public static void main(String[] args) {
+        int[][] states = {{-1, -1}, {0, 0}, {2, 4}, {3, 2}};
+        for (int[] s : states) {
+            System.out.println("front " + s[0] + ", tail " + s[1] + ": size " + size(s[0], s[1]));
+        }
+    }
+}
+```
+
+```text
+front -1, tail -1: size 0
+front 0, tail 0: size 1
+front 2, tail 4: size 3
+front 3, tail 2: size 0
+```
+
+</Step>
+
+<Step title="4. Check">
+
+(-1, -1) gives 0, (0, 0) gives 1 (one element), (2, 4) gives 3 (slots 2, 3 and 4) and (3, 2) gives 0 (the queue has been emptied). The same `size()` makes `isEmpty()` simply `size() == 0`, and `isFull()` is `size() == queue.length`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Choosing and explaining: two questions
+
+### Exam question 6: stack, queue or priority queue? (6 marks)
+
+For each application choose a stack, a queue or a priority queue and justify the choice: (a) the undo mechanism of a text editor, (b) students waiting at a cafeteria, (c) the processes that a multitasking operating system runs, (d) the Back button of a web browser, (e) a printer queue, (f) the evaluation of an expression. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Six applications, each with a choice and a reason. The reason is the rule: LIFO for a stack, FIFO for a queue, ordering by key for a priority queue. These are the application areas the lectures list.
+
+</Step>
+
+<Step title="2. Plan">
+
+Ask in each case which element should be dealt with first: the newest, the oldest, or the most important.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Application | Structure | Justification |
+|---|---|---|
+| (a) Undo in a text editor | Stack | the most recent change is the first to be undone: last in, first out |
+| (b) Students at a cafeteria | Queue | the student who arrived first is served first: first in, first out |
+| (c) Processes in a multitasking operating system | Priority queue | processes have priorities: the one with the lowest (or highest) key is always at the front |
+| (d) The Back button of a browser | Stack | the last page visited is the first one returned to |
+| (e) A printer queue | Queue | jobs are printed in the order they were sent |
+| (f) Evaluating an expression | Stack | the most recently stored operand or operator is the next one needed |
+
+</Step>
+
+<Step title="4. Check">
+
+Each justification names the rule. The deciding question for a stack is "do I need the newest first?" and for a queue "do I need the oldest first?". The lectures list recursion, undo, the Back button and expression evaluation as stack applications, and printer queues, keystroke queues, CPU processes, cafeterias, banks and ATMs, elections and buses as queue applications.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 7: overflow and underflow (5 marks)
+
+Explain overflow and underflow. For an array stack, a linked stack, an array queue and a linked queue, say which of the two can happen and what the code does. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Overflow means adding to a structure that has no room; underflow means removing from one that has nothing in it. Overflow needs a fixed capacity.
+
+</Step>
+
+<Step title="2. Plan">
+
+Arrays have a fixed size, so they can overflow. Linked structures grow node by node, so they have no capacity limit. Any structure can underflow.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Structure | Overflow | Underflow |
+|---|---|---|
+| Array stack | possible when `top == length - 1`: `push` prints "Stack Overflow! Can not insert..." and returns `false` | `pop` prints "Stack Underflow! Nothing to remove" and returns `null` |
+| Linked stack | not possible (no capacity; `isFull()` does not apply) | `pop` returns `null`; `peek` prints "Stack is empty" |
+| Array queue | possible: `isFull()` refuses the `enqueue` with "Full!!", and the lecture warns of `ArrayIndexOutOfBoundsException` when `tail` reaches the end | `dequeue` returns `null` |
+| Linked queue | not possible | `dequeue` returns `null` |
+
+</Step>
+
+<Step title="4. Check">
+
+The lecture's remark is that an array must be given a capacity, and that a capacity that is too small causes overflow while one that is too large wastes space. The linked versions avoid both at the cost of an extra node for each element. Java's `Queue.remove()` also reports underflow, by throwing `NoSuchElementException`, while `peek()` returns `null`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Repairing the lecture's code: one question
+
+### Exam question 8: the compile errors (4 marks)
+
+The lecture prints these two fragments. State the error `javac` reports for each, and repair it. (4 marks)
+
+```java
+// array stack: search()
+for (int i = top; i > -1; i--) {
+    if ( key.equals(stack[i])           // Found!
+        ind = i; break;
+}
+
+// linked queue: dequeue()
+public String dequeue() {
+    if (! isEmpty()) {
+        String data = front.data;
+        front = front.next;
+        if (isEmpty())
+            tail = null;
+    }
+    return data;
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two separate faults, one in each fragment. Read each for brackets and for the scope of variables.
+
+</Step>
+
+<Step title="2. Plan">
+
+In the first fragment the condition of the `if` is not closed, and the block has no braces. In the second, `data` is declared inside the `if` block but used after it.
+
+</Step>
+
+<Step title="3. Solution">
+
+The first fragment gives `error: ')' expected` at the end of the `if` line. The repair closes the condition and puts `ind = i; break;` in braces; without braces `break` would run on every pass:
+
+```java
+for (int i = top; i > -1; i--) {
+    if (key.equals(stack[i])) {
+        ind = i;
+        break;
+    }
+}
+```
+
+The second fragment gives `error: cannot find symbol` with `symbol: variable data`, because a variable declared in a block exists only inside it. The repair returns inside the block and returns `null` for the empty queue:
+
+```java
+public String dequeue() {
+    if (isEmpty()) {
+        return null;
+    }
+    String data = front.data;
+    front = front.next;
+    if (isEmpty()) {
+        tail = null;
+    }
+    return data;
+}
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Both messages come from compiling the fragments as printed. The repaired versions are the ones used in the two implementation lessons, where `search(20)` gave 3 on the stack 10, 20, 30, 20, and the queue emptied correctly with `front` and `tail` both `null`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 7. Errors to check before handing in
+
+- The structure is checked for **empty** before a `pop`, a `peek` or a `dequeue`, and an array structure for **full** before a `push` or an `enqueue`.
+- `top` is -1 for an empty array stack, and `size()` is `top + 1`.
+- A stack removes the newest element (LIFO) and a queue the oldest (FIFO): the removed values are in different orders for the same operations.
+- The first `enqueue` on an empty linked queue sets **both** `front` and `tail`, and the `dequeue` that empties it sets both to `null`.
+- `dequeue` on an array queue moves `front`; it does not erase the array slot. The size is `tail - front + 1`.
+- In a memory diagram, a node that nothing points to is garbage, and an array slot above `top` or before `front` is stale, not part of the structure.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+For every stack or queue question: say whether the rule is LIFO or FIFO, write the structure after each operation, and check the empty and the full cases. In memory, an array structure is an object holding the array and its indexes, and a linked structure is an object holding `top` or `front` and `tail`. Removing from an array structure moves an index and leaves the slot; removing from a linked structure unlinks a node that becomes garbage.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Add 4, 8, 6 to a stack and to a queue, then remove one value from each. What is removed from each?">
+
+The stack removes 6 (the newest) and the queue removes 4 (the oldest).
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is slot 2 of an array stack not cleared when pop() returns the element in it?">
+
+`pop()` lowers `top`, which removes the element from the stack; slots above `top` are ignored. The next `push` overwrites the stale value.
+
+</CheckQuestion>
+
+<CheckQuestion question="After the last dequeue of a linked queue, why must tail be null as well as front?">
+
+Otherwise `tail` would still refer to the removed node, so `getTail()` would return data from an empty queue and the node could not be garbage collected.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is size() of an array queue with front = 3 and tail = 2?">
+
+`tail - front + 1 = 0`: the queue has been emptied. `front` is one past `tail`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which of the four structures (array stack, linked stack, array queue, linked queue) can overflow?">
+
+Only the two array structures, which have a fixed capacity. The linked ones allocate a node for each element and have no capacity limit.
+
+</CheckQuestion>
+
+</CheckQuestions>
