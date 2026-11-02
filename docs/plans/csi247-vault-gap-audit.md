@@ -4,6 +4,15 @@ This audit maps the owner's own CSI247 material to the lessons that cover it, li
 
 The owner's standing complaint is that writers do only what is named. The audit exists to stop that: a lesson is planned from the whole row set for its chapter, not from the title of the chapter.
 
+## Scope rule (owner, 2026-11-02): the Lectures folder is the whole course
+
+The owner said: "refer to the lecture notes here as the entire course scope" (`C:\Users\Nido\Desktop\Semester_3_Vault\Current\CSI247\Lectures`). That folder holds `Lec01` to `Lec15` and `Lab07 - generics-1.pdf`. So:
+
+- The labs held elsewhere (Labs 1, 4, 5, 6 and 8), `Revision/` (the study checklist, the revision guide, the annotated Lecture 7), `Resources/` (the Full Notes, the outline, the rules) and the books are **not scope**. Rows in section 4 that cite them (ids starting `RG-`, items that name a Lab other than Lab 7, the Full Notes or the revision guide) are marked **Out of scope** and are kept only as a record of what was found.
+- Section 5 (sibling concepts nobody named) is **withdrawn**. Depth now comes from the lecture's own topics: more variations of each lecture example, the lecture's own exercises answered in full, the exam forms those exercises use, and the common errors. A new topic is not added because it is a "sibling".
+- Section 4 was written before this rule and was not re-checked row by row against the slides. Where a row's item is not a slide topic (for example mutual recursion, Towers of Hanoi, amortised cost, Big-Omega) it is out of scope even if it is not marked. The authoritative in-scope list is the slide list per lane in section 8 of the brief. Each chapter's lane starts by listing its lecture's slide titles and checking every planned section against them.
+- Chapter 02 was first written beyond Lecture 6 and was trimmed on 2026-11-02 (see the work order CSI247-17).
+
 ## 1. Sources and what was read
 
 All paths are under `C:\Users\Nido\Desktop\Semester_3_Vault\Current\CSI247`.
@@ -65,8 +74,8 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L01-2 | Primitive and non-primitive structures | none | Missing | J01 |
 | L01-3 | Linear and non-linear structures | none | Missing | J01 |
 | L01-4 | Common operations: insert, delete, search, traverse, sort | scattered in chapters | Thin | J01 |
-| L01-5 | Interface against implementation; correctness, time and space as the three qualities (Full Notes pp. 1 to 2) | none | Missing | J01 |
-| L01-6 | Abstract data type (Full Notes, four pages) | `08-collections` core-interfaces (2 KB) | Thin | J08 |
+| L01-5 | Interface against implementation; correctness, time and space as the three qualities (Full Notes pp. 1 to 2) | none | Out of scope | J01 |
+| L01-6 | Abstract data type (Full Notes, four pages) | `08-collections` core-interfaces (2 KB) | Out of scope | J08 |
 
 ### Lec02 Reviewing Java basics (Quiz 1)
 
@@ -133,7 +142,7 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L05-6 | Arrays as parameters (the callee changes the caller's array) | arrays-and-methods | Covered | J01 |
 | L05-7 | Arrays of `String` and of other objects; two `new`s; `NullPointerException` | arrays-and-objects | Covered | J01 |
 | L05-8 | Two-dimensional arrays: `new int[r][c]`, row and column loops, ragged arrays | 2 mentions | Thin | J01 |
-| L05-9 | Matrix operations: sum of a row or column, diagonal and anti-diagonal (revision guide Q6c) | none | Missing | J01 |
+| L05-9 | Matrix operations: sum of a row or column, diagonal and anti-diagonal (revision guide Q6c) | none | Out of scope | J01 |
 | L05-10 | Common array algorithms: copy, reverse in place, rotate, shift, remove an element, count, min and max, running total | scattered | Thin | J01 |
 | L05-11 | The `Arrays` class: `toString`, `sort`, `fill`, `copyOf`, `equals`, `asList` | searching-with-the-java-library, lists-and-arraylist | Thin | J01 |
 
@@ -156,7 +165,7 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L06-13 | Backtracking (subsets, permutations, paths in a grid) | 2 mentions | Missing | J02 |
 | L06-14 | Towers of Hanoi | none | Missing | J02 |
 | L06-15 | Call stack drawn as frames (memory diagram of calls) | none | Missing | J02 |
-| L06-16 | Recursive sorting steps: recursive bubble and selection sort between indexes `i` and `j` (revision guide Q2a) | none | Missing | J04 |
+| L06-16 | Recursive sorting steps: recursive bubble and selection sort between indexes `i` and `j` (revision guide Q2a) | none | Out of scope | J04 |
 
 ### Lec07 Algorithm analysis (Quiz 2; annotated Lec07)
 
@@ -183,7 +192,7 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L08-1 | Linear search on unordered and ordered arrays; both return conventions (`boolean`, index, `-1`) | linear-search (14 KB) | Covered | J04 |
 | L08-2 | Linear search complexity; when to use it; why not sort first | linear-search | Covered | J04 |
 | L08-3 | Binary search: requirement, halving, illustration, iterative and recursive code | binary-search (17 KB) | Covered | J04 |
-| L08-4 | Lab 4: `linearSearch` on `double[]`, `binarySearch(arr, key, start, end)`, a menu loop that ends on any other key, `Math.random` data (never shown anywhere on the site) | searching-exam-drill | Thin | J04 |
+| L08-4 | Lab 4: `linearSearch` on `double[]`, `binarySearch(arr, key, start, end)`, a menu loop that ends on any other key, `Math.random` data (never shown anywhere on the site) | searching-exam-drill | Out of scope | J04 |
 | L08-5 | Searching objects by a field; first and last occurrence; count of matches | searching-exam-drill | Thin | J04 |
 
 ### Lec09 Sorting arrays (Test 1)
@@ -193,9 +202,9 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L09-1 | Bubble sort; array after each pass (63 29 72 85 18) | bubble-sort, bubble-and-selection-sort (unlisted) | Covered | J04 |
 | L09-2 | Insertion sort; selection sort; the same exercise array | insertion-sort, selection-sort | Covered | J04 |
 | L09-3 | Merge sort; the two operations (split, merge); the 8-element exercise | merge-sort | Covered | J04 |
-| L09-4 | Quick sort (in the revision guide and Full Notes; not in Lec09) | quick-sort (7 KB) | Thin | J04 |
-| L09-5 | Stability; worst-case contrast between merge sort and quick sort (revision guide Q2b) | choosing-an-algorithm | Covered | J04 |
-| L09-6 | Lab 5: `mergeSort` that returns a sorted array and uses the supplied `merge(arr, s, m, e)`; fix the errors in the given method; random marks in a loop | merge-sort | Thin | J04 |
+| L09-4 | Quick sort (in the revision guide and Full Notes; not in Lec09) | quick-sort (7 KB) | Out of scope | J04 |
+| L09-5 | Stability; worst-case contrast between merge sort and quick sort (revision guide Q2b) | choosing-an-algorithm | Out of scope | J04 |
+| L09-6 | Lab 5: `mergeSort` that returns a sorted array and uses the supplied `merge(arr, s, m, e)`; fix the errors in the given method; random marks in a loop | merge-sort | Out of scope | J04 |
 | L09-7 | Counting comparisons and swaps | 100 mentions | Covered | J04 |
 
 ### Lec10 Packages
@@ -224,8 +233,8 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L11-11a | An interface extending another interface (Lec11 slide 89) | only mentioned in passing for `Queue<E> extends Collection<E>` | Missing | J06 |
 | L11-12 | Default and static interface methods (Java 8) | 1 mention | Thin | J06 |
 | L11-13 | Built-in interfaces (`Comparable`, `Runnable`, `Iterable`) | comparable-and-comparator | Thin | J06 |
-| L11-14 | Lab 5: UML for `Doctor`, `GP`, `Surgeon`; overriding `tagName` and `calculatePay`; a tester that reads `data.txt` with optional fields and writes three files | shapes-case-study-and-uml | Thin | J06 |
-| L11-15 | Lab 6: abstract `Employee` with `computeSalary`, overloaded constructors, `Teacher` and `Admin` with their own `equals`, a payroll tester with totals; interface `Test`, `Test2` | abstract-classes-and-interfaces | Thin | J06 |
+| L11-14 | Lab 5: UML for `Doctor`, `GP`, `Surgeon`; overriding `tagName` and `calculatePay`; a tester that reads `data.txt` with optional fields and writes three files | shapes-case-study-and-uml | Out of scope | J06 |
+| L11-15 | Lab 6: abstract `Employee` with `computeSalary`, overloaded constructors, `Teacher` and `Admin` with their own `equals`, a payroll tester with totals; interface `Test`, `Test2` | abstract-classes-and-interfaces | Out of scope | J06 |
 | L11-16 | Access modifiers on members: `private`, default, `protected`, `public` in a table of who can see what | 12 and 16 mentions | Thin | J06 |
 | L11-17 | `static` members: counters, constants, utility methods, and why a static method cannot touch an instance field | 40 mentions | Covered | J06 |
 | L11-18 | Dynamic dispatch against static type: what runs for `Shape s = new Circle()` | overriding-and-polymorphism | Thin | J06 |
@@ -269,8 +278,8 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L13-12 | `Set` (`HashSet`, `LinkedHashSet`, `TreeSet`) and `Map` (`HashMap`, `TreeMap`): no duplicates, iteration order | choosing-a-collection (2 KB) | Thin | J08 |
 | L13-13 | `Collections` utilities: `reverse`, `shuffle`, `max`, `min`, `frequency`, `unmodifiableList` | 13 mentions | Thin | J08 |
 | L13-14 | `toArray`; `Arrays.asList` is fixed size | 1 mention | Thin | J08 |
-| L13-15 | Lab 8: `Person implements Comparable` on `fullname`; read records from a file into an `ArrayList`; `remove(8)` on a short list and what it throws; memory diagram; sort | lists-and-arraylist | Thin | J08 |
-| L13-16 | Lab 8: `LinkedList<String>` of course names; every `add` and `remove` variant; `contains`; `toArray` and for-each | none in `08-collections` | Missing | J08 |
+| L13-15 | Lab 8: `Person implements Comparable` on `fullname`; read records from a file into an `ArrayList`; `remove(8)` on a short list and what it throws; memory diagram; sort | lists-and-arraylist | Out of scope | J08 |
+| L13-16 | Lab 8: `LinkedList<String>` of course names; every `add` and `remove` variant; `contains`; `toArray` and for-each | none in `08-collections` | Out of scope | J08 |
 | L13-17 | Choose a collection for a scenario and justify (exam form) | choosing-a-collection | Thin | J08 |
 
 ### Lec14 Linked list implementation
@@ -289,7 +298,7 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L14-10 | Merge two sorted lists; remove duplicates; insert in sorted order | none | Missing | J09 |
 | L14-11 | Doubly linked list: `prev` and `next`, insert and delete | 13 mentions (`dll` scenario) | Thin | J09 |
 | L14-12 | Circular linked list | 1 mention | Missing | J09 |
-| L14-13 | Traversal that computes a value (revision guide Q1: weighted index over nodes holding arrays; guard the division by zero) | none | Missing | J09 |
+| L14-13 | Traversal that computes a value (revision guide Q1: weighted index over nodes holding arrays; guard the division by zero) | none | Out of scope | J09 |
 | L14-14 | Linked list against array: cost table for each operation | cheat-sheet | Covered | J09 |
 
 ### Lec15 Stack implementation, plus the queue material of the Full Notes and the revision guide
@@ -302,54 +311,32 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L15-4 | Advantages against disadvantages of each | stacks-and-queues-explained | Thin | J10 |
 | L15-5 | Stack applications: brackets, reversing, undo, call stack | 22 mentions | Covered | J10 |
 | L15-6 | Postfix evaluation | 7 mentions | Thin | J10 |
-| L15-7 | Infix to postfix with every push and pop (revision guide Q6d: `( X + Y ) * Z - ( W / V )`) | 1 mention | Thin | J10 |
+| L15-7 | Infix to postfix with every push and pop (revision guide Q6d: `( X + Y ) * Z - ( W / V )`) | 1 mention | Out of scope | J10 |
 | L15-8 | Next greater element; span; two stacks in one array; a queue from two stacks | 1 mention | Thin | J10 |
 | L15-9 | Queue: FIFO; array queue and its waste of space | stacks-and-queues-in-java | Covered | J10 |
-| L15-10 | Circular queue: front, back, size; `isFull` when size equals capacity; `back = (back + 1) % capacity` (revision guide Q5a) | stacks-and-queues-in-java (14 mentions) | Covered | J10 |
+| L15-10 | Circular queue: front, back, size; `isFull` when size equals capacity; `back = (back + 1) % capacity` (revision guide Q5a) | stacks-and-queues-in-java (14 mentions) | Out of scope | J10 |
 | L15-11 | Linked queue: head and tail, enqueue at the tail, dequeue at the head | 7 mentions | Thin | J10 |
 | L15-12 | Deque (double-ended queue) and its four operations | 25 mentions | Thin | J10 |
-| L15-13 | Priority queue: the idea, `java.util.PriorityQueue`, ordering with a `Comparator`; the heap behind it (Full Notes pp. 41 to 44) | 13 mentions | Thin | J10 |
+| L15-13 | Priority queue: the idea, `java.util.PriorityQueue`, ordering with a `Comparator`; the heap behind it (Full Notes pp. 41 to 44) | 13 mentions | Out of scope | J10 |
 | L15-14 | Queue applications: print queue, breadth-first order, round robin, a bank | none | Missing | J10 |
 | L15-15 | Trace the contents of a stack or queue after a list of operations (exam form) | stacks-and-queues-explained | Thin | J10 |
-| L15-16 | A string-manipulation task with a queue or stack (revision guide Q5b: shift the first y vowels, count the changes) | none | Missing | J10 |
+| L15-16 | A string-manipulation task with a queue or stack (revision guide Q5b: shift the first y vowels, count the changes) | none | Out of scope | J10 |
 
 ### Revision guide and checklist items that cross chapters
 
 | ID | Item | Now | State | Lane |
 |---|---|---|---|---|
-| RG-1 | Read a text file line by line; for lines ending in `?` count words and return the average (Q3a) | strings-control-io | Missing | J01 |
-| RG-2 | Parse CSV with missing fields; handle missing values gracefully | none | Missing | J01 |
-| RG-3 | Adjacency matrix to adjacency list (Q6a) | none (CSI323 04-graphs) | Missing | CSI323 |
-| RG-4 | Balanced BST from a sorted list; pre-order (Q6b); smallest value in the right subtree (Q3b) | none (CSI323 01-trees) | Missing | CSI323 |
-| RG-5 | Greedy truck loading and coin change; where greedy fails (Q4) | none | Missing | J04 |
-| RG-6 | Employee performance index over a linked list (Q1) | none | Missing | J09 |
-| RG-7 | Differences reference, items A to T of the checklist (objects and classes; the three kinds of variable; instance against static variable; static against instance method; constructor against method; setter against getter; `void` against value-returning; definition against invocation; overloading against overriding; primitive against reference; `==` against `equals`; `length` against `length()` against `size()`; compile-time against run-time error; array advantages and disadvantages; recursion against iteration; base case against recursive case; best, average, worst; experimentation against methodology; linear against binary search; growth rates ranked) | cheat sheets in part | Thin | J01 to J10 (one flashcard each) |
+| RG-1 | Read a text file line by line; for lines ending in `?` count words and return the average (Q3a) | strings-control-io | Out of scope | J01 |
+| RG-2 | Parse CSV with missing fields; handle missing values gracefully | none | Out of scope | J01 |
+| RG-3 | Adjacency matrix to adjacency list (Q6a) | none (CSI323 04-graphs) | Out of scope | CSI323 |
+| RG-4 | Balanced BST from a sorted list; pre-order (Q6b); smallest value in the right subtree (Q3b) | none (CSI323 01-trees) | Out of scope | CSI323 |
+| RG-5 | Greedy truck loading and coin change; where greedy fails (Q4) | none | Out of scope | J04 |
+| RG-6 | Employee performance index over a linked list (Q1) | none | Out of scope | J09 |
+| RG-7 | Differences reference, items A to T of the checklist (objects and classes; the three kinds of variable; instance against static variable; static against instance method; constructor against method; setter against getter; `void` against value-returning; definition against invocation; overloading against overriding; primitive against reference; `==` against `equals`; `length` against `length()` against `size()`; compile-time against run-time error; array advantages and disadvantages; recursion against iteration; base case against recursive case; best, average, worst; experimentation against methodology; linear against binary search; growth rates ranked) | cheat sheets in part | Out of scope | J01 to J10 (one flashcard each) |
 
-## 5. Sibling concepts nobody named
+## 5. Sibling concepts nobody named (withdrawn)
 
-These are not in a single lecture title but are asked about next to a named topic, or are the other half of a named idea. They go into the lanes in the last column. Each needs the full pattern (template, three or more variations, an exam question, common errors).
-
-| Next to | Sibling | Lane |
-|---|---|---|
-| Recursion | mutual recursion; accumulator; helper method with an index; recursion on a `String` (palindrome, reverse, count); recursion on an array (sum, max, search); power by squaring; binary recursion and counting calls; Hanoi; subsets; permutations; flood fill on a grid; recursion to loop and back | J02 |
-| Trace tables | a call-stack picture (frames, locals, return address) beside the table; the unwinding phase where values return | J02 |
-| Big-O | loop shapes (30); dependent nested loops; logarithmic loops; loop plus method call; recurrence solving by expansion; amortised analysis; space; Omega and Theta; real library costs | J03 |
-| Linear and binary search | search on objects by field; first, last and all matches; recursive binary search; search a 2D array; search a sorted array of strings | J04 |
-| Sorting | recursive bubble and selection sort; sort descending; sort by a field; stability on records; count swaps; best case of bubble with a flag; quick sort partition schemes; sort a linked list | J04 |
-| Greedy | coin change, truck loading, activity selection, and the counterexample [6, 4, 1] for 8 | J04 |
-| Packages | name clash between two packages; `import` versus fully qualified name; default (package-private) access across packages; running from a different folder with `-cp` | J05 |
-| Classes | constructor chaining; copy constructor; static counter; immutable class; `final` fields; `toString` called implicitly | J06 |
-| Inheritance | constructor order; `super` call rules; field hiding against method overriding; `protected`; `final`; `Object` as the root | J06 |
-| Polymorphism | static against dynamic type; overloading resolution with `null` and boxing; array of the superclass holding subclasses; an interface reference | J06 |
-| `equals` | the contract (reflexive, symmetric, transitive, consistent, `null`); `getClass` against `instanceof`; `hashCode` consistency | J06 |
-| Abstract and interface | abstract class with a constructor; interface constants; default and static methods; diamond problem; choosing between them | J06 |
-| Generics | generic stack and queue; generic method returning `T`; two bounds (`T extends A & B`); generic array creation workaround; `Comparable<T>` against `Comparator<T>`; wildcard capture | J07 |
-| Collections | `LinkedHashMap`; `TreeMap` navigation methods; iterating a `Map` (`entrySet`); `Deque` as stack and queue; `Collections.unmodifiableList`; `Arrays.asList` write-through | J08 |
-| Linked lists | head insertion against tail insertion; deleting the head, a middle node, the last node; deleting by value; reverse in place; palindrome check; intersection; nth from the end | J09 |
-| Stacks and queues | stack overflow and underflow messages; resizing array stack; two stacks in one array; queue using two stacks; stack using two queues; min stack; sliding window; round-robin scheduling | J10 |
-| Arrays | 2D arrays and matrices; transpose; row and column sums; diagonals; array of arrays of different lengths; copy against alias | J01 |
-| File I/O | `Scanner(File)`; `hasNextLine`; `PrintWriter`; append mode (`FileWriter(name, true)`); try-with-resources; `FileNotFoundException` | J01 |
-| Methods | recursion's cousin: a method that calls another; overloading by type and by count; returning an array; returning an object | J01 |
+Withdrawn on 2026-11-02 by the scope rule at the top of this file: the lectures are the whole course, so siblings from outside them are not added. The list is in the git history of this file (commit `6d5837f`).
 
 ## 6. Lanes
 
