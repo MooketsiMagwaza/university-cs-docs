@@ -49,8 +49,8 @@ const texts = (drawing) => {
   return out;
 };
 
-test('there are twenty-four scenarios and each one builds and draws every step', () => {
-  assert.equal(memoryScenarioIds.length, 24);
+test('there are twenty-five scenarios and each one builds and draws every step', () => {
+  assert.equal(memoryScenarioIds.length, 25);
   for (const id of memoryScenarioIds) {
     const sc = buildMemoryScenario(id);
     assert.ok(sc.steps.length >= 1, `${id} has steps`);
@@ -176,4 +176,13 @@ test('the array queue leaves removed elements in the array and resets front and 
   const stack = finalState(buildMemoryScenario('stackarray')).objs.find((o) => o.addr === 300);
   assert.equal(stack.cells[2].v.t, '46');
   assert.ok(stack.cells[2].old.includes('92'), 'the stale 92 is crossed out when 46 overwrites it');
+});
+
+test('the generic set reuses the first empty cell after a remove', () => {
+  const arr = finalState(buildMemoryScenario('genset')).objs.find((o) => o.addr === 300);
+  assert.equal(arr.cells[0].v.t, '5');
+  assert.ok(arr.cells[0].old.includes('7'), 'the removed 7 is crossed out before 5 takes the cell');
+  assert.equal(arr.cells[1].v.t, '12');
+  assert.equal(arr.cells[2].v.t, '7', 'the duplicate 7 is still there');
+  assert.equal(arr.cells[3].v.t, 'null');
 });

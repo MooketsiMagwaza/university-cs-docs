@@ -383,6 +383,28 @@ const scenarios: Record<string, Builder> = {
     return B.done('removeFront and removeLast');
   },
 
+  genset() {
+    const B = memoryBuilder().code([
+      'Set<Integer> s = new Set<Integer>();',
+      's.add(7);',
+      's.add(12);',
+      's.add(7);',
+      's.remove(7);',
+      's.add(5);',
+    ]);
+    B.snap(-1, 'Lab 7\'s generic Set: an object that keeps an array of 10 cells for elements of type T. Here T is Integer. (The cells really hold references to Integer objects; the picture writes the values to stay readable.)');
+    B.arr(300, 10, { x: 470, y: 40, cw: 46, t: 'Object[]' })
+      .obj(200, [['items', { r: 300 }]], { x: 200, y: 30, w: 190, t: 'Set' })
+      .v('s', { r: 200 }, { y: 30 });
+    B.snap(0, 'new Set<Integer>(): the array has 10 cells, all null (empty).');
+    B.set(300, 0, 7).snap(1, 'add(7): an element goes into the FIRST EMPTY cell, index 0.');
+    B.set(300, 1, 12).snap(2, 'add(12): the first empty cell is now index 1.');
+    B.set(300, 2, 7).snap(3, 'add(7) again: duplicates are allowed, so the second 7 goes into the first empty cell, index 2.');
+    B.set(300, 0, 'null').snap(4, 'remove(7): the search uses equals and finds the FIRST 7, at index 0. That cell is set back to null (the 7 is crossed out). The 7 at index 2 stays, and there is now a gap at the start.');
+    B.set(300, 0, 5).snap(5, 'add(5): the first empty cell is index 0 again, so 5 fills the gap. The set holds 5, 12, 7 in cells 0, 1 and 2.');
+    return B.done('Generic Set: add into the first empty cell, remove leaves a gap');
+  },
+
   stackarray() {
     const B = memoryBuilder().code([
       'Stack1 st1 = new Stack1(5);',
