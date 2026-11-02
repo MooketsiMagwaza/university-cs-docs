@@ -1,6 +1,6 @@
 ---
 title: "Cheat Sheet"
-description: "Fast reference for Java generics: generic classes, methods and interfaces, bounded type parameters, wildcards and the rule of thumb for choosing them, type erasure and what it forbids."
+description: "Fast reference for Lecture 12 and Lab 7: generic classes, creating objects, bounded types, generic methods and interfaces, what does not compile, and the generic Set and Pair."
 ---
 
 Use the [chapter notes](/docs/sem3/csi247/07-generics) for the explanations. This page is for lookup.
@@ -9,181 +9,159 @@ Use the [chapter notes](/docs/sem3/csi247/07-generics) for the explanations. Thi
 
 | Placeholder | Meaning | Example |
 |---|---|---|
-| `T` | A type parameter: "some type, chosen by the user" | `Box<T>` |
-| `E` | A type parameter naming an element | `List<E>` |
-| `K`, `V` | Key and value types | `Map<K, V>` |
-| `N` | A number type | `<N extends Number>` |
-| `Bound` | A type the parameter must extend or implement | `Comparable<T>` |
+| `T` | A type parameter: "some type, chosen when the object is created" | `GenTest<T>` |
+| `E` | A type parameter naming an element | `<E> void printArray(E[] elements)` |
+| `K`, `V` | Key and value types | `Lookup<K, V>` |
+| `N` | A number type | `Nums<N extends Number>` |
+| `Bound` | A type the parameter must extend | `Number`, `Comparable<T>` |
 
-By convention one capital letter: `T` type, `E` element, `K` key, `V` value, `N` number.
+By convention one capital letter: `T` type, `E` element, `K` key, `N` number, `V` value.
 
 ## 2. A generic class
 
-```java
-public class Box<T> {                  // T is declared once, after the class name
-    private T item;
-    public void set(T item) { this.item = item; }
-    public T get() { return item; }
-}
-
-Box<String> b = new Box<String>();     // T becomes String for this object
-Box<Integer> n = new Box<>();          // the diamond <> lets the compiler infer it
-```
-
-A type argument must be a **reference type**: `Box<Integer>`, never `Box<int>`. Autoboxing converts between `int` and `Integer` for you.
-
-## 3. A generic method
-
-The type parameter goes **before the return type**.
+Generics allow one class, method or interface to work with different reference types. The advantages are **code reuse**, **type safety**, **no type casting** and **errors caught at compile time**.
 
 ```java
-public static <T> void printAll(T[] items) { ... }
-public static <T> T firstOf(List<T> list) { return list.get(0); }
-```
-
-The compiler infers `T` from the arguments, so you normally call `firstOf(names)` with no angle brackets.
-
-## 4. A generic interface
-
-```java
-public interface Pair<K, V> {
-    K getKey();
-    V getValue();
+public class GenTest<T> {              // T is declared once, after the class name
+    private T obj;                     // T: the type of the instance variable
+    void modify(T obj) { this.obj = obj; }   // T: a parameter type
+    T get() { return obj; }                  // T: a return type
 }
+
+GenTest<Integer> a = new GenTest<Integer>();   // read: "GenTest of Integer"
+a.modify(17);                                  // accepts an Integer
 ```
 
-An implementing class either fixes the types (`class Entry implements Pair<String, Integer>`) or stays generic (`class Entry<K, V> implements Pair<K, V>`).
+Read a generic class by **substitution**: replace every `T` with the type argument. The rules for creating an object:
 
-## 5. Bounded type parameters
-
-`<T extends Bound>` restricts `T` to `Bound` and its subtypes, and lets you call `Bound`'s methods on a `T`. For an interface bound the keyword is still `extends`. Several bounds use `&`: `<T extends Number & Comparable<T>>`.
-
-```java title="Bounds.java"
-import java.util.Arrays;
-import java.util.List;
-
-public class Bounds {
-    // T must be Comparable to itself, so compareTo can be called
-    static <T extends Comparable<T>> T max(List<T> list) {
-        T best = list.get(0);
-        for (T item : list) {
-            if (item.compareTo(best) > 0) {
-                best = item;
-            }
-        }
-        return best;
-    }
-
-    // N must be a Number, so doubleValue() can be called
-    static <N extends Number> double sum(List<N> list) {
-        double total = 0;
-        for (N n : list) {
-            total += n.doubleValue();
-        }
-        return total;
-    }
-
-    public static void main(String[] args) {
-        System.out.println(max(Arrays.asList(7, 3, 11, 5)));
-        System.out.println(max(Arrays.asList("pear", "apple", "plum")));
-        System.out.println(sum(Arrays.asList(1, 2, 3)));
-        System.out.println(sum(Arrays.asList(1.5, 2.5)));
-    }
-}
-```
-
-```text
-11
-plum
-6.0
-4.0
-```
-
-`max(Arrays.asList(new Object(), new Object()))` does not compile: `Object` is not `Comparable<Object>`, so the bound is not met.
-
-## 6. Wildcards
-
-`?` means "some unknown type". Use it when you only **read** from, or only **write** to, a generic parameter and the exact type does not matter.
-
-| Form | Meaning | You can | You cannot |
-|---|---|---|---|
-| `List<?>` | a list of unknown type | read as `Object`; check size | add anything except `null` |
-| `List<? extends Number>` | a list of `Number` or a subtype (`Integer`, `Double`...) | **read** items as `Number` | add (the real type is unknown) |
-| `List<? super Integer>` | a list of `Integer` or a supertype (`Number`, `Object`) | **add** an `Integer` | read as anything but `Object` |
-
-**Rule of thumb (PECS): Producer Extends, Consumer Super.** If the parameter produces values you read, use `extends`. If it consumes values you write, use `super`.
-
-`List<Integer>` is **not** a `List<Number>`, even though `Integer` is a `Number`: generics are invariant. If it were allowed, you could add a `Double` through the `List<Number>` view and corrupt the `List<Integer>`. A `List<? extends Number>` is the type that accepts both.
-
-```java title="Wildcards.java"
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
-public class Wildcards {
-    static double total(List<? extends Number> numbers) {       // producer: only reads
-        double sum = 0;
-        for (Number n : numbers) {
-            sum += n.doubleValue();
-        }
-        return sum;
-    }
-
-    static void fillWithInts(List<? super Integer> sink) {      // consumer: only writes
-        for (int i = 1; i <= 3; i++) {
-            sink.add(i);
-        }
-    }
-
-    public static void main(String[] args) {
-        List<Integer> ints = Arrays.asList(1, 2, 3);
-        List<Double> doubles = Arrays.asList(0.5, 1.5);
-        System.out.println(total(ints) + " " + total(doubles));
-
-        List<Number> numbers = new ArrayList<>();
-        List<Object> objects = new ArrayList<>();
-        fillWithInts(numbers);
-        fillWithInts(objects);
-        System.out.println(numbers + " " + objects);
-    }
-}
-```
-
-```text
-6.0 2.0
-[1, 2, 3] [1, 2, 3]
-```
-
-## 7. Type erasure and what it forbids
-
-The compiler checks generic types and then **erases** them: at run time a `Box<String>` and a `Box<Integer>` are both just `Box`, and a bare `T` becomes its bound (or `Object`).
-
-| Not allowed | Why |
+| Rule | Example |
 |---|---|
-| `new T()` | the class of `T` is not known at run time |
-| `new T[10]` | arrays need their element type at run time |
-| `new ArrayList<String>[10]` | generic array creation |
-| `x instanceof List<String>` | the `<String>` is erased; use `x instanceof List<?>` |
-| `static T value;` | a static member is shared by all `Box<...>` types |
-| `class E<T> extends Exception` | generic exceptions are not allowed |
-| `catch (T e)` | the type is erased |
-| `Box<int>` | type arguments must be reference types |
-| overloads `f(List<String>)` and `f(List<Integer>)` | both erase to `f(List)` |
+| The type argument must be a **reference type** | `GenTest<Integer>`, never `GenTest<int>` |
+| The types on both sides of `=` are identical | `GenTest<Integer> a = new GenTest<Integer>();` |
+| Keep the `()` at the end | `new GenTest<Integer>()` |
+| `T` cannot be used to allocate memory | `new T[20]` does not compile |
 
-Workaround for a generic array: `T[] items = (T[]) new Object[n];` with `@SuppressWarnings("unchecked")`, or use an `ArrayList<T>`.
+Two or more type parameters are separated by commas: `class Test<T, U>`.
 
-## 8. Raw types
+## 3. Bounded types
 
-`List list = new ArrayList();` (no `<...>`) is a **raw type**. It compiles with a warning, accepts anything, and moves every type error from compile time to a run-time `ClassCastException`. Always write the type argument.
+`<T extends Number>` restricts `T` to `Number` and its subclasses (`Integer`, `Double`, `Float`, `Long`). The bound also lets the class call the methods of `Number` on a `T`. For an interface bound the keyword is still `extends`: `<T extends Comparable<T>>`.
 
-## 9. Common errors
+## 4. A generic method
 
-| Mistake | What the compiler says | Repair |
+Put the type parameter in angle brackets **before the return type**. Its scope is that method. It works for static and non-static methods, and a method may also use the class's type parameter.
+
+## 5. A generic interface
+
+A generic interface takes a type parameter, and the class that implements it is generic too and passes the parameter on: `class GenC<T> implements GenI<T>`. A class that uses `T` without declaring it does not compile.
+
+```java title="GenericsCheat.java"
+public class GenericsCheat {
+    static class Box<T> {
+        private T item;
+
+        void set(T item) {
+            this.item = item;
+        }
+
+        T get() {
+            return item;
+        }
+    }
+
+    static class Nums<T extends Number> {
+        private T value;
+
+        Nums(T value) {
+            this.value = value;
+        }
+
+        double twice() {
+            return value.doubleValue() * 2;   // allowed: T is a Number
+        }
+    }
+
+    interface GenI<T> {
+        void modify(T val);
+
+        T get();
+    }
+
+    static class GenC<T> implements GenI<T> {
+        T val;
+
+        public void modify(T val) {
+            this.val = val;
+        }
+
+        public T get() {
+            return val;
+        }
+    }
+
+    static <E> void printArray(E[] elements) {
+        for (E element : elements) {
+            System.out.printf("%s ", element);
+        }
+        System.out.println();
+    }
+
+    static <T extends Comparable<T>> T larger(T a, T b) {
+        return a.compareTo(b) >= 0 ? a : b;
+    }
+
+    public static void main(String[] args) {
+        Box<String> box = new Box<String>();
+        box.set("Kago");
+        System.out.println(box.get().length());
+        System.out.println(new Nums<Integer>(4).twice());
+        GenC<Integer> n = new GenC<Integer>();
+        n.modify(190);
+        System.out.println("Num: " + n.get());
+        printArray(new Integer[] {2, 4, 5});
+        System.out.println(larger(3, 9) + " " + larger("pear", "apple"));
+    }
+}
+```
+
+```text
+4
+8.0
+Num: 190
+2 4 5
+9 pear
+```
+
+## 6. What does not compile
+
+| Statement | Compiler message |
+|---|---|
+| `a.modify("CSI247");` on a `GenTest<Integer>` | `incompatible types: String cannot be converted to Integer` |
+| `GenTest<int> a;` | `unexpected type` (required: reference, found: int) |
+| `GenTest<Integer> a = new GenTest<String>();` | `incompatible types: GenTest<String> cannot be converted to GenTest<Integer>` |
+| `new GenTest<Integer>;` | `'(' or '[' expected` |
+| `T[] arr = new T[20];` | `generic array creation` |
+| `Nums<String>` when `T extends Number` | `type argument String is not within bounds of type-variable T` |
+| `printArray(new int[] {1, 2})` | `method printArray ... cannot be applied to given types` (required `E[]`, found `int[]`) |
+| `class G implements GenI<T>` without declaring `T` | `cannot find symbol` (symbol: class T) |
+| `x.compareTo(y)` on an unbounded `T` | `cannot find symbol` (symbol: method compareTo(T)) |
+
+## 7. Lab 7: the generic Set and Pair
+
+| Class | Design | Key points |
 |---|---|---|
-| `List<int>` | unexpected type; required reference | `List<Integer>` |
-| `List<Number> n = new ArrayList<Integer>();` | incompatible types | `List<? extends Number>` |
-| Adding to a `List<? extends Number>` | cannot add | use `List<Number>` or `List<? super Integer>` |
-| Calling `compareTo` on an unbounded `T` | cannot find symbol | `<T extends Comparable<T>>` |
-| `<T>` placed after the return type | illegal start of type | `public static <T> T method(...)` |
-| `new T[]` | generic array creation | `(T[]) new Object[n]` or `ArrayList<T>` |
-| Raw `List` | unchecked warning, later `ClassCastException` | add the type argument |
+| `Set<T>` | an array of 10 cells of type `T`, all `null` at first | `add` uses the **first empty cell** (duplicates allowed); `remove` uses `equals` and leaves a gap; `search` returns the first element equal to the argument |
+| the array | `items = (T[]) new Object[10];` with `@SuppressWarnings("unchecked")` | `new T[10]` is rejected; the cast is unchecked |
+| `Pair<T extends Number, U extends Number>` | two members, a getter and a setter for each | `add`, `subtract`, `multiply` and `divide` use `doubleValue()` and return a `Pair<Double, Double>`; `7 / 2` gives 3.5; dividing by zero gives `Infinity`, not an exception |
+
+## 8. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| `GenTest<int>` | unexpected type | `GenTest<Integer>` |
+| Different type arguments on the two sides of `=` | incompatible types | make them identical |
+| Calling `compareTo` or `doubleValue` on an unbounded `T` | cannot find symbol | add the bound: `<T extends Comparable<T>>`, `<T extends Number>` |
+| `<E>` placed after the return type | illegal start of type | `public static <E> void method(...)` |
+| `new T[n]` | generic array creation | `(T[]) new Object[n]` |
+| Comparing generic values with `==` | compares addresses | use `equals` |
+| A class that implements a generic interface does not declare `T` | cannot find symbol | `class C<T> implements I<T>` |
