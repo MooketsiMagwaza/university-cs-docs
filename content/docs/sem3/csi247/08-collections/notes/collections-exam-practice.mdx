@@ -1,0 +1,796 @@
+---
+title: "Collections Exam Practice"
+description: "Eight exam questions on collections, each with a four-step answer: Lab 8 question 1 (Person, ArrayList, file input, remove at index 8, Collections.sort), a LinkedList trace, array and ArrayList memory, fixing broken code, an iterator method, a two-key compareTo, comparing the structures, and a mixed trace."
+---
+
+These are the question forms Lecture 13 and Lab 8 lead to. Lab 8 asks for a `Person` class that is `Comparable`, a tester that reads records from a file into an `ArrayList`, removes items at two indexes ("what did you notice by attempting to remove item at index 8?"), a memory diagram, and a sort. The rest follow the lecture's exercises: trace a program, draw the memory, repair broken code, write an iterator loop, make a class sortable, and compare the structures. Every program here was compiled with `--release 8` and run, and the compiler messages are real. Work each question on paper before opening the answer. The lessons that teach the material are [Collections by Example](/docs/sem3/csi247/08-collections/notes/collections-by-example) and [List Implementations by Example](/docs/sem3/csi247/08-collections/notes/list-implementations-by-example).
+
+<LearningObjectives items={[
+  'Write the Person class and the tester of Lab 8 question 1, and explain what happens at index 8',
+  'Trace ArrayList, LinkedList, Iterator and Collections.sort code and give its exact output',
+  'Draw the memory for an array of Integer objects and an ArrayList that copies it',
+  'Repair collection code from the compiler messages',
+  'Write an iterator loop that removes elements, and a compareTo that orders on two keys',
+]} />
+
+<Prerequisites items={[
+  'Collections by Example and List Implementations by Example in this chapter',
+  'Reading and writing text files with Scanner, from the Java Fundamentals chapter',
+  'Classes, constructors, `toString` and `equals`, from the Object-Oriented Programming chapter',
+]} />
+
+## 1. How to answer these questions
+
+1. **Read.** Underline the command words: *trace*, *draw*, *write*, *explain*, *what happens*.
+2. **Plan.** Name the structure and the operation (an array, an `ArrayList`, a `LinkedList`, an iterator). Say what each operation changes.
+3. **Solve.** Show the state after every step. For a list, write the whole list after each statement; for memory, show the addresses.
+4. **Check.** Count the elements, check that an index is below the size, and read the answer back once.
+
+## 2. Lab 8, question 1: Person, ArrayList, file input and sort
+
+### Exam question 1: the Lab 8 tester (12 marks)
+
+Write class `Person` with `id`, `fullname` and `age`. It implements `Comparable` (using `fullname`) and overrides `toString` and `equals`. Write `PersonTester` with a method `displayList` that shows an `ArrayList` using an iterator, and a `main` that reads Person records from a file into an `ArrayList`, removes the items at indices 2 and 8, shows the number of items and the contents, sorts with `Collections.sort()`, and shows the sorted list. The file has the three lab records and three more:
+
+```text
+265341,Lesego Jones,19
+265476,Thomas Kago,25
+673523,Mpho Wangu,28
+118204,Neo Dube,22
+540912,Kagiso Moeng,31
+722301,Amo Seretse,20
+```
+
+What do you notice when index 8 is removed? Draw the memory for the reading and the two removals. (12 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A class with three variables that is `Comparable` on `fullname`, plus `toString` and `equals`; a tester with an iterator method; reading a file line by line; two removals by index; a sort; and a memory diagram. The question about index 8 is the one the lab asks you to explain.
+
+</Step>
+
+<Step title="2. Plan">
+
+`Person` needs a constructor, `compareTo` that returns `fullname.compareTo(other.fullname)`, `toString` and `equals` (with `instanceof` and a cast). The tester splits each line at the commas, converts the `id` and `age` with `Integer.parseInt`, and adds each `Person` to the list. `people.remove(2)` removes the third record and shifts the later ones left. The list has 6 items, so index 8 does not exist.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Person.java"
+public class Person implements Comparable<Person> {
+    private int id;
+    private String fullname;
+    private int age;
+
+    Person(int id, String fullname, int age) {
+        this.id = id;
+        this.fullname = fullname;
+        this.age = age;
+    }
+
+    int getId() {
+        return id;
+    }
+
+    String getFullname() {
+        return fullname;
+    }
+
+    int getAge() {
+        return age;
+    }
+
+    public int compareTo(Person other) {
+        return fullname.compareTo(other.fullname);      // the order is by fullname
+    }
+
+    public String toString() {
+        return id + " " + fullname + " (" + age + ")";
+    }
+
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof Person)) {
+            return false;
+        }
+        Person other = (Person) obj;
+        return id == other.id && fullname.equals(other.fullname) && age == other.age;
+    }
+}
+```
+
+The lab reads the file name from the keyboard:
+
+```java
+Scanner keyboard = new Scanner(System.in);
+System.out.print("Input file: ");
+String filename = keyboard.nextLine();
+Scanner fileIn = new Scanner(new File(filename));
+```
+
+The version below writes the same six records to a temporary file first, so that it can run on its own; everything after the file is opened is the lab's code.
+
+```java title="PersonTester.java"
+import java.io.File;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Scanner;
+
+public class PersonTester {
+    static void displayList(ArrayList<Person> list) {
+        Iterator<Person> it = list.iterator();
+        while (it.hasNext()) {
+            System.out.println(it.next());                 // full details, one per line
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        File file = File.createTempFile("people", ".txt"); // stands in for the file the user names
+        file.deleteOnExit();
+        PrintWriter out = new PrintWriter(file);
+        out.println("265341,Lesego Jones,19");
+        out.println("265476,Thomas Kago,25");
+        out.println("673523,Mpho Wangu,28");
+        out.println("118204,Neo Dube,22");
+        out.println("540912,Kagiso Moeng,31");
+        out.println("722301,Amo Seretse,20");
+        out.close();
+
+        ArrayList<Person> people = new ArrayList<Person>();
+        Scanner in = new Scanner(file);
+        while (in.hasNextLine()) {                          // one line at a time
+            String[] parts = in.nextLine().split(",");
+            people.add(new Person(Integer.parseInt(parts[0]), parts[1], Integer.parseInt(parts[2])));
+        }
+        in.close();
+        System.out.println("read " + people.size() + " records");
+
+        people.remove(2);                                   // the third record
+        try {
+            people.remove(8);                               // there is no index 8
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("remove(8): " + e.getClass().getName());
+        }
+
+        System.out.println("number of items: " + people.size());
+        displayList(people);
+
+        Collections.sort(people);
+        System.out.println("sorted:");
+        displayList(people);
+    }
+}
+```
+
+```text
+read 6 records
+remove(8): java.lang.IndexOutOfBoundsException
+number of items: 5
+265341 Lesego Jones (19)
+265476 Thomas Kago (25)
+118204 Neo Dube (22)
+540912 Kagiso Moeng (31)
+722301 Amo Seretse (20)
+sorted:
+722301 Amo Seretse (20)
+540912 Kagiso Moeng (31)
+265341 Lesego Jones (19)
+118204 Neo Dube (22)
+265476 Thomas Kago (25)
+```
+
+What you notice at index 8: the list has six items, then five after `remove(2)`, so the valid indexes are 0 to 4. `remove(8)` throws `IndexOutOfBoundsException`, the list does not change, and an uncaught exception would stop the program. The sorted list is in the alphabetical order of `fullname`, not the order of the file or the `id`.
+
+<MemoryDiagram scenario="personlist" />
+
+</Step>
+
+<Step title="4. Check">
+
+Read the output against the file: six records read, Mpho Wangu removed (index 2), five items left, and the sort puts Amo before Kagiso before Lesego before Neo before Thomas. The diagram agrees: after `remove(2)` the three later addresses moved left, slot 5 became `null` and `size` is 5.
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+Expecting `remove(8)` to do nothing, or to remove the last item. An index at or beyond `size()` throws `IndexOutOfBoundsException`; the method does not clamp the index. Check `index < list.size()` first if the index can be out of range.
+
+</Callout>
+
+## 3. Trace a LinkedList
+
+### Exam question 2: a LinkedList of courses (6 marks)
+
+Trace the program and give its exact output. (6 marks)
+
+```java
+import java.util.LinkedList;
+
+public class CourseVariant {
+    public static void main(String[] args) {
+        LinkedList<String> courses = new LinkedList<String>();
+        courses.add("Maths");
+        courses.add("Physics");
+        courses.addFirst("Chemistry");
+        courses.add(1, "Biology");
+        System.out.println(courses);
+        String gone = courses.removeLast();
+        boolean had = courses.remove("Biology");
+        System.out.println(gone + " " + had + " " + courses);
+        System.out.println(courses.get(1) + " " + courses.contains("Maths") + " " + courses.indexOf("Physics"));
+    }
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four adds, two removals and three reads. The output has three lines.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the list after every statement. `addFirst` puts the new element at index 0, `add(1, e)` inserts at index 1 and pushes the rest along, `removeLast` returns the last element, `remove(Object)` returns a `boolean`.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Statement | List afterwards |
+|---|---|
+| `add("Maths")` | `[Maths]` |
+| `add("Physics")` | `[Maths, Physics]` |
+| `addFirst("Chemistry")` | `[Chemistry, Maths, Physics]` |
+| `add(1, "Biology")` | `[Chemistry, Biology, Maths, Physics]` |
+| `removeLast()` returns `Physics` | `[Chemistry, Biology, Maths]` |
+| `remove("Biology")` returns `true` | `[Chemistry, Maths]` |
+
+The reads: `get(1)` is `Maths`, `contains("Maths")` is `true`, `indexOf("Physics")` is -1 because it was removed. The output is `[Chemistry, Biology, Maths, Physics]`, then `Physics true [Chemistry, Maths]`, then `Maths true -1`.
+
+</Step>
+
+<Step title="4. Check">
+
+The program was run:
+
+```java title="CourseVariant.java"
+import java.util.LinkedList;
+
+public class CourseVariant {
+    public static void main(String[] args) {
+        LinkedList<String> courses = new LinkedList<String>();
+        courses.add("Maths");
+        courses.add("Physics");
+        courses.addFirst("Chemistry");
+        courses.add(1, "Biology");
+        System.out.println(courses);
+        String gone = courses.removeLast();
+        boolean had = courses.remove("Biology");
+        System.out.println(gone + " " + had + " " + courses);
+        System.out.println(courses.get(1) + " " + courses.contains("Maths") + " " + courses.indexOf("Physics"));
+    }
+}
+```
+
+```text
+[Chemistry, Biology, Maths, Physics]
+Physics true [Chemistry, Maths]
+Maths true -1
+```
+
+The three lines agree with the tables. The common slip is `indexOf("Physics")`: after `removeLast()` the element is gone, so the answer is -1, not 3.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Memory: an array of Integer and an ArrayList copy
+
+### Exam question 3: array, ArrayList and shared objects (8 marks)
+
+Draw the state of memory after this code, and state whether `list.get(0)` and `marks[0]` refer to the same object. (8 marks)
+
+```java
+Integer[] marks = new Integer[4];
+marks[0] = 73;  marks[1] = 81;  marks[2] = 69;  marks[3] = 60;
+ArrayList<Integer> list = new ArrayList<Integer>(Arrays.asList(marks));
+list.add(70);
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four assignments to an array, then a list built from the array and one `add`. The drawing must show where each Integer lives and what the list copied.
+
+</Step>
+
+<Step title="2. Plan">
+
+`new Integer[4]` makes an array of four references, all `null`. Each assignment autoboxes an `int` into an `Integer` object and stores its address. `new ArrayList<Integer>(Arrays.asList(marks))` makes a **new** hidden array and copies the **references**; the Integer objects are not copied. `add(70)` adds a fifth reference.
+
+</Step>
+
+<Step title="3. Solution">
+
+Stack: `marks` holds the address of the `Integer[]` (100); `list` holds the address of the `ArrayList` object (say 600). Heap: the `Integer[]` at 100 holds four addresses, 200, 300, 400 and 500, which are the four `Integer` objects 73, 81, 69 and 60. The `ArrayList` object has `size` 5 and an `elementData` field pointing at its own hidden array, whose first four cells hold the same addresses 200, 300, 400 and 500, and whose fifth cell holds the address of a new `Integer` 70 object. So there are two arrays and five `Integer` objects. `list.get(0)` and `marks[0]` hold the same address (200): the same object.
+
+</Step>
+
+<Step title="4. Check">
+
+```java title="SharedObjects.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+
+public class SharedObjects {
+    public static void main(String[] args) {
+        Integer[] marks = new Integer[4];
+        marks[0] = 73;
+        marks[1] = 81;
+        marks[2] = 69;
+        marks[3] = 60;
+        ArrayList<Integer> list = new ArrayList<Integer>(Arrays.asList(marks));
+        list.add(70);
+
+        System.out.println(list + " " + marks.length);
+        System.out.println(list.get(0) == marks[0]);
+        System.out.println(list.get(3) == marks[3]);
+        marks[0] = 5;                                     // a new Integer replaces the reference in the array only
+        System.out.println(list.get(0) + " " + marks[0]);
+    }
+}
+```
+
+```text
+[73, 81, 69, 60, 70] 4
+true
+true
+73 5
+```
+
+The two containers hold the same objects, so `==` is `true`. Replacing `marks[0]` changes the array's reference only: the list still holds the old 73. Changing one array does not change the other because the list has its own hidden array.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Fix the code
+
+### Exam question 4: repair the declarations (6 marks)
+
+Each statement below has an error. Give the compiler message and the repair for each. (6 marks)
+
+```java
+ArrayList<int> nums = new ArrayList<int>();
+List<Integer> a = new List<Integer>();
+ArrayList<Integer> b = new ArrayList<String>();
+List<String> names = new ArrayList<String>();
+names.add(5);
+String s = names.get(0).size();
+names.length();
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Seven lines, six errors (the fourth line is correct). For each: the message, then the repair.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check each against three rules: a collection's type argument must be a reference type; an interface cannot be instantiated; and the element type decides what `add` accepts and what `get` returns.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Statement | Compiler message | Repair |
+|---|---|---|
+| `ArrayList<int> nums = new ArrayList<int>();` | `error: unexpected type` (required: reference, found: int), reported twice | `ArrayList<Integer> nums = new ArrayList<Integer>();` |
+| `List<Integer> a = new List<Integer>();` | `error: List is abstract; cannot be instantiated` | create a class that implements it: `new ArrayList<Integer>()` |
+| `ArrayList<Integer> b = new ArrayList<String>();` | `error: incompatible types: ArrayList<String> cannot be converted to ArrayList<Integer>` | the same type argument on both sides |
+| `names.add(5);` | `error: incompatible types: int cannot be converted to String` | add a `String`: `names.add("5")` |
+| `names.get(0).size()` | `error: cannot find symbol` (symbol: method size(), location: class String) | `get` returns a `String`; use `length()` |
+| `names.length()` | `error: cannot find symbol` (symbol: method length(), location: variable names of type `List<String>`) | a `List` has `size()`, an array has `length` |
+
+</Step>
+
+<Step title="4. Check">
+
+All seven lines were compiled together and javac reported exactly these errors, in this order, and none for the correct line `List<String> names = new ArrayList<String>();`. The lecture's own array-to-list snippet also fails to compile as printed: `(Arrays.asList(marks));` gives `not a statement`, and the name `aList` gives `cannot find symbol`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Write an iterator loop
+
+### Exam question 5: remove failing marks (6 marks)
+
+Write a method `removeBelow(ArrayList<Integer> marks, int pass)` that removes every mark below `pass` using an `Iterator` and returns how many it removed. Show it on `[73, 45, 90, 38, 50, 61]` with pass mark 50. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A method, an iterator, a removal and a count. The list must be changed while it is traversed, so the removal must go through the iterator.
+
+</Step>
+
+<Step title="2. Plan">
+
+Create `Iterator<Integer> it = marks.iterator()`. In a `while (it.hasNext())` loop call `next()` once, test the value, and call `it.remove()` and add 1 to the count when it is below `pass`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="FailedMarks.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+
+public class FailedMarks {
+    static int removeBelow(ArrayList<Integer> marks, int pass) {
+        int removed = 0;
+        Iterator<Integer> it = marks.iterator();
+        while (it.hasNext()) {
+            int mark = it.next();                   // one next() per hasNext()
+            if (mark < pass) {
+                it.remove();                        // removes the mark just returned
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    public static void main(String[] args) {
+        ArrayList<Integer> marks = new ArrayList<Integer>(Arrays.asList(73, 45, 90, 38, 50, 61));
+        int count = removeBelow(marks, 50);
+        System.out.println(count + " removed, left " + marks);
+    }
+}
+```
+
+```text
+2 removed, left [73, 90, 50, 61]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+45 and 38 are below 50, so two are removed, and 50 stays because the test is "below". Each pass of the loop calls `next()` once and `remove()` at most once after it. A for-each loop with `marks.remove(...)` would throw `ConcurrentModificationException`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 7. Make a class Comparable on two keys
+
+### Exam question 6: age, then name (8 marks)
+
+A `Member` has a `name` and an `age`. Write `compareTo` so that members are sorted by age, and members of the same age are sorted alphabetically by name. Show the result for Thato 30, Kago 25, Neo 30, Amo 25. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two keys: the first decides the order, the second breaks ties. The result is a sorted list.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare the ages first and return a negative or positive number if they differ. Only when they are equal, return the result of `name.compareTo(other.name)`. Returning 0 only when both match keeps `compareTo` consistent with `equals`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Member.java"
+public class Member implements Comparable<Member> {
+    String name;
+    int age;
+
+    Member(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    public int compareTo(Member other) {
+        if (age != other.age) {
+            return age < other.age ? -1 : 1;           // the first key
+        }
+        return name.compareTo(other.name);             // equal ages: the second key
+    }
+
+    public String toString() {
+        return name + " " + age;
+    }
+}
+```
+
+```java title="MemberSort.java"
+import java.util.ArrayList;
+import java.util.Collections;
+
+public class MemberSort {
+    public static void main(String[] args) {
+        ArrayList<Member> list = new ArrayList<Member>();
+        list.add(new Member("Thato", 30));
+        list.add(new Member("Kago", 25));
+        list.add(new Member("Neo", 30));
+        list.add(new Member("Amo", 25));
+        Collections.sort(list);
+        System.out.println(list);
+    }
+}
+```
+
+```text
+[Amo 25, Kago 25, Neo 30, Thato 30]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The two 25-year-olds come first, Amo before Kago; then the two 30-year-olds, Neo before Thato. If `compareTo` returned 0 whenever the ages matched, the order of the tied members would stay as they were added.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 8. Compare the structures
+
+### Exam question 7: array, ArrayList and LinkedList (6 marks)
+
+Compare an array, an `ArrayList` and a `LinkedList` on: whether the size can change, how an element is reached, and the cost of inserting at the front. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three structures and three points of comparison: nine facts, so a table is the natural answer.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the lecture's wording: an array has a static size and contiguous memory; an `ArrayList` is a dynamic array that creates a larger array and copies when full; a `LinkedList` is a list of nodes reached from the head.
+
+</Step>
+
+<Step title="3. Solution">
+
+| | Array | `ArrayList` | `LinkedList` |
+|---|---|---|---|
+| Size | fixed when created | grows and shrinks (a new, larger array and a copy when full) | grows and shrinks node by node |
+| Reaching an element | directly by index, `A[i]` | directly: `get(i)` and `set(i, e)` | start at the head and follow links; no direct access |
+| Insert at the front | not possible without a bigger array and copying | shifts every element one place right | only links change |
+
+</Step>
+
+<Step title="4. Check">
+
+Each cell comes from the lecture's list of efficient and inefficient methods: `get`, `set` and `add` at the end are efficient for an `ArrayList`; `add(index, ...)` and `remove(index)` shift elements, which is why the lecture moves to a linked structure.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 9. A mixed trace
+
+### Exam question 8: array, view, list and iterator (8 marks)
+
+Give the exact output of this program and explain the last line. (8 marks)
+
+```java
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
+public class MixedTrace {
+    public static void main(String[] args) {
+        Integer[] raw = {40, 15, 33, 8};
+        List<Integer> view = Arrays.asList(raw);
+        ArrayList<Integer> list = new ArrayList<Integer>(view);
+        list.add(0, 21);
+        list.remove(Integer.valueOf(33));
+        Collections.sort(list);
+
+        Iterator<Integer> it = list.iterator();
+        int sum = 0;
+        while (it.hasNext()) {
+            int v = it.next();
+            if (v % 2 == 1) {
+                it.remove();
+            } else {
+                sum += v;
+            }
+        }
+        System.out.println(list + " sum " + sum);
+
+        Arrays.sort(raw);
+        System.out.println(Arrays.toString(raw) + " " + view);
+    }
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+An array, a list view of it, a separate `ArrayList` copy, some list operations, an iterator loop and a final sort of the array. Two lines of output.
+
+</Step>
+
+<Step title="2. Plan">
+
+Track `raw`, `view` and `list` separately. `Arrays.asList(raw)` is a view of the array; `new ArrayList<Integer>(view)` is an independent copy.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Statement | `list` | Note |
+|---|---|---|
+| `new ArrayList<Integer>(view)` | `[40, 15, 33, 8]` | a copy |
+| `list.add(0, 21)` | `[21, 40, 15, 33, 8]` | inserted at the front |
+| `list.remove(Integer.valueOf(33))` | `[21, 40, 15, 8]` | the object 33 |
+| `Collections.sort(list)` | `[8, 15, 21, 40]` | ascending |
+| iterator removes the odd values 15 and 21 | `[8, 40]` | `sum = 8 + 40 = 48` |
+
+The first line is `[8, 40] sum 48`. `Arrays.sort(raw)` then sorts the array in place to `[8, 15, 33, 40]`, and `view` prints the same, because `Arrays.asList` is a view that reads the array.
+
+</Step>
+
+<Step title="4. Check">
+
+The output was produced by running the program:
+
+```java title="MixedTrace.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
+public class MixedTrace {
+    public static void main(String[] args) {
+        Integer[] raw = {40, 15, 33, 8};
+        List<Integer> view = Arrays.asList(raw);
+        ArrayList<Integer> list = new ArrayList<Integer>(view);
+        list.add(0, 21);
+        list.remove(Integer.valueOf(33));
+        Collections.sort(list);
+
+        Iterator<Integer> it = list.iterator();
+        int sum = 0;
+        while (it.hasNext()) {
+            int v = it.next();
+            if (v % 2 == 1) {
+                it.remove();
+            } else {
+                sum += v;
+            }
+        }
+        System.out.println(list + " sum " + sum);
+
+        Arrays.sort(raw);
+        System.out.println(Arrays.toString(raw) + " " + view);
+    }
+}
+```
+
+```text
+[8, 40] sum 48
+[8, 15, 33, 40] [8, 15, 33, 40]
+```
+
+The copy `list` did not change when `raw` was sorted, but `view` did. That is the reason the lecture's code copies the array into a new `ArrayList` rather than using `Arrays.asList` directly.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Lab 8 question 1: `Person implements Comparable<Person>` with `compareTo` on `fullname`, plus `toString` and `equals`; read the file one line at a time, split at the commas and add each `Person` to an `ArrayList`; `remove(2)` shifts the later items left, `remove(8)` on a list with fewer than nine items throws `IndexOutOfBoundsException`; `Collections.sort` orders by `compareTo`. For a trace, write the whole list after every statement. For memory, an `Integer` is an object, an array of objects holds addresses, and copying a list copies the addresses. Repair collection code from the message: a reference type in the brackets, identical types on both sides, an interface needs an implementing class. Change a list while traversing only through the iterator. `compareTo` on two keys compares the first, and uses the second only on a tie.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does removing at index 8 from the Person list throw an exception, and what does the list look like afterwards?">
+
+After reading six records and removing index 2, the list has five items, so the valid indexes are 0 to 4. `remove(8)` throws `IndexOutOfBoundsException`, and the list is unchanged.
+
+</CheckQuestion>
+
+<CheckQuestion question="In the Lab 8 sorted output, why is Amo Seretse before Kagiso Moeng although the file lists Kagiso first?">
+
+`Person.compareTo` compares `fullname`, and `Collections.sort` orders by it, so the order is alphabetical by name, not the order in the file.
+
+</CheckQuestion>
+
+<CheckQuestion question="After new ArrayList(Arrays.asList(marks)), do the list and the array share the Integer objects?">
+
+Yes. The constructor copies the references into the list's own hidden array, so `list.get(0) == marks[0]` is `true`. The two arrays are separate: replacing `marks[0]` does not change the list.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can a list be changed through an iterator but not inside a for-each loop?">
+
+The for-each loop uses an iterator privately. Changing the list directly makes that iterator detect a modification and throw `ConcurrentModificationException`; `Iterator.remove()` updates the list and the iterator together.
+
+</CheckQuestion>
+
+<CheckQuestion question="How does compareTo order objects by two keys?">
+
+Compare the first key; if the objects differ on it, return the result. Only when they are equal on the first key, return the comparison of the second key.
+
+</CheckQuestion>
+
+</CheckQuestions>
