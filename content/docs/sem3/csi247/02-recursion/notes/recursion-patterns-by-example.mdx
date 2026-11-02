@@ -1,0 +1,1061 @@
+---
+title: "Recursion Patterns by Example"
+description: "Mutual recursion, backtracking with subsets, permutations and grid paths, Towers of Hanoi, converting between loops and recursion, and the four causes of a stack overflow, with exam questions on each."
+---
+
+Some recursion does not fit the "one call, one smaller input" shape. Two methods can call each other. A method can try a choice, explore it, and **undo** it before trying the next. A loop can be rewritten as recursion and back by a fixed rule, and a recursion can fail in four distinct ways. This lesson gives each pattern a template, several variations and an exam question. It follows [Recursion by Example](/docs/sem3/csi247/02-recursion/notes/recursion-by-example) and [Recursion on Arrays and Strings by Example](/docs/sem3/csi247/02-recursion/notes/recursion-on-data-by-example).
+
+<LearningObjectives items={[
+  'Write and trace two methods that call each other, and give each a base case',
+  'Write a backtracking method with the choose, explore and undo template, and count its calls',
+  'Solve Towers of Hanoi and state the number of moves for n disks',
+  'Convert a loop to recursion and a recursion to a loop by following a rule',
+  'Name the four causes of a StackOverflowError and repair each',
+]} />
+
+<Prerequisites items={[
+  'Base case, recursive case and tracing, from Recursion by Example',
+  'Recursion on arrays, strings and ranges, from the previous lesson',
+]} />
+
+## 1. The templates
+
+```text
+Mutual recursion:    a(n) calls b(smaller);  b(n) calls a(smaller);  each has its own base case.
+
+Backtracking:        explore(state)
+                         if the state is complete: record it and return
+                         for each choice:
+                             make the choice       (change the state)
+                             explore(state)        (recurse)
+                             undo the choice       (restore the state: this is the "back" in backtracking)
+
+Loop to recursion:   1. every variable the loop changes becomes a parameter
+                     2. the opposite of the loop condition becomes the base case, which returns the answer variable
+                     3. the loop body is the work, and the update becomes the arguments of the call
+```
+
+## 2. Mutual recursion
+
+Two methods are **mutually recursive** when `a` calls `b` and `b` calls `a`. Each must make progress and each needs its own base case, because either can be the one that is called first.
+
+### Even and odd
+
+```java title="EvenOdd.java"
+public class EvenOdd {
+    // Question: write isEven and isOdd so that each is defined using the other.
+    static boolean isEven(int n) {
+        if (n == 0) {
+            return true;                      // 0 is even
+        }
+        return isOdd(n - 1);                  // n is even when n - 1 is odd
+    }
+
+    static boolean isOdd(int n) {
+        if (n == 0) {
+            return false;                     // 0 is not odd
+        }
+        return isEven(n - 1);                 // n is odd when n - 1 is even
+    }
+
+    public static void main(String[] args) {
+        int[] values = {0, 1, 4, 7};
+        for (int n : values) {
+            System.out.println(n + ": even " + isEven(n) + ", odd " + isOdd(n));
+        }
+    }
+}
+```
+
+```text
+0: even true, odd false
+1: even false, odd true
+4: even true, odd false
+7: even false, odd true
+```
+
+The two base cases disagree on purpose: `isEven(0)` is `true` and `isOdd(0)` is `false`. If both returned `true`, every number would be both even and odd.
+
+### Taking turns
+
+```java title="TickTock.java"
+public class TickTock {
+    // Question: print "tick" and "tock" alternately, five words in all.
+    static void tick(int n) {
+        if (n == 0) {
+            return;
+        }
+        System.out.print("tick ");
+        tock(n - 1);
+    }
+
+    static void tock(int n) {
+        if (n == 0) {
+            return;
+        }
+        System.out.print("tock ");
+        tick(n - 1);
+    }
+
+    public static void main(String[] args) {
+        tick(5);
+        System.out.println();
+    }
+}
+```
+
+```text
+tick tock tick tock tick
+```
+
+Mutual recursion fits a process that **alternates between two states**. The same two-method shape recognises text that must alternate.
+
+### A string that must alternate a, b, a, b
+
+```java title="AlternatingAB.java"
+public class AlternatingAB {
+    // Question: is the string made of 'a' and 'b' taking turns, starting with 'a'?
+    static boolean expectA(String s) {
+        if (s.isEmpty()) {
+            return true;                      // ran out of characters with no fault
+        }
+        return s.charAt(0) == 'a' && expectB(s.substring(1));
+    }
+
+    static boolean expectB(String s) {
+        if (s.isEmpty()) {
+            return true;
+        }
+        return s.charAt(0) == 'b' && expectA(s.substring(1));
+    }
+
+    public static void main(String[] args) {
+        String[] tests = {"ababab", "aba", "abba", "ba", ""};
+        for (String t : tests) {
+            System.out.println("[" + t + "] " + expectA(t));
+        }
+    }
+}
+```
+
+```text
+[ababab] true
+[aba] true
+[abba] false
+[ba] false
+[] true
+```
+
+`expectA` and `expectB` are the two states of a tiny machine. The string `"aba"` passes because the check only demands that the letters alternate, not that the string ends on `b`.
+
+### Exam question 1: even and odd, traced (5 marks)
+
+Write the mutually recursive methods `isEven` and `isOdd`. Trace `isEven(3)` and state how many calls are made. Explain why each method needs its own base case. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "write", "trace", "state" and "explain". The methods must be mutually recursive: `isEven` calls `isOdd` and the reverse. The trace is for `n = 3`, and the number of calls includes the first.
+
+</Step>
+
+<Step title="2. Plan">
+
+A number is even when the one below it is odd. Each call lowers `n` by one and passes to the other method. Both reach `n == 0` after `n` steps, but which method is running at that moment depends on whether `n` was even or odd, so each needs a base case.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="EvenOddTrace.java"
+public class EvenOddTrace {
+    // Question: trace isEven(3) with a print on entry to each method.
+    static boolean isEven(int n) {
+        System.out.println("isEven(" + n + ")");
+        if (n == 0) {
+            return true;
+        }
+        return isOdd(n - 1);
+    }
+
+    static boolean isOdd(int n) {
+        System.out.println("isOdd(" + n + ")");
+        if (n == 0) {
+            return false;
+        }
+        return isEven(n - 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println("answer " + isEven(3));
+    }
+}
+```
+
+```text
+isEven(3)
+isOdd(2)
+isEven(1)
+isOdd(0)
+answer false
+```
+
+| Call | `n == 0`? | Returns |
+|---|---|---|
+| `isEven(3)` | false | `isOdd(2)` |
+| `isOdd(2)` | false | `isEven(1)` |
+| `isEven(1)` | false | `isOdd(0)` |
+| `isOdd(0)` | true | `false` |
+
+</Step>
+
+<Step title="4. Check">
+
+Four calls, and the answer `false` travels up unchanged: 3 is not even. Each method needs its own base case because the chain ends in whichever method receives 0: `isOdd(0)` here, but `isEven(0)` for `isEven(4)`. With only one base case, half of the inputs would never stop.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Backtracking: choose, explore, undo
+
+Backtracking builds an answer one choice at a time. After exploring a choice it **undoes** it, so the next choice starts from the same state. The undo step is the part students forget.
+
+### All subsets
+
+```java title="Subsets.java"
+import java.util.ArrayList;
+import java.util.List;
+
+public class Subsets {
+    // Question: print every subset of {1, 2, 3} and count the calls.
+    static int calls;
+
+    static void subsets(int[] a, int i, List<Integer> chosen) {
+        calls++;
+        if (i == a.length) {
+            System.out.println(chosen);       // a complete choice for every element
+            return;
+        }
+        chosen.add(a[i]);                     // choose: take a[i]
+        subsets(a, i + 1, chosen);            // explore with it
+        chosen.remove(chosen.size() - 1);     // undo: put it back
+        subsets(a, i + 1, chosen);            // explore without it
+    }
+
+    public static void main(String[] args) {
+        subsets(new int[] {1, 2, 3}, 0, new ArrayList<Integer>());
+        System.out.println("calls " + calls);
+    }
+}
+```
+
+```text
+[1, 2, 3]
+[1, 2]
+[1, 3]
+[1]
+[2, 3]
+[2]
+[3]
+[]
+calls 15
+```
+
+For each element there are two options, take it or leave it, so three elements give 2 x 2 x 2 = 8 subsets. The shared list `chosen` is changed on the way down and restored on the way back, so one list serves every branch. Removing by position (`size() - 1`) matters: `remove(Integer.valueOf(x))` would remove a value, which could be a different element.
+
+### All permutations
+
+```java title="Permutations.java"
+public class Permutations {
+    // Question: print every arrangement of "abc", and count the arrangements of "abcd".
+    static void permute(String prefix, String rest) {
+        if (rest.isEmpty()) {
+            System.out.println(prefix);       // every letter has been placed
+            return;
+        }
+        for (int i = 0; i < rest.length(); i++) {
+            String next = prefix + rest.charAt(i);                    // choose letter i
+            String left = rest.substring(0, i) + rest.substring(i + 1);   // the others
+            permute(next, left);              // explore; the strings are new, so nothing to undo
+        }
+    }
+
+    static int count(String rest) {
+        if (rest.isEmpty()) {
+            return 1;
+        }
+        int total = 0;
+        for (int i = 0; i < rest.length(); i++) {
+            total += count(rest.substring(0, i) + rest.substring(i + 1));
+        }
+        return total;
+    }
+
+    public static void main(String[] args) {
+        permute("", "abc");
+        System.out.println(count("abcd"));
+    }
+}
+```
+
+```text
+abc
+acb
+bac
+bca
+cab
+cba
+24
+```
+
+A loop inside the method tries each remaining letter as the next one. Because `String` values are never changed, each call gets its own `prefix` and `rest`, so there is no undo step: backtracking by copying. There are 3! = 6 arrangements of three letters and 4! = 24 of four.
+
+### Counting paths in a grid
+
+```java title="GridPaths.java"
+public class GridPaths {
+    // Question: count the routes from the top-left to the bottom-right moving only right or down.
+    static int paths(int rows, int cols) {
+        if (rows == 1 || cols == 1) {
+            return 1;                         // a single row or column: one straight route
+        }
+        return paths(rows - 1, cols) + paths(rows, cols - 1);   // the last move was down, or right
+    }
+
+    static int pathsBlocked(boolean[][] blocked, int r, int c) {
+        int rows = blocked.length;
+        int cols = blocked[0].length;
+        if (r >= rows || c >= cols || blocked[r][c]) {
+            return 0;                         // off the grid or into a wall: dead end
+        }
+        if (r == rows - 1 && c == cols - 1) {
+            return 1;                         // reached the corner
+        }
+        return pathsBlocked(blocked, r + 1, c) + pathsBlocked(blocked, r, c + 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(paths(2, 2));
+        System.out.println(paths(3, 3));
+        System.out.println(paths(3, 7));
+        boolean[][] wall = new boolean[3][3];
+        wall[1][1] = true;                    // block the centre square
+        System.out.println(pathsBlocked(wall, 0, 0));
+    }
+}
+```
+
+```text
+2
+6
+28
+2
+```
+
+Each cell is reached from the cell above or from the cell to its left, so the counts add, the same shape as Pascal's rule in the previous lesson. With the centre blocked, only the two routes along the edges remain. The base cases of the second method are the **dead ends** (return 0) and the **goal** (return 1).
+
+### Pruning: can some of these numbers add up to the target?
+
+```java title="SubsetSum.java"
+public class SubsetSum {
+    // Question: can some of the numbers (each used at most once) add up to target?
+    static boolean canMake(int[] a, int i, int target) {
+        if (target == 0) {
+            return true;                      // success: the chosen numbers add up exactly
+        }
+        if (i == a.length || target < 0) {
+            return false;                     // dead end: backtrack
+        }
+        return canMake(a, i + 1, target - a[i]) || canMake(a, i + 1, target);   // take a[i], or leave it
+    }
+
+    public static void main(String[] args) {
+        int[] a = {3, 34, 4, 12, 5, 2};
+        System.out.println(canMake(a, 0, 9));
+        System.out.println(canMake(a, 0, 30));
+        System.out.println(canMake(a, 0, 0));
+        System.out.println(canMake(a, 0, 1));
+    }
+}
+```
+
+```text
+true
+false
+true
+false
+```
+
+The `||` stops as soon as one branch succeeds, so the search ends early (4 + 5 gives 9). The test `target < 0` **prunes**: once a choice overshoots the target there is no point exploring further. Nothing needs undoing here, because the target is passed as an argument, so each branch has its own copy.
+
+<Callout type="mistake" title="Common error">
+
+Forgetting to undo the choice when the state is shared. If `Subsets` omitted `chosen.remove(...)`, the list would keep every element ever added. A real run prints `[1, 2, 3]` twice, then `[1, 2, 3, 3]` twice, then `[1, 2, 3, 3, 2, 3]` twice, and so on: the same wrong list, growing. Either undo the change before the next choice, or pass a fresh value (a new string or an argument) so there is nothing to undo.
+
+</Callout>
+
+### Exam question 2: how many calls does subsets make? (4 marks)
+
+The method `subsets(a, i, chosen)` above makes two recursive calls until `i` reaches `a.length`. State the number of calls for an array of n elements as a formula, give it for n = 4, and draw the calls for n = 2. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "state", "give" and "draw". The unit counted is one call, including the first and the calls that reach the end (`i == a.length`).
+
+</Step>
+
+<Step title="2. Plan">
+
+Each call at depth `i` makes two calls at depth `i + 1`, down to depth n, so the number of calls at depth d is 2 to the d. Add the levels from 0 to n.
+
+</Step>
+
+<Step title="3. Solution">
+
+The levels give 1 + 2 + 4 + ... + 2 to the n, which is 2 to the (n + 1) minus 1. For n = 4 that is 2 to the 5 minus 1 = 31. For n = 2 the calls are:
+
+```text
+subsets(i=0)
+├─ subsets(i=1)    after taking a[0]
+│  ├─ subsets(i=2)   take a[1]: prints a complete subset
+│  └─ subsets(i=2)   leave a[1]: prints a complete subset
+└─ subsets(i=1)    after leaving a[0]
+   ├─ subsets(i=2)   take a[1]: prints
+   └─ subsets(i=2)   leave a[1]: prints
+```
+
+```java title="SubsetCalls.java"
+import java.util.ArrayList;
+import java.util.List;
+
+public class SubsetCalls {
+    // Question: count the calls made by subsets for 1 to 5 elements.
+    static int calls;
+
+    static void subsets(int[] a, int i, List<Integer> chosen) {
+        calls++;
+        if (i == a.length) {
+            return;
+        }
+        chosen.add(a[i]);
+        subsets(a, i + 1, chosen);
+        chosen.remove(chosen.size() - 1);
+        subsets(a, i + 1, chosen);
+    }
+
+    public static void main(String[] args) {
+        for (int n = 1; n <= 5; n++) {
+            calls = 0;
+            subsets(new int[n], 0, new ArrayList<Integer>());
+            System.out.println("n " + n + ": calls " + calls);
+        }
+    }
+}
+```
+
+```text
+n 1: calls 3
+n 2: calls 7
+n 3: calls 15
+n 4: calls 31
+n 5: calls 63
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The program prints 3, 7, 15, 31 and 63, which are 2 to the (n + 1) minus 1 for n = 1 to 5. The n = 2 tree has 1 + 2 + 4 = 7 calls and 4 subsets, matching 2 squared.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Towers of Hanoi
+
+Three pegs, and a stack of n disks of different sizes on the first. Move the whole stack to another peg, one disk at a time, and never put a larger disk on a smaller one. The recursive idea: to move n disks from `from` to `to`, move the top n - 1 out of the way onto `via`, move the biggest disk, then move the n - 1 back on top.
+
+```text
+hanoi(n, from, to, via)
+    if n == 0: nothing to do
+    hanoi(n - 1, from, via, to)       // clear the way
+    move disk n from -> to            // the one move that matters
+    hanoi(n - 1, via, to, from)       // put the others back on top
+```
+
+### Three disks
+
+```java title="Hanoi.java"
+public class Hanoi {
+    // Question: list the moves that carry three disks from peg A to peg C.
+    static int moves;
+
+    static void hanoi(int n, char from, char to, char via) {
+        if (n == 0) {
+            return;                           // base case: no disk to move
+        }
+        hanoi(n - 1, from, via, to);
+        moves++;
+        System.out.println("move disk " + n + " from " + from + " to " + to);
+        hanoi(n - 1, via, to, from);
+    }
+
+    public static void main(String[] args) {
+        hanoi(3, 'A', 'C', 'B');
+        System.out.println("moves " + moves);
+    }
+}
+```
+
+```text
+move disk 1 from A to C
+move disk 2 from A to B
+move disk 1 from C to B
+move disk 3 from A to C
+move disk 1 from B to A
+move disk 2 from B to C
+move disk 1 from A to C
+moves 7
+```
+
+Disk 1 is the smallest. The biggest disk (3) moves exactly once, in the middle, after the two smaller ones have been moved off it to peg B. The order of the moves is the order of the calls, in-order: left call, then the move, then the right call.
+
+### How many moves?
+
+```java title="HanoiCount.java"
+public class HanoiCount {
+    // Question: how many moves does n disks need?
+    static int count(int n) {
+        if (n == 0) {
+            return 0;
+        }
+        return count(n - 1) + 1 + count(n - 1);   // clear, move one, put back
+    }
+
+    public static void main(String[] args) {
+        for (int n = 1; n <= 6; n++) {
+            System.out.println(n + " disks: " + count(n) + " moves, 2^n - 1 = " + ((1 << n) - 1));
+        }
+    }
+}
+```
+
+```text
+1 disks: 1 moves, 2^n - 1 = 1
+2 disks: 3 moves, 2^n - 1 = 3
+3 disks: 7 moves, 2^n - 1 = 7
+4 disks: 15 moves, 2^n - 1 = 15
+5 disks: 31 moves, 2^n - 1 = 31
+6 disks: 63 moves, 2^n - 1 = 63
+```
+
+Each extra disk **doubles** the number of moves and adds one: `moves(n) = 2 * moves(n - 1) + 1`, which solves to 2 to the n minus 1. This is exponential: 10 disks need 1,023 moves and 64 disks would need more than 18 quintillion.
+
+### Exam question 3: Hanoi moves (4 marks)
+
+State the moves for carrying two disks from A to C using B, and the number of moves for 10 disks. Explain why the largest disk moves only once. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" asks for a list of moves and a number, and "explain" asks for one reason. The disks are numbered 1 (smallest) and 2 (largest). The pegs are A (start), C (target) and B (spare).
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the template with n = 2: clear disk 1 to B, move disk 2 to C, bring disk 1 onto C. For 10 disks use `moves(n) = 2 * moves(n - 1) + 1`, or 2 to the 10 minus 1.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="HanoiTwo.java"
+public class HanoiTwo {
+    // Question: the moves for two disks from A to C, and the number of moves for ten disks.
+    static void hanoi(int n, char from, char to, char via) {
+        if (n == 0) {
+            return;
+        }
+        hanoi(n - 1, from, via, to);
+        System.out.println("move disk " + n + " from " + from + " to " + to);
+        hanoi(n - 1, via, to, from);
+    }
+
+    static int count(int n) {
+        if (n == 0) {
+            return 0;
+        }
+        return 2 * count(n - 1) + 1;
+    }
+
+    public static void main(String[] args) {
+        hanoi(2, 'A', 'C', 'B');
+        System.out.println(count(10));
+    }
+}
+```
+
+```text
+move disk 1 from A to B
+move disk 2 from A to C
+move disk 1 from B to C
+1023
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Disk 1 goes to B, disk 2 goes to C, disk 1 goes to C: 3 moves, which is 2 squared minus 1. For 10 disks the answer is 1023. The largest disk moves once because nothing can sit on top of it while it moves, so every other disk has to be on the spare peg first; and after it has moved, the others are only ever placed on top of it, never moved under it.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Recursion to a loop, and a loop to recursion
+
+Every recursive method can be written as a loop and every loop as a recursion. The rule in section 1 turns a loop into recursion; going the other way, the base case becomes the starting value and the recursive case becomes the body.
+
+### A linear recursion as a loop
+
+```java title="DigitSumBoth.java"
+public class DigitSumBoth {
+    // Question: write digitSum as a loop and compare it with the recursive version.
+    static int digitSumRec(int n) {
+        if (n == 0) {
+            return 0;
+        }
+        return n % 10 + digitSumRec(n / 10);
+    }
+
+    static int digitSumLoop(int n) {
+        int total = 0;                        // the base case value is the starting total
+        while (n > 0) {                       // the opposite of the base case n == 0
+            total += n % 10;                  // the work of the recursive case
+            n = n / 10;                       // the smaller input
+        }
+        return total;
+    }
+
+    public static void main(String[] args) {
+        int[] values = {4096, 0, 7, 99999};
+        for (int n : values) {
+            System.out.println(n + ": " + digitSumRec(n) + " " + digitSumLoop(n));
+        }
+    }
+}
+```
+
+```text
+4096: 19 19
+0: 0 0
+7: 7 7
+99999: 45 45
+```
+
+### A loop with two changing variables, as recursion
+
+The Collatz walk repeats: halve an even number, otherwise triple it and add one, until the number is 1. The loop changes two variables, `n` and `steps`, so the recursive version has two parameters.
+
+```java title="CollatzBoth.java"
+public class CollatzBoth {
+    // Question: convert the loop to a recursive method and check that both agree.
+    static int stepsLoop(int n) {
+        int steps = 0;
+        while (n != 1) {
+            n = (n % 2 == 0) ? n / 2 : 3 * n + 1;
+            steps++;
+        }
+        return steps;
+    }
+
+    static int stepsRec(int n, int steps) {
+        if (n == 1) {
+            return steps;                     // the opposite of the loop condition; return the answer variable
+        }
+        int next = (n % 2 == 0) ? n / 2 : 3 * n + 1;   // the body
+        return stepsRec(next, steps + 1);     // the updates become the arguments
+    }
+
+    public static void main(String[] args) {
+        int[] values = {1, 6, 7, 27};
+        for (int n : values) {
+            System.out.println(n + ": " + stepsLoop(n) + " " + stepsRec(n, 0));
+        }
+    }
+}
+```
+
+```text
+1: 0 0
+6: 8 8
+7: 16 16
+27: 111 111
+```
+
+Rule 1: `n` and `steps` become parameters. Rule 2: the loop runs while `n != 1`, so the base case is `n == 1` and it returns `steps`, the variable holding the answer. Rule 3: the body computes the next `n`, and the updates `next` and `steps + 1` are the arguments of the call. The initial values of the variables (`steps = 0`) become the first call's arguments.
+
+### Branching recursion as a loop, and memoisation
+
+```java title="FibMemo.java"
+public class FibMemo {
+    // Question: fib(30) by plain recursion, with a memo table, and by a loop. Compare the calls.
+    static long naiveCalls;
+    static long memoCalls;
+
+    static long fibNaive(int n) {
+        naiveCalls++;
+        if (n <= 1) {
+            return n;
+        }
+        return fibNaive(n - 1) + fibNaive(n - 2);
+    }
+
+    static long fibMemo(int n, long[] memo) {
+        memoCalls++;
+        if (n <= 1) {
+            return n;
+        }
+        if (memo[n] != 0) {
+            return memo[n];                   // already computed: reuse it
+        }
+        memo[n] = fibMemo(n - 1, memo) + fibMemo(n - 2, memo);
+        return memo[n];
+    }
+
+    static long fibLoop(int n) {
+        long a = 0;
+        long b = 1;
+        for (int i = 0; i < n; i++) {
+            long next = a + b;
+            a = b;
+            b = next;
+        }
+        return a;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(fibNaive(30) + " calls " + naiveCalls);
+        System.out.println(fibMemo(30, new long[31]) + " calls " + memoCalls);
+        System.out.println(fibLoop(30));
+    }
+}
+```
+
+```text
+832040 calls 2692537
+832040 calls 59
+832040
+```
+
+Plain recursion makes more than two and a half million calls for `fib(30)`. Remembering each answer the first time it is computed (**memoisation**) cuts the calls to about two per value, a linear number, with the same recursive shape. The loop does 30 steps. The conversion for a branching recursion is not mechanical: either remember the answers, or keep the last two values in variables.
+
+### Exam question 4: convert a loop to recursion (5 marks)
+
+Convert this method to a recursive method with the same result, and trace both for `n = 9`.
+
+```java
+static int sumStep(int n) {
+    int s = 0;
+    for (int i = n; i > 0; i = i - 2) {
+        s += i;
+    }
+    return s;
+}
+```
+
+(5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "convert" and "trace". The loop changes two variables, `i` (the counter) and `s` (the answer). `i` starts at `n`, runs while it is positive, and goes down by 2.
+
+</Step>
+
+<Step title="2. Plan">
+
+Apply the three rules. Parameters: `i` and `s`. Base case: the opposite of `i > 0`, which is `i <= 0`, returning `s`. Recursive case: add `i` to `s` and call with `i - 2`. The first call is `sumStepRec(n, 0)`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="SumStep.java"
+public class SumStep {
+    // Question: the loop and its recursive version.
+    static int sumStepLoop(int n) {
+        int s = 0;
+        for (int i = n; i > 0; i = i - 2) {
+            s += i;
+        }
+        return s;
+    }
+
+    static int sumStepRec(int i, int s) {
+        if (i <= 0) {
+            return s;                         // loop condition false: the answer is ready
+        }
+        return sumStepRec(i - 2, s + i);      // the body and the update
+    }
+
+    public static void main(String[] args) {
+        int[] values = {9, 10, 0, -3};
+        for (int n : values) {
+            System.out.println(n + ": " + sumStepLoop(n) + " " + sumStepRec(n, 0));
+        }
+    }
+}
+```
+
+```text
+9: 25 25
+10: 30 30
+0: 0 0
+-3: 0 0
+```
+
+| Call | `i` | `i <= 0`? | `s` so far |
+|---|---|---|---|
+| `sumStepRec(9, 0)` | 9 | false | 0 |
+| `sumStepRec(7, 9)` | 7 | false | 9 |
+| `sumStepRec(5, 16)` | 5 | false | 16 |
+| `sumStepRec(3, 21)` | 3 | false | 21 |
+| `sumStepRec(1, 24)` | 1 | false | 24 |
+| `sumStepRec(-1, 25)` | -1 | true | returns **25** |
+
+</Step>
+
+<Step title="4. Check">
+
+Both give 25 for 9 (9 + 7 + 5 + 3 + 1), 30 for 10, and 0 when the loop would not run at all (`n` of 0 or -3). The base case is a range test, `i <= 0`, because `i` steps by 2 and can jump from 1 to -1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Why a recursion overflows the stack
+
+Every call uses a stack frame, and the stack is small. Java throws `StackOverflowError` when it is full. There are four causes, and each has a different repair.
+
+```java title="StackCauses.java"
+public class StackCauses {
+    // Question: name the cause of each StackOverflowError.
+    static int noBase(int n) {                // 1. no base case at all
+        return n + noBase(n - 1);
+    }
+
+    static int stuck(int n) {                 // 2. the argument never changes
+        if (n == 0) {
+            return 0;
+        }
+        return stuck(n);
+    }
+
+    static int unreachable(int n) {           // 3. the base case can be stepped over
+        if (n == 1) {
+            return 1;
+        }
+        return n + unreachable(n - 2);
+    }
+
+    static boolean ping(int n) {              // 4. mutual recursion with no base case
+        return pong(n - 1);
+    }
+
+    static boolean pong(int n) {
+        return ping(n - 1);
+    }
+
+    static int sumTo(int n) {                 // correct, but too deep for a big n
+        if (n == 0) {
+            return 0;
+        }
+        return n + sumTo(n - 1);
+    }
+
+    public static void main(String[] args) {
+        try {
+            noBase(5);
+        } catch (StackOverflowError e) {
+            System.out.println("noBase: " + e.getClass().getName());
+        }
+        try {
+            stuck(5);
+        } catch (StackOverflowError e) {
+            System.out.println("stuck: " + e.getClass().getName());
+        }
+        try {
+            unreachable(4);
+        } catch (StackOverflowError e) {
+            System.out.println("unreachable(4): " + e.getClass().getName());
+        }
+        System.out.println("unreachable(5): " + unreachable(5));
+        try {
+            ping(5);
+        } catch (StackOverflowError e) {
+            System.out.println("ping: " + e.getClass().getName());
+        }
+        System.out.println("sumTo(1000): " + sumTo(1000));
+        try {
+            sumTo(10000000);
+        } catch (StackOverflowError e) {
+            System.out.println("sumTo(10000000): " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+noBase: java.lang.StackOverflowError
+stuck: java.lang.StackOverflowError
+unreachable(4): java.lang.StackOverflowError
+unreachable(5): 9
+ping: java.lang.StackOverflowError
+sumTo(1000): 500500
+sumTo(10000000): java.lang.StackOverflowError
+```
+
+| Cause | Example | Repair |
+|---|---|---|
+| No base case | `noBase` | add one |
+| The argument does not change | `stuck(n)` calls `stuck(n)` | pass a smaller argument |
+| The base case can be stepped over | `unreachable(4)` goes 4, 2, 0, -2 and never meets 1 | use a range: `n <= 1` |
+| Mutual recursion with no base case | `ping` and `pong` | give each method one |
+| (Correct but too deep) | `sumTo(10000000)` | use a loop, or recurse by halves |
+
+`unreachable(5)` works because 5, 3 and 1 do meet the base case, which is exactly why this fault is easy to miss: it passes the tests for odd inputs and fails on even ones. The stack holds only a limited number of frames (the exact limit depends on the JVM settings and the size of each frame), so a correct linear recursion over a very large input also fails; a halving recursion needs only about log of `n` frames.
+
+### Exam question 5: diagnose and repair (4 marks)
+
+The call `unreachable(4)` ends in a `StackOverflowError` but `unreachable(5)` returns 9. Explain the difference and repair the method. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "explain" and "repair". The method returns 1 when `n == 1` and otherwise returns `n + unreachable(n - 2)`. One input works and one does not.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the sequence of arguments for each input and see whether it meets the base case.
+
+</Step>
+
+<Step title="3. Solution">
+
+For 5 the arguments are 5, 3, 1, and 1 meets the base case, so the result is 5 + 3 + 1 = 9. For 4 they are 4, 2, 0, -2, -4 and so on: they step over 1 because they decrease by 2 from an even start, so the base case is never true and the calls never stop. The repair is a base case that is a range:
+
+```java title="UnreachableFixed.java"
+public class UnreachableFixed {
+    // Question: repair the base case so that every starting value stops.
+    static int fixed(int n) {
+        if (n <= 1) {
+            return Math.max(n, 0);            // 1 for an odd start, 0 when it stepped past
+        }
+        return n + fixed(n - 2);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(fixed(5));
+        System.out.println(fixed(4));
+        System.out.println(fixed(1));
+        System.out.println(fixed(0));
+    }
+}
+```
+
+```text
+9
+6
+1
+0
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`fixed(4)` is 4 + 2 + 0 = 6. `fixed(5)` is still 9, and `fixed(1)` is 1. Every argument now ends at a value of at most 1, whichever parity it started with. A review rule to apply to any recursion that steps by more than 1: the base case must be written as `<=` or `<`, never `==`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Mutually recursive methods each need a base case, because either can be called first. Backtracking is choose, explore, undo; undo is only needed when the state is shared, and a pruning test stops a branch early. Hanoi takes `2 * moves(n - 1) + 1` moves, which is 2 to the n minus 1. A loop becomes recursion by turning its changing variables into parameters, the opposite of its condition into the base case that returns the answer variable, and its update into the arguments; going back, the base case value is the starting value. A recursion overflows the stack when it has no base case, does not shrink its argument, steps over its base case, is mutual with no base case, or is correct but too deep.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why do isEven and isOdd return different values at n == 0?">
+
+Zero is even and not odd. The chain of calls ends in whichever method receives 0 and its answer travels up unchanged, so the two base cases must give the right answer for their own question.
+
+</CheckQuestion>
+
+<CheckQuestion question="In the subsets method, what goes wrong if the line that removes the last element is deleted?">
+
+The shared list keeps every element ever added, so later subsets print with extra elements (`[1, 2, 3, 3]` and so on). The undo restores the state before the second branch.
+
+</CheckQuestion>
+
+<CheckQuestion question="How many moves do 5 disks need in Towers of Hanoi, and why does one extra disk double the work?">
+
+31, which is 2 to the 5 minus 1. An extra disk means moving the whole smaller tower twice (off and back on) plus one move of the big disk: `2 * moves(n - 1) + 1`.
+
+</CheckQuestion>
+
+<CheckQuestion question="A loop changes variables n and steps and runs while n != 1. What is the base case of the recursive version and what does it return?">
+
+The base case is `n == 1`, the opposite of the loop condition, and it returns `steps`, the variable that holds the answer. The updates become the arguments of the recursive call.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can a method with base case n == 1 and recursive case n - 2 work for 5 and overflow for 4?">
+
+From 5 the arguments 5, 3, 1 meet the base case. From 4 they are 4, 2, 0, -2 and never equal 1. Writing the base case as `n <= 1` catches both.
+
+</CheckQuestion>
+
+</CheckQuestions>
