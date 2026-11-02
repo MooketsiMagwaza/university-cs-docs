@@ -49,8 +49,8 @@ const texts = (drawing) => {
   return out;
 };
 
-test('there are thirteen scenarios and each one builds and draws every step', () => {
-  assert.equal(memoryScenarioIds.length, 13);
+test('there are twenty scenarios and each one builds and draws every step', () => {
+  assert.equal(memoryScenarioIds.length, 20);
   for (const id of memoryScenarioIds) {
     const sc = buildMemoryScenario(id);
     assert.ok(sc.steps.length >= 1, `${id} has steps`);
@@ -146,4 +146,19 @@ test('traversal draws no dead arrows, so cur only shows the addresses it visited
   const final = sc.steps[sc.steps.length - 1].s;
   assert.deepEqual(final.vars.find((v) => v.n === 'cur').old, ['367', '100', '450', '290']);
   assert.ok(!classes(drawDiagram(final, sc.opts)).includes('ar dead'));
+});
+
+test('the Lecture 14 linked list scenarios leave the nodes they unlink as garbage', () => {
+  for (const id of ['llremove', 'llexercise', 'llpractice']) {
+    const sc = buildMemoryScenario(id);
+    const last = finalState(sc);
+    const pointedAt = new Set();
+    for (const o of last.objs) o.cells.forEach((c) => c.v.r != null && pointedAt.add(c.v.r));
+    last.vars.forEach((v) => v.v.r != null && pointedAt.add(v.v.r));
+    const garbage = last.objs.filter((o) => !pointedAt.has(o.addr)).map((o) => o.addr);
+    assert.ok(garbage.length >= 1, `${id} leaves at least one unreachable node`);
+  }
+  const added = finalState(buildMemoryScenario('lladdlast'));
+  const tail = added.objs.find((o) => o.addr === 300);
+  assert.equal(tail.cells.find((c) => c.n === 'next').v.r, 400, 'addLast links the old tail to the new node');
 });

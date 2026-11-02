@@ -288,6 +288,148 @@ const scenarios: Record<string, Builder> = {
     B.v('head', { r: 100 }, { y: 60 }).v('tail', { r: 367 }, { y: 150, via: 'under' }).snap(0, '');
     return B.done('Doubly linked list');
   },
+
+  llcircular() {
+    const B = memoryBuilder();
+    B.node(100, 6, { r: 200 }, { x: 240, y: 60, cw: 56, t: 'Node' })
+      .node(200, 3, { r: 300 }, { x: 440, y: 60, cw: 56 })
+      .node(300, 9, { r: 100 }, { x: 640, y: 60, cw: 56 });
+    B.v('head', { r: 100 }, { y: 60 }).snap(0, '');
+    return B.done('Circular linked list');
+  },
+
+  lladdlast() {
+    const B = memoryBuilder().code([
+      'Node n = new Node(7);',
+      'Node currNode = head;',
+      'while (currNode.next != null)',
+      '    currNode = currNode.next;',
+      'currNode.next = n;',
+    ]);
+    B.node(100, 6, { r: 200 }, { x: 240, y: 60, cw: 56, t: 'Node' })
+      .node(200, 3, { r: 300 }, { x: 440, y: 60, cw: 56 })
+      .node(300, 9, 'null', { x: 640, y: 60, cw: 56 })
+      .v('head', { r: 100 }, { y: 60 });
+    B.snap(-1, 'The lecture\'s list 6 → 3 → 9. To add 7 at the END, the new node must become the tail, so we first have to find the old tail: the node whose next is null.');
+    B.node(400, 7, 'null', { x: 840, y: 200, cw: 56 }).v('n', { r: 400 }, { y: 200 });
+    B.snap(0, 'Create the new node: data 7, next null. n holds its address (400). It is not part of the list yet: nothing in the list points to it.');
+    B.v('currNode', { r: 100 }, { y: 330 });
+    B.snap(1, 'Start the traversal at the first node: currNode = head, so currNode holds 100.');
+    B.snap(2, 'currNode.next != null? The 6 node\'s next is 200, so yes: keep walking.');
+    B.sv('currNode', { r: 200 }).snap(3, 'currNode = currNode.next: it now holds 200, the 3 node.');
+    B.snap(2, 'currNode.next != null? The 3 node\'s next is 300, so yes.');
+    B.sv('currNode', { r: 300 }).snap(3, 'currNode now holds 300, the 9 node.');
+    B.snap(2, 'currNode.next != null? The 9 node\'s next is null, so the loop stops. currNode is ON the tail. (For a list of n nodes this loop moves n − 1 times: addLast is O(n).)');
+    B.set(300, 'next', { r: 400 }).snap(4, 'currNode.next = n: the old tail now points to the new node. The list is 6 → 3 → 9 → 7 and 7 is the new tail, its next still null.');
+    return B.done('addLast: walk to the tail, then link the new node');
+  },
+
+  lladdfront() {
+    const B = memoryBuilder().code(['Node n = new Node(7);', 'n.next = head;', 'head = n;']);
+    B.node(100, 6, { r: 200 }, { x: 440, y: 60, cw: 56, t: 'Node' })
+      .node(200, 3, { r: 300 }, { x: 640, y: 60, cw: 56 })
+      .node(300, 9, 'null', { x: 840, y: 60, cw: 56 })
+      .v('head', { r: 100 }, { y: 60 });
+    B.snap(-1, 'The lecture\'s list 6 → 3 → 9. To add 7 in FRONT nothing needs to be traversed: only head and the new node\'s next change.');
+    B.node(400, 7, 'null', { x: 240, y: 200, cw: 56, t: 'Node' }).v('n', { r: 400 }, { y: 200 });
+    B.snap(0, 'Create the new node (400) with data 7 and next null. It is outside the list for now.');
+    B.set(400, 'next', { r: 100 }).snap(1, 'n.next = head: the new node points at the current first node (100). Do this FIRST, while head still holds the address of the old list.');
+    B.sv('head', { r: 400 }).snap(2, 'head = n: head now holds 400, so the list is 7 → 6 → 3 → 9. Only two assignments, whatever the length of the list: addFront is O(1).');
+    return B.done('addFront: two assignments');
+  },
+
+  lladdat() {
+    const B = memoryBuilder().code([
+      'Node n = new Node(7);',
+      'Node cur = head;      // the node BEFORE the position (position 1: the first node)',
+      'n.next = cur.next;',
+      'cur.next = n;',
+    ]);
+    B.node(100, 6, { r: 200 }, { x: 240, y: 60, cw: 56, t: 'Node' })
+      .node(200, 3, { r: 300 }, { x: 540, y: 60, cw: 56 })
+      .node(300, 9, 'null', { x: 760, y: 60, cw: 56 })
+      .v('head', { r: 100 }, { y: 60 });
+    B.snap(-1, 'The lecture\'s list 6 → 3 → 9. We add 7 as the SECOND node (index 1): the new node must end up between 6 and 3.');
+    B.node(400, 7, 'null', { x: 390, y: 200, cw: 56, t: 'Node' }).v('n', { r: 400 }, { y: 200 });
+    B.snap(0, 'Create the new node (400): data 7, next null.');
+    B.v('cur', { r: 100 }, { y: 330 });
+    B.snap(1, 'Traverse until the node BEFORE the position. For index 1 that is the first node, so cur = head and the loop moves 0 times.');
+    B.set(400, 'next', { r: 200 }).snap(2, 'n.next = cur.next: the new node first grabs the address of its right neighbour (200, the 3 node).');
+    B.set(100, 'next', { r: 400 }).snap(3, 'cur.next = n: now 6 points to 7. The list is 6 → 7 → 3 → 9. Done in this order, nothing is lost; the other way round, the 3 → 9 part of the list would be unreachable.');
+    return B.done('add at a position: link the new node to its right neighbour first');
+  },
+
+  llremove() {
+    const B = memoryBuilder().code([
+      'head = head.next;      // removeFront()',
+      'Node cur = head;       // removeLast() starts here',
+      'while (cur.next.next != null)',
+      '    cur = cur.next;',
+      'cur.next = null;',
+    ]);
+    B.node(100, 6, { r: 200 }, { x: 240, y: 60, cw: 56, t: 'Node' })
+      .node(200, 3, { r: 300 }, { x: 440, y: 60, cw: 56 })
+      .node(300, 9, { r: 400 }, { x: 640, y: 60, cw: 56 })
+      .node(400, 7, 'null', { x: 840, y: 60, cw: 56 })
+      .v('head', { r: 100 }, { y: 60 });
+    B.snap(-1, 'A list 6 → 3 → 9 → 7. We remove the first node, then the last.');
+    B.sv('head', { r: 200 }).snap(0, 'removeFront: head = head.next. head now holds 200. Nothing points to the 6 node any more, so it is isolated: the garbage collector reclaims its memory. List: 3 → 9 → 7.');
+    B.v('cur', { r: 200 }, { y: 200 });
+    B.snap(1, 'removeLast: start at the first node, cur = head.');
+    B.snap(2, 'cur.next.next != null? cur.next is 300 and its next is 400, not null: keep walking.');
+    B.sv('cur', { r: 300 }).snap(3, 'cur = cur.next: cur holds 300, the 9 node.');
+    B.snap(2, 'cur.next.next != null? cur.next is 400 and its next is null: stop. cur is the SECOND-LAST node.');
+    B.set(300, 'next', 'null').snap(4, 'cur.next = null: the 9 node no longer points to the 7 node, which is isolated and becomes garbage. List: 3 → 9. (On a one-node list cur.next.next would fail: cur.next is null.)');
+    return B.done('removeFront and removeLast');
+  },
+
+  llpractice() {
+    const B = memoryBuilder().code([
+      'Node a = new Node(4);',
+      'a.next = new Node(8);',
+      'Node b = a.next;',
+      'b.next = new Node(2);',
+      'a = a.next;',
+    ]);
+    B.snap(-1, 'Five lines of Java, no list class: just Node variables. Work out what each line does to the boxes before you step on.');
+    B.node(100, 4, 'null', { x: 300, y: 60, cw: 56, t: 'Node' }).v('a', { r: 100 }, { y: 60 });
+    B.snap(0, 'new Node(4) makes a node at 100 with next null. a holds its address.');
+    B.node(200, 8, 'null', { x: 500, y: 60, cw: 56 }).set(100, 'next', { r: 200 });
+    B.snap(1, 'A second node (200) is created and its address is stored in the first node\'s next. a is unchanged: it still holds 100.');
+    B.v('b', { r: 200 }, { y: 200 });
+    B.snap(2, 'b = a.next: follow a to the 4 node, read its next field (200) and copy it into b. b and the first node\'s next now hold the same address.');
+    B.node(300, 2, 'null', { x: 700, y: 60, cw: 56 }).set(200, 'next', { r: 300 });
+    B.snap(3, 'b.next = new Node(2): follow b to the 8 node and store the address of a new node (300) in its next field. The chain is 4 → 8 → 2.');
+    B.sv('a', { r: 200 }).snap(4, 'a = a.next: a moves to 200. Nothing points to the 4 node now (a no longer does, and no next field does), so it is garbage. a and b both point at the 8 node; the reachable list is 8 → 2.');
+    return B.done('Node variables: what each line does');
+  },
+
+  llexercise() {
+    const B = memoryBuilder().code([
+      'LinkedList myList = new LinkedList();',
+      'myList.addLast(6);',
+      'myList.addLast(3);',
+      'myList.addLast(9);',
+      'myList.removeFront();',
+      'myList.addFront(12);',
+      'myList.addFront(8);',
+    ]);
+    B.snap(-1, 'The end of Lecture 14 asks for a memory diagram of every action of the tester, in order. This is that diagram for a shorter run: three nodes added, the first removed, two added in front.');
+    B.obj(340, [['head', 'null']], { x: 200, y: 30, w: 190, t: 'LinkedList' }).v('myList', { r: 340 }, { y: 30 });
+    B.snap(0, 'new LinkedList(): the constructor sets head to null. myList holds the address of the LinkedList object (340). The list is empty.');
+    B.node(100, 6, 'null', { x: 480, y: 40, cw: 56, t: 'Node' }).set(340, 'head', { r: 100 });
+    B.snap(1, 'addLast(6) on an empty list: the new node becomes the first node, so head = 100.');
+    B.node(200, 3, 'null', { x: 660, y: 40, cw: 56 }).set(100, 'next', { r: 200 });
+    B.snap(2, 'addLast(3): walk to the tail (the 6 node) and link the new node (200) after it.');
+    B.node(300, 9, 'null', { x: 840, y: 40, cw: 56 }).set(200, 'next', { r: 300 });
+    B.snap(3, 'addLast(9): walk to the tail (the 3 node) and link the new node (300) after it. List: 6 → 3 → 9.');
+    B.set(340, 'head', { r: 200 }).snap(4, 'removeFront: head = head.next, so head holds 200. The 6 node is isolated: garbage. List: 3 → 9.');
+    B.node(400, 12, { r: 200 }, { x: 480, y: 170, cw: 56 }).set(340, 'head', { r: 400 });
+    B.snap(5, 'addFront(12): the new node (400) points at the old first node (200), then head = 400. List: 12 → 3 → 9.');
+    B.node(500, 8, { r: 400 }, { x: 480, y: 300, cw: 56 }).set(340, 'head', { r: 500 });
+    B.snap(6, 'addFront(8): the new node (500) points at 400, then head = 500. Final list: 8 → 12 → 3 → 9, with the 6 node left as garbage.');
+    return B.done('The Lecture 14 tester, action by action');
+  },
 };
 
 export const memoryScenarioIds = Object.keys(scenarios);
