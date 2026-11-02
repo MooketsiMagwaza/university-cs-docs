@@ -49,8 +49,8 @@ const texts = (drawing) => {
   return out;
 };
 
-test('there are twenty-five scenarios and each one builds and draws every step', () => {
-  assert.equal(memoryScenarioIds.length, 25);
+test('there are twenty-eight scenarios and each one builds and draws every step', () => {
+  assert.equal(memoryScenarioIds.length, 28);
   for (const id of memoryScenarioIds) {
     const sc = buildMemoryScenario(id);
     assert.ok(sc.steps.length >= 1, `${id} has steps`);
@@ -185,4 +185,45 @@ test('the generic set reuses the first empty cell after a remove', () => {
   assert.equal(arr.cells[1].v.t, '12');
   assert.equal(arr.cells[2].v.t, '7', 'the duplicate 7 is still there');
   assert.equal(arr.cells[3].v.t, 'null');
+});
+
+test('the iterator scenario moves cursor and lastRet and removes the last element seen', () => {
+  const sc = buildMemoryScenario('iterator');
+  const itOf = (state) => state.objs.find((o) => o.addr === 400);
+  const field = (o, n) => o.cells.find((c) => c.n === n).v.t;
+  assert.equal(field(itOf(sc.steps[5].s), 'cursor'), '3');
+  assert.equal(field(itOf(sc.steps[5].s), 'lastRet'), '2');
+  const afterRemove = sc.steps[6].s;
+  assert.equal(field(itOf(afterRemove), 'lastRet'), '-1');
+  assert.equal(field(afterRemove.objs.find((o) => o.addr === 200), 'size'), '5');
+  const arr = afterRemove.objs.find((o) => o.addr === 300);
+  assert.equal(arr.cells[2].v.t, '81');
+  assert.ok(arr.cells[2].old.includes('12'), 'the removed 12 is crossed out');
+  assert.equal(arr.cells[5].v.t, 'null');
+});
+
+test('the Person list shifts left on remove(2) and leaves Mpho Wangu as garbage', () => {
+  const last = finalState(buildMemoryScenario('personlist'));
+  const arr = last.objs.find((o) => o.addr === 300);
+  assert.equal(arr.cells[2].v.r, 1300);
+  assert.equal(arr.cells[4].v.r, 1500);
+  assert.equal(arr.cells[5].v.t, 'null');
+  assert.equal(last.objs.find((o) => o.addr === 200).cells.find((c) => c.n === 'size').v.t, '5');
+  const pointedAt = new Set();
+  for (const o of last.objs) o.cells.forEach((c) => c.v.r != null && pointedAt.add(c.v.r));
+  last.vars.forEach((v) => v.v.r != null && pointedAt.add(v.v.r));
+  assert.ok(!pointedAt.has(1200), 'nothing points at the removed Person');
+});
+
+test('the LinkedList scenario keeps both directions of every link consistent', () => {
+  const last = finalState(buildMemoryScenario('llcourses'));
+  const node = (a) => last.objs.find((o) => o.addr === a);
+  const f = (a, n) => node(a).cells.find((c) => c.n === n).v;
+  assert.equal(f(200, 'first').r, 600);
+  assert.equal(f(200, 'last').r, 400);
+  assert.equal(f(600, 'next').r, 700);
+  assert.equal(f(700, 'prev').r, 600);
+  assert.equal(f(700, 'next').r, 400);
+  assert.equal(f(400, 'prev').r, 700);
+  assert.equal(f(400, 'next').t, 'null');
 });

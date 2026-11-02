@@ -554,6 +554,118 @@ const scenarios: Record<string, Builder> = {
     B.snap(6, 'addFront(8): the new node (500) points at 400, then head = 500. Final list: 8 → 12 → 3 → 9, with the 6 node left as garbage.');
     return B.done('The Lecture 14 tester, action by action');
   },
+
+  iterator() {
+    const B = memoryBuilder().code([
+      'ArrayList<Integer> nums = new ArrayList<Integer>(Arrays.asList(51, 35, 12, 81, 54, 16));',
+      'Iterator<Integer> it = nums.iterator();',
+      'it.next();',
+      'it.next();',
+      'it.next();',
+      'it.remove();',
+      'it.next();',
+    ]);
+    B.snap(-1, "Lecture 13's iterator picture, as memory. The list holds 51, 35, 12, 81, 54, 16. An iterator is a small object that remembers where it is in the list.");
+    B.arr(300, 6, { x: 330, y: 40, cw: 62, t: 'Object[]' })
+      .obj(200, [['size', 6], ['elementData', { r: 300 }]], { x: 20, y: 150, w: 210, t: 'ArrayList' })
+      .v('nums', { r: 200 }, { y: 150 });
+    [51, 35, 12, 81, 54, 16].forEach((v, i) => B.set(300, i, v));
+    B.snap(0, 'The ArrayList (200) holds its elements in a hidden array (300). (The cells really hold references to Integer objects; the picture writes the numbers.) size is 6.');
+    B.obj(400, [['cursor', 0], ['lastRet', -1]], { x: 330, y: 190, w: 200, t: 'Iterator' }).v('it', { r: 400 }, { y: 250 });
+    B.snap(1, 'iterator() creates an Iterator object (400). cursor is the index of the NEXT element to return: 0, the position before the first element. lastRet is the index of the last element returned: -1 means none yet, which is why remove() would fail now.');
+    B.set(400, 'cursor', 1).set(400, 'lastRet', 0).snap(2, 'next() returns the element at cursor (51), then cursor becomes 1 and lastRet becomes 0. The iterator now sits between 51 and 35.');
+    B.set(400, 'cursor', 2).set(400, 'lastRet', 1).snap(3, 'next() returns 35. cursor 2, lastRet 1.');
+    B.set(400, 'cursor', 3).set(400, 'lastRet', 2).snap(4, 'next() returns 12. cursor 3, lastRet 2. The last element seen is 12.');
+    B.clean();
+    [
+      [2, 81],
+      [3, 54],
+      [4, 16],
+    ].forEach(([k, v]) => B.set(300, k, v));
+    B.set(300, 5, 'null').set(200, 'size', 5).set(400, 'cursor', 2).set(400, 'lastRet', -1);
+    B.snap(5, 'remove() removes the element at lastRet (index 2, the 12): the later elements shift one place left, the last used slot becomes null and size becomes 5. The iterator steps back with it: cursor = 2, and lastRet is -1 again, so a second remove() with no next() in between would fail.');
+    B.set(400, 'cursor', 3).set(400, 'lastRet', 2).snap(6, 'next() returns the element at cursor 2, which is now 81. The 12 is never returned again.');
+    return B.done('Iterator: next() and remove()');
+  },
+
+  personlist() {
+    const B = memoryBuilder().code([
+      'ArrayList<Person> people = new ArrayList<Person>();',
+      'people.add(new Person(265341, "Lesego Jones", 19));',
+      'people.add(new Person(265476, "Thomas Kago", 25));',
+      'people.add(new Person(673523, "Mpho Wangu", 28));',
+      'people.add(new Person(118204, "Neo Dube", 22));',
+      'people.add(new Person(540912, "Kagiso Moeng", 31));',
+      'people.add(new Person(722301, "Amo Seretse", 20));',
+      'people.remove(2);',
+      'people.remove(8);',
+    ]);
+    B.snap(-1, "Lab 8, question 1 (iv): the state of memory while the records are read and two items are removed. The file has the three given records plus three more. To keep the picture readable, each name is written inside its Person (in the exam, draw each name as its own String object).");
+    B.arr(300, 10, { x: 330, y: 20, cw: 46, t: 'Object[]' })
+      .obj(200, [['size', 0], ['elementData', { r: 300 }]], { x: 20, y: 130, w: 210, t: 'ArrayList' })
+      .v('people', { r: 200 }, { y: 130 });
+    B.snap(0, 'An empty ArrayList (200). Its hidden array (300) is created with the default capacity of 10 cells, all null. size is 0.');
+    const people = [
+      [1000, 265341, '"Lesego Jones"', 19, 20, 120],
+      [1100, 265476, '"Thomas Kago"', 25, 340, 120],
+      [1200, 673523, '"Mpho Wangu"', 28, 660, 120],
+      [1300, 118204, '"Neo Dube"', 22, 20, 300],
+      [1400, 540912, '"Kagiso Moeng"', 31, 340, 300],
+      [1500, 722301, '"Amo Seretse"', 20, 660, 300],
+    ];
+    people.forEach(([addr, id, name, age, x, y], i) => {
+      B.obj(addr, [['id', id], ['fullname', name], ['age', age]], { x: x + 260, y: y + 90, w: 230, t: 'Person' })
+        .set(300, i, { r: addr })
+        .set(200, 'size', i + 1);
+      B.snap(i + 1, 'One line of the file becomes a Person (' + addr + '). add() stores its address in the first free slot, index ' + i + ', and size becomes ' + (i + 1) + '.');
+    });
+    B.clean()
+      .set(300, 2, { r: 1300 })
+      .set(300, 3, { r: 1400 })
+      .set(300, 4, { r: 1500 })
+      .set(300, 5, 'null')
+      .set(200, 'size', 5);
+    B.snap(7, 'remove(2) removes the third item, Mpho Wangu (1200). The addresses after it shift one place left (1300, 1400, 1500 move to indexes 2, 3, 4), index 5 becomes null and size becomes 5. Nothing points to 1200 now, so it is garbage.');
+    B.snap(8, 'remove(8): index 8 is not below size (5), so there is no item to remove. The ArrayList checks the index first, throws IndexOutOfBoundsException, and nothing in memory changes. The program stops here unless the exception is caught. This is what the lab asks you to notice.');
+    return B.done('Lab 8: an ArrayList of Person, remove(2) and remove(8)');
+  },
+
+  llcourses() {
+    const B = memoryBuilder().code([
+      'LinkedList<String> courses = new LinkedList<String>();',
+      'courses.add("DSA");',
+      'courses.add("Prob");',
+      'courses.addFirst("DB");',
+      'courses.removeLast();',
+      'courses.add(1, "Net");',
+    ]);
+    B.snap(-1, "Lab 8, question 2 (iii): a LinkedList of course names. Java's LinkedList is doubly linked: each node has prev, data and next, and the list object keeps first, last and size. (The names are written inside the nodes; in the exam draw each as a String object.)");
+    B.obj(200, [['first', 'null'], ['last', 'null'], ['size', 0]], { x: 20, y: 130, w: 210, t: 'LinkedList' }).v('courses', { r: 200 }, { y: 130 });
+    B.snap(0, 'new LinkedList: first and last are null and size is 0. No array and no capacity: nodes are created one at a time.');
+    B.node(400, '"DSA"', 'null', { x: 330, y: 40, cw: 64, prev: 'null', t: 'Node' })
+      .set(200, 'first', { r: 400 })
+      .set(200, 'last', { r: 400 })
+      .set(200, 'size', 1);
+    B.snap(1, 'add("DSA") on an empty list: one node (400) with no neighbours. first and last both point at it. size 1.');
+    B.node(500, '"Prob"', 'null', { x: 640, y: 40, cw: 64, prev: { r: 400 } })
+      .set(400, 'next', { r: 500 })
+      .set(200, 'last', { r: 500 })
+      .set(200, 'size', 2);
+    B.snap(2, 'add("Prob") joins at the END: the new node (500) points back at 400, 400.next points forward at 500, and last moves to 500. No other element moves.');
+    B.node(600, '"DB"', { r: 400 }, { x: 330, y: 210, cw: 64, prev: 'null' })
+      .set(400, 'prev', { r: 600 })
+      .set(200, 'first', { r: 600 })
+      .set(200, 'size', 3);
+    B.snap(3, 'addFirst("DB") joins at the FRONT: the new node (600) points forward at the old first node (400), 400.prev points back at 600, and first moves to 600. size 3: DB, DSA, Prob.');
+    B.set(200, 'last', { r: 400 }).set(400, 'next', 'null').set(200, 'size', 2);
+    B.snap(4, 'removeLast() returns "Prob": last moves back to 400 (the old last node\'s prev) and 400.next becomes null. Nothing points at 500 now, so it is garbage. size 2: DB, DSA.');
+    B.node(700, '"Net"', { r: 400 }, { x: 640, y: 210, cw: 64, prev: { r: 600 } })
+      .set(600, 'next', { r: 700 })
+      .set(400, 'prev', { r: 700 })
+      .set(200, 'size', 3);
+    B.snap(5, 'add(1, "Net") inserts between DB and DSA: the list walks to index 1, the new node (700) points back at 600 and forward at 400, then 600.next and 400.prev are changed to 700. No element is shifted. size 3: DB, Net, DSA.');
+    return B.done('Lab 8: a LinkedList of course names');
+  },
 };
 
 export const memoryScenarioIds = Object.keys(scenarios);
