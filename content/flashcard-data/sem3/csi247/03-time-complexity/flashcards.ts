@@ -44,4 +44,5 @@ export const flashcardData = [
   { front: "Best, average and worst case of a search of n items", back: "Best 1 comparison (the target is first), worst n (last or absent), average present (n + 1) / 2, which is 4.5 for 8 items. The best case is O(1); the average and worst are O(n)." },
   { front: "Why the worst case is quoted", back: "It is the maximum runtime for size n, so it is a guarantee for every input, and it is the most crucial case in domains such as surgery and air traffic control." },
   { front: "Average, string and factorial algorithms", back: "The average of n numbers, printing the characters of a string of length n, and an iterative n! each use one loop of about n passes, so each is O(n)." },
+  { front: "Where O(log n) comes from", back: "A loop that halves its counter (i = i / 2) runs about log2 n times: 1024 reaches 1 after 10 halvings. Binary search (Lecture 8) halves the search space, and merge sort (Lecture 9) halves the problem and does n work per level, which gives O(n log n)." },
 ];

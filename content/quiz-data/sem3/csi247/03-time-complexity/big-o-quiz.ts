@@ -467,5 +467,24 @@ export const quizData = [
       "For small n the quadratic term is larger (n = 6).",
       "The reason is the growth of the terms, not the constants."
     ]
+  },
+  {
+    "group": "Big-O and growth",
+    "question": "How many times does the body of this loop run for n = 1024?",
+    "code": "for (int i = n; i > 1; i = i / 2) {\n    passes++;\n}",
+    "options": [
+      "10",
+      "11",
+      "512",
+      "1024"
+    ],
+    "correctIndex": 0,
+    "explanation": "i takes the values 1024, 512, ..., 2: ten values, then 1 ends the loop. A loop that halves its counter runs about log2 n times, which is where O(log n) comes from.",
+    "optionFeedback": [
+      "Correct. 2 to the 10 is 1024, so ten halvings reach 1.",
+      "11 counts the condition checks (ten that are true and the final false one), not the body.",
+      "512 is the first value after one halving, not the number of passes.",
+      "1024 would be the count for a loop that subtracts 1 each time."
+    ]
   }
 ];
