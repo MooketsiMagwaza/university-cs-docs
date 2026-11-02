@@ -4,14 +4,17 @@ This audit maps the owner's own CSI247 material to the lessons that cover it, li
 
 The owner's standing complaint is that writers do only what is named. The audit exists to stop that: a lesson is planned from the whole row set for its chapter, not from the title of the chapter.
 
-## Scope rule (owner, 2026-11-02): the Lectures folder is the whole course
+## Scope rule (owner, 2026-11-02): the lectures and the labs are the whole course
 
-The owner said: "refer to the lecture notes here as the entire course scope" (`C:\Users\Nido\Desktop\Semester_3_Vault\Current\CSI247\Lectures`). That folder holds `Lec01` to `Lec15` and `Lab07 - generics-1.pdf`. So:
+The owner said first "refer to the lecture notes here as the entire course scope" (`CSI247\Lectures`: `Lec01` to `Lec16`, and `Lab07 - generics-1.pdf`), then "all the labs are in here to confirm assessment scope too" (`CSI247\Resources\Labs`: Labs 2 to 8; Lab 1 is in `Revision/` and is treated as a lab), and "memory diagrams are a large part of assessments". So:
 
-- The labs held elsewhere (Labs 1, 4, 5, 6 and 8), `Revision/` (the study checklist, the revision guide, the annotated Lecture 7), `Resources/` (the Full Notes, the outline, the rules) and the books are **not scope**. Rows in section 4 that cite them (ids starting `RG-`, items that name a Lab other than Lab 7, the Full Notes or the revision guide) are marked **Out of scope** and are kept only as a record of what was found.
-- Section 5 (sibling concepts nobody named) is **withdrawn**. Depth now comes from the lecture's own topics: more variations of each lecture example, the lecture's own exercises answered in full, the exam forms those exercises use, and the common errors. A new topic is not added because it is a "sibling".
-- Section 4 was written before this rule and was not re-checked row by row against the slides. Where a row's item is not a slide topic (for example mutual recursion, Towers of Hanoi, amortised cost, Big-Omega) it is out of scope even if it is not marked. The authoritative in-scope list is the slide list per lane in section 8 of the brief. Each chapter's lane starts by listing its lecture's slide titles and checking every planned section against them.
-- Chapter 02 was first written beyond Lecture 6 and was trimmed on 2026-11-02 (see the work order CSI247-17).
+- **In scope:** the slides in `Lectures/` and the lab sheets (Labs 1 to 8).
+- **Not scope:** `Revision/` (the study checklist, the revision guide, the annotated Lecture 7), `Resources/Data Structures Full Notes.pdf`, the course outline and rules (except as background), the books. Rows that cite the revision guide, the checklist or the Full Notes (ids starting `RG-`) are marked **Out of scope** and kept only as a record.
+- **Memory diagrams** are a large part of the assessments: every lane whose lecture or lab creates variables, objects, arrays, lists or calls teaches the diagram as an exam form (draw the state; read a diagram), with `MemoryDiagram` scenarios.
+- Section 5 (sibling concepts nobody named) is **withdrawn**: depth comes from the lecture and lab topics (more variations, the lecture and lab exercises answered in full, the exam forms they use, common errors), not from new topics.
+- Section 4 was written before this rule and was not re-checked row by row against the slides and labs. Where a row's item is neither a slide topic nor a lab task (for example mutual recursion, Towers of Hanoi, amortised cost, Big-Omega) it is out of scope even if unmarked. The authoritative in-scope list is the lane table in section 8 of the brief. Each chapter's lane starts by listing its lecture and lab and checking every planned section against them.
+- **A lecture and two labs were not in the first audit:** `Lec16 - Queue Implementation` (queue review, types of queues, the linked-list queue `Queue1` with its `Node`, the array queue and the effect of `enqueue` and `dequeue` on front and tail, exercises), `Lab02` (UML of the lay-by class, `preProcessing`, `validate`, `linearSearch` on objects, a menu loop) and `Lab03 - Recursion` (`factorial`, `fibonacci`, `power`; trace `factorial(7)`, `fibonacci(9)`, `power(2, 8)`; remove a base case and test; iterative versions).
+- Chapter 02 was first written beyond Lecture 6 and Lab 3 and was trimmed on 2026-11-02 (work order CSI247-17).
 
 ## 1. Sources and what was read
 
@@ -192,7 +195,7 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L08-1 | Linear search on unordered and ordered arrays; both return conventions (`boolean`, index, `-1`) | linear-search (14 KB) | Covered | J04 |
 | L08-2 | Linear search complexity; when to use it; why not sort first | linear-search | Covered | J04 |
 | L08-3 | Binary search: requirement, halving, illustration, iterative and recursive code | binary-search (17 KB) | Covered | J04 |
-| L08-4 | Lab 4: `linearSearch` on `double[]`, `binarySearch(arr, key, start, end)`, a menu loop that ends on any other key, `Math.random` data (never shown anywhere on the site) | searching-exam-drill | Out of scope | J04 |
+| L08-4 | Lab 4: `linearSearch` on `double[]`, `binarySearch(arr, key, start, end)`, a menu loop that ends on any other key, `Math.random` data (never shown anywhere on the site) | searching-exam-drill | Thin | J04 |
 | L08-5 | Searching objects by a field; first and last occurrence; count of matches | searching-exam-drill | Thin | J04 |
 
 ### Lec09 Sorting arrays (Test 1)
@@ -204,7 +207,7 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L09-3 | Merge sort; the two operations (split, merge); the 8-element exercise | merge-sort | Covered | J04 |
 | L09-4 | Quick sort (in the revision guide and Full Notes; not in Lec09) | quick-sort (7 KB) | Out of scope | J04 |
 | L09-5 | Stability; worst-case contrast between merge sort and quick sort (revision guide Q2b) | choosing-an-algorithm | Out of scope | J04 |
-| L09-6 | Lab 5: `mergeSort` that returns a sorted array and uses the supplied `merge(arr, s, m, e)`; fix the errors in the given method; random marks in a loop | merge-sort | Out of scope | J04 |
+| L09-6 | Lab 5: `mergeSort` that returns a sorted array and uses the supplied `merge(arr, s, m, e)`; fix the errors in the given method; random marks in a loop | merge-sort | Thin | J04 |
 | L09-7 | Counting comparisons and swaps | 100 mentions | Covered | J04 |
 
 ### Lec10 Packages
@@ -233,8 +236,8 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L11-11a | An interface extending another interface (Lec11 slide 89) | only mentioned in passing for `Queue<E> extends Collection<E>` | Missing | J06 |
 | L11-12 | Default and static interface methods (Java 8) | 1 mention | Thin | J06 |
 | L11-13 | Built-in interfaces (`Comparable`, `Runnable`, `Iterable`) | comparable-and-comparator | Thin | J06 |
-| L11-14 | Lab 5: UML for `Doctor`, `GP`, `Surgeon`; overriding `tagName` and `calculatePay`; a tester that reads `data.txt` with optional fields and writes three files | shapes-case-study-and-uml | Out of scope | J06 |
-| L11-15 | Lab 6: abstract `Employee` with `computeSalary`, overloaded constructors, `Teacher` and `Admin` with their own `equals`, a payroll tester with totals; interface `Test`, `Test2` | abstract-classes-and-interfaces | Out of scope | J06 |
+| L11-14 | Lab 5: UML for `Doctor`, `GP`, `Surgeon`; overriding `tagName` and `calculatePay`; a tester that reads `data.txt` with optional fields and writes three files | shapes-case-study-and-uml | Thin | J06 |
+| L11-15 | Lab 6: abstract `Employee` with `computeSalary`, overloaded constructors, `Teacher` and `Admin` with their own `equals`, a payroll tester with totals; interface `Test`, `Test2` | abstract-classes-and-interfaces | Thin | J06 |
 | L11-16 | Access modifiers on members: `private`, default, `protected`, `public` in a table of who can see what | 12 and 16 mentions | Thin | J06 |
 | L11-17 | `static` members: counters, constants, utility methods, and why a static method cannot touch an instance field | 40 mentions | Covered | J06 |
 | L11-18 | Dynamic dispatch against static type: what runs for `Shape s = new Circle()` | overriding-and-polymorphism | Thin | J06 |
@@ -278,8 +281,8 @@ State: **Covered** (taught, with at least one worked example; depth still to be 
 | L13-12 | `Set` (`HashSet`, `LinkedHashSet`, `TreeSet`) and `Map` (`HashMap`, `TreeMap`): no duplicates, iteration order | choosing-a-collection (2 KB) | Thin | J08 |
 | L13-13 | `Collections` utilities: `reverse`, `shuffle`, `max`, `min`, `frequency`, `unmodifiableList` | 13 mentions | Thin | J08 |
 | L13-14 | `toArray`; `Arrays.asList` is fixed size | 1 mention | Thin | J08 |
-| L13-15 | Lab 8: `Person implements Comparable` on `fullname`; read records from a file into an `ArrayList`; `remove(8)` on a short list and what it throws; memory diagram; sort | lists-and-arraylist | Out of scope | J08 |
-| L13-16 | Lab 8: `LinkedList<String>` of course names; every `add` and `remove` variant; `contains`; `toArray` and for-each | none in `08-collections` | Out of scope | J08 |
+| L13-15 | Lab 8: `Person implements Comparable` on `fullname`; read records from a file into an `ArrayList`; `remove(8)` on a short list and what it throws; memory diagram; sort | lists-and-arraylist | Thin | J08 |
+| L13-16 | Lab 8: `LinkedList<String>` of course names; every `add` and `remove` variant; `contains`; `toArray` and for-each | none in `08-collections` | Missing | J08 |
 | L13-17 | Choose a collection for a scenario and justify (exam form) | choosing-a-collection | Thin | J08 |
 
 ### Lec14 Linked list implementation
