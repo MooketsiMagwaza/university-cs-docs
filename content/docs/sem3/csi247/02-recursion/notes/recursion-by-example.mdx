@@ -1,16 +1,16 @@
 ---
 title: "Recursion by Example"
-description: "Write recursive methods from a template, choose how the problem shrinks, trace the calls, count them, and answer exam questions on counters, powers, digits, Euclid and branching recursion."
+description: "Write recursive factorial, power and Fibonacci from a template, trace them, convert between recursion and iteration, and explain infinite recursion, with exam questions on each."
 ---
 
 A complete recursion answer states the base case, shows the smaller problem, says how the answers combine, and traces the method on a small input. This lesson extends [Recursion](/docs/sem3/csi247/02-recursion/notes/recursion-in-java) and [Trace tables](/docs/sem3/csi247/02-recursion/notes/trace-tables) with many methods, many traces and the exam questions that go with them. To practise, cover each worked answer, write the method on paper, trace it, then open the answer and compare.
 
 <LearningObjectives items={[
   'Write a recursive method from a template: a base case, a smaller problem and a way to combine',
-  'Choose how the problem shrinks (by one, by two, by a digit, by half) and say why it reaches the base case',
-  'Trace any recursive call with a trace table, going down and coming back up',
-  'Write branching recursion with two base cases and count the calls it makes',
-  'Convert a recursive method to a loop and show that the two agree',
+  'Trace a recursive call with a trace table, going down and coming back up',
+  'Write factorial, power and Fibonacci recursively and iteratively, and compare their output',
+  'Explain infinite recursion and repair a missing or unreachable base case',
+  'Write Fibonacci with two base cases and count the calls it makes',
 ]} />
 
 <Prerequisites items={[
@@ -50,9 +50,9 @@ Use this procedure to trace any recursive call:
 
 Every worked example below is a complete program. Its question is in a comment, and the output is what a real run prints.
 
-## 2. Counter recursion: the parameter shrinks by one
+## 2. Factorial and infinite recursion
 
-The simplest recursion has one number that goes down by one on each call until it reaches 0 or 1. `Myst(n)` in the trace tables lesson is the sum 1 to `n`; here are the variations an examiner uses next.
+Lecture 6 introduces recursion with factorial: `n!` is 1 when `n` is 1, and `n` times `(n - 1)!` otherwise. Each variation below changes one thing from the one before. The Lecture 6 exercises (a) and (b) are the second variation, and Lab 3 question 3 is the third.
 
 ### Factorial, and where `long` runs out
 
@@ -84,38 +84,78 @@ public class FactorialLong {
 
 `fact(5)` is `5 * 4 * 3 * 2 * 1`. The base case `n <= 1` also answers `fact(0)`. `fact(21)` is larger than the biggest `long`, so the product wraps around to a negative number: Java does not warn. When a recursive result is suspiciously negative, suspect overflow before suspecting the recursion.
 
-### The parameter shrinks by two
+### The iterative and the recursive version compared (Lecture 6 exercises a and b)
 
-```java title="SumEvens.java"
-public class SumEvens {
-    // Question: return the sum of the even numbers from 2 up to n.
-    static int sumEvens(int n) {
-        if (n < 2) {
-            return 0;                         // base case: no even number left
+```java title="FactorialBoth.java"
+public class FactorialBoth {
+    // Question: is the output of the iterative factorial different from the recursive one?
+    static long factL(int n) {
+        long prod = 1;
+        for (int i = 1; i <= n; i++) {
+            prod = prod * i;                  // the loop version
         }
-        if (n % 2 == 1) {
-            return sumEvens(n - 1);           // odd: skip it, nothing to add
+        return prod;
+    }
+
+    static long factR(int n) {
+        if (n == 1) {
+            return 1;                         // the lecture's base case
         }
-        return n + sumEvens(n - 2);           // even: add it and jump over the odd number
+        return n * factR(n - 1);
     }
 
     public static void main(String[] args) {
-        System.out.println(sumEvens(8));
-        System.out.println(sumEvens(9));
-        System.out.println(sumEvens(1));
-        System.out.println(sumEvens(0));
+        for (int n = 1; n <= 5; n++) {
+            System.out.println(n + "! = " + factL(n) + " " + factR(n));
+        }
+        System.out.println("factL(0) = " + factL(0));
+        try {
+            factR(0);
+        } catch (StackOverflowError e) {
+            System.out.println("factR(0): " + e.getClass().getName());
+        }
     }
 }
 ```
 
 ```text
-20
-20
-0
-0
+1! = 1 1
+2! = 2 2
+3! = 6 6
+4! = 24 24
+5! = 120 120
+factL(0) = 1
+factR(0): java.lang.StackOverflowError
 ```
 
-The base case is `n < 2`, not `n == 0`, because stepping by two from an odd start would jump over 0. `sumEvens(9)` skips to 8 and then adds `8 + 6 + 4 + 2`.
+For every `n` from 1 the two versions print the same value. They differ at 0: the loop never runs and returns 1, but `factR(0)` goes to -1, -2 and so on and never meets the base case `n == 1`. So the answer to "is there any difference?" is: not for the inputs the base case covers, yes for the others. A base case must cover every input that can reach the method.
+
+### No base case at all (Lecture 6, infinite recursion; Lab 3 question 3)
+
+```java title="NoBaseCase.java"
+public class NoBaseCase {
+    // Question: what happens when the base case is missing, and how is it repaired?
+    static long factR(int n) {
+        long prod;
+        prod = n * factR(n - 1);              // no base case: every call makes another call
+        return prod;
+    }
+
+    public static void main(String[] args) {
+        try {
+            factR(5);
+        } catch (StackOverflowError e) {
+            System.out.println("factR(5): " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+factR(5): java.lang.StackOverflowError
+```
+
+This is the lecture's own example of infinite recursion, and the cause is the missing base case. Each call waits for the next, the frames pile up on the stack, and Java stops the program with a `StackOverflowError`. The repair is the base case from the previous program: `if (n == 1) return 1;` before the recursive call.
 
 ### A base case one step too late
 
@@ -147,103 +187,11 @@ sumTo(0): java.lang.StackOverflowError
 
 From 0 the argument goes to -1, -2, -3 and never equals 1. Every call adds a frame, the stack fills, and Java throws `StackOverflowError`. Writing `n <= 1` or `n == 0` as the base case repairs it. Always ask "which inputs can reach this method?" and check that each of them ends at a base case.
 
-### The same method counting up
-
-```java title="CountUp.java"
-public class CountUp {
-    // Question: print 1 to n using recursion, smallest first.
-    static void printUpTo(int n) {
-        if (n == 0) {
-            return;                           // base case: nothing left to print
-        }
-        printUpTo(n - 1);                     // first handle everything smaller
-        System.out.print(n + " ");            // then print this one, on the way back up
-    }
-
-    public static void main(String[] args) {
-        printUpTo(5);
-        System.out.println();
-    }
-}
-```
-
-```text
-1 2 3 4 5
-```
-
-The call comes before the print, so the printing happens as the calls return, smallest first. Putting the print before the call would print `5 4 3 2 1`. This is the second thing to ask of any recursive method that prints: does the print come before or after the call?
-
 <Callout type="mistake" title="Common error">
 
 A base case that the argument can step over, or never reaches. `if (n == 1)` with a call `sumTo(0)`, or `if (n == 0)` with `n` going down by two from an odd number, never stops and ends in a `StackOverflowError`. Write the base case as a range (`n <= 1`, `n < 2`) when the argument might start below the value you expect.
 
 </Callout>
-
-### Exam question 1: sum of squares (4 marks)
-
-Write a recursive method `int sumOfSquares(int n)` that returns 1 squared + 2 squared + ... + n squared, for n of at least 0. Trace `sumOfSquares(3)`.
-
-<details>
-<summary>Worked answer, with the reasoning</summary>
-
-<Steps title="Answering the question">
-
-<Step title="1. Read the question">
-
-The command words are "write" and "trace", so the answer is a method and a table. The input is one `int` that is at least 0; the output is one `int`. The method must be recursive, so no loop.
-
-</Step>
-
-<Step title="2. Plan">
-
-The smaller problem is `sumOfSquares(n - 1)`. The sum up to `n` is `n * n` plus the sum up to `n - 1`. The sum up to 0 has no terms, so it is 0 and that is the base case.
-
-</Step>
-
-<Step title="3. Solution">
-
-```java title="SumOfSquares.java"
-public class SumOfSquares {
-    // Question: return 1 squared + ... + n squared, recursively.
-    static int sumOfSquares(int n) {
-        if (n == 0) {
-            return 0;                         // base case: an empty sum
-        }
-        return n * n + sumOfSquares(n - 1);   // this square plus the rest
-    }
-
-    public static void main(String[] args) {
-        System.out.println(sumOfSquares(3));
-        System.out.println(sumOfSquares(0));
-        System.out.println(sumOfSquares(10));
-    }
-}
-```
-
-```text
-14
-0
-385
-```
-
-| n | Call | Base case? | Returned | Result |
-|---|---|---|---|---|
-| 3 | `sumOfSquares(3)` | false | `9 + sumOfSquares(2)` | 9 + 5 = **14** |
-| 2 | `sumOfSquares(2)` | false | `4 + sumOfSquares(1)` | 4 + 1 = 5 |
-| 1 | `sumOfSquares(1)` | false | `1 + sumOfSquares(0)` | 1 + 0 = 1 |
-| 0 | `sumOfSquares(0)` | true | `0` | 0 |
-
-</Step>
-
-<Step title="4. Check">
-
-`1 + 4 + 9 = 14`, which matches the bottom-up column and the program. The edge case `n = 0` returns 0 at once, and `sumOfSquares(10)` is 385, the known value of 1 squared up to 10 squared.
-
-</Step>
-
-</Steps>
-
-</details>
 
 ## 3. Power: the lecturer's exercise
 
@@ -324,57 +272,6 @@ public class PowerBoth {
 
 The conversion rule: the **base case becomes the starting value** of the accumulator, and the **recursive case becomes the loop body**, repeated as many times as the recursion would call itself.
 
-### Fast power by squaring, and counting the calls
-
-When `y` is even, `x` to the `y` is the square of `x` to the `y / 2`. One call then does the work of two.
-
-```java title="FastPower.java"
-public class FastPower {
-    // Question: count the calls made by slow power and by power with squaring.
-    static int slowCalls;
-    static int fastCalls;
-
-    static long slow(long x, int y) {
-        slowCalls++;
-        if (y == 0) {
-            return 1;
-        }
-        return x * slow(x, y - 1);
-    }
-
-    static long fast(long x, int y) {
-        fastCalls++;
-        if (y == 0) {
-            return 1;
-        }
-        if (y % 2 == 0) {
-            long half = fast(x, y / 2);       // one call, used twice
-            return half * half;
-        }
-        return x * fast(x, y - 1);
-    }
-
-    public static void main(String[] args) {
-        int[] exponents = {10, 16, 31};
-        for (int y : exponents) {
-            slowCalls = 0;
-            fastCalls = 0;
-            long a = slow(2, y);
-            long b = fast(2, y);
-            System.out.println("2^" + y + " = " + a + " (" + (a == b) + "), calls: slow " + slowCalls + ", fast " + fastCalls);
-        }
-    }
-}
-```
-
-```text
-2^10 = 1024 (true), calls: slow 11, fast 6
-2^16 = 65536 (true), calls: slow 17, fast 6
-2^31 = 2147483648 (true), calls: slow 32, fast 10
-```
-
-The slow version makes `y + 1` calls, one per step down to 0. The fast version halves `y` whenever it can, so its number of calls grows like log of `y`: 6 calls for 10 and 16, 10 for 31. This is the same "halving gives about log n levels" idea as binary search.
-
 ### A negative exponent
 
 ```java title="PowerGuard.java"
@@ -414,7 +311,7 @@ Returning 0 from the base case of a product, or 1 from the base case of a sum. T
 
 </Callout>
 
-### Exam question 2: trace and convert (5 marks)
+### Exam question 1: trace and convert (5 marks)
 
 Trace the call `power(6, 3)` using a trace table, then write a non-recursive method with the same result. (5 marks)
 
@@ -466,217 +363,7 @@ static int powerLoop(int x, int y) {
 
 </details>
 
-## 4. Shrinking by more than one: digits, halving and Euclid
-
-Not every recursion subtracts one. A number can lose its last digit (`n / 10`), be halved (`n / 2`), or be replaced by a remainder. The base case is whatever stops that kind of shrinking.
-
-```text
-digits:   last digit = n % 10     the rest = n / 10      stops at n = 0 (or n < 10)
-halving:  half = n / 2                                    stops at n = 1
-Euclid:   (a, b) becomes (b, a % b)                       stops at b = 0
-```
-
-### Digit sum
-
-```java title="DigitSum.java"
-public class DigitSum {
-    // Question: return the sum of the digits of n (n at least 0).
-    static int digitSum(int n) {
-        if (n == 0) {
-            return 0;                         // base case: no digits left
-        }
-        return n % 10 + digitSum(n / 10);     // last digit plus the digits of the rest
-    }
-
-    public static void main(String[] args) {
-        System.out.println(digitSum(4096));
-        System.out.println(digitSum(0));
-        System.out.println(digitSum(7));
-        System.out.println(digitSum(100000));
-    }
-}
-```
-
-```text
-19
-0
-7
-1
-```
-
-`4096` becomes `6 + digitSum(409)`, then `9 + digitSum(40)`, then `0 + digitSum(4)`, then `4 + digitSum(0)`: 6 + 9 + 0 + 4 + 0 = 19. Five calls, one per digit plus the base case.
-
-### Counting digits: the base case is a single digit
-
-```java title="CountDigits.java"
-public class CountDigits {
-    // Question: return how many digits n has (n at least 0).
-    static int countDigits(int n) {
-        if (n < 10) {
-            return 1;                         // one digit, including 0 itself
-        }
-        return 1 + countDigits(n / 10);       // this digit plus the digits of the rest
-    }
-
-    public static void main(String[] args) {
-        System.out.println(countDigits(0));
-        System.out.println(countDigits(7));
-        System.out.println(countDigits(4096));
-        System.out.println(countDigits(100000));
-    }
-}
-```
-
-```text
-1
-1
-4
-6
-```
-
-If the base case were `n == 0` returning 0, then `countDigits(0)` would say 0 digits. The number 0 is written with one digit, so the base case here is `n < 10` and it returns 1. Compare with `digitSum`, where `n == 0` is right because 0 adds nothing.
-
-### Halving: how many times can n be halved?
-
-```java title="TimesHalved.java"
-public class TimesHalved {
-    // Question: how many times can n be halved (integer division) before it reaches 1?
-    static int timesHalved(int n) {
-        if (n <= 1) {
-            return 0;                         // base case: already 1
-        }
-        return 1 + timesHalved(n / 2);
-    }
-
-    public static void main(String[] args) {
-        int[] values = {1, 16, 1000, 1024, 1023};
-        for (int n : values) {
-            System.out.println(n + ": " + timesHalved(n));
-        }
-    }
-}
-```
-
-```text
-1: 0
-16: 4
-1000: 9
-1024: 10
-1023: 9
-```
-
-This counts how many levels a halving recursion has. 1024 is 2 to the 10, so it halves exactly 10 times; 1023 is one less and halves 9 times with integer division. This is the number behind "O(log n)".
-
-### Euclid's greatest common divisor
-
-The greatest common divisor of `a` and `b` is the same as that of `b` and `a % b`, and when `b` is 0 the answer is `a`.
-
-```java title="GcdTrace.java"
-public class GcdTrace {
-    // Question: trace gcd(48, 18) and gcd(17, 5).
-    static int gcd(int a, int b) {
-        System.out.println("gcd(" + a + ", " + b + ")");
-        if (b == 0) {
-            return a;                         // base case: nothing left to divide by
-        }
-        return gcd(b, a % b);                 // the remainder is strictly smaller than b
-    }
-
-    public static void main(String[] args) {
-        System.out.println("answer " + gcd(48, 18));
-        System.out.println("answer " + gcd(17, 5));
-    }
-}
-```
-
-```text
-gcd(48, 18)
-gcd(18, 12)
-gcd(12, 6)
-gcd(6, 0)
-answer 6
-gcd(17, 5)
-gcd(5, 2)
-gcd(2, 1)
-gcd(1, 0)
-answer 1
-```
-
-Each call prints its arguments on the way down. `(48, 18)` leaves remainder 12, then `(18, 12)` leaves 6, then `(12, 6)` leaves 0, so the answer is the last non-zero value, 6. The method returns the same value all the way up: there is nothing to combine.
-
-<Callout type="mistake" title="Common error">
-
-Swapping `/` and `%`. `n / 10` is the number without its last digit; `n % 10` is the last digit alone. Writing `n / 10 + digitSum(n % 10)` adds the wrong pieces and recurses on the wrong one: for 4096 it passes 6 to the next call, and `digitSum(6)` then calls `digitSum(6)` again, so the argument never reaches 0 and the run ends in a `StackOverflowError`. Read the pair aloud: "the last digit is the remainder; the rest is the quotient".
-
-</Callout>
-
-### Exam question 3: all digits even (4 marks)
-
-Write a recursive method `boolean allDigitsEven(int n)` that returns `true` when every digit of the non-negative number `n` is even. For example, 2468 gives `true` and 2458 gives `false`. State what it returns for 0. (4 marks)
-
-<details>
-<summary>Worked answer, with the reasoning</summary>
-
-<Steps title="Answering the question">
-
-<Step title="1. Read the question">
-
-The command word is "write", and a second part asks to "state" a result for 0. The input is an `int` of at least 0 and the output is a `boolean`. The method must be recursive.
-
-</Step>
-
-<Step title="2. Plan">
-
-Look at the last digit. If it is odd the answer is `false` at once. Otherwise the answer depends on the rest of the digits. When no digits are left, nothing has been found odd, so the answer is `true`.
-
-</Step>
-
-<Step title="3. Solution">
-
-```java title="AllDigitsEven.java"
-public class AllDigitsEven {
-    // Question: return true when every digit of n is even.
-    static boolean allDigitsEven(int n) {
-        if (n == 0) {
-            return true;                      // no digits left: none was odd
-        }
-        if ((n % 10) % 2 != 0) {
-            return false;                     // the last digit is odd
-        }
-        return allDigitsEven(n / 10);         // check the rest
-    }
-
-    public static void main(String[] args) {
-        System.out.println(allDigitsEven(2468));
-        System.out.println(allDigitsEven(2458));
-        System.out.println(allDigitsEven(0));
-        System.out.println(allDigitsEven(7));
-        System.out.println(allDigitsEven(20));
-    }
-}
-```
-
-```text
-true
-false
-true
-false
-true
-```
-
-</Step>
-
-<Step title="4. Check">
-
-`allDigitsEven(2458)`: the last digit 8 is even, so check 245; the last digit 5 is odd, so the answer is `false` without looking at 24. For 0 the method returns `true`: the digit 0 is even, and with the base case it also holds because no odd digit exists. For 7 the last digit is odd, so `false`.
-
-</Step>
-
-</Steps>
-
-</details>
-
-## 5. Branching recursion: two base cases and a tree of calls
+## 4. Branching recursion: two base cases and a tree of calls
 
 When a method calls itself twice, the calls form a tree rather than a chain. Fibonacci is the standard case: each number is the sum of the two before it, so the method needs **two base cases** (0 and 1) and **two recursive calls**.
 
@@ -839,72 +526,13 @@ public class FibSeries {
 
 The loop keeps the last two numbers and does `n` steps. The recursive version recomputes every number from scratch for each position. Both print the same series; the loop does far less work.
 
-### Climbing stairs
-
-```java title="Stairs.java"
-public class Stairs {
-    // Question: in how many ways can Naledi climb n steps, taking 1 or 2 steps at a time?
-    static int ways(int n) {
-        if (n <= 1) {
-            return 1;                         // one way to climb 0 or 1 steps
-        }
-        return ways(n - 1) + ways(n - 2);     // the last move was 1 step or 2 steps
-    }
-
-    public static void main(String[] args) {
-        for (int n = 1; n <= 8; n++) {
-            System.out.print(ways(n) + " ");
-        }
-        System.out.println();
-    }
-}
-```
-
-```text
-1 2 3 5 8 13 21 34
-```
-
-The last move was either one step (leaving `n - 1` to climb) or two (leaving `n - 2`), so the counts add. The numbers are Fibonacci numbers shifted by one place, because the base cases are 1 and 1 instead of 0 and 1.
-
-### Binomial coefficients
-
-```java title="Binomial.java"
-public class Binomial {
-    // Question: how many ways can k items be chosen from n? Use Pascal's rule.
-    static int choose(int n, int k) {
-        if (k == 0 || k == n) {
-            return 1;                         // base cases: choose none, or choose all
-        }
-        return choose(n - 1, k - 1) + choose(n - 1, k);   // the item is taken, or it is not
-    }
-
-    public static void main(String[] args) {
-        System.out.println(choose(5, 2));
-        System.out.println(choose(6, 3));
-        System.out.println(choose(4, 0));
-        System.out.println(choose(4, 4));
-        System.out.println(choose(10, 5));
-    }
-}
-```
-
-```text
-10
-20
-1
-1
-252
-```
-
-Two base cases again (`k == 0` and `k == n`) and two recursive calls. Both arguments can change, and each call moves `n` down by one, so every chain ends at a base case.
-
 <Callout type="mistake" title="Common error">
 
 Writing only one base case for a method that calls itself twice. With `if (n == 0) return 0;` alone, `fib(1)` calls `fib(0)` and `fib(-1)`, and `fib(-1)` calls `fib(-2)` and `fib(-3)`: the second call goes below the base case and never comes back. A method that calls itself with `n - 2` needs a base case for the value just above the one it can skip, here `n == 1`.
 
 </Callout>
 
-### Exam question 4: how many times is fib(2) called? (6 marks)
+### Exam question 2: how many times is fib(2) called? (6 marks)
 
 For the recursive `fib` above, state how many times `fib(2)` is called while `fib(5)` is evaluated, and how many calls are made in total. Show your working. (6 marks)
 
@@ -992,7 +620,7 @@ The program agrees: `fib(2)` is called 3 times and the total is 15. A second che
 
 <Callout type="key" title="Remember">
 
-A recursive method has a base case (answered directly, with the identity value for the combination), a recursive case on a strictly smaller input, and a combination of the returned answer. The input can shrink by one, by two, by a digit (`n / 10`), by half or by a remainder, and the base case must catch every input that can reach it. Trace with a table: calls down, results up, and count the rows to count the calls. A method that calls itself twice needs two base cases and makes an exponential number of calls. Convert to a loop by turning the base case into the starting value and the recursive case into the loop body.
+A recursive method has a base case, answered directly with the identity value for the combination, and a recursive case on a smaller input. Each call has its own stack frame. The base case must catch every input that can reach it: `factR` with the base case `n == 1` never stops for 0, and a missing base case is infinite recursion, which Java reports as a `StackOverflowError`. The iterative and recursive versions of factorial, power and Fibonacci print the same values for valid input. Trace with a table: calls down, results up. A method that calls itself twice, like Fibonacci, needs two base cases and makes many more calls than the loop does steps. Convert to a loop by turning the base case into the starting value and the recursive case into the loop body.
 
 </Callout>
 
@@ -1006,9 +634,9 @@ The base case value must leave the combination unchanged: multiplying by 1 chang
 
 </CheckQuestion>
 
-<CheckQuestion question="countDigits(0) should return 1 but a student's version returns 0. What did they write as the base case?">
+<CheckQuestion question="factL(0) returns 1 but factR(0) never finishes. Why, when the two agree for 1 to 5?">
 
-They wrote `if (n == 0) return 0;`, which treats 0 as "no digits". The number 0 has one digit, so the base case should be `n < 10` returning 1.
+The loop does not run for 0 and returns its starting value 1. The recursive version has the base case `n == 1`, and from 0 the argument goes -1, -2 and so on, never equal to 1, so the calls end in a `StackOverflowError`.
 
 </CheckQuestion>
 
@@ -1018,9 +646,9 @@ No. The argument goes 0, -1, -2 and so on and never equals 1, so calls pile up u
 
 </CheckQuestion>
 
-<CheckQuestion question="A recursive power method makes y + 1 calls. How many does power by squaring make for y = 16, and why?">
+<CheckQuestion question="A recursive Fibonacci has only the base case n == 0. What happens for fib(1)?">
 
-Six: the arguments are 16, 8, 4, 2, 1 and 0. Each even `y` is halved, so the number of calls is about log of `y` instead of `y`.
+`fib(1)` calls `fib(0)` and `fib(-1)`. The call with -1 calls `fib(-2)` and `fib(-3)`, which go further below the base case and never return, so it ends in a `StackOverflowError`. A method that calls itself with `n - 2` needs a base case for 1 as well.
 
 </CheckQuestion>
 
