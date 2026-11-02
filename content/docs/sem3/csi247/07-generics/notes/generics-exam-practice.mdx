@@ -1,0 +1,579 @@
+---
+title: "Generics Exam Practice"
+description: "Eight generics exam questions from Lecture 12 and Lab 7: explain generics, draw the memory of the generic Set, write a generic class, a bounded class, generic methods and a generic interface, and explain the Pair results."
+---
+
+This lesson has no new teaching. It is eight questions in the forms Lecture 12 and Lab 7 use, each answered the way a marker wants to see it. Cover the answer, work the question on paper, then open the answer and compare. The ideas are in [Generics by Example](/docs/sem3/csi247/07-generics/notes/generics-by-example) and the older lessons of this chapter.
+
+<LearningObjectives items={[
+  'Explain generics and their advantages, and the cost of the Object approach',
+  'Draw the memory of the generic Set from Lab 7 and trace add, remove and search',
+  'Write a generic class, a bounded class, a generic method and a generic interface with its implementing class',
+  'Explain why a bound is needed for compareTo and why new T[] is rejected',
+  'Predict the results of the Lab 7 Pair with Integer, Double and Float members',
+]} />
+
+## 1. How to earn the marks
+
+| Command word | What the marker wants |
+|---|---|
+| Explain / state | The definition in one or two sentences, using the lecture's words: parameterised types, type parameter, type argument, type safety |
+| Write | The header with the type parameter in the right place, every `T` in the body, and a test that shows the type argument |
+| Which compile | A verdict for each statement and the reason for each that fails: a primitive, a value of the wrong type, mismatched types, outside the bound |
+| Draw | The object on the heap, its array, one cell for each element with `null` for empty, changed values crossed out |
+| Predict | The output, with the reason: boxing, conversion to `double`, `equals` rather than `==` |
+
+## 2. Explaining generics
+
+### Exam question 1: what are generics? (6 marks)
+
+Explain what generics are, state four advantages, and say what goes wrong with a class that stores `Object` instead. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three parts: a definition, four advantages, and the problem with `Object`. The lecture defines generics as an OOP concept that refers to **parameterised types**.
+
+</Step>
+
+<Step title="2. Plan">
+
+Definition first, then the list of advantages from the lecture, then the contrast: an `Object` container accepts anything and needs a cast.
+
+</Step>
+
+<Step title="3. Solution">
+
+**Generics** are an OOP concept that refers to parameterised types: they allow a single class, method or interface to work with different types of objects, so the implementation is independent of the class type, and various object types can be passed as parameters to methods, classes and interfaces. The advantages are: **code reuse** (write the code once, use it for any type); **type safety** (only one type, the type parameter, is stored); **no need for type casting**; and **errors caught at compile time** rather than at run time.
+
+A class that stores `Object` accepts any value, so a `String` can be stored where an `Integer` was intended, and every value that comes out must be cast. The wrong cast is found only when the program runs: the earlier lesson's program compiled and then failed with a `ClassCastException`. With a type parameter the same mistake is a compile error.
+
+</Step>
+
+<Step title="4. Check">
+
+Each advantage is a separate point, and the contrast names the difference in time: run time against compile time. The lecture's example is `GenTest<Integer>`, which refuses `a.modify("CSI247")` with `incompatible types: String cannot be converted to Integer`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Drawing memory
+
+### Exam question 2: the generic Set (6 marks)
+
+The Lab 7 `Set<Integer>` keeps an array of 10 cells, all `null` at first. Draw the memory after `add(7)`, `add(12)`, `add(7)`, `remove(7)` and `add(5)`. State which 7 is removed and why the 5 goes where it does. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The set object holds a reference to the array. `add` stores in the **first empty cell**; `remove` uses `equals` and takes the first match; duplicates are allowed. A removed element leaves its cell `null`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the first cells after each operation, with the old value crossed out when a cell changes.
+
+</Step>
+
+<Step title="3. Solution">
+
+<MemoryDiagram scenario="genset" />
+
+</Step>
+
+<Step title="4. Check">
+
+The first `7` (index 0) is the one removed, because the search goes from index 0 and stops at the first match. The second `7` (index 2) stays. The next `add(5)` takes the first empty cell, which is index 0 again, so the final cells are 5, 12, 7 and then seven empty cells.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Writing generic code
+
+### Exam question 3: a generic class (6 marks)
+
+Write a generic class `Box<T>` that stores one value, with a setter, a getter and `isEmpty()`. Create a `Box` of `Integer` and a `Box` of `String`, and say what the compiler does with `intBox.set("x")`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The type parameter goes after the class name in angle brackets. It is used for the field, the parameter of the setter and the return type of the getter. The objects are created with the type on both sides of `=`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`class Box<T>`, `private T value;`, `set(T value)`, `T get()`, and `isEmpty()` comparing the field with `null`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Box.java"
+public class Box<T> {
+    private T value;                          // T: the type of the stored value
+
+    public void set(T value) {
+        this.value = value;
+    }
+
+    public T get() {
+        return value;
+    }
+
+    public boolean isEmpty() {
+        return value == null;
+    }
+}
+```
+
+```java title="BoxDemo.java"
+public class BoxDemo {
+    // Question: create a Box of Integer and a Box of String and use them.
+    public static void main(String[] args) {
+        Box<Integer> intBox = new Box<Integer>();
+        System.out.println("empty: " + intBox.isEmpty());
+        intBox.set(17);
+        int doubled = intBox.get() * 2;       // no cast: get() returns an Integer
+        System.out.println("doubled: " + doubled);
+
+        Box<String> stringBox = new Box<String>();
+        stringBox.set("Kago");
+        System.out.println(stringBox.get().toUpperCase());
+    }
+}
+```
+
+```text
+empty: true
+doubled: 34
+KAGO
+```
+
+`intBox.set("x")` does not compile: `incompatible types: String cannot be converted to Integer`.
+
+</Step>
+
+<Step title="4. Check">
+
+`intBox.get()` is an `Integer`, so it can be multiplied directly, and `stringBox.get()` is a `String`, so `toUpperCase()` can be called, both without a cast. The statement `intBox.set("x")` is the type-safety rule: the error is reported at compile time.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: a bounded class (6 marks)
+
+Write a class `NumberBox<T extends Number>` with a constructor, a method `isPositive()` and a method `plus(T other)` that returns the sum as a `double`. State which of `NumberBox<Integer>`, `NumberBox<Double>`, `NumberBox<Float>` and `NumberBox<String>` are valid, and why the bound allows `doubleValue()`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A bounded type uses `extends` after the type parameter. The bound is also what lets the class call methods of `Number` on a value of type `T`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`T extends Number`; both methods convert with `doubleValue()`. Valid instantiations are the subclasses of `Number`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="NumberBox.java"
+public class NumberBox<T extends Number> {
+    private T value;
+
+    public NumberBox(T value) {
+        this.value = value;
+    }
+
+    public boolean isPositive() {
+        return value.doubleValue() > 0;       // allowed: T is a Number
+    }
+
+    public double plus(T other) {
+        return value.doubleValue() + other.doubleValue();
+    }
+}
+```
+
+```java title="NumberBoxDemo.java"
+public class NumberBoxDemo {
+    // Question: use NumberBox with Integer, Double and Float.
+    public static void main(String[] args) {
+        NumberBox<Integer> a = new NumberBox<Integer>(5);
+        System.out.println(a.plus(3) + " " + a.isPositive());
+        NumberBox<Double> b = new NumberBox<Double>(-2.5);
+        System.out.println(b.isPositive());
+        NumberBox<Float> c = new NumberBox<Float>(1.5f);
+        System.out.println(c.plus(0.25f));
+    }
+}
+```
+
+```text
+8.0 true
+false
+1.75
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`NumberBox<Integer>`, `NumberBox<Double>` and `NumberBox<Float>` are valid because `Integer`, `Double` and `Float` extend `Number`. `NumberBox<String>` is rejected: `type argument String is not within bounds of type-variable T`. Without the bound, `T` is just an `Object` and `value.doubleValue()` would not compile.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: generic methods (6 marks)
+
+Write generic methods `swap(E[] a, int i, int j)`, which exchanges two elements of an array, and `contains(E[] a, E key)`, which says whether the key is in the array. Test them with an `Integer` array and a `String` array, and explain why `contains` uses `equals`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two generic methods: the type parameter `<E>` goes before the return type. The parameter is an array of `E`. `contains` compares objects, so `==` is the wrong test.
+
+</Step>
+
+<Step title="2. Plan">
+
+`swap` uses a temporary variable of type `E`. `contains` loops with a for-each over `E` and calls `equals`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="ArrayTools.java"
+import java.util.Arrays;
+
+public class ArrayTools {
+    // Question: generic swap and contains.
+    static <E> void swap(E[] a, int i, int j) {
+        E temp = a[i];
+        a[i] = a[j];
+        a[j] = temp;
+    }
+
+    static <E> boolean contains(E[] a, E key) {
+        for (E x : a) {
+            if (x.equals(key)) {              // equals compares the contents of objects
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void main(String[] args) {
+        Integer[] nums = {3, 8, 5};
+        swap(nums, 0, 2);
+        System.out.println(Arrays.toString(nums));
+        String[] names = {"Kago", "Naledi"};
+        swap(names, 0, 1);
+        System.out.println(Arrays.toString(names));
+        System.out.println(contains(names, "Naledi") + " " + contains(nums, 9));
+        System.out.println(contains(names, new String("Kago")));
+    }
+}
+```
+
+```text
+[5, 8, 3]
+[Naledi, Kago]
+true false
+true
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`swap` worked for an `Integer[]` and a `String[]` with one definition. `contains(names, new String("Kago"))` is `true` although the argument is a different object from the one in the array: `equals` compares the contents, whereas `==` would compare addresses and give `false`. The methods work only for reference arrays: an `int[]` would give `method swap in class ArrayTools cannot be applied to given types`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: a generic interface and its class (6 marks)
+
+Write a generic interface `Container<T>` with `put(T item)`, `take()` and `isEmpty()`, and a class that implements it. Explain what the compiler says if the implementing class uses `T` without declaring it. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A generic interface takes a type parameter, and the class implementing it is generic too and passes the parameter on: `class SingleContainer<T> implements Container<T>`.
+
+</Step>
+
+<Step title="2. Plan">
+
+The interface declares the three methods in terms of `T`. The class keeps one item and implements all three.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Container.java"
+public interface Container<T> {
+    void put(T item);
+    T take();
+    boolean isEmpty();
+}
+```
+
+```java title="SingleContainer.java"
+public class SingleContainer<T> implements Container<T> {
+    private T item;
+
+    public void put(T item) {
+        this.item = item;
+    }
+
+    public T take() {
+        T result = item;
+        item = null;                          // taking empties the container
+        return result;
+    }
+
+    public boolean isEmpty() {
+        return item == null;
+    }
+}
+```
+
+```java title="ContainerDemo.java"
+public class ContainerDemo {
+    // Question: use the container with a String and an Integer.
+    public static void main(String[] args) {
+        Container<String> names = new SingleContainer<String>();
+        names.put("Thato");
+        System.out.println("empty: " + names.isEmpty());
+        System.out.println("took: " + names.take() + ", empty: " + names.isEmpty());
+        Container<Integer> marks = new SingleContainer<Integer>();
+        marks.put(72);
+        System.out.println(marks.take() + 1);
+    }
+}
+```
+
+```text
+empty: false
+took: Thato, empty: true
+73
+```
+
+</Step>
+
+<Step title="4. Check">
+
+A class such as `class Bad implements Container<T>` that does not declare `T` gives `error: cannot find symbol` with `symbol: class T`. The class must be generic (`SingleContainer<T>`), as the lecture's `GenC<T> implements GenI<T>` is. The reference type `Container<String>` can hold a `SingleContainer<String>`, but the type arguments must agree.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Explaining the results
+
+### Exam question 7: why the bound, and why not new T[]? (6 marks)
+
+(a) Explain why the method `static <T> T largest(T[] a)` cannot call `x.compareTo(best)`, and give the repair. (b) Explain why the Lab 7 `Set` creates its array with `(T[]) new Object[10]`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two parts. In (a) the question is what the compiler knows about `T`. In (b) it is why `T` cannot be used to allocate memory.
+
+</Step>
+
+<Step title="2. Plan">
+
+(a) An unbounded `T` is only known to be an `Object`, which has no `compareTo`. A bound `T extends Comparable<T>` promises the method. (b) The lecture says `T[] arr = new T[20]` is not allowed.
+
+</Step>
+
+<Step title="3. Solution">
+
+(a) With an unbounded `T`, `x.compareTo(best)` gives `error: cannot find symbol`, `symbol: method compareTo(T)`: the compiler only knows that `x` is an `Object`. Bounding the type parameter, `<T extends Comparable<T>>`, tells the compiler that every `T` has `compareTo`:
+
+```java title="LargestDemo.java"
+public class LargestDemo {
+    // Question: largest element of an array of Comparable values.
+    static <T extends Comparable<T>> T largest(T[] a) {
+        T best = a[0];
+        for (T x : a) {
+            if (x.compareTo(best) > 0) {
+                best = x;
+            }
+        }
+        return best;
+    }
+
+    public static void main(String[] args) {
+        Integer[] marks = {42, 7, 63, 19};
+        String[] names = {"Naledi", "Kago", "Thato"};
+        System.out.println(largest(marks) + " " + largest(names));
+    }
+}
+```
+
+```text
+63 Thato
+```
+
+(b) `T` is a placeholder, not a real class that Java can allocate, so `new T[10]` gives `error: generic array creation`. The `Set` therefore creates an `Object[]` of 10 cells and casts it to `T[]`; the compiler cannot check that cast, so the constructor is marked `@SuppressWarnings("unchecked")`.
+
+</Step>
+
+<Step title="4. Check">
+
+`largest` returned 63 for the `Integer` array and `Thato` for the `String` array (the last name alphabetically), using the same code. Both `Integer` and `String` implement `Comparable`, so they satisfy the bound.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: the results of the Pair (6 marks)
+
+The Lab 7 `Pair<T extends Number, U extends Number>` has `add`, `subtract`, `multiply` and `divide`, which combine two pairs member by member and return a `Pair<Double, Double>`. For `Pair<Integer, Integer>(7, 2)` and `Pair<Integer, Integer>(2, 4)`, give the result of each operation, explain why the results are `Double`, and say what happens when the second pair is (0, 0). (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four operations on the members 7 and 2 against 2 and 4, an explanation of the result type, and the division by zero.
+
+</Step>
+
+<Step title="2. Plan">
+
+Work out each member: 7 and 2, then 2 and 4. `+` is not defined for `Number`, so each value is converted with `doubleValue()` first.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Operation | First member | Second member | Result |
+|---|---|---|---|
+| `add` | 7 + 2 = 9.0 | 2 + 4 = 6.0 | (9.0, 6.0) |
+| `subtract` | 7 - 2 = 5.0 | 2 - 4 = -2.0 | (5.0, -2.0) |
+| `multiply` | 7 x 2 = 14.0 | 2 x 4 = 8.0 | (14.0, 8.0) |
+| `divide` | 7 / 2 = 3.5 | 2 / 4 = 0.5 | (3.5, 0.5) |
+
+The results are `Double` because the operations are done on `doubleValue()`: the bound `T extends Number` allows that call, and `7 / 2` is then a division of doubles (3.5), not of integers (3). Dividing by the pair (0, 0) does not throw an exception: the division is on doubles, so both members are `Infinity`.
+
+</Step>
+
+<Step title="4. Check">
+
+These are the values printed by `PairTest` in the lesson: `(9.0, 6.0) (5.0, -2.0) (14.0, 8.0) (3.5, 0.5)` and `(Infinity, Infinity)` for the division by zero. With `Float` members the double conversion also shows the extra digits of the float representation (1.1f + 1.1f printed as 2.200000047683716).
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Errors to check before handing in
+
+- The type parameter is declared after the class name (`class Box<T>`) or before a method's return type (`<E> void print(E[] a)`).
+- The type argument is a **reference** type, the types on both sides of `=` are identical, and the `()` is kept.
+- A bounded type uses `extends`, even for an interface (`T extends Comparable<T>`).
+- `T` is not used to allocate memory: no `new T()` and no `new T[n]`.
+- A class that implements a generic interface declares the type parameter it passes on.
+- Objects are compared with `equals`, not `==`.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Generics are parameterised types: write the code once, store one type, avoid casts, and find the type errors at compile time. Read a generic class by replacing `T` with the type argument. A bound (`extends`) restricts the type and gives the class the methods of the bound. A generic method has its type parameter before the return type. A class that implements a generic interface is generic and passes its parameter on. `new T[n]` is rejected, so the Lab 7 `Set` casts an `Object[]`; its `add` fills the first empty cell and its `remove` and `search` use `equals`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What is the difference between a type parameter and a type argument?">
+
+The type parameter is the placeholder in the declaration (`T` in `class Box<T>`). The type argument is the actual type given when an object is created (`Integer` in `Box<Integer>`).
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can the method largest call compareTo only after T extends Comparable of T is written?">
+
+Without the bound the compiler only knows that `T` is an `Object`, which has no `compareTo`. The bound promises that every `T` implements `Comparable`.
+
+</CheckQuestion>
+
+<CheckQuestion question="In the Lab 7 Set, which cell does the next add use after remove has emptied cell 0?">
+
+Cell 0: `add` always uses the first empty cell, so the gap left by `remove` is reused first.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is the result of dividing Pair of Integer 7 and 2 by Pair of Integer 2 and 4 a pair of doubles, with first member 3.5?">
+
+The operations convert each member with `doubleValue()` and return a `Pair<Double, Double>`, so `7 / 2` is a division of doubles, 3.5, not the integer division result 3.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which type arguments does a class declared with T extends Number accept?">
+
+`Number` and its subclasses, such as `Integer`, `Double`, `Float` and `Long`. A `String` is outside the bound and is rejected at compile time.
+
+</CheckQuestion>
+
+</CheckQuestions>
