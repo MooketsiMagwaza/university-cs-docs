@@ -1,0 +1,1097 @@
+---
+title: "The LinkedList Class by Example"
+description: "Build the Lecture 14 singly linked list method by method, draw the memory after each operation, fix the errors in the lecture's code, answer its time complexity exercises, and write the generic version."
+---
+
+Lecture 14 builds a singly linked list class from nothing: an inner `Node` class, a constructor, `isEmpty`, the add methods, `contains`, the remove methods and `size`. It ends with a tester exercise and a request to draw the memory diagram of every action in order. This lesson works through every one of those pieces with variations, shows what the lecture's own code gets wrong when it is run, and answers the "prove the time complexity" exercises with counted pointer moves. It extends [Linked Lists, Explained](/docs/sem3/csi247/09-linked-lists-traversals/notes/linked-lists-explained) and [Linked Lists and Traversal](/docs/sem3/csi247/09-linked-lists-traversals/notes/linked-lists-and-traversal).
+
+<LearningObjectives items={[
+  'Write the Node class, the constructor and isEmpty, and say what a linked list looks like in memory when it is empty',
+  'Add a node at the end, at the front and at a position, changing the pointers in a safe order',
+  'Traverse a list to count nodes and to search it, and find the errors in the lecture\'s contains',
+  'Remove the first node, the last node and the node at a position, including a list of one node',
+  'Draw the memory diagram of a sequence of operations on a linked list',
+  'State the time complexity of each method and justify it by counting pointer moves',
+]} />
+
+<Prerequisites items={[
+  'Classes, objects and references, and drawing memory diagrams, from the earlier chapters',
+  'Counting steps and Big-O, from the Time Complexity chapter',
+]} />
+
+## 1. The templates
+
+A linked list is an object that keeps one reference, `head`, to the first node. Each node stores a data item and a reference to the next node. The reference in the last node is `null`.
+
+```text
+Traverse:  cur = head
+           while cur is not null:  use cur.data;  cur = cur.next
+
+Insert after a node cur:   1. n.next = cur.next      (the new node takes over the rest of the list)
+                           2. cur.next = n           (then cur points at the new node)
+Insert at the front:       1. n.next = head          2. head = n
+Remove the node after cur: cur.next = cur.next.next  (the removed node is no longer reachable)
+Remove the first node:     head = head.next
+```
+
+To draw the memory after any piece of code, use this procedure:
+
+```text
+1. Draw the stack on the left and the heap on the right.
+2. One box for each variable. A reference variable holds an address, not a node.
+3. One two-part box for each node on the heap: data, and next (an address or null).
+4. Run the code a line at a time. Cross out a value that changes and write the new one.
+5. A node that nothing points to any more is garbage.
+```
+
+## 2. Review: nodes, head and the three types of list
+
+A linked list stores its elements as separate **nodes**, which are not stored next to each other in memory (unlike an array). `head` is not a node: it is a reference to the first node, and it is `null` when the list is empty. A linked list is a **recursive data structure**: it is either empty (`head == null`) or a node holding a data item and a reference to the rest of the list.
+
+<MemoryDiagram scenario="llslide" static />
+
+There are three common types:
+
+| Type | Each node has | The last node |
+|---|---|---|
+| Singly linked | one link: `next` | has `next == null` |
+| Doubly linked | two links: `prev` and `next` | has `next == null` |
+| Circular | `next` (and `prev` if doubly linked) | links back to the first node |
+
+<MemoryDiagram scenario="dll" static />
+
+<MemoryDiagram scenario="llcircular" static />
+
+An array or an `ArrayList` gives direct access (`arr[i]`, `get(i)`). A linked list has neither: you keep track of `head` and follow the `next` references one at a time (sequential access). The benefits are that the list is **dynamic** (it grows and shrinks as needed) and that no items are shifted for an insertion or a removal. The drawback is that there is no direct access to an element.
+
+## 3. The inner class, the constructor and isEmpty
+
+The lecture needs two classes besides the tester: the list and the node. The node is written inside the list class as an **inner (nested) class**, which groups classes that belong together. This is the class this lesson uses; every method of the lecture is in it, with the repairs described in sections 4 to 7.
+
+```java title="LectureList.java"
+public class LectureList {
+    private class Node {                      // an inner class (Lecture 14)
+        int data;                             // the node's data part
+        Node next;                            // a link to the next node
+
+        Node(int data) {
+            this.data = data;
+            this.next = null;                 // assumption: it is the last node of the list
+        }
+    }
+
+    private Node head;                        // keeps track of the first node
+    static int moves;                         // counts how often a next pointer is followed (section 9)
+
+    public LectureList() {
+        head = null;                          // initially head points to no node
+    }
+
+    public boolean isEmpty() {
+        return head == null;
+    }
+
+    public void addLast(int data) {
+        Node n = new Node(data);              // create the new node
+        if (isEmpty()) {
+            head = n;                         // it becomes the first node
+        } else {
+            Node currNode = head;
+            while (currNode.next != null) {   // walk to the last node
+                currNode = currNode.next;
+                moves++;
+            }
+            currNode.next = n;                // link it as the new tail
+        }
+    }
+
+    public void addFront(int data) {
+        Node n = new Node(data);
+        n.next = head;                        // the new node points at the old first node
+        head = n;                             // and becomes the first node
+    }
+
+    public void add(int i, int data) {        // the new node ends up at index i (0 is the front)
+        if (i < 0) {
+            throw new IndexOutOfBoundsException("Index: " + i);
+        }
+        if (i == 0) {
+            addFront(data);
+            return;
+        }
+        Node cur = head;
+        for (int k = 1; k < i && cur != null; k++) {      // stop at the node before position i
+            cur = cur.next;
+            moves++;
+        }
+        if (cur == null) {
+            throw new IndexOutOfBoundsException("Index: " + i + ", Size: " + size());
+        }
+        Node n = new Node(data);
+        n.next = cur.next;                    // first: the new node takes over the rest of the list
+        cur.next = n;                         // then: cur points at the new node
+    }
+
+    public boolean contains(int data) {
+        Node tmp = head;
+        while (tmp != null) {                 // visit every node, including the last
+            if (tmp.data == data) {
+                return true;
+            }
+            tmp = tmp.next;
+            moves++;
+        }
+        return false;
+    }
+
+    public void removeFront() {
+        if (isEmpty()) {
+            System.out.println("List is empty");
+        } else {
+            head = head.next;                 // promote the next node to first
+        }
+    }
+
+    public void removeLast() {
+        if (isEmpty()) {
+            System.out.println("List is empty");
+        } else if (head.next == null) {
+            head = null;                      // a list of one node becomes empty
+        } else {
+            Node cur = head;
+            while (cur.next.next != null) {   // stop at the second-last node
+                cur = cur.next;
+                moves++;
+            }
+            cur.next = null;                  // isolate the old tail
+        }
+    }
+
+    public void remove(int i) {               // remove the node at index i
+        if (i < 0 || isEmpty()) {
+            throw new IndexOutOfBoundsException("Index: " + i + ", Size: " + size());
+        }
+        if (i == 0) {
+            removeFront();
+            return;
+        }
+        Node cur = head;
+        for (int k = 1; k < i && cur.next != null; k++) {  // stop at the node before position i
+            cur = cur.next;
+            moves++;
+        }
+        if (cur.next == null) {
+            throw new IndexOutOfBoundsException("Index: " + i + ", Size: " + size());
+        }
+        cur.next = cur.next.next;             // bypass the node
+    }
+
+    public int size() {
+        int count = 0;
+        Node cur = head;
+        while (cur != null) {
+            count++;
+            cur = cur.next;
+            moves++;
+        }
+        return count;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("[");
+        Node cur = head;
+        while (cur != null) {
+            sb.append(cur.data);
+            if (cur.next != null) {
+                sb.append(", ");
+            }
+            cur = cur.next;
+        }
+        return sb.append("]").toString();
+    }
+}
+```
+
+### An empty list
+
+```java title="EmptyListTest.java"
+public class EmptyListTest {
+    // Question (Lecture 14 exercise): display "Empty list!" when the list is empty, otherwise "List not empty".
+    public static void main(String[] args) {
+        LectureList myList = new LectureList();
+        System.out.println("List empty? : " + myList.isEmpty());
+        System.out.println(myList.isEmpty() ? "Empty list!" : "List not empty");
+        myList.addLast(6);
+        System.out.println("List empty? : " + myList.isEmpty());
+        System.out.println(myList.isEmpty() ? "Empty list!" : "List not empty");
+        System.out.println(myList);
+    }
+}
+```
+
+```text
+List empty? : true
+Empty list!
+List empty? : false
+List not empty
+[6]
+```
+
+The constructor sets `head` to `null` and `isEmpty` tests exactly that. After one `addLast`, `head` holds the address of a node, so the list is no longer empty. In memory the empty list is one `LinkedList` object whose `head` field holds `null`; the variable `myList` holds the address of that object.
+
+<Callout type="mistake" title="Common error">
+
+Writing `if (head = null)` instead of `if (head == null)`. The single `=` assigns `null` to `head`, which would lose the whole list, but `javac` stops it first: `error: incompatible types: Node cannot be converted to boolean`. Compare with `==`.
+
+</Callout>
+
+## 4. Adding nodes
+
+### Add at the end
+
+The new node must become the **tail**. The method walks from `head` to the last node, the one whose `next` is `null`, and changes that `next` to point at the new node.
+
+<MemoryDiagram scenario="lladdlast" />
+
+```java title="AddLastTest.java"
+public class AddLastTest {
+    // Question: add 7 at the end of an empty list, a list of one node and the lecture's list 6, 3, 9.
+    public static void main(String[] args) {
+        LectureList empty = new LectureList();
+        empty.addLast(7);
+        System.out.println("empty list: " + empty);
+
+        LectureList one = new LectureList();
+        one.addLast(6);
+        LectureList.moves = 0;
+        one.addLast(7);
+        System.out.println("one node: " + one + ", pointer moves " + LectureList.moves);
+
+        LectureList three = new LectureList();
+        three.addLast(6);
+        three.addLast(3);
+        three.addLast(9);
+        LectureList.moves = 0;
+        three.addLast(7);
+        System.out.println("three nodes: " + three + ", pointer moves " + LectureList.moves);
+    }
+}
+```
+
+```text
+empty list: [7]
+one node: [6, 7], pointer moves 0
+three nodes: [6, 3, 9, 7], pointer moves 2
+```
+
+The three cases follow different paths. In an empty list the new node becomes the first node (`head = n`). In a list of one node the loop does not run, because the first node's `next` is already `null`. In a list of three nodes the loop moves twice (to the 3 node, then the 9 node). For `n` nodes the walk makes `n - 1` moves: the cost of `addLast` grows with the length of the list.
+
+### Add at the front
+
+<MemoryDiagram scenario="lladdfront" />
+
+```java title="AddFrontTest.java"
+public class AddFrontTest {
+    // Question: add 7 in front of 6, 3, 9, and in front of an empty list.
+    public static void main(String[] args) {
+        LectureList list = new LectureList();
+        list.addLast(6);
+        list.addLast(3);
+        list.addLast(9);
+        LectureList.moves = 0;
+        list.addFront(7);
+        System.out.println(list + ", pointer moves " + LectureList.moves);
+
+        LectureList empty = new LectureList();
+        empty.addFront(7);
+        System.out.println("front of an empty list: " + empty);
+    }
+}
+```
+
+```text
+[7, 6, 3, 9], pointer moves 0
+front of an empty list: [7]
+```
+
+`addFront` makes the new node point at the old first node, then moves `head` to the new node. Nothing is walked, so there are no pointer moves, however long the list is. Doing the two assignments the other way round (`head = n` first) loses the address of the old list.
+
+### Add at a position
+
+<MemoryDiagram scenario="lladdat" />
+
+```java title="AddAtTest.java"
+public class AddAtTest {
+    // Question: add 7 as the second node of 6, 3, 9; then at the front, at the end, and beyond the end.
+    static LectureList lecture() {
+        LectureList list = new LectureList();
+        list.addLast(6);
+        list.addLast(3);
+        list.addLast(9);
+        return list;
+    }
+
+    public static void main(String[] args) {
+        LectureList a = lecture();
+        a.add(1, 7);
+        System.out.println("add(1, 7): " + a);
+
+        LectureList b = lecture();
+        b.add(0, 7);
+        System.out.println("add(0, 7): " + b);
+
+        LectureList c = lecture();
+        c.add(3, 7);
+        System.out.println("add(3, 7): " + c);
+
+        LectureList d = lecture();
+        try {
+            d.add(5, 7);
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("add(5, 7): " + e.getClass().getName() + ": " + e.getMessage());
+        }
+    }
+}
+```
+
+```text
+add(1, 7): [6, 7, 3, 9]
+add(0, 7): [7, 6, 3, 9]
+add(3, 7): [6, 3, 9, 7]
+add(5, 7): java.lang.IndexOutOfBoundsException: Index: 5, Size: 3
+```
+
+The method walks to the node **before** the position, links the new node to that node's right neighbour first, and only then links the node before it to the new one. Position 0 is the front, and a position equal to the size is the end. A position beyond the end is an error: the library `LinkedList` throws the same `IndexOutOfBoundsException` for an index that does not exist.
+
+### Exam question 1: add at a position (6 marks)
+
+The lecture leaves `add(int i)` as an exercise. Write a method `add(int i, int data)` that inserts a new node with the given data so that it becomes the node at index `i`, and trace it for the call `add(1, 7)` on the list 6 → 3 → 9. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write" and "trace". The new node must end up at index `i`, so for `i = 1` it becomes the second node. The method needs the node **before** the position, because that is the node whose `next` changes.
+
+</Step>
+
+<Step title="2. Plan">
+
+Handle `i = 0` with the front insertion. Otherwise start at `head` and move `i - 1` times to reach the node before the position. Create the node, set its `next` to that node's `next`, then set that node's `next` to the new node. Reject a position that is past the end.
+
+</Step>
+
+<Step title="3. Solution">
+
+The method is `add` in `LectureList` above. For `add(1, 7)` on 6 → 3 → 9:
+
+| Step | Action | Result |
+|---|---|---|
+| 1 | `i` is not 0; `cur = head` (the 6 node); the loop moves `i - 1 = 0` times | `cur` is the 6 node |
+| 2 | `n = new Node(7)` | a node with `next` null |
+| 3 | `n.next = cur.next` | the 7 node points at the 3 node |
+| 4 | `cur.next = n` | the 6 node points at the 7 node |
+
+The picture is the `lladdat` diagram above: 6 → 7 → 3 → 9.
+
+</Step>
+
+<Step title="4. Check">
+
+The program above printed `add(1, 7): [6, 7, 3, 9]`. At the edges, `add(0, 7)` printed `[7, 6, 3, 9]` and `add(3, 7)` printed `[6, 3, 9, 7]`, and `add(5, 7)` threw an `IndexOutOfBoundsException`. The time complexity is best case O(1) (position 0) and worst case O(n) (a position near the end).
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Traversal: size and display
+
+Traversing means going through the list from the first node to the last. `size()` has the header `public int size()`, takes no parameter and returns the number of nodes, so it counts while it traverses. `toString()` builds the text of the list in the same way.
+
+```java title="SizeAndDisplay.java"
+public class SizeAndDisplay {
+    // Question: display the nodes and the number of nodes of an empty list, a list of one node and a list of five.
+    public static void main(String[] args) {
+        LectureList list = new LectureList();
+        System.out.println(list + " has " + list.size() + " nodes");
+        list.addLast(120);
+        System.out.println(list + " has " + list.size() + " node");
+        int[] values = {45, 30, 80, 15};
+        for (int v : values) {
+            list.addLast(v);
+        }
+        System.out.println(list + " has " + list.size() + " nodes");
+        LectureList.moves = 0;
+        list.size();
+        System.out.println("pointer moves for size(): " + LectureList.moves);
+    }
+}
+```
+
+```text
+[] has 0 nodes
+[120] has 1 node
+[120, 45, 30, 80, 15] has 5 nodes
+pointer moves for size(): 5
+```
+
+The loop `while (cur != null)` handles the empty list without a special case: `cur` starts as `null` and the loop body never runs, so the count is 0. A traversal always makes one move for each node, so `size()` is O(n). (A class can instead keep a `size` field and update it on every add and remove, which makes `size()` O(1) but adds work to every other method.)
+
+## 6. contains, and the errors in the lecture's code
+
+`contains` must visit the nodes from the first to the last, comparing each node's data with the search key, and stop at the first match. The lecture gives this code and asks students to type it in and "fix errors, if any".
+
+```java
+public boolean contains(int data) {
+    Node tmp = head;                     // start searching from the first node
+    while (tmp.next != null) {           // stop upon reaching the tail node
+        if (tmp.data == data)
+            return true;
+        tmp = tmp.next;
+    }
+    return false;
+}
+```
+
+The class below holds the lecture's `contains`, `addFront` and `removeLast` exactly as they are written (with the missing braces of `removeLast` supplied so that it compiles), so that their behaviour can be tested.
+
+```java title="LectureListAsWritten.java"
+public class LectureListAsWritten {
+    private class Node {
+        int data;
+        Node next;
+
+        Node(int data) {
+            this.data = data;
+            this.next = null;
+        }
+    }
+
+    private Node head;
+
+    public boolean isEmpty() {
+        return head == null;
+    }
+
+    public void addLast(int data) {
+        Node n = new Node(data);
+        if (isEmpty()) {
+            head = n;
+        } else {
+            Node currNode = head;
+            while (currNode.next != null) {
+                currNode = currNode.next;
+            }
+            currNode.next = n;
+        }
+    }
+
+    public void addFront(int data) {          // the lecture's version
+        Node n = new Node(data);
+        if (isEmpty()) {
+            System.out.println("List is empty!");
+        } else {
+            n.next = head;
+            head = n;
+        }
+    }
+
+    public boolean contains(int data) {       // the lecture's version
+        Node tmp = head;
+        while (tmp.next != null) {
+            if (tmp.data == data) {
+                return true;
+            }
+            tmp = tmp.next;
+        }
+        return false;
+    }
+
+    public void removeLast() {                // the lecture's version, with braces supplied
+        if (!isEmpty()) {
+            Node cur = head;
+            while (cur.next.next != null) {
+                cur = cur.next;
+            }
+            cur.next = null;
+        }
+    }
+
+    public String toString() {
+        return isEmpty() ? "[]" : "not empty";
+    }
+}
+```
+
+```java title="AsWrittenTest.java"
+public class AsWrittenTest {
+    // Question: what do the lecture's contains, addFront and removeLast do?
+    public static void main(String[] args) {
+        LectureListAsWritten list = new LectureListAsWritten();
+        list.addLast(6);
+        list.addLast(3);
+        list.addLast(9);
+        System.out.println("contains(6): " + list.contains(6));
+        System.out.println("contains(3): " + list.contains(3));
+        System.out.println("contains(9): " + list.contains(9));
+
+        LectureListAsWritten empty = new LectureListAsWritten();
+        try {
+            empty.contains(5);
+        } catch (NullPointerException e) {
+            System.out.println("contains on an empty list: " + e.getClass().getName());
+        }
+        empty.addFront(5);
+        System.out.println("after addFront(5) on an empty list: " + empty);
+
+        LectureListAsWritten one = new LectureListAsWritten();
+        one.addLast(4);
+        try {
+            one.removeLast();
+        } catch (NullPointerException e) {
+            System.out.println("removeLast on one node: " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+contains(6): true
+contains(3): true
+contains(9): false
+contains on an empty list: java.lang.NullPointerException
+List is empty!
+after addFront(5) on an empty list: []
+removeLast on one node: java.lang.NullPointerException
+```
+
+There are three faults, and each shows the same lesson about the ends of a list:
+
+| Method | Fault | Why | Repair |
+|---|---|---|---|
+| `contains` | never compares the last node | `while (tmp.next != null)` stops ON the tail before its data is tested, so `contains(9)` is `false` for 6, 3, 9 | loop `while (tmp != null)` |
+| `contains` | `NullPointerException` on an empty list | `tmp` is `null`, so `tmp.next` fails | the same repair: test `tmp`, not `tmp.next` |
+| `addFront` | does not add to an empty list | the empty case prints a message and returns without linking the node | the two assignments work for an empty list as well |
+| `removeLast` | `NullPointerException` on a list of one node | `cur.next` is `null`, so `cur.next.next` fails | handle the one-node list first: `head = null` |
+
+The lecture's `removeLast` as printed is also missing its braces after `if (!isEmpty())`: with the declaration `Node cur = head;` as the body, `javac` reports `error: variable declaration not allowed here`, and the unmatched braces give a second error. Adding the braces fixes the syntax but not the one-node fault above.
+
+### contains: found at the head, in the middle, at the tail and not found
+
+```java title="ContainsTest.java"
+public class ContainsTest {
+    // Question: search the list 12, 40, 75, 120, 8 for each key and count the pointer moves.
+    public static void main(String[] args) {
+        LectureList list = new LectureList();
+        int[] values = {12, 40, 75, 120, 8};
+        for (int v : values) {
+            list.addLast(v);
+        }
+        int[] keys = {12, 75, 8, 99};
+        for (int key : keys) {
+            LectureList.moves = 0;
+            boolean found = list.contains(key);
+            System.out.println("contains(" + key + ") = " + found + ", pointer moves " + LectureList.moves);
+        }
+        System.out.println("empty list: " + new LectureList().contains(5));
+    }
+}
+```
+
+```text
+contains(12) = true, pointer moves 0
+contains(75) = true, pointer moves 2
+contains(8) = true, pointer moves 4
+contains(99) = false, pointer moves 5
+empty list: false
+```
+
+The best case is a key in the first node (0 moves, O(1)). The worst case is a key in the last node or no key at all: the search moves through the whole list, O(n).
+
+### Exam question 2: find and repair the errors (6 marks)
+
+The lecture's `contains` returns `false` for the key 9 in the list 6, 3, 9, and throws `NullPointerException` on an empty list. Explain both faults, give the repaired method, and state its best and worst case time complexity. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Explain" two faults, "give" the repaired method and "state" two complexities. Both faults are in the loop condition `tmp.next != null`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Ask what the condition tests. `tmp.next != null` is true while there is a node **after** `tmp`, so the loop stops when `tmp` is the last node, before its data is compared. An empty list has `tmp == null`, so `tmp.next` has no object to read from.
+
+</Step>
+
+<Step title="3. Solution">
+
+The loop must run while `tmp` itself is not `null`:
+
+```java
+public boolean contains(int data) {
+    Node tmp = head;
+    while (tmp != null) {
+        if (tmp.data == data) {
+            return true;
+        }
+        tmp = tmp.next;
+    }
+    return false;
+}
+```
+
+This is the `contains` of `LectureList` above. With `tmp != null` the last node is compared (the loop ends only after `tmp` has stepped off the tail and become `null`), and an empty list skips the loop and returns `false`.
+
+</Step>
+
+<Step title="4. Check">
+
+On 6, 3, 9 the lecture's version printed `contains(9): false`; the repaired version finds it. On an empty list the repaired version returns `false` instead of throwing. The best case is O(1) (the key is in the first node) and the worst case is O(n) (the key is last or absent), as the counted moves above show.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 7. Removing nodes
+
+### Remove the first node and the last node
+
+<MemoryDiagram scenario="llremove" />
+
+```java title="RemoveEndsTest.java"
+public class RemoveEndsTest {
+    // Question: remove the first and the last node of lists of 4, 2, 1 and 0 nodes.
+    static LectureList build(int... values) {
+        LectureList list = new LectureList();
+        for (int v : values) {
+            list.addLast(v);
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        LectureList a = build(6, 3, 9, 7);
+        a.removeFront();
+        System.out.println("removeFront on 6, 3, 9, 7: " + a);
+        a.removeLast();
+        System.out.println("then removeLast: " + a);
+
+        LectureList b = build(6, 3);
+        b.removeLast();
+        System.out.println("removeLast on 6, 3: " + b);
+
+        LectureList c = build(6);
+        c.removeLast();
+        System.out.println("removeLast on one node: " + c + ", empty: " + c.isEmpty());
+
+        LectureList d = build();
+        d.removeFront();
+        d.removeLast();
+        System.out.println("both on an empty list: " + d);
+    }
+}
+```
+
+```text
+removeFront on 6, 3, 9, 7: [3, 9, 7]
+then removeLast: [3, 9]
+removeLast on 6, 3: [6]
+removeLast on one node: [], empty: true
+List is empty
+List is empty
+both on an empty list: []
+```
+
+`removeFront` is one assignment, `head = head.next`; the old first node is isolated and the garbage collector reclaims it. `removeLast` must find the **second-last** node, because it is that node's `next` that becomes `null`, so it walks the whole list. The two special cases are the list of one node (where there is no second-last node: `head` becomes `null`) and the empty list.
+
+### Remove the node at a position
+
+```java title="RemoveAtTest.java"
+public class RemoveAtTest {
+    // Question: remove the node at index 0, 2 and 3 of 6, 3, 9, 7, and at an index that does not exist.
+    static LectureList lecture() {
+        LectureList list = new LectureList();
+        int[] values = {6, 3, 9, 7};
+        for (int v : values) {
+            list.addLast(v);
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        LectureList a = lecture();
+        a.remove(0);
+        System.out.println("remove(0): " + a);
+        LectureList b = lecture();
+        b.remove(2);
+        System.out.println("remove(2): " + b);
+        LectureList c = lecture();
+        c.remove(3);
+        System.out.println("remove(3): " + c);
+        LectureList d = lecture();
+        try {
+            d.remove(4);
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("remove(4): " + e.getClass().getName() + ": " + e.getMessage());
+        }
+    }
+}
+```
+
+```text
+remove(0): [3, 9, 7]
+remove(2): [6, 3, 7]
+remove(3): [6, 3, 9]
+remove(4): java.lang.IndexOutOfBoundsException: Index: 4, Size: 4
+```
+
+The method walks to the node **before** the position and changes its `next` to bypass the node: `cur.next = cur.next.next`. Index 0 is the first node and is handled by `removeFront`. Index 3 is the last node of this list, and an index equal to the size does not exist.
+
+<Callout type="mistake" title="Common error">
+
+Standing on the node you want to remove. In a singly linked list you can only follow arrows forwards, so once `cur` is the target there is no way to change the `next` of the node in front of it. Stop one node earlier.
+
+</Callout>
+
+## 8. The lecture's tester exercise
+
+Lecture 14 ends with this task: create a list and add nodes, display them and the number of nodes, remove the first node and print the rest, add two nodes in front and display all nodes, display "Found it" if the list has 120 and otherwise "Better luck next time!", and draw the memory diagram of all these actions in the given order.
+
+```java title="LectureTester.java"
+public class LectureTester {
+    // Question (Lecture 14 exercise): add 6 nodes, display, size, remove the first, add 2 in front, search for 120.
+    static void search(LectureList list) {
+        if (list.contains(120)) {
+            System.out.println("Found it");
+        } else {
+            System.out.println("Better luck next time!");
+        }
+    }
+
+    public static void main(String[] args) {
+        LectureList myList = new LectureList();
+        int[] values = {12, 40, 75, 120, 8, 30};
+        for (int v : values) {
+            myList.addLast(v);
+        }
+        System.out.println(myList + ", " + myList.size() + " nodes");
+        myList.removeFront();
+        System.out.println("after removing the first: " + myList);
+        myList.addFront(5);
+        myList.addFront(60);
+        System.out.println("after adding 2 in front: " + myList + ", " + myList.size() + " nodes");
+        search(myList);
+        myList.remove(4);
+        System.out.println("after remove(4): " + myList);
+        search(myList);
+    }
+}
+```
+
+```text
+[12, 40, 75, 120, 8, 30], 6 nodes
+after removing the first: [40, 75, 120, 8, 30]
+after adding 2 in front: [60, 5, 40, 75, 120, 8, 30], 7 nodes
+Found it
+after remove(4): [60, 5, 40, 75, 8, 30]
+Better luck next time!
+```
+
+The second search fails because `remove(4)` removed the node holding 120: the list 60, 5, 40, 75, 120, 8, 30 has 120 at index 4. The memory diagram of the actions in order, for a shorter run, is below. Step through it: every line changes one pointer, and the node that `removeFront` unlinks becomes garbage.
+
+<MemoryDiagram scenario="llexercise" />
+
+## 9. The time complexity of each method
+
+Lecture 14 puts "Exercise: prove that it is O(n)" and "Time complexity: O(1)? Proof!" against its methods. A proof here is a count: how many times does the method follow a `next` pointer for a list of `n` nodes? The program builds lists of 10, 100 and 1000 nodes and counts the moves.
+
+```java title="ListCosts.java"
+public class ListCosts {
+    // Question: how many pointer moves does each method make for lists of 10, 100 and 1000 nodes?
+    static LectureList build(int n) {
+        LectureList list = new LectureList();
+        for (int i = n; i >= 1; i--) {
+            list.addFront(i);                 // the list reads 1, 2, ..., n
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        int[] sizes = {10, 100, 1000};
+        System.out.println("n | addFront | addLast | add(middle) | contains first | contains last | removeFront | removeLast | remove(middle) | size");
+        for (int n : sizes) {
+            LectureList.moves = 0;
+            build(n).addFront(0);
+            int addFront = LectureList.moves;
+            LectureList l = build(n);
+            LectureList.moves = 0;
+            l.addLast(0);
+            int addLast = LectureList.moves;
+            l = build(n);
+            LectureList.moves = 0;
+            l.add(n / 2, 0);
+            int addMiddle = LectureList.moves;
+            l = build(n);
+            LectureList.moves = 0;
+            l.contains(1);
+            int first = LectureList.moves;
+            LectureList.moves = 0;
+            l.contains(n);
+            int last = LectureList.moves;
+            LectureList.moves = 0;
+            l.removeFront();
+            int removeFront = LectureList.moves;
+            l = build(n);
+            LectureList.moves = 0;
+            l.removeLast();
+            int removeLast = LectureList.moves;
+            l = build(n);
+            LectureList.moves = 0;
+            l.remove(n / 2);
+            int removeMiddle = LectureList.moves;
+            l = build(n);
+            LectureList.moves = 0;
+            l.size();
+            int size = LectureList.moves;
+            System.out.println(n + " | " + addFront + " | " + addLast + " | " + addMiddle + " | " + first + " | " + last + " | "
+                + removeFront + " | " + removeLast + " | " + removeMiddle + " | " + size);
+        }
+    }
+}
+```
+
+```text
+n | addFront | addLast | add(middle) | contains first | contains last | removeFront | removeLast | remove(middle) | size
+10 | 0 | 9 | 4 | 0 | 9 | 0 | 8 | 4 | 10
+100 | 0 | 99 | 49 | 0 | 99 | 0 | 98 | 49 | 100
+1000 | 0 | 999 | 499 | 0 | 999 | 0 | 998 | 499 | 1000
+```
+
+| Method | Pointer moves | Best case | Worst case | Why |
+|---|---|---|---|---|
+| `addFront` | 0 | O(1) | O(1) | two assignments, no walking |
+| `addLast` | `n - 1` | O(n) | O(n) | must reach the tail (a `tail` reference would make it O(1)) |
+| `add(i)` | about `i - 1` | O(1) at index 0 | O(n) near the end | walk to the node before the position |
+| `contains` | 0 to `n` | O(1) | O(n) | first node, or the whole list |
+| `removeFront` | 0 | O(1) | O(1) | one assignment |
+| `removeLast` | `n - 2` | O(n) | O(n) | must reach the second-last node |
+| `remove(i)` | about `i - 1` | O(1) at index 0 | O(n) | walk to the node before the position |
+| `size` | `n` | O(n) | O(n) | counts every node |
+
+The counts grow in step with `n` for each method that walks: ten times the nodes means about ten times the moves, which is linear growth. The methods that only change `head` make no moves at all, so their cost does not depend on `n`. This is the trade-off the lecture states: an insertion or a removal at the front needs no shifting, but there is no direct access to the middle or the end.
+
+### Exam question 3: the complexity of adding at the end and at the front (5 marks)
+
+State the time complexity of `addLast` and `addFront` for a singly linked list that keeps only a `head` reference, and justify each by counting the pointer moves for a list of `n` nodes. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State" and "justify" for two methods. The list keeps only `head`, so the tail has to be found by walking. The count to give is the number of times `next` is followed for `n` nodes.
+
+</Step>
+
+<Step title="2. Plan">
+
+For `addLast`: the loop `while (currNode.next != null)` runs until `currNode` is the last node, which is `n - 1` moves. For `addFront`: only two assignments and no loop.
+
+</Step>
+
+<Step title="3. Solution">
+
+`addLast` makes `n - 1` pointer moves, then one assignment to link the new node: the cost grows in proportion to `n`, so it is **O(n)** in the best, average and worst case. `addFront` makes **0** pointer moves and two assignments whatever `n` is, so it is **O(1)**.
+
+</Step>
+
+<Step title="4. Check">
+
+The counted moves above agree: for the list of 10 nodes `addLast` made 9 moves, for 100 nodes 99, and for 1000 nodes 999, while `addFront` made none at any size.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 10. A generic linked list
+
+The last exercise of the lecture asks for a generic class `GenLinkedList`, tested with `String`, `Integer` and `Dog` values. The data type of the node becomes a type parameter `T`, and the comparison in `contains` uses `equals`, because `==` would compare addresses for objects.
+
+```java title="Dog.java"
+public class Dog {
+    private String name;
+
+    public Dog(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof Dog && ((Dog) other).name.equals(name);
+    }
+
+    @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "Dog(" + name + ")";
+    }
+}
+```
+
+```java title="GenLinkedList.java"
+public class GenLinkedList<T> {
+    private class Node {
+        T data;
+        Node next;
+
+        Node(T data) {
+            this.data = data;
+        }
+    }
+
+    private Node head;
+
+    public void addLast(T data) {
+        Node n = new Node(data);
+        if (head == null) {
+            head = n;
+        } else {
+            Node cur = head;
+            while (cur.next != null) {
+                cur = cur.next;
+            }
+            cur.next = n;
+        }
+    }
+
+    public void addFront(T data) {
+        Node n = new Node(data);
+        n.next = head;
+        head = n;
+    }
+
+    public boolean contains(T data) {
+        Node cur = head;
+        while (cur != null) {
+            if (cur.data.equals(data)) {
+                return true;
+            }
+            cur = cur.next;
+        }
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("[");
+        Node cur = head;
+        while (cur != null) {
+            sb.append(cur.data);
+            if (cur.next != null) {
+                sb.append(", ");
+            }
+            cur = cur.next;
+        }
+        return sb.append("]").toString();
+    }
+}
+```
+
+```java title="GenListTest.java"
+public class GenListTest {
+    // Question (Lecture 14 exercise): test GenLinkedList with String, Integer and Dog values.
+    public static void main(String[] args) {
+        GenLinkedList<String> names = new GenLinkedList<String>();
+        names.addLast("Kago");
+        names.addLast("Naledi");
+        names.addFront("Mpho");
+        System.out.println(names + " contains Naledi: " + names.contains("Naledi"));
+
+        GenLinkedList<Integer> marks = new GenLinkedList<Integer>();
+        marks.addLast(72);
+        marks.addLast(85);
+        System.out.println(marks + " contains 85: " + marks.contains(85));
+
+        GenLinkedList<Dog> dogs = new GenLinkedList<Dog>();
+        dogs.addLast(new Dog("Rex"));
+        dogs.addLast(new Dog("Tau"));
+        System.out.println(dogs + " contains Dog(Tau): " + dogs.contains(new Dog("Tau")));
+        System.out.println(dogs + " contains Dog(Max): " + dogs.contains(new Dog("Max")));
+    }
+}
+```
+
+```text
+[Mpho, Kago, Naledi] contains Naledi: true
+[72, 85] contains 85: true
+[Dog(Rex), Dog(Tau)] contains Dog(Tau): true
+[Dog(Rex), Dog(Tau)] contains Dog(Max): false
+```
+
+`contains(new Dog("Tau"))` is `true` although the argument is a different object from the one in the list: `equals` compares the names, which is why `Dog` overrides it. Without that override the default `equals` compares addresses and the search would fail. The algorithm of every method is the same as in the `int` version; only the type of `data` changes.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A linked list object holds `head`, a reference to the first node; each node holds data and a `next` reference, and the last `next` is `null`. Insert by pointing the new node at its right neighbour first, then pointing the node before it at the new node; remove by making the node before the target bypass it. Never test `tmp.next` when you mean to visit every node: the loop `while (tmp != null)` covers the last node and the empty list. The special cases to check in every method are the empty list, a list of one node, the first position and the last position. `addFront`, `removeFront` and a change at `head` are O(1); everything that walks is O(n). The memory diagram of a list is a row of node boxes, `head` on the stack, and an unlinked node left as garbage.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does the lecture's contains return false for the key 9 in the list 6, 3, 9?">
+
+Its loop is `while (tmp.next != null)`, which stops when `tmp` is the last node, before that node's data is compared. The loop must run while `tmp != null`.
+
+</CheckQuestion>
+
+<CheckQuestion question="In which order must the two assignments of an insertion be made, and what is lost if they are reversed?">
+
+First `n.next = cur.next` (the new node takes over the rest of the list), then `cur.next = n`. Reversed, `cur.next` is overwritten first and the only reference to the rest of the list is lost.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does removeLast need to stop at the second-last node, and what breaks for a list of one node?">
+
+The second-last node is the one whose `next` must become `null`. A list of one node has no second-last node: `cur.next` is `null`, so `cur.next.next` throws `NullPointerException`. That case must set `head = null`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which of addFront and addLast is O(1) when the list keeps only a head reference, and why?">
+
+`addFront`: it makes two assignments and follows no pointer. `addLast` must walk `n - 1` pointers to find the tail, so it is O(n).
+
+</CheckQuestion>
+
+<CheckQuestion question="What does the memory diagram show for a node that removeFront has unlinked?">
+
+The node is still on the heap, but nothing points to it (not `head`, not another node's `next`), so it is garbage and the garbage collector can reclaim its memory.
+
+</CheckQuestion>
+
+</CheckQuestions>
