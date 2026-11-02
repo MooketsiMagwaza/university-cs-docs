@@ -49,8 +49,8 @@ const texts = (drawing) => {
   return out;
 };
 
-test('there are twenty scenarios and each one builds and draws every step', () => {
-  assert.equal(memoryScenarioIds.length, 20);
+test('there are twenty-four scenarios and each one builds and draws every step', () => {
+  assert.equal(memoryScenarioIds.length, 24);
   for (const id of memoryScenarioIds) {
     const sc = buildMemoryScenario(id);
     assert.ok(sc.steps.length >= 1, `${id} has steps`);
@@ -149,7 +149,7 @@ test('traversal draws no dead arrows, so cur only shows the addresses it visited
 });
 
 test('the Lecture 14 linked list scenarios leave the nodes they unlink as garbage', () => {
-  for (const id of ['llremove', 'llexercise', 'llpractice']) {
+  for (const id of ['llremove', 'llexercise', 'llpractice', 'stacklinked', 'queuelinked']) {
     const sc = buildMemoryScenario(id);
     const last = finalState(sc);
     const pointedAt = new Set();
@@ -161,4 +161,19 @@ test('the Lecture 14 linked list scenarios leave the nodes they unlink as garbag
   const added = finalState(buildMemoryScenario('lladdlast'));
   const tail = added.objs.find((o) => o.addr === 300);
   assert.equal(tail.cells.find((c) => c.n === 'next').v.r, 400, 'addLast links the old tail to the new node');
+});
+
+test('the array queue leaves removed elements in the array and resets front and tail when it empties', () => {
+  const sc = buildMemoryScenario('queuearray');
+  const afterThreeDequeues = sc.steps[7].s;
+  const arr = afterThreeDequeues.objs.find((o) => o.addr === 300);
+  assert.equal(arr.cells[0].v.t, '26', 'a dequeued element stays in the array');
+  const q = afterThreeDequeues.objs.find((o) => o.addr === 200);
+  assert.equal(q.cells.find((c) => c.n === 'front').v.t, '3');
+  assert.equal(q.cells.find((c) => c.n === 'tail').v.t, '2');
+  const last = finalState(sc).objs.find((o) => o.addr === 200);
+  assert.equal(last.cells.find((c) => c.n === 'front').v.t, '0', 'front is reset by the next enqueue');
+  const stack = finalState(buildMemoryScenario('stackarray')).objs.find((o) => o.addr === 300);
+  assert.equal(stack.cells[2].v.t, '46');
+  assert.ok(stack.cells[2].old.includes('92'), 'the stale 92 is crossed out when 46 overwrites it');
 });
