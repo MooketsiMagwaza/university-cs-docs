@@ -1,0 +1,273 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for singly linked lists in Java: the node, adding and removing at the front, the end and the middle, traversal, reversing, finding the middle, the pointer-order rules and the costs."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/09-linked-lists-traversals) for the explanations. This page is for lookup.
+
+## 1. Placeholders used in every template on this page
+
+| Placeholder | Meaning | Example |
+|---|---|---|
+| `head` | The field holding the first node, or `null` for an empty list | `head = n;` |
+| `cur` | A helper that walks the list; it is a variable, never part of the list | `Node cur = head;` |
+| `prev` | The node just behind `cur` | `prev.next = cur.next;` |
+| `n` | A new node being added | `Node n = new Node(5);` |
+| `value` | The data stored in a node | `33` |
+
+## 2. The node and the list
+
+```java title="Node.java"
+public class Node {
+    int data;
+    Node next;                 // the address of the following node, or null
+
+    Node(int data) {
+        this.data = data;      // next starts as null
+    }
+}
+```
+
+A list is only a `head` reference. `head == null` means the list is empty. A list of one node has `head.next == null`.
+
+## 3. Adding a node
+
+**Order matters.** Always link the new node to the rest of the list **first**, then move the arrow that reaches it. Doing it the other way round loses the rest of the list.
+
+| Where | Steps (in this order) | Cost |
+|---|---|---|
+| At the front | `n.next = head;` then `head = n;` | O(1) |
+| After a known node `cur` | `n.next = cur.next;` then `cur.next = n;` | O(1) |
+| At the end (no tail pointer) | walk to the last node, then `last.next = n;` | O(n) |
+| At the end (with a `tail` pointer) | `tail.next = n; tail = n;` | O(1) |
+| Into an empty list | `head = n;` | O(1) |
+
+```java title="AddNodes.java"
+public class AddNodes {
+    static class Node {
+        int data;
+        Node next;
+        Node(int data) { this.data = data; }
+    }
+
+    static Node head;
+
+    static void addFirst(int value) {
+        Node n = new Node(value);
+        n.next = head;               // 1. the new node points at the old first node
+        head = n;                    // 2. head points at the new node
+    }
+
+    static void addLast(int value) {
+        Node n = new Node(value);
+        if (head == null) {          // empty list: the new node is the list
+            head = n;
+            return;
+        }
+        Node cur = head;
+        while (cur.next != null) {   // stop ON the last node, not after it
+            cur = cur.next;
+        }
+        cur.next = n;
+    }
+
+    static void print() {
+        StringBuilder sb = new StringBuilder();
+        for (Node cur = head; cur != null; cur = cur.next) {
+            sb.append(cur.data).append(" -> ");
+        }
+        System.out.println(sb + "null");
+    }
+
+    public static void main(String[] args) {
+        addFirst(33);
+        addFirst(12);
+        addLast(41);
+        print();
+    }
+}
+```
+
+```text
+12 -> 33 -> 41 -> null
+```
+
+## 4. Removing a node
+
+| Which | Steps | Cost |
+|---|---|---|
+| The first node | `head = head.next;` | O(1) |
+| The node after `prev` | `prev.next = prev.next.next;` | O(1) |
+| The first node with a given value | walk with `prev` and `cur`, then `prev.next = cur.next;` | O(n) |
+| The last node | walk until `cur.next.next == null`, then `cur.next = null;` | O(n) |
+
+Removing the **first** node has no `prev`, so it is a special case: test `head.data == value` before the loop.
+
+```java title="RemoveNodes.java"
+public class RemoveNodes {
+    static class Node {
+        int data;
+        Node next;
+        Node(int data) { this.data = data; }
+    }
+
+    static Node remove(Node head, int value) {
+        if (head == null) {
+            return null;
+        }
+        if (head.data == value) {            // special case: the first node
+            return head.next;
+        }
+        Node prev = head;
+        Node cur = head.next;
+        while (cur != null && cur.data != value) {
+            prev = cur;
+            cur = cur.next;
+        }
+        if (cur != null) {                   // found: skip over it
+            prev.next = cur.next;
+        }
+        return head;
+    }
+
+    static void print(Node head) {
+        StringBuilder sb = new StringBuilder();
+        for (Node cur = head; cur != null; cur = cur.next) {
+            sb.append(cur.data).append(" -> ");
+        }
+        System.out.println(sb + "null");
+    }
+
+    public static void main(String[] args) {
+        Node head = new Node(12);
+        head.next = new Node(33);
+        head.next.next = new Node(41);
+        head = remove(head, 33);
+        print(head);
+        head = remove(head, 12);
+        print(head);
+        head = remove(head, 99);              // not present: nothing changes
+        print(head);
+    }
+}
+```
+
+```text
+12 -> 41 -> null
+41 -> null
+41 -> null
+```
+
+## 5. Traversal templates
+
+```java
+// visit every node
+for (Node cur = head; cur != null; cur = cur.next) {
+    // use cur.data
+}
+
+// stop ON the last node (to append)
+Node cur = head;
+while (cur.next != null) {
+    cur = cur.next;
+}
+```
+
+Test `cur != null` to visit every node, and `cur.next != null` to stop on the last one. Using `cur.next` when `cur` can be `null` throws a `NullPointerException`.
+
+## 6. Reversing, middle and cycles
+
+| Task | Idea | Cost |
+|---|---|---|
+| Reverse iteratively | three references `prev`, `cur`, `next`; flip `cur.next = prev` one node at a time | O(n), O(1) extra |
+| Find the middle | a `slow` that moves one step and a `fast` that moves two; when `fast` reaches the end, `slow` is in the middle | O(n) |
+| Detect a cycle (Floyd) | `slow` one step, `fast` two; if they ever meet there is a cycle | O(n), O(1) extra |
+| Length | traverse with a counter | O(n) |
+
+```java title="ReverseList.java"
+public class ReverseList {
+    static class Node {
+        int data;
+        Node next;
+        Node(int data) { this.data = data; }
+    }
+
+    static Node reverse(Node head) {
+        Node prev = null;
+        Node cur = head;
+        while (cur != null) {
+            Node next = cur.next;       // 1. remember the rest
+            cur.next = prev;            // 2. flip this node's arrow
+            prev = cur;                 // 3. step both references forward
+            cur = next;
+        }
+        return prev;                    // prev is the new first node
+    }
+
+    static Node middle(Node head) {
+        Node slow = head, fast = head;
+        while (fast != null && fast.next != null) {
+            slow = slow.next;
+            fast = fast.next.next;
+        }
+        return slow;
+    }
+
+    static void print(Node head) {
+        StringBuilder sb = new StringBuilder();
+        for (Node cur = head; cur != null; cur = cur.next) {
+            sb.append(cur.data).append(" -> ");
+        }
+        System.out.println(sb + "null");
+    }
+
+    public static void main(String[] args) {
+        Node head = new Node(1);
+        head.next = new Node(2);
+        head.next.next = new Node(3);
+        head.next.next.next = new Node(4);
+        head.next.next.next.next = new Node(5);
+        System.out.println("middle: " + middle(head).data);
+        head = reverse(head);
+        print(head);
+    }
+}
+```
+
+```text
+middle: 3
+5 -> 4 -> 3 -> 2 -> 1 -> null
+```
+
+## 7. A dummy head removes the special case
+
+A dummy node in front of the list means every real node has a predecessor, so inserting and removing at the front need no `if`.
+
+```java
+Node dummy = new Node(0);       // data is never used
+dummy.next = head;
+Node prev = dummy;
+// ... same loop as for the middle of the list ...
+head = dummy.next;              // the real first node
+```
+
+## 8. Singly linked, doubly linked and `ArrayList`
+
+| | Singly linked | Doubly linked (`prev` and `next`) | `ArrayList` |
+|---|---|---|---|
+| Get element `i` | O(n) | O(n) | O(1) |
+| Add or remove at the front | O(1) | O(1) | O(n) |
+| Add or remove at the end | O(n), or O(1) with `tail` | O(1) | O(1) amortised |
+| Remove a node you already hold | O(n) (need `prev`) | O(1) | O(n) |
+| Extra memory per element | one reference | two references | none (but spare capacity) |
+
+## 9. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| Moving `head` before linking the new node | the old list is lost | `n.next = head;` first, then `head = n;` |
+| Using `cur.next` when `cur` is `null` | `NullPointerException` | test `cur != null` first |
+| Forgetting the empty list | `NullPointerException` on `head.next` | test `head == null` first |
+| Removing the first node with the middle-of-list code | the first node is never removed (no `prev`) | handle `head` as a special case, or use a dummy head |
+| `cur = cur.next` missing in the loop | infinite loop | advance `cur` on every path |
+| Losing the rest of the list while reversing | only one node survives | save `next` before changing `cur.next` |

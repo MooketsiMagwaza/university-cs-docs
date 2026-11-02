@@ -1,0 +1,187 @@
+---
+title: "Arrays & methods"
+description: "An array stores many values under one name; a method packages instructions under one name."
+---
+
+Every search and sort in this course is a method that works on an array.
+
+<LearningObjectives items={[
+  "How to create an array, read and write its elements by index, and loop over it.",
+  "Why array positions start at 0, and what happens if you go past the end.",
+  "How to write a method with parameters and a return value, and how to call it.",
+  "What the call stack is, and how Java passes values into methods.",
+]} />
+
+## Arrays
+
+<Callout type="analogy">
+
+An array is like a row of numbered lockers, all the same size, standing side by side. The whole row has one name, and each locker is identified by its number. You can go straight to locker number 7 without opening lockers 0 to 6 first.
+
+</Callout>
+
+An **array** is a fixed-size, ordered collection of values that all have the same type. Each value is an **element**, and each element sits at a numbered position called its **index**. Indexes start at **0**, so in an array of length 5 the valid indexes are 0, 1, 2, 3 and 4. The last index is always `length - 1`.
+
+<SvgFigure src="sem3/csi247/01-java-fundamentals/notes/arrays-and-methods" id="arrays-methods-1">
+
+**Figure 4.1** An array of five `int`s. `scores[3]` is the fourth element, 90. Asking for `scores[5]` is an error, because there is no locker 5.
+
+</SvgFigure>
+
+```java title="Arrays.java"
+int[] scores = {72, 85, 64, 90, 58};     // create AND fill in one step (an "array initialiser")
+int[] empty  = new int[3];               // create 3 slots; ints start as 0 → {0, 0, 0}
+
+System.out.println(scores[0]);           // 72   — read the element at index 0
+scores[2] = 70;                          // overwrite index 2: {72, 85, 70, 90, 58}
+System.out.println(scores.length);       // 5    — length is a property, no brackets
+
+// Visit every element with a classic for loop (you get the index i as well)
+for (int i = 0; i < scores.length; i++) {
+    System.out.println("Index " + i + " holds " + scores[i]);
+}
+
+// The for-each loop: simpler when you only need the values, not the positions
+int total = 0;
+for (int s : scores) {                   // read as: "for each int s in scores"
+    total += s;
+}
+System.out.println(total);               // 375
+```
+
+When you create an array with `new`, Java fills every slot with a **default value**: `0` for number types, `false` for `boolean`, and `null` (meaning "no object") for object types such as `String`. Once created, an array's length can never change. If you need a collection that grows, Java provides `ArrayList`, which we'll meet later.
+
+<Callout type="mistake" title="Off-by-one errors">
+
+Writing `i <= scores.length` instead of `i < scores.length`. On the last iteration `i` equals 5, and `scores[5]` doesn't exist, so the program crashes with `ArrayIndexOutOfBoundsException`. Many sorting bugs are this exact mistake, especially in loops that look at `a[j + 1]`.
+
+</Callout>
+
+### Why do indexes start at 0?
+
+An array is stored as one continuous block of memory. To find element `i`, the computer takes the address where the array starts and adds `i × (size of one element)`. The first element is zero steps from the start, so it is index 0. This arithmetic is also why reading `a[i]` takes the same tiny amount of time whether the array has ten elements or ten million. Binary search depends on that: it jumps straight to the middle element instantly.
+
+## Methods
+
+<Callout type="analogy">
+
+A method is like a recipe card with a name on it. Once the card is written, you can say "make pancakes" instead of reciting all the steps every time. Some recipes need ingredients handed to them (parameters) and give you back a finished dish (a return value).
+
+</Callout>
+
+A **method** is a named block of code that performs one task. You **define** it once, and then **call** it (run it) by name as many times as you like. Methods let you avoid repeating code, give a meaningful name to a piece of logic, and test each piece separately. (Other languages call these "functions" or "procedures".)
+
+### Anatomy of a method
+
+```java title="MaxDemo.java"
+public class MaxDemo {
+
+    //  modifiers   return type   name   parameter list
+    public static   int           max    (int[] values) {
+        int best = values[0];                 // assume the first value is the biggest...
+        for (int i = 1; i < values.length; i++) {
+            if (values[i] > best) {           // ...and replace it whenever we see something bigger
+                best = values[i];
+            }
+        }
+        return best;                          // hand the answer back to whoever called us
+    }
+
+    public static void main(String[] args) {
+        int[] temps = {21, 27, 19, 30, 25};
+        int hottest = max(temps);             // CALL the method; its return value is stored
+        System.out.println(hottest);          // 30
+    }
+}
+```
+
+- **Parameters** are variables listed in the brackets of the definition (`int[] values`). They receive the values passed in when the method is called.
+- The values you pass in when calling (`temps`) are called **arguments**.
+- The **return type** (`int`) says what kind of value comes back. `return` sends that value back and immediately ends the method. A method declared `void` returns nothing, and may use a bare `return;` to finish early.
+- The name plus the parameter types form the method's **signature**, here `max(int[])`.
+- For now every method we write is `static`, which simply means it can be called without creating an object first. The OOP section explains what non-static methods are.
+
+### What happens when you call a method: the call stack
+
+When a method is called, Java creates a fresh workspace for it called a **stack frame**, which holds that call's parameters and local variables. The frames are stacked on top of each other like plates: the method currently running is on top. When it returns, its frame is removed and the method underneath carries on from exactly where it paused. This pile of frames is the **call stack**. It becomes very important on the Recursion page.
+
+<SvgFigure src="sem3/csi247/01-java-fundamentals/notes/arrays-and-methods" id="arrays-methods-2">
+
+**Figure 4.2** Each method call gets its own frame on the call stack. Local variables live inside the frame and disappear when the method returns.
+
+</SvgFigure>
+
+### How values are passed in
+
+Java always passes **a copy of the value** held by the argument (this is called *pass-by-value*). For a primitive like `int`, the method gets a copy of the number, so changing the parameter inside the method does not change the caller's variable. An array variable, however, doesn't hold the elements themselves; it holds a *reference* (an address) to where the array lives. The method receives a copy of that address, which still points to the *same* array. So if a method changes `values[0]`, the caller sees the change. This is exactly how a sorting method can rearrange your array without returning anything.
+
+```java title="PassByValue.java"
+static void tryToChange(int n, int[] arr) {
+    n = 99;          // changes only the method's private copy of the number
+    arr[0] = 99;     // follows the copied address to the SHARED array and changes it
+}
+
+int x = 1;
+int[] data = {1, 2, 3};
+tryToChange(x, data);
+System.out.println(x);         // 1        — unchanged
+System.out.println(data[0]);   // 99       — the array itself was modified
+```
+
+### A helper you will use constantly: `swap`
+
+Many sorting algorithms need to exchange two elements of an array. You can't just write `a[i] = a[j]; a[j] = a[i];`, because the first line overwrites `a[i]` and its old value is lost forever. You need a temporary variable to hold one value while you move the other, like needing an empty glass to swap the drinks in two full glasses.
+
+```java title="Swap.java"
+static void swap(int[] a, int i, int j) {
+    int tmp = a[i];    // 1. put a[i] somewhere safe
+    a[i] = a[j];       // 2. now it's safe to overwrite a[i] with a[j]
+    a[j] = tmp;        // 3. put the saved value into a[j]
+}
+// int[] a = {5, 8};  swap(a, 0, 1);  → a is now {8, 5}
+```
+
+### Printing an array
+
+Printing an array variable directly, as in `System.out.println(scores)`, shows something unhelpful like `[I@1b6d3586` (a type code and an identity number). To see the contents, use the library method `Arrays.toString`, after adding `import java.util.Arrays;` at the top of the file. An **import** tells the compiler which library class you mean by a short name.
+
+```java title="PrintArray.java"
+import java.util.Arrays;
+
+public class PrintArray {
+    public static void main(String[] args) {
+        int[] scores = {72, 85, 64};
+        System.out.println(Arrays.toString(scores));   // [72, 85, 64]
+    }
+}
+```
+
+<Callout type="key">
+
+Arrays hold a fixed number of same-type values, indexed from 0 to `length − 1`. Methods package logic under a name, take parameters and may return a value. Java passes copies of values, but a copied array reference still points to the same array, so methods can rearrange arrays in place.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={"An array has length 8. What are its first and last valid indexes?"}>
+
+0 and 7. The last index is always `length − 1`.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why does <code>swap</code> need the variable <code>tmp</code>?</>}>
+
+Because assigning `a[i] = a[j]` destroys the old value of `a[i]`. `tmp` keeps a copy so it can be written into `a[j]` afterwards.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>A method receives an <code>int</code> parameter and sets it to 0. Does the caller's variable change? What if it receives an array and sets element 0 to 0?</>}>
+
+The `int`: no, the method only had a copy of the number. The array: yes, the method had a copy of the reference, which points at the very same array the caller has.
+
+</CheckQuestion>
+
+</CheckQuestions>

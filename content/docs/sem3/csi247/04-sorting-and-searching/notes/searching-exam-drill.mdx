@@ -1,0 +1,253 @@
+---
+title: "Exam drill: searching"
+description: "The searching examples from Lecture 8, done the way an exam wants them: the lecturer's exact code, comparison counts, trace tables, searching arrays of objects, and the recursive versions left as exercises."
+---
+
+<LearningObjectives items={[
+  "How to count comparisons for linear search on sorted and unsorted arrays.",
+  "How to trace the lecturer's binary search with a low / high / mid table.",
+  "How to search an array of objects safely (the `null` check).",
+  "Recursive linear and binary search, with traces.",
+]} />
+
+If you haven't read them yet, start with [Linear search](/docs/sem3/csi247/04-sorting-and-searching/notes/linear-search) and [Binary search](/docs/sem3/csi247/04-sorting-and-searching/notes/binary-search). This page assumes you know the ideas and focuses on doing the questions.
+
+## Linear search: the lecturer's code
+
+```java title="LinearSearch.java"
+public static int linearSearch(int arr[], int key) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr[i] == key)
+            return i;      // found: stop immediately and report the position
+    }
+    return -1;             // only reached if the loop checked EVERY element without success
+}
+```
+
+### Unsorted array, searching for 18
+
+Array: `63 29 85 72 18 42 23 54 8 32`. Each row is one comparison `arr[i] == key`:
+
+<TraceTable>
+
+| `i` | `arr[i]` | `arr[i] == 18`? | Comparisons so far |
+| --- | --- | --- | --- |
+| 0 | 63 | false | 1 |
+| 1 | 29 | false | 2 |
+| 2 | 85 | false | 3 |
+| 3 | 72 | false | 4 |
+| 4 | 18 | true → return 4 | 5 |
+
+</TraceTable>
+
+**Found at index 4 after 5 comparisons.** Searching the same array for **31**: every one of the 10 elements is compared and none match, so **10 comparisons, return −1**. That's the worst case: *n* comparisons.
+
+### Sorted array: you can stop early
+
+Array: `8 18 23 29 34 42 54 63 72 85`. Searching for **18**: 8 (no), 18 (yes) → **2 comparisons**, index 1. Searching for **31**: the lecturer's code above would still check all 10. But because the array is sorted, a smarter version can stop as soon as it sees a value *bigger* than the key: after 8, 18, 23, 29 comes 34, and since 34 \> 31, 31 can't be further along. That's **5 comparisons**.
+
+```java title="SortedLinearSearch.java"
+public static int sortedLinearSearch(int[] arr, int key) {   // arr must be in ascending order
+    for (int i = 0; i < arr.length; i++) {
+        if (arr[i] == key) return i;     // found
+        if (arr[i] > key) return -1;     // passed the place it would be → it isn't here
+    }
+    return -1;
+}
+```
+
+<Callout type="note">
+
+The lecture's observation: sorting only helps linear search when the key is *missing*. When the key is present, you stop at it either way. In general linear search is about equally fast on sorted and unsorted data. Best case O(1) (key at index 0), worst case O(*n*) (key last or missing).
+
+</Callout>
+
+## Searching an array of objects
+
+The revision notes implement linear search on an array of objects by name. Two things change compared with ints: compare Strings with `.equals`, never `==`; and some slots may be `null` (remember, `new Student[10]` starts full of nulls), so check for `null` before calling a method.
+
+```java title="ObjectSearch.java"
+public static int linearSearch(Student[] obj, String k) {
+    for (int i = 0; i < obj.length; i++) {
+        // && stops early: if obj[i] is null, the right-hand side is never evaluated,
+        // so we never call getName() on null (which would crash with NullPointerException)
+        if (obj[i] != null && obj[i].getName().equals(k)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Using it, as in the revision notes:
+if (linearSearch(myStudents, "Sub1") != -1) {
+    System.out.println("Found");
+} else {
+    System.out.println("Not found");
+}
+```
+
+<Callout type="mistake">
+
+Writing `obj[i].getName().equals(k) && obj[i] != null`, the other way round. Java evaluates left to right, so it calls `getName()` on the null slot before it ever gets to the check.
+
+</Callout>
+
+## Binary search: the lecturer's code
+
+```java title="BinarySearch.java"
+public static int binarySearch(int[] arr, int key, int low, int high) {
+    int index = -1;                            // "not found yet"
+    while (low <= high) {                      // while there is still a range to look in
+        int mid = low + ((high - low) / 2);    // middle of the range (integer division rounds down)
+        if (arr[mid] < key) {
+            low = mid + 1;                     // key is bigger → throw away the left half (and mid)
+        } else if (arr[mid] > key) {
+            high = mid - 1;                    // key is smaller → throw away the right half (and mid)
+        } else if (arr[mid] == key) {
+            index = mid;                       // found it
+            break;                             // leave the loop
+        }
+    }
+    return index;
+}
+// first call: binarySearch(arr, 18, 0, arr.length - 1)
+```
+
+To trace it, use one row per pass of the loop with columns `low`, `high`, `low <= high`?, `mid`, `arr[mid]`, and what happens.
+
+### Searching for 18 (found)
+
+Array (indexes 0–9): `8 18 23 29 34 42 54 63 72 85`.
+
+<TraceTable>
+
+| `low` | `high` | low ≤ high? | `mid` | `arr[mid]` | Action |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 9 | true | 0 + 9/2 = 4 | 34 | 34 \> 18 → `high = 3` |
+| 0 | 3 | true | 0 + 3/2 = 1 | 18 | 18 == 18 → `index = 1`, break |
+
+</TraceTable>
+
+**Returns 1 after 2 passes.**
+
+<Callout type="caution" title="The slide's picture">
+
+The illustration on the slides picks 42 as the first middle and keeps indexes 0–4. That's rounding the middle *up*. The code rounds *down* (integer division: 9/2 = 4), so it picks 34. In an exam, always follow the code you are given and show the arithmetic for `mid`.
+
+</Callout>
+
+### Searching for 31 (not found)
+
+<TraceTable>
+
+| `low` | `high` | low ≤ high? | `mid` | `arr[mid]` | Action |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 9 | true | 4 | 34 | 34 \> 31 → `high = 3` |
+| 0 | 3 | true | 1 | 18 | 18 \< 31 → `low = 2` |
+| 2 | 3 | true | 2 + 1/2 = 2 | 23 | 23 \< 31 → `low = 3` |
+| 3 | 3 | true | 3 | 29 | 29 \< 31 → `low = 4` |
+| 4 | 3 | false | — | — | loop ends → return `index` = **−1** |
+
+</TraceTable>
+
+4 passes instead of linear search's 10. For an array of a million elements binary search needs at most about 20.
+
+### Searching for 72
+
+<TraceTable>
+
+| `low` | `high` | low ≤ high? | `mid` | `arr[mid]` | Action |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 9 | true | 4 | 34 | 34 \< 72 → `low = 5` |
+| 5 | 9 | true | 5 + 4/2 = 7 | 63 | 63 \< 72 → `low = 8` |
+| 8 | 9 | true | 8 + 1/2 = 8 | 72 | found → `index = 8`, break |
+
+</TraceTable>
+
+### Binary search's running time (the lecture's exercise)
+
+| Case | When | Big-O |
+| --- | --- | --- |
+| Best | the key is exactly at the first `mid` | O(1) |
+| Average | a typical key | O(log *n*) |
+| Worst | the key is missing, or found on the last halving | O(log *n*) |
+
+## Recursive versions (the lecture's exercises)
+
+### Recursive linear search
+
+```java title="RecursiveLinear.java"
+public static int linearSearch(int[] arr, int key, int i) {   // start with i = 0
+    if (i == arr.length) return -1;      // base case 1: ran off the end → not found
+    if (arr[i] == key) return i;         // base case 2: found it
+    return linearSearch(arr, key, i + 1);   // recursive case: search the rest of the array
+}
+```
+
+<TraceTable>
+
+| `i` | Call | `i == length`? | `arr[i] == key`? | Returned | Result ↑ |
+| --- | --- | --- | --- | --- | --- |
+| 0 | `linearSearch(a, 18, 0)` | false | 63: false | `linearSearch(a, 18, 1)` | 4 |
+| 1 | `linearSearch(a, 18, 1)` | false | 29: false | `linearSearch(a, 18, 2)` | 4 |
+| 2 | `linearSearch(a, 18, 2)` | false | 85: false | `linearSearch(a, 18, 3)` | 4 |
+| 3 | `linearSearch(a, 18, 3)` | false | 72: false | `linearSearch(a, 18, 4)` | 4 |
+| 4 | `linearSearch(a, 18, 4)` | false | 18: **true** | `4` | 4 |
+
+</TraceTable>
+
+(Array `a` = `63 29 85 72 18 …`.) Each call just passes the answer it receives straight back up, so the Result column is 4 all the way.
+
+### Recursive binary search
+
+```java title="RecursiveBinary.java"
+public static int binarySearch(int[] arr, int key, int low, int high) {
+    if (low > high) return -1;                       // base case 1: empty range → not found
+    int mid = low + (high - low) / 2;
+    if (arr[mid] == key) return mid;                 // base case 2: found
+    if (arr[mid] < key)
+        return binarySearch(arr, key, mid + 1, high);   // search the right half
+    else
+        return binarySearch(arr, key, low, mid - 1);    // search the left half
+}
+```
+
+<TraceTable>
+
+| Call | low \> high? | `mid` | `arr[mid]` | Returned | Result ↑ |
+| --- | --- | --- | --- | --- | --- |
+| `bs(a, 72, 0, 9)` | false | 4 | 34 | `bs(a, 72, 5, 9)` | 8 |
+| `bs(a, 72, 5, 9)` | false | 7 | 63 | `bs(a, 72, 8, 9)` | 8 |
+| `bs(a, 72, 8, 9)` | false | 8 | 72 | `8` | 8 |
+
+</TraceTable>
+
+<Callout type="key">
+
+Linear: count one comparison per element looked at; −1 only after the loop. Binary: needs sorted data; table of low / high / mid; `mid = low + (high − low) / 2` rounds down; stop when `low > high`. Object arrays: `obj[i] != null &&` first, then `.equals`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>How many comparisons does the lecturer's linear search make looking for 32 in <code>63 29 85 72 18 42 23 54 8 32</code>?</>}>
+
+\10. It's the last element, so every element is compared once, and the 10th comparison succeeds.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Trace binary search for 8 in <code>8 18 23 29 34 42 54 63 72 85</code>. How many passes?</>}>
+
+low 0, high 9, mid 4 (34 \> 8) → high 3; mid 1 (18 \> 8) → high 0; mid 0 (8) → found at index 0. **3 passes.**
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why can't binary search be used on <code>63 29 85 72 18</code>?</>}>
+
+It isn't sorted. Binary search decides which half to throw away by assuming everything left of `mid` is smaller and everything right is bigger. On unsorted data that assumption is false and it can miss elements that are there.
+
+</CheckQuestion>
+
+</CheckQuestions>

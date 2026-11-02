@@ -1,0 +1,306 @@
+---
+title: "Case study: Shapes & UML"
+description: "The lecture's running example, Shape, Circle and Rectangle, built up completely."
+---
+
+" question from Lecture 11.
+
+<LearningObjectives items={[
+  "Why the three separate classes repeat themselves, and how inheritance removes the repetition.",
+  "The finished, compiling Shape hierarchy with an abstract `getArea()`.",
+  "How to draw UML class diagrams for inheritance and interfaces.",
+  "How to decide whether a statement like `Rectangle r = new Shape();` is valid.",
+  "How to predict the output of the lecture's abstract-class and interface examples.",
+]} />
+
+## The problem: three classes, lots of copying
+
+Imagine writing `Shape`, `Circle` and `Rectangle` as three unrelated classes. Each would need its own `colour` field, its own setter and getter for it, and its own `toString` and `equals`. That's the same code typed three times. If you later find a bug in the colour setter, you must fix it in three places, and you will forget one.
+
+What do the three have in common? A circle *is a* shape and a rectangle *is a* shape. They all have a colour. That "is a" sentence is the signal to use [inheritance](/docs/sem3/csi247/06-object-oriented-programming/notes/inheritance-and-super): put everything shared into `Shape`, and let `Circle` and `Rectangle` `extends Shape`, adding only what's new.
+
+## Drawing it in UML
+
+**UML** (the Unified Modelling Language) is a standard way of drawing classes so that anyone can read your design. A class is a box with three sections: the *name*, the *fields*, and the *methods*. A symbol in front of each member shows its access:
+
+| Symbol | Access modifier | Who can use it |
+| --- | --- | --- |
+| `+` | `public` | Everyone |
+| `#` | `protected` | The class, its subclasses, and its package |
+| `-` | `private` | Only the class itself |
+
+Fields are written `name: Type` and methods `name(parameters): ReturnType`. Abstract things are written in *italics*. An inheritance arrow is a solid line with a **hollow triangle pointing at the parent**.
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/shapes-case-study-and-uml" id="shape-case-study-1">
+
+**Figure 11a.1** A UML class diagram for the hierarchy. The triangle points at the superclass. Circle and Rectangle don't list `colour` or `setColour` again: they inherit them. (In the lecture, before abstract classes are introduced, Shape is a normal class without `getArea`.)
+
+</SvgFigure>
+
+## The finished code
+
+This is the end point of the lecture's exercises: `getArea()` is abstract in `Shape` (a plain shape has no dimensions, so there's nothing to calculate), and each subclass overrides `toString`, `equals` and `getArea`.
+
+```java title="Shape.java"
+public abstract class Shape {                    // abstract: you can't write new Shape(...) any more
+    private String colour;                       // private: only Shape's own code touches it directly
+
+    public Shape() { this.colour = ""; }
+    public Shape(String colour) { this.colour = colour; }
+
+    public void setColour(String colour) { this.colour = colour; }
+    public String getColour() { return colour; }
+
+    public abstract double getArea();            // no body, just a semicolon: subclasses MUST write one
+
+    @Override
+    public String toString() { return "I am a " + colour + " shape"; }
+}
+```
+
+```java title="Circle.java"
+public class Circle extends Shape {
+    private int radius;                          // the one thing a Circle adds
+
+    public Circle() { super(); this.radius = 0; }
+    public Circle(String colour, int radius) {
+        super(colour);                           // constructors are NOT inherited: ask Shape's to set colour
+        this.radius = radius;
+    }
+
+    public void setRadius(int radius) { this.radius = radius; }
+    public int getRadius() { return radius; }
+
+    @Override
+    public double getArea() { return Math.PI * radius * radius; }   // πr²
+
+    @Override
+    public String toString() {                   // PARTIAL overriding: reuse Shape's text, then add to it
+        return super.toString() + ": a circle with radius " + radius;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this) return true;
+        if (o == null || this.getClass() != o.getClass()) return false;
+        Circle other = (Circle) o;
+        return getColour().equals(other.getColour()) && radius == other.radius;   // getColour(): colour is private in Shape
+    }
+}
+```
+
+```java title="Rectangle.java"
+public class Rectangle extends Shape {
+    private int height;
+    private int width;
+
+    public Rectangle() { super(); }
+    public Rectangle(String colour, int height, int width) {
+        super(colour);
+        this.height = height;
+        this.width = width;
+    }
+
+    public int getHeight() { return height; }
+    public int getWidth() { return width; }
+
+    @Override
+    public double getArea() { return height * width; }
+
+    @Override
+    public String toString() { return super.toString() + ": a " + height + " by " + width + " rectangle"; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this) return true;
+        if (!(o instanceof Rectangle)) return false;     // instanceof is false for null as well
+        Rectangle r = (Rectangle) o;
+        return getColour().equals(r.getColour()) && height == r.height && width == r.width;
+    }
+}
+```
+
+```java title="ShapeTester.java"
+public class ShapeTester {
+    public static boolean isGreater(Shape a, Shape b) {   // accepts ANY kind of Shape
+        return a.getArea() > b.getArea();                 // each object runs its OWN getArea (polymorphism)
+    }
+
+    public static void main(String[] args) {
+        Shape c = new Circle("Yellow", 2);
+        Shape r = new Rectangle("Red", 3, 4);
+        System.out.println(c);
+        System.out.println(r);
+        System.out.printf("%.2f %.2f%n", c.getArea(), r.getArea());
+        System.out.println(isGreater(c, r));
+        System.out.println(c.equals(new Circle("Yellow", 2)));   // same data → equals says true
+        System.out.println(c == new Circle("Yellow", 2));        // different objects → == says false
+    }
+}
+```
+
+```text
+I am a Yellow shape: a circle with radius 2
+I am a Red shape: a 3 by 4 rectangle
+12.57 12.00
+true
+true
+false
+```
+
+<Callout type="mistake" title="A slip in the slides">
+
+The partial-overriding slide writes `super.toString();` as a statement on its own and then returns a different string. That calls the parent's method and throws the result away, so it achieves nothing. To actually *reuse* the parent's text, put the call inside the return: `return super.toString() + "…";` as above.
+
+</Callout>
+
+### What a Circle object looks like in memory
+
+A subclass object is *one* object that contains the inherited fields *and* its own fields. There is no separate "Shape part" object somewhere else.
+
+<MemoryDiagram scenario="shape" />
+
+## What subclasses can and cannot do
+
+**A subclass can**
+
+- Use the superclass's public (and protected) fields and methods as if they were its own.
+- Add new fields (`radius`).
+- Add new methods (`getRadius`).
+- Override inherited methods (`toString`, `equals`).
+
+**A subclass cannot**
+
+- Remove anything it inherited.
+- Directly use the superclass's `private` fields or methods (it goes through public getters instead).
+- Inherit constructors. It writes its own and calls the parent's with `super(…)`; if it doesn't, Java calls the parent's no-argument constructor automatically.
+- Extend more than one class.
+
+### Kinds of inheritance Java allows
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/shapes-case-study-and-uml" id="shape-case-study-2">
+
+**Figure 11a.2** Single: one parent, one child. Hierarchical: one parent, many children. Multi-level: a chain (C extends B, B extends A, so C gets A's members too). What Java does *not* allow is one class with two parent classes; that is what interfaces are for.
+
+</SvgFigure>
+
+## Exercise: valid or not valid?
+
+This is the lecture's exercise, assuming the early (non-abstract) Shape with constructors `Shape()` and `Shape(String)`. The key rule: **a variable may point to an object of its own class or of any subclass, never a superclass**. "A Rectangle is a Shape" is true; "a Shape is a Rectangle" isn't always true.
+
+<TraceTable>
+
+| Statement | Verdict | Why |
+| --- | --- | --- |
+| `a) Shape s1 = new Shape();` | Valid | A Shape variable holding a Shape. (It becomes *invalid* once Shape is made abstract.) |
+| `b) Shape s2 = new Shape("Green");` | Valid | Uses the `Shape(String)` constructor. |
+| `c) s1.setColour("Red");` | Valid | `setColour` is a public Shape method. |
+| `d) boolean b = s1.equals(s2);` | Valid | `equals` returns a boolean. Here it's `false` (Red vs Green). |
+| `e) Systems.out.println(s1.toString());` | Not valid as written | Trick: there is no class called `Systems`. With `System` it would be valid. |
+| `f) Shape s3 = new Rectangle();` | Valid | A Rectangle *is a* Shape (upcasting). |
+| `g) s3.setColour("Orange");` | Valid | Rectangle inherited `setColour`, and the Shape variable can see it. |
+| `h) Rectangle s4 = new Shape();` | Not valid | A plain Shape is not a Rectangle (it has no height or width). Compile error: incompatible types. |
+| `i) Shape s5 = new Circle("Yellow");` | Valid only if… | The types are fine (a Circle is a Shape), but the lecture's Circle only has `Circle()` and `Circle(int)`. You need a constructor `Circle(String colour) { super(colour); }` for this to compile. |
+| `j) Shape r1 = new Rectangle("Blue");` | Valid only if… | Same story: Rectangle needs a `Rectangle(String)` constructor. |
+| `k) System.out.println(r1.equals(s3));` | Valid | Prints `false` with Shape's colour-comparing `equals`: Blue vs Orange. |
+
+</TraceTable>
+
+## What is the output?
+
+### The abstract Dog
+
+```java title="Russel.java"
+abstract class Dog {
+    abstract void bark();               // empty method: no body
+}
+public class Russel extends Dog {
+    public void bark() { System.out.println("Baaaaark"); }    // Russel fills it in
+
+    public static void main(String[] args) {
+        Dog myDog = new Russel();       // Dog VARIABLE, Russel OBJECT
+        myDog.bark();                   // the object decides → Russel's bark runs
+    }
+}
+```
+
+```text
+Baaaaark
+```
+
+You can't write `new Dog()` (Dog is abstract), but a `Dog` variable can point to any concrete subclass object.
+
+### Interface Test, abstract Mist, concrete Bob
+
+```java title="TestTester.java"
+interface Test {                       // a contract: three methods, no bodies
+    void methodA();
+    void methodB();
+    void methodC();
+}
+abstract class Mist implements Test {  // writes only ONE of the three, so it must stay abstract
+    public void methodA() { System.out.println("Testing"); }
+}
+class Bob extends Mist {               // writes the other two → now everything has a body → concrete
+    public void methodB() { System.out.println("Hello"); }
+    public void methodC() { System.out.println("There"); }
+}
+public class TestTester {
+    public static void main(String[] args) {
+        Test t = new Bob();            // interface variable, Bob object
+        t.methodA();                   // Bob inherited this from Mist
+        t.methodB();
+        t.methodC();
+    }
+}
+```
+
+```text
+Testing
+Hello
+There
+```
+
+### Multiple interfaces
+
+The output of the lecture's `Multi` example is `Interface A method!` followed by `Interface B method!!!!.`. One warning: the slide declares the interface methods as `private void methodA();`, which **does not compile** ("missing method body, or declare abstract"). Interface methods without a body are automatically `public abstract`, so just write `void methodA();`.
+
+### Interfaces in UML
+
+An interface is drawn like a class with `«interface»` above its name. A class that implements it is joined by a **dashed** line with a hollow triangle (a solid line means `extends`; dashed means `implements`).
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/shapes-case-study-and-uml" id="shape-case-study-3">
+
+**Figure 11a.3** Dashed line + triangle = implements an interface. Solid line + triangle = extends a class. Mist is in italics because it is abstract.
+
+</SvgFigure>
+
+<Callout type="key">
+
+Shared fields and methods go up into the superclass; subclasses add and override. UML: three sections, `+ - #` for access, italics for abstract, solid-line triangle for `extends`, dashed for `implements`. A variable can hold its own type or any subtype, never a supertype. The *object* decides which overridden method runs.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={"After Shape becomes abstract, which of the exercise statements a–k stop compiling?"}>
+
+a) and b), because they say `new Shape(…)` and an abstract class can't be instantiated. (Statement h was already invalid.) Everything that creates a Circle or Rectangle is still fine.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why must <code>Circle</code>'s <code>equals</code> call <code>getColour()</code> instead of using <code>colour</code> directly?</>}>
+
+`colour` is `private` in Shape, and private members are only visible inside Shape itself, not in subclasses. The public getter is the way in. (Making it `protected` would also work.)
+
+</CheckQuestion>
+
+<CheckQuestion question={"A class implements an interface but writes only some of its methods. What must be true of the class?"}>
+
+It must be declared `abstract`, like `Mist`. A concrete subclass has to supply the remaining methods.
+
+</CheckQuestion>
+
+</CheckQuestions>

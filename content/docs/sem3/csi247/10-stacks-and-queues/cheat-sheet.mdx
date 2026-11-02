@@ -1,0 +1,282 @@
+---
+title: "Cheat Sheet"
+description: "Fast reference for stacks, queues and deques in Java: the operations, which class to use, an array stack, a circular queue, and the classic uses (balanced brackets, postfix, undo, breadth-first order)."
+---
+
+Use the [chapter notes](/docs/sem3/csi247/10-stacks-and-queues) for the explanations. This page is for lookup.
+
+## 1. The rule of each structure
+
+| Structure | Rule | Add | Remove | Look without removing |
+|---|---|---|---|---|
+| Stack | last in, first out (LIFO) | `push(x)` at the top | `pop()` from the top | `peek()` |
+| Queue | first in, first out (FIFO) | `offer(x)` or `add(x)` at the rear | `poll()` or `remove()` from the front | `peek()` or `element()` |
+| Deque | both ends | `addFirst`, `addLast` | `pollFirst`, `pollLast` | `peekFirst`, `peekLast` |
+| Priority queue | smallest (or largest) out first | `offer(x)` | `poll()` | `peek()` |
+
+**Empty structure:** `pop()` on `java.util.Stack` throws `EmptyStackException`. `remove()` on a `Queue` throws `NoSuchElementException`, while `poll()` and `peek()` return `null`. Test `isEmpty()` before you take.
+
+## 2. Which Java class to use
+
+| Need | Use | Declare as |
+|---|---|---|
+| Stack | `ArrayDeque` (preferred) or `Stack` | `Deque<Integer> stack = new ArrayDeque<>();` |
+| Queue | `ArrayDeque` or `LinkedList` | `Queue<Integer> queue = new ArrayDeque<>();` |
+| Priority queue | `PriorityQueue` | `Queue<Integer> pq = new PriorityQueue<>();` |
+
+With `ArrayDeque` as a stack use `push`, `pop` and `peek` (they work at the **front**). As a queue use `offer` at the rear and `poll` from the front. Do not mix the two sets of methods on one object.
+
+```java title="Basics.java"
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.PriorityQueue;
+import java.util.Queue;
+
+public class Basics {
+    public static void main(String[] args) {
+        Deque<String> stack = new ArrayDeque<>();
+        stack.push("a");
+        stack.push("b");
+        stack.push("c");
+        System.out.println("stack pop order: " + stack.pop() + stack.pop() + stack.pop());
+
+        Queue<String> queue = new ArrayDeque<>();
+        queue.offer("a");
+        queue.offer("b");
+        queue.offer("c");
+        System.out.println("queue poll order: " + queue.poll() + queue.poll() + queue.poll());
+
+        Queue<Integer> pq = new PriorityQueue<>();
+        pq.offer(40);
+        pq.offer(10);
+        pq.offer(30);
+        System.out.println("priority order: " + pq.poll() + " " + pq.poll() + " " + pq.poll());
+    }
+}
+```
+
+```text
+stack pop order: cba
+queue poll order: abc
+priority order: 10 30 40
+```
+
+## 3. Tracing: write the contents after every operation
+
+Write the structure **left = bottom/front, right = top/rear** and keep the same convention throughout.
+
+| Operation | Stack (bottom to top) | Returned |
+|---|---|---|
+| `push(7)` | 7 | |
+| `push(2)` | 7 2 | |
+| `push(9)` | 7 2 9 | |
+| `pop()` | 7 2 | 9 |
+| `peek()` | 7 2 | 2 |
+| `pop()` | 7 | 2 |
+
+| Operation | Queue (front to rear) | Returned |
+|---|---|---|
+| `offer(7)` | 7 | |
+| `offer(2)` | 7 2 | |
+| `offer(9)` | 7 2 9 | |
+| `poll()` | 2 9 | 7 |
+| `peek()` | 2 9 | 2 |
+| `poll()` | 9 | 2 |
+
+## 4. Building an array stack
+
+A stack in an array needs only the array and `top`, the number of items (the next free index).
+
+```java title="ArrayStack.java"
+public class ArrayStack {
+    private final int[] data;
+    private int top = 0;                    // number of items; also the next free index
+
+    ArrayStack(int capacity) {
+        data = new int[capacity];
+    }
+
+    boolean isEmpty() { return top == 0; }
+    boolean isFull()  { return top == data.length; }
+
+    void push(int value) {
+        if (isFull()) {
+            throw new IllegalStateException("stack is full");
+        }
+        data[top++] = value;                // store, then move top up
+    }
+
+    int pop() {
+        if (isEmpty()) {
+            throw new IllegalStateException("stack is empty");
+        }
+        return data[--top];                 // move top down, then read
+    }
+
+    public static void main(String[] args) {
+        ArrayStack s = new ArrayStack(3);
+        s.push(5);
+        s.push(8);
+        System.out.println(s.pop() + " " + s.pop() + " " + s.isEmpty());
+        try {
+            s.pop();
+        } catch (IllegalStateException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
+```
+
+```text
+8 5 true
+stack is empty
+```
+
+`push` is `data[top++]` (use the index, then add 1). `pop` is `data[--top]` (subtract 1, then use the index). Swapping the two reads the wrong slot.
+
+## 5. The circular queue
+
+A queue in an array that only moves `front` and `rear` forward soon runs off the end even though the front slots are free. The fix is to wrap the indexes with `%`.
+
+| Quantity | Formula |
+|---|---|
+| Next rear slot | `(front + size) % capacity` |
+| Move front forward after a remove | `front = (front + 1) % capacity` |
+| Full | `size == capacity` |
+| Empty | `size == 0` |
+
+```java title="CircularQueue.java"
+public class CircularQueue {
+    private final int[] data;
+    private int front = 0;
+    private int size = 0;
+
+    CircularQueue(int capacity) {
+        data = new int[capacity];
+    }
+
+    void enqueue(int value) {
+        if (size == data.length) {
+            throw new IllegalStateException("queue is full");
+        }
+        data[(front + size) % data.length] = value;   // the slot after the last item, wrapped
+        size++;
+    }
+
+    int dequeue() {
+        if (size == 0) {
+            throw new IllegalStateException("queue is empty");
+        }
+        int value = data[front];
+        front = (front + 1) % data.length;            // wrap around the end
+        size--;
+        return value;
+    }
+
+    public static void main(String[] args) {
+        CircularQueue q = new CircularQueue(3);
+        q.enqueue(1);
+        q.enqueue(2);
+        q.enqueue(3);
+        System.out.println(q.dequeue() + " " + q.dequeue());
+        q.enqueue(4);                                  // reuses the freed slot at index 0
+        q.enqueue(5);
+        System.out.println(q.dequeue() + " " + q.dequeue() + " " + q.dequeue());
+    }
+}
+```
+
+```text
+1 2
+3 4 5
+```
+
+Tracking `size` as well as `front` is what tells a full queue from an empty one; with only `front` and `rear` both states look the same.
+
+## 6. Classic uses
+
+| Task | Structure | Idea |
+|---|---|---|
+| Balanced brackets | stack | push each opener; on a closer, pop and check it matches; the stack must be empty at the end |
+| Evaluate postfix | stack | push numbers; on an operator, pop two, apply, push the result |
+| Infix to postfix | stack of operators | output operands at once; hold operators by precedence |
+| Undo / back button | stack | the most recent action is undone first |
+| Print jobs, scheduling | queue | served in arrival order |
+| Breadth-first search | queue | visit the nearest vertices first |
+| Depth-first search | stack (or recursion) | follow one branch as far as it goes |
+| Next greater element | stack | keep a stack of indexes that are still waiting for a larger value |
+
+```java title="Brackets.java"
+import java.util.ArrayDeque;
+import java.util.Deque;
+
+public class Brackets {
+    static boolean balanced(String s) {
+        Deque<Character> stack = new ArrayDeque<>();
+        for (char c : s.toCharArray()) {
+            if (c == '(' || c == '[' || c == '{') {
+                stack.push(c);
+            } else if (c == ')' || c == ']' || c == '}') {
+                if (stack.isEmpty()) {
+                    return false;                       // a closer with nothing open
+                }
+                char open = stack.pop();
+                if ((c == ')' && open != '(') || (c == ']' && open != '[') || (c == '}' && open != '{')) {
+                    return false;                       // the wrong kind of opener
+                }
+            }
+        }
+        return stack.isEmpty();                         // anything left is unclosed
+    }
+
+    static int evalPostfix(String expression) {
+        Deque<Integer> stack = new ArrayDeque<>();
+        for (String token : expression.split(" ")) {
+            if (token.matches("\\d+")) {
+                stack.push(Integer.parseInt(token));
+            } else {
+                int right = stack.pop();                // the right operand comes off first
+                int left = stack.pop();
+                switch (token) {
+                    case "+": stack.push(left + right); break;
+                    case "-": stack.push(left - right); break;
+                    case "*": stack.push(left * right); break;
+                    default:  stack.push(left / right);
+                }
+            }
+        }
+        return stack.pop();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(balanced("{[()]}") + " " + balanced("([)]") + " " + balanced("(("));
+        System.out.println(evalPostfix("3 4 + 2 *"));      // (3 + 4) * 2
+        System.out.println(evalPostfix("10 2 8 * + 3 -")); // 10 + (2 * 8) - 3
+    }
+}
+```
+
+```text
+true false false
+14
+23
+```
+
+## 7. Cost
+
+| Operation | Array stack / `ArrayDeque` | `LinkedList` | `PriorityQueue` |
+|---|---|---|---|
+| push, pop, peek / offer, poll, peek | O(1) | O(1) | peek O(1), offer and poll O(log n) |
+| Search for a value | O(n) | O(n) | O(n) |
+| Access the middle | not offered | O(n) | not offered |
+
+## 8. Common errors
+
+| Mistake | What happens | Repair |
+|---|---|---|
+| `pop()` or `remove()` on an empty structure | `EmptyStackException` or `NoSuchElementException` | test `isEmpty()`, or use `poll()` and check for `null` |
+| Using `java.util.Stack`'s `get(i)` or `add(i, x)` | breaks the LIFO idea | use only `push`, `pop`, `peek` |
+| Mixing `push` with `offer` on one `ArrayDeque` | the order is not what you expect | choose stack methods or queue methods, not both |
+| Popping the operands in the wrong order for `-` and `/` | wrong sign or quotient | the first pop is the **right** operand |
+| A linear queue that never reuses freed slots | "full" while most slots are empty | use the circular formula with `%` |
+| Not checking the stack is empty at the end of bracket matching | `"(("` is reported balanced | return `stack.isEmpty()` |

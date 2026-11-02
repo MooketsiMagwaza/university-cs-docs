@@ -1,0 +1,118 @@
+---
+title: "Searching with the Java library"
+description: "In real programs you rarely write a search by hand."
+---
+
+Java's standard library already provides well-tested versions; knowing how they behave is what matters.
+
+<LearningObjectives items={[
+  "How to use `Arrays.binarySearch` and decode its negative return value.",
+  "What `ArrayList` is, and its linear-search methods `indexOf` and `contains`.",
+  "Why your own classes need a correct `equals` for these to work.",
+]} />
+
+## `Arrays.binarySearch`
+
+The class `java.util.Arrays` contains ready-made binary search methods for every primitive array type and for object arrays. The array must already be sorted in ascending order; if it isn't, the result is undefined (meaningless).
+
+```java title="LibraryBinarySearch.java"
+import java.util.Arrays;
+
+public class LibraryBinarySearch {
+    public static void main(String[] args) {
+        int[] a = {2, 5, 8, 12, 16, 23, 38, 56, 72, 91};
+
+        System.out.println(Arrays.binarySearch(a, 23));   // 5
+        System.out.println(Arrays.binarySearch(a, 40));   // -8   ← not found. But why -8?
+
+        int r = Arrays.binarySearch(a, 40);
+        if (r < 0) {
+            int insertionPoint = -r - 1;                  // decode: -(-8) - 1 = 7
+            System.out.println("40 is absent; it would go at index " + insertionPoint);
+        }
+    }
+}
+```
+
+### Decoding the negative result
+
+When the target is found, the library returns its index, just like ours. When it isn't found, instead of a plain −1 it returns **`-(insertion point) - 1`**. The *insertion point* is the index where the target would have to be inserted to keep the array sorted (the first element greater than the target). In the example, 40 belongs at index 7 (just before 56), so the result is −7 − 1 = −8.
+
+Why the extra "− 1"? If the insertion point is 0 (the target is smaller than everything), returning −0 would be just 0, indistinguishable from "found at index 0". Subtracting 1 guarantees every "not found" answer is negative. So the rule for callers is simple: **a result ≥ 0 means found; a negative result means not found**, and `-result - 1` tells you where it would go. This is exactly the final value of `low` you saw in our own trace.
+
+<Callout type="caution">
+
+If the array contains duplicates of the target, `Arrays.binarySearch` makes no promise about *which* of them it finds. Use the first-occurrence technique from the previous page if you need a specific one.
+
+</Callout>
+
+There are also versions that search only part of an array, `Arrays.binarySearch(a, fromIndex, toIndex, key)`, where `fromIndex` is included and `toIndex` is excluded. For object arrays sorted by a custom order, you can pass the same `Comparator` used to sort them (Comparators are explained on the [Comparable & Comparator](/docs/sem3/csi247/04-sorting-and-searching/notes/comparable-and-comparator) page).
+
+## Lists: `ArrayList`
+
+Arrays have a fixed length. When you need a collection that can grow and shrink, Java provides `ArrayList`: a class that wraps an array internally and automatically replaces it with a bigger one when it fills up. Because of generics, you say what type it holds in angle brackets. It can only hold objects, so for numbers you use the "wrapper" class `Integer` instead of `int`; Java converts between them automatically (this is called *autoboxing*).
+
+```java title="ListSearch.java"
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+public class ListSearch {
+    public static void main(String[] args) {
+        List<String> names = new ArrayList<>();   // an empty, growable list of Strings
+        names.add("Lesedi");                      // add to the end
+        names.add("Kago");
+        names.add("Naledi");
+
+        // LINEAR searches built into every list — they work on unsorted lists, O(n):
+        System.out.println(names.indexOf("Kago"));      // 1
+        System.out.println(names.indexOf("Thabo"));     // -1
+        System.out.println(names.contains("Naledi"));   // true
+
+        // BINARY search — the list must be sorted first, O(log n):
+        Collections.sort(names);                        // [Kago, Lesedi, Naledi]
+        System.out.println(Collections.binarySearch(names, "Lesedi"));   // 1
+    }
+}
+```
+
+| Method | Algorithm | Needs sorted data? | Cost | Returns when absent |
+| --- | --- | --- | --- | --- |
+| `list.indexOf(x)` | linear search | No | O(*n*) | `-1` |
+| `list.contains(x)` | linear search | No | O(*n*) | `false` |
+| `Arrays.binarySearch(a, x)` | binary search | Yes | O(log *n*) | `-(insertion point) - 1` |
+| `Collections.binarySearch(list, x)` | binary search | Yes | O(log *n*) on an `ArrayList` | `-(insertion point) - 1` |
+
+## Searching for your own objects
+
+`indexOf` and `contains` decide whether two objects match by calling `equals`. The version every class inherits from `Object` just compares references (identity), so two separate `Point` objects with the same coordinates would *not* match. To make them match, your class must override `equals` (and `hashCode` along with it). [Appendix D](/docs/sem3/csi247/resources#appendix-d--the-object-class-equals-hashcode-tostring) shows exactly how. For `binarySearch` on objects, the class must instead define an ordering, which is the topic of the [Comparable & Comparator](/docs/sem3/csi247/04-sorting-and-searching/notes/comparable-and-comparator) page.
+
+<Callout type="tip" title="Even faster lookups">
+
+When you need to check "is this item present?" very often, Java's `HashSet` and `HashMap` classes answer in roughly constant time, O(1) on average, without needing sorted data. They use a different technique called *hashing*, beyond the scope of this course, and they also rely on a correct `equals` and `hashCode`.
+
+</Callout>
+
+<Callout type="key">
+
+Use `Arrays.binarySearch` / `Collections.binarySearch` on sorted data: ≥ 0 means found, negative means absent with insertion point `-r - 1`. Use `indexOf` / `contains` (linear) on unsorted lists. Your classes need `equals` to be found by value.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<><code>Arrays.binarySearch</code> returns −1. What does that tell you?</>}>
+
+The target is not present, and its insertion point is −(−1) − 1 = 0: it is smaller than every element in the array.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why does <code>Collections.binarySearch</code> on an unsorted list give unreliable answers, while <code>indexOf</code> works fine?</>}>
+
+Binary search discards halves based on the assumption that the list is sorted; if that's false it may discard the half containing the target. `indexOf` is a linear search that checks every element, so order doesn't matter.
+
+</CheckQuestion>
+
+</CheckQuestions>

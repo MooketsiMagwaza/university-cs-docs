@@ -1,0 +1,1078 @@
+---
+title: "Hash Tables by Example"
+description: "Compute bucket indexes, trace chaining and probing step by step, break and repair the equals and hashCode contract, resize a table, and answer exam questions on each."
+---
+
+A complete hash table answer shows the hash, the index, which bucket was inspected, what was compared there, and what the table looks like afterwards. This lesson extends [Hash Tables in Java](/docs/sem5/csi323/03-hash-tables/notes/hash-tables-in-java) with many keys, many traces and the exam questions that go with them. To practise, cover each worked answer, trace the operation on paper, then open it and compare.
+
+<LearningObjectives items={[
+  'Compute a bucket index from a key, including a negative hash',
+  'Trace insert, lookup and delete in a table that uses separate chaining',
+  'Trace insert, lookup and delete in a table that uses linear probing, including wrap-around and deleted slots',
+  'Explain and repair a broken equals and hashCode pair',
+  'Work out the load factor and redistribute entries when a table is resized',
+]} />
+
+## 1. The tracing template
+
+A hash table stores an entry in the **bucket** chosen by its key. The three parts to keep apart are the **hash** (an integer made from the key), the **index** (the bucket the hash selects) and the **collision rule** (what to do when two keys choose the same bucket).
+
+```text
+index = hash mod m          m is the number of buckets (the table length)
+```
+
+Use this procedure to apply any operation to any table:
+
+```text
+1. Write the table length m and the collision rule (chaining or probing).
+2. Compute the hash of the key. For an integer key the hash is the key itself.
+3. Compute the index: hash mod m. If the hash can be negative, use Math.floorMod.
+4. Go to that bucket and compare with equals, never with ==.
+5. Chaining: look along the chain. Probing: look at index, index + 1, index + 2 ... wrapping to 0.
+6. Record what was found, what was changed, and how many keys were compared.
+7. Draw the table after the operation.
+```
+
+Every worked example below is a complete program. Its question is in a comment; the output is what a real run prints.
+
+## 2. From key to index
+
+An integer's hash is the integer. A `String`'s hash is computed by `String.hashCode()`, which Java defines as `s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-1]`. The index is that hash taken modulo the table length.
+
+### Integer keys in a table of 7
+
+```java title="IndexOfIntegers.java"
+public class IndexOfIntegers {
+    // Question: which bucket does each key choose in a table of 7 buckets?
+    public static void main(String[] args) {
+        int m = 7;
+        int[] keys = {31, 18, 10, 24, 7};
+        for (int key : keys) {
+            System.out.println(key + " -> bucket " + key % m);
+        }
+    }
+}
+```
+
+```text
+31 -> bucket 3
+18 -> bucket 4
+10 -> bucket 3
+24 -> bucket 3
+7 -> bucket 0
+```
+
+`31`, `10` and `24` all give remainder 3, so three different keys choose bucket 3. This is a **collision**: normal, and the reason a collision rule is needed.
+
+### A negative hash
+
+```java title="NegativeIndex.java"
+public class NegativeIndex {
+    // Question: why must the index be corrected when the hash is negative?
+    public static void main(String[] args) {
+        int m = 7;
+        int hash = -5;
+        System.out.println(hash % m);                  // remainder takes the sign of the left operand
+        System.out.println(Math.floorMod(hash, m));    // always 0 .. m-1
+        System.out.println((hash & 0x7fffffff) % m);   // clear the sign bit first
+    }
+}
+```
+
+```text
+-5
+2
+4
+```
+
+`-5 % 7` is `-5`, which is not a bucket number: using it as an index throws `ArrayIndexOutOfBoundsException`. `Math.floorMod(-5, 7)` is `2`. Clearing the sign bit with `& 0x7fffffff` gives a different but still valid index, so pick one method and use it for every operation on the table.
+
+### A String key
+
+```java title="StringHash.java"
+public class StringHash {
+    // Question: compute the bucket of "CSI247" in a table of 7 buckets, and compare two simple hash functions.
+    static int sumHash(String s) {
+        int h = 0;
+        for (char c : s.toCharArray()) {
+            h += c;                                    // add the character codes
+        }
+        return h;
+    }
+
+    public static void main(String[] args) {
+        System.out.println("CSI247".hashCode());
+        System.out.println(Math.floorMod("CSI247".hashCode(), 7));
+        System.out.println(sumHash("cat") + " " + sumHash("act"));
+        System.out.println("cat".hashCode() + " " + "act".hashCode());
+    }
+}
+```
+
+```text
+1997029820
+2
+312 312
+98262 96402
+```
+
+The character-sum hash gives `"cat"` and `"act"` the same value (anagrams always collide), so it is a poor hash function. Java's `String.hashCode` multiplies by 31 at each step, so the position of a character matters and the two words get different hashes.
+
+<Callout type="mistake" title="Common error">
+
+Writing `hash / m` instead of `hash % m`. Division gives the number of times `m` fits into the hash, not a position inside the table; it exceeds `m - 1` for any hash larger than `m * m`. The index is always the **remainder**.
+
+</Callout>
+
+### Exam question: compute the buckets
+
+A table has 10 buckets and uses `index = key mod 10`. State the bucket for the keys `47`, `130`, `99` and `5`, and say which two keys collide. (4 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "state", so a list of buckets is enough, then one sentence on the collision. The given facts: `m = 10`, integer keys (so the hash is the key), the rule `key mod 10`.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each key take the remainder after dividing by 10, which is the last digit. Compare the results.
+
+</Step>
+
+<Step title="3. Solution">
+
+`47 mod 10 = 7`, `130 mod 10 = 0`, `99 mod 10 = 9`, `5 mod 10 = 5`. All four buckets are different, so **no** two of these keys collide.
+
+</Step>
+
+<Step title="4. Check">
+
+The question assumed a collision; the buckets 7, 0, 9 and 5 are distinct, so the correct answer is that none collide. Adding `57` would collide with `47` in bucket 7. State what you found, not what the question seems to expect.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Separate chaining
+
+Each bucket holds a list. A new key is added to the list in its bucket; a lookup walks that list comparing keys. The table can hold more entries than it has buckets.
+
+### Insert four keys and watch the chains grow
+
+```java title="ChainTrace.java"
+import java.util.LinkedList;
+
+public class ChainTrace {
+    // Question: insert 31, 18, 10, 24, in that order, into a chained table of 7 buckets.
+    static LinkedList<Integer>[] table;
+
+    @SuppressWarnings("unchecked")
+    public static void main(String[] args) {
+        table = (LinkedList<Integer>[]) new LinkedList[7];
+        for (int i = 0; i < 7; i++) {
+            table[i] = new LinkedList<>();
+        }
+        for (int key : new int[] {31, 18, 10, 24}) {
+            table[key % 7].add(key);                   // new keys go to the end of the chain
+            System.out.println("insert " + key + " -> bucket " + key % 7);
+        }
+        for (int i = 0; i < 7; i++) {
+            System.out.println(i + ": " + table[i]);
+        }
+    }
+}
+```
+
+```text
+insert 31 -> bucket 3
+insert 18 -> bucket 4
+insert 10 -> bucket 3
+insert 24 -> bucket 3
+0: []
+1: []
+2: []
+3: [31, 10, 24]
+4: [18]
+5: []
+6: []
+```
+
+Bucket 3 holds the chain `31, 10, 24` in arrival order; bucket 4 holds `18`; the others are empty. The longest chain has three keys.
+
+### Look up: success, collision and failure
+
+| Lookup | Bucket | Compared along the chain | Comparisons | Result |
+|---|---|---|---|---|
+| `31` | 3 | `31` | 1 | found |
+| `24` | 3 | `31`, `10`, `24` | 3 | found |
+| `17` | 3 | `31`, `10`, `24` | 3 | not found |
+| `6` | 6 | empty chain | 0 | not found |
+
+A **successful** lookup stops at the key; an **unsuccessful** lookup must read the whole chain. The cost of a lookup is the chain length, which is why a table with short chains is fast.
+
+```java title="ChainLookup.java"
+import java.util.LinkedList;
+
+public class ChainLookup {
+    // Question: how many keys are compared when looking up 24, 17 and 6?
+    static int comparisons;
+
+    static boolean contains(LinkedList<Integer>[] table, int key) {
+        comparisons = 0;
+        for (int stored : table[key % table.length]) {
+            comparisons++;
+            if (stored == key) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void main(String[] args) {
+        LinkedList<Integer>[] table = (LinkedList<Integer>[]) new LinkedList[7];
+        for (int i = 0; i < 7; i++) {
+            table[i] = new LinkedList<>();
+        }
+        for (int key : new int[] {31, 18, 10, 24}) {
+            table[key % 7].add(key);
+        }
+        for (int key : new int[] {31, 24, 17, 6}) {
+            boolean found = contains(table, key);
+            System.out.println(key + ": " + found + " after " + comparisons + " comparisons");
+        }
+    }
+}
+```
+
+```text
+31: true after 1 comparisons
+24: true after 3 comparisons
+17: false after 3 comparisons
+6: false after 0 comparisons
+```
+
+### Insert a key that is already there
+
+A map holds each key once. Inserting an equal key **replaces the value**; the chain does not grow.
+
+```java title="ChainReplace.java"
+import java.util.HashMap;
+import java.util.Map;
+
+public class ChainReplace {
+    // Question: what do size() and get("CSI247") return after the third put?
+    public static void main(String[] args) {
+        Map<String, String> room = new HashMap<>();
+        room.put("CSI247", "Room 4");
+        room.put("MAT247", "Room 8");
+        room.put("CSI247", "Room 6");                  // same key: replaces the value
+        System.out.println(room.size());
+        System.out.println(room.get("CSI247"));
+        System.out.println(room.put("CSI247", "Room 9"));   // put returns the OLD value
+    }
+}
+```
+
+```text
+2
+Room 6
+Room 6
+```
+
+### Delete from the middle of a chain
+
+Removing a key from a chain only changes that chain: the keys before and after it stay in order.
+
+| Operation | Bucket 3 before | Bucket 3 after |
+|---|---|---|
+| `remove(10)` | `31, 10, 24` | `31, 24` |
+| `remove(31)` | `31, 24` | `24` |
+| `remove(99)` | `24` | `24` (99 is in bucket 1, which is empty) |
+
+<Callout type="mistake" title="Common error">
+
+Checking only the length of the table to decide how many keys are stored. With chaining, 7 buckets can hold 100 keys. Keep a separate `size` field, increase it only when a **new** key is added (not when a value is replaced) and decrease it only when a key is actually removed.
+
+</Callout>
+
+### Exam question: place six keys and draw the chains
+
+Insert the keys `15, 8, 22, 1, 29, 36` in that order into a table of 7 buckets using chaining and `key mod 7`. Draw the table and state the longest chain and the load factor. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "insert" and "draw", with two figures to state. Given: `m = 7`, chaining, keys in a fixed order. The order matters because each chain lists keys in arrival order.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compute `key mod 7` for each key, add the key to the end of that bucket's chain, then count chain lengths. Load factor is entries divided by buckets.
+
+</Step>
+
+<Step title="3. Solution">
+
+`15 mod 7 = 1`, `8 mod 7 = 1`, `22 mod 7 = 1`, `1 mod 7 = 1`, `29 mod 7 = 1`, `36 mod 7 = 1`. Every key chooses bucket 1.
+
+| Bucket | Chain |
+|---|---|
+| 0 | |
+| 1 | `15 → 8 → 22 → 1 → 29 → 36` |
+| 2 to 6 | |
+
+The longest chain has 6 keys. The load factor is `6 / 7 = 0.86`.
+
+</Step>
+
+<Step title="4. Check">
+
+Each key is `1 + 7k`, which is why they all collide. The lookup of `36` compares six keys: O(n), the worst case. A different table length (for example 8) would spread them, which is why the length is usually not a round number related to the data.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Linear probing
+
+There are no lists. Every entry lives in the array itself. A key that finds its home bucket occupied tries `index + 1`, `index + 2` and so on, **wrapping** to bucket 0 after the last one. The table must never be full, so the load factor stays below 1.
+
+### Insert four keys
+
+```java title="ProbeInsert.java"
+public class ProbeInsert {
+    // Question: insert 31, 18, 10, 24, in that order, into a linear-probing table of 7 buckets.
+    public static void main(String[] args) {
+        Integer[] table = new Integer[7];               // null means empty
+        for (int key : new int[] {31, 18, 10, 24}) {
+            int index = key % 7;
+            int probes = 1;
+            while (table[index] != null) {              // occupied: try the next bucket
+                index = (index + 1) % 7;
+                probes++;
+            }
+            table[index] = key;
+            System.out.println("insert " + key + ": home " + key % 7 + ", placed in " + index + " after " + probes + " probe(s)");
+        }
+        for (int i = 0; i < 7; i++) {
+            System.out.println(i + ": " + table[i]);
+        }
+    }
+}
+```
+
+```text
+insert 31: home 3, placed in 3 after 1 probe(s)
+insert 18: home 4, placed in 4 after 1 probe(s)
+insert 10: home 3, placed in 5 after 3 probe(s)
+insert 24: home 3, placed in 6 after 4 probe(s)
+0: null
+1: null
+2: null
+3: 31
+4: 18
+5: 10
+6: 24
+```
+
+`10` wants bucket 3 (taken by `31`), tries 4 (taken by `18`) and lands in 5. `24` also wants 3 and must probe 3, 4, 5 before it finds the free bucket 6. Keys with the same home bucket **cluster** into a block of full buckets, and every later key that lands in the block must probe to its end.
+
+### Wrap around the end of the table
+
+```java title="ProbeWrap.java"
+public class ProbeWrap {
+    // Question: where does 13 go when buckets 6 and 0 are already occupied?
+    public static void main(String[] args) {
+        Integer[] table = new Integer[7];
+        for (int key : new int[] {6, 7, 13}) {         // 6 -> 6, 7 -> 0, 13 -> 6 (taken), 0 (taken), 1
+            int index = key % 7;
+            int probes = 1;
+            while (table[index] != null) {
+                index = (index + 1) % 7;               // 6 + 1 wraps to 0
+                probes++;
+            }
+            table[index] = key;
+            System.out.println(key + " placed in " + index + " after " + probes + " probe(s)");
+        }
+    }
+}
+```
+
+```text
+6 placed in 6 after 1 probe(s)
+7 placed in 0 after 1 probe(s)
+13 placed in 1 after 3 probe(s)
+```
+
+### Look up a key that is present and one that is absent
+
+| Lookup (table `[ _, _, _, 31, 18, 10, 24 ]`) | Home | Probes, in order | Result |
+|---|---|---|---|
+| `10` | 3 | bucket 3 (`31`), 4 (`18`), 5 (`10`) | found after 3 probes |
+| `3` | 3 | 3, 4, 5, 6, then 0 is **empty** | not found after 5 probes |
+| `5` | 5 | bucket 5 (`10`), 6 (`24`), then 0 is empty | not found after 3 probes |
+
+A lookup stops at the key **or at the first empty bucket**: a key can never be beyond an empty bucket on its own probe path.
+
+### Delete without breaking later lookups
+
+Emptying a bucket on delete breaks the stop rule above. If `10` (bucket 5) is simply emptied, a lookup for `24` probes 3, 4, then reaches the empty bucket 5 and wrongly reports that `24` is absent. The fix is a **tombstone**: mark the bucket "deleted". A lookup passes over a tombstone; an insert may reuse it.
+
+```java title="Tombstone.java"
+public class Tombstone {
+    // Question: after deleting 10, can we still find 24?
+    static final Integer DELETED = Integer.MIN_VALUE;   // a marker no real key uses
+
+    static boolean contains(Integer[] table, int key) {
+        int index = key % table.length;
+        for (int probes = 0; probes < table.length; probes++) {
+            if (table[index] == null) {
+                return false;                           // an empty bucket ends the search
+            }
+            if (table[index].equals(key)) {
+                return true;                            // a tombstone never equals a real key
+            }
+            index = (index + 1) % table.length;
+        }
+        return false;
+    }
+
+    public static void main(String[] args) {
+        Integer[] table = {null, null, null, 31, 18, 10, 24};
+
+        table[5] = null;                                // WRONG: empty the bucket
+        System.out.println("emptied bucket, find 24: " + contains(table, 24));
+
+        table[5] = DELETED;                             // RIGHT: leave a tombstone
+        System.out.println("tombstone, find 24:      " + contains(table, 24));
+        System.out.println("tombstone, find 10:      " + contains(table, 10));
+    }
+}
+```
+
+```text
+emptied bucket, find 24: false
+tombstone, find 24:      true
+tombstone, find 10:      false
+```
+
+### Other probe sequences
+
+Linear probing creates clusters. Two other sequences spread the colliding keys; the lecture names them, and an exam asks for the sequence.
+
+| Method | Sequence for the `i`-th probe (`i = 0, 1, 2 ...`) | Idea |
+|---|---|---|
+| Linear | `(h + i) mod m` | try the next bucket |
+| Quadratic | `(h + i^2) mod m` | jump further each time |
+| Double hashing | `(h1 + i * h2) mod m` | a second hash gives the step size |
+
+```java title="ProbeSequences.java"
+public class ProbeSequences {
+    // Question: list the first five buckets probed for key 10 with m = 7.
+    public static void main(String[] args) {
+        int m = 7;
+        int key = 10;
+        int h = key % m;                               // 3
+        int step = 5 - (key % 5);                      // a second hash that is never 0: 5
+        StringBuilder linear = new StringBuilder();
+        StringBuilder quadratic = new StringBuilder();
+        StringBuilder dbl = new StringBuilder();
+        for (int i = 0; i < 5; i++) {
+            linear.append((h + i) % m).append(' ');
+            quadratic.append((h + i * i) % m).append(' ');
+            dbl.append((h + i * step) % m).append(' ');
+        }
+        System.out.println("linear:    " + linear.toString().trim());
+        System.out.println("quadratic: " + quadratic.toString().trim());
+        System.out.println("double:    " + dbl.toString().trim());
+    }
+}
+```
+
+```text
+linear:    3 4 5 6 0
+quadratic: 3 4 0 5 5
+double:    3 1 6 4 2
+```
+
+The second hash must never be 0 (the key would never move) and should share no factor with `m`, which is why a prime table length is common.
+
+<Callout type="mistake" title="Common error">
+
+Stopping a probing lookup when the first bucket does not match. A mismatch means "keep probing", not "absent". Only an empty bucket (or having probed every bucket) proves the key is absent.
+
+</Callout>
+
+### Exam question: probing with a deleted entry
+
+A linear-probing table has 7 buckets and `key mod 7`. Insert `20, 13, 6, 27`, then delete `13`, then look up `27`. Show the table after each step and the probes for the lookup. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "insert", "delete" and "look up", with a table drawn after each step. Given: `m = 7`, linear probing, `key mod 7`. The trap is the delete: the answer must use a tombstone, and the lookup must pass over it.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compute each home bucket, place keys with probing, mark the deleted bucket, then follow `27`'s probe path.
+
+</Step>
+
+<Step title="3. Solution">
+
+Homes: `20 mod 7 = 6`, `13 mod 7 = 6`, `6 mod 7 = 6`, `27 mod 7 = 6`. Every key wants bucket 6.
+
+| Step | Table (buckets 0 to 6) | Note |
+|---|---|---|
+| insert 20 | `_ _ _ _ _ _ 20` | bucket 6 free |
+| insert 13 | `13 _ _ _ _ _ 20` | 6 taken, wraps to 0 |
+| insert 6 | `13 6 _ _ _ _ 20` | 6 and 0 taken, 1 free |
+| insert 27 | `13 6 27 _ _ _ 20` | 6, 0, 1 taken, 2 free |
+| delete 13 | `X 6 27 _ _ _ 20` | bucket 0 becomes a tombstone `X` |
+
+Lookup `27`: home 6 (`20`, no), 0 (tombstone, keep going), 1 (`6`, no), 2 (`27`, **found**). Four probes.
+
+</Step>
+
+<Step title="4. Check">
+
+If bucket 0 had been emptied instead of marked, the lookup would stop at 0 and wrongly report `27` absent. Run the check on paper: every key sits on the probe path from its home bucket with no empty bucket in between.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. The equals and hashCode contract
+
+A `HashMap` finds a key in two steps: `hashCode()` picks the bucket, then `equals` picks the entry inside it. If two objects are `equals` but give different hashes, the map looks in the wrong bucket and never meets the stored key.
+
+### Overriding `equals` alone
+
+```java title="BrokenKey.java"
+import java.util.HashSet;
+import java.util.Set;
+
+public class BrokenKey {
+    // Question: why does the set not contain the key that was just added?
+    private final String id;
+
+    BrokenKey(String id) { this.id = id; }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof BrokenKey && id.equals(((BrokenKey) other).id);
+    }
+    // hashCode is NOT overridden: Object.hashCode depends on the object's identity
+
+    public static void main(String[] args) {
+        Set<BrokenKey> set = new HashSet<>();
+        set.add(new BrokenKey("S100"));
+        System.out.println(new BrokenKey("S100").equals(new BrokenKey("S100")));
+        System.out.println(set.contains(new BrokenKey("S100")));
+    }
+}
+```
+
+```text
+true
+false
+```
+
+`equals` says the two objects are equal, but the set says it does not contain one of them: the two objects have different identity hashes, so the set looks in a different bucket (in most runs).
+
+### Both overridden from the same fields
+
+```java title="GoodKey.java"
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
+public class GoodKey {
+    // Question: repair BrokenKey so that the set finds the key.
+    private final String id;
+
+    GoodKey(String id) { this.id = id; }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (other == null || getClass() != other.getClass()) return false;
+        return id.equals(((GoodKey) other).id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);                        // the SAME field as equals
+    }
+
+    public static void main(String[] args) {
+        Set<GoodKey> set = new HashSet<>();
+        set.add(new GoodKey("S100"));
+        System.out.println(set.contains(new GoodKey("S100")));
+        System.out.println(set.add(new GoodKey("S100")));    // add returns false: already there
+        System.out.println(set.size());
+    }
+}
+```
+
+```text
+true
+false
+1
+```
+
+### A key that changes after it is stored
+
+```java title="MutableKey.java"
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
+public class MutableKey {
+    // Question: why can the map not find the entry after the key's field changes?
+    int id;
+
+    MutableKey(int id) { this.id = id; }
+
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof MutableKey && id == ((MutableKey) other).id;
+    }
+
+    @Override
+    public int hashCode() { return Objects.hash(id); }
+
+    public static void main(String[] args) {
+        Map<MutableKey, String> map = new HashMap<>();
+        MutableKey key = new MutableKey(1);
+        map.put(key, "stored");
+        System.out.println(map.get(new MutableKey(1)));
+
+        key.id = 2;                                     // the hash changes; the entry stays where it was
+        System.out.println(map.get(new MutableKey(1)));
+        System.out.println(map.get(new MutableKey(2)));
+        System.out.println(map.size());
+    }
+}
+```
+
+```text
+stored
+null
+null
+1
+```
+
+The entry is still in the map (`size()` is 1) but cannot be reached: looking up the old key finds the right bucket and fails `equals`; looking up the new key searches the wrong bucket. **Keys should be immutable**, or never changed while stored.
+
+### Exam question: state and apply the contract
+
+State the contract between `equals` and `hashCode`, and say which of these classes breaks it: (a) `equals` compares `name`, `hashCode` returns `name.hashCode()`; (b) `equals` compares `name`, `hashCode` returns `age`; (c) `equals` compares `name` and `age`, `hashCode` returns `name.hashCode()`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "state" and "say which". Part one is the rule; part two is a check of three classes against it.
+
+</Step>
+
+<Step title="2. Plan">
+
+The rule runs in one direction only: equal objects must have equal hashes. For each class ask: can two objects be `equals` and still have different hashes?
+
+</Step>
+
+<Step title="3. Solution">
+
+**Contract:** if `a.equals(b)` is true then `a.hashCode() == b.hashCode()` must be true. Equal hashes do **not** imply equal objects, and the hash must not change while the object is a key.
+
+(a) valid: equal names give equal `name.hashCode()`.
+(b) **breaks the contract**: `equals` looks only at `name`, so two objects with the same name and different ages are equal, but their hashes are their two different ages.
+(c) valid: if `equals` is true, name and age are equal, so the hash (from `name`) is equal. It is a weaker hash, because objects with the same name and different ages collide, but it is correct.
+
+</Step>
+
+<Step title="4. Check">
+
+Test each with two objects: (b) `new P("Ann", 20)` and `new P("Ann", 21)` are `equals` (same name) but hash to 20 and 21: broken. A hash that uses fewer fields than `equals` is allowed (c); a hash that uses a field `equals` ignores is not (b).
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Load factor and resizing
+
+`load factor = entries / buckets`. A longer chain or a longer probe path makes every operation slower, so a table **rehashes** (grows, and recomputes every index) when the load factor passes a limit; Java's `HashMap` uses 0.75.
+
+### Redistribute after growing
+
+The index depends on the table length, so every entry must be placed again; copying the buckets as they are would put keys in the wrong place.
+
+```java title="Rehash.java"
+import java.util.LinkedList;
+
+public class Rehash {
+    // Question: insert 5, 9, 13, 2 into a table of 4 buckets that doubles when the load factor passes 0.75.
+    static LinkedList<Integer>[] table;
+    static int size = 0;
+
+    @SuppressWarnings("unchecked")
+    static LinkedList<Integer>[] newTable(int capacity) {
+        LinkedList<Integer>[] t = (LinkedList<Integer>[]) new LinkedList[capacity];
+        for (int i = 0; i < capacity; i++) {
+            t[i] = new LinkedList<>();
+        }
+        return t;
+    }
+
+    static void put(int key) {
+        table[key % table.length].add(key);
+        size++;
+        double load = (double) size / table.length;
+        System.out.println("put " + key + ": size " + size + ", buckets " + table.length + ", load " + load);
+        if (load > 0.75) {
+            LinkedList<Integer>[] old = table;
+            table = newTable(old.length * 2);
+            for (LinkedList<Integer> chain : old) {
+                for (int k : chain) {
+                    table[k % table.length].add(k);     // recompute the index with the NEW length
+                }
+            }
+            System.out.println("  grew to " + table.length + " buckets");
+        }
+    }
+
+    public static void main(String[] args) {
+        table = newTable(4);
+        for (int key : new int[] {5, 9, 13, 2}) {
+            put(key);
+        }
+        for (int i = 0; i < table.length; i++) {
+            System.out.println(i + ": " + table[i]);
+        }
+    }
+}
+```
+
+```text
+put 5: size 1, buckets 4, load 0.25
+put 9: size 2, buckets 4, load 0.5
+put 13: size 3, buckets 4, load 0.75
+put 2: size 4, buckets 4, load 1.0
+  grew to 8 buckets
+0: []
+1: [9]
+2: [2]
+3: []
+4: []
+5: [5, 13]
+6: []
+7: []
+```
+
+With 4 buckets `5`, `9` and `13` all chose bucket 1 (`mod 4`). After doubling to 8, `9` stays in bucket 1 but `5` and `13` move to bucket 5 (`mod 8`): growing spreads the keys out.
+
+### Load factor for several tables
+
+| Entries | Buckets | Load factor | Over 0.75? |
+|---|---|---|---|
+| 3 | 4 | 0.75 | no (equal is not over) |
+| 4 | 4 | 1.00 | yes: resize |
+| 6 | 16 | 0.38 | no |
+| 13 | 16 | 0.81 | yes: resize |
+
+A rehash costs O(n), but it happens only after about as many `put`s as the table already holds, so the cost **per `put` averaged over many** is still O(1): **amortised** O(1).
+
+### Exam question: resize and say how many entries move
+
+A chained table has 5 buckets and holds the keys `10, 15, 20, 7`. A fifth key, `12`, is inserted and the table doubles to 10 buckets. Give the chains before and after and say which entries changed bucket. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Give" the chains twice and "say which changed bucket". Given: `key mod 5` before, `key mod 10` after, arrival order within a chain.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compute both indexes for each of the five keys and compare them.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Key | `mod 5` (before) | `mod 10` (after) | Moved? |
+|---|---|---|---|
+| 10 | 0 | 0 | no |
+| 15 | 0 | 5 | yes |
+| 20 | 0 | 0 | no |
+| 7 | 2 | 7 | yes |
+| 12 | 2 | 2 | no |
+
+Before (including 12): bucket 0 `10 → 15 → 20`, bucket 2 `7 → 12`. After: bucket 0 `10 → 20`, bucket 2 `12`, bucket 5 `15`, bucket 7 `7`. Two entries (`15` and `7`) changed bucket.
+
+</Step>
+
+<Step title="4. Check">
+
+The five keys are still present (2 + 1 + 1 + 1 = 5), and the longest chain dropped from 3 to 2. A key moves only when its remainder differs between the two lengths.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 7. Using HashMap and HashSet
+
+Java's `HashMap` and `HashSet` do the chaining, the equality checks and the resizing for you. The exam asks you to **use** them: count, group, find duplicates.
+
+### Count occurrences
+
+```java title="Frequency.java"
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
+
+public class Frequency {
+    // Question: count how many times each word occurs, then print the words in order.
+    public static void main(String[] args) {
+        String[] words = {"queue", "stack", "queue", "tree", "stack", "queue"};
+        Map<String, Integer> counts = new HashMap<>();
+        for (String w : words) {
+            counts.put(w, counts.getOrDefault(w, 0) + 1);   // 0 the first time, then add one
+        }
+        System.out.println(new TreeMap<>(counts));          // HashMap order is not specified
+    }
+}
+```
+
+```text
+{queue=3, stack=2, tree=1}
+```
+
+### Find the first repeated value with a set
+
+```java title="FirstDuplicate.java"
+import java.util.HashSet;
+import java.util.Set;
+
+public class FirstDuplicate {
+    // Question: return the first value that appears twice, or -1 if there is none.
+    static int firstDuplicate(int[] a) {
+        Set<Integer> seen = new HashSet<>();
+        for (int v : a) {
+            if (!seen.add(v)) {                             // add returns false if already present
+                return v;
+            }
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(firstDuplicate(new int[] {4, 9, 1, 9, 4}));
+        System.out.println(firstDuplicate(new int[] {1, 2, 3}));
+        System.out.println(firstDuplicate(new int[] {}));
+    }
+}
+```
+
+```text
+9
+-1
+-1
+```
+
+### Two numbers that add up to a target
+
+A map from "value seen" to "its index" turns an O(n^2) search over pairs into one O(n) pass.
+
+```java title="TwoSum.java"
+import java.util.HashMap;
+import java.util.Map;
+
+public class TwoSum {
+    // Question: find indexes i < j with a[i] + a[j] == target, or report that none exist.
+    static String twoSum(int[] a, int target) {
+        Map<Integer, Integer> indexOf = new HashMap<>();    // value -> where it was seen
+        for (int j = 0; j < a.length; j++) {
+            Integer i = indexOf.get(target - a[j]);         // is the partner already stored?
+            if (i != null) {
+                return i + " and " + j;
+            }
+            indexOf.put(a[j], j);
+        }
+        return "none";
+    }
+
+    public static void main(String[] args) {
+        System.out.println(twoSum(new int[] {2, 7, 11, 15}, 9));
+        System.out.println(twoSum(new int[] {3, 3}, 6));
+        System.out.println(twoSum(new int[] {1, 2}, 10));
+    }
+}
+```
+
+```text
+0 and 1
+0 and 1
+none
+```
+
+### Exam question: group words by length
+
+Write `Map<Integer, List<String>> byLength(String[] words)`, where each key is a length and each value lists the words of that length in the order given. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command word is "write", so give the whole method. Input: an array of strings. Output: a map from `Integer` length to a `List<String>`. The order inside each list must match the array.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each word, find the list stored under its length (creating it the first time) and append the word.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="ByLength.java"
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+public class ByLength {
+    static Map<Integer, List<String>> byLength(String[] words) {
+        Map<Integer, List<String>> groups = new HashMap<>();
+        for (String w : words) {
+            List<String> list = groups.get(w.length());
+            if (list == null) {                         // first word of this length
+                list = new ArrayList<>();
+                groups.put(w.length(), list);
+            }
+            list.add(w);
+        }
+        return groups;
+    }
+
+    public static void main(String[] args) {
+        String[] words = {"tree", "map", "set", "queue", "heap", "list"};
+        System.out.println(new TreeMap<>(byLength(words)));
+    }
+}
+```
+
+```text
+{3=[map, set], 4=[tree, heap, list], 5=[queue]}
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`"map"` and `"set"` have length 3, `"tree"`, `"heap"` and `"list"` have length 4, `"queue"` has length 5, so three groups, each in the original order. An empty array returns an empty map.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 8. Cost, and when a hash table is the wrong tool
+
+| Operation | Average | Worst case | When the worst case happens |
+|---|---|---|---|
+| `put`, `get`, `remove`, `containsKey` | O(1) | O(n) | every key in one bucket, or one long probe run |
+| Rehash | O(n) | O(n) | the load factor passes the limit |
+| Find the smallest key | O(n) | O(n) | the table has no order |
+| Iterate in key order | not offered | | use a `TreeMap` (O(log n) operations, sorted) |
+| Search by value | O(n) | O(n) | the table is organised by key |
+
+A hash table is the right tool for "find by exact key, fast". It is the wrong tool for "the smallest key", "all keys between a and b" or "in sorted order": a balanced search tree answers those.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+The index is the hash **mod** the table length, with `Math.floorMod` or a cleared sign bit when the hash can be negative. A collision is normal. Chaining keeps a list per bucket: lookup compares along the chain and an unsuccessful lookup reads all of it. Linear probing keeps entries in the array: probe `index`, `index + 1`, ... wrapping, stop at the key or an empty bucket, and mark a deleted bucket with a tombstone rather than emptying it. Equal objects must have equal hashes, so override `equals` and `hashCode` together from the same fields, and never change a stored key. The load factor is entries over buckets; a rehash recomputes every index and keeps the average cost of `put` constant.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can a lookup stop at an empty bucket in linear probing, but not at a tombstone?">
+
+An empty bucket means the key was never placed beyond it, because any key would have been placed in the first free bucket on its probe path. A tombstone is a bucket that **was** occupied, so keys that probed past it may still be further along.
+
+</CheckQuestion>
+
+<CheckQuestion question="Two keys have the same hash. Are they equal?">
+
+Not necessarily. Equal hashes mean the keys share a bucket; `equals` decides whether they are the same key. The contract only guarantees the reverse: equal keys have equal hashes.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does a rehash recompute the index of every entry?">
+
+The index is the hash mod the table length. When the length changes, the same hash gives a different remainder, so copying the buckets unchanged would leave entries where lookups no longer search.
+
+</CheckQuestion>
+
+<CheckQuestion question="A table with 7 buckets holds 20 keys. Is that possible, and what is its load factor?">
+
+It is possible with chaining (each bucket holds a list), with a load factor of 20 / 7 = 2.86. It is impossible with linear probing, which stores every entry in the array and so cannot hold more than 7.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is a mutable object a dangerous key?">
+
+If a field used by `hashCode` changes after the key is stored, the entry stays in its old bucket while lookups search the new one, so the entry can no longer be found, although it still counts in `size()`.
+
+</CheckQuestion>
+
+</CheckQuestions>

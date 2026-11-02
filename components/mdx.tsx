@@ -47,6 +47,10 @@ import { CountingCalculator } from './interactive/counting-calculator';
 import { Visualise } from './interactive/function-visual';
 import { PredictReveal } from './interactive/predict-reveal';
 import { RegressionPlot } from './interactive/regression-plot';
+import { MemoryDiagram } from './interactive/memory-diagram';
+import { ConceptFrame, FrameBox } from './learning/concept-frame';
+import { TraceTable } from './learning/trace-table';
+import { SvgFigure } from './visuals/svg-figure';
 
 
 import { Callout } from './callouts/callout';
@@ -151,6 +155,11 @@ export function getMDXComponents(components?: MDXComponents) {
     Visualise,
     PredictReveal,
     RegressionPlot,
+    MemoryDiagram,
+    ConceptFrame,
+    FrameBox,
+    TraceTable,
+    SvgFigure,
     ExamQuestion,
     SubQuestion,
     FlashcardDeck,

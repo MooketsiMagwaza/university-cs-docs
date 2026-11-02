@@ -1,0 +1,205 @@
+---
+title: "The Object class, casting & wrappers"
+description: "Every class you write has a secret parent called Object."
+---
+
+This page explains what you inherit from it, how to test and change an object's type, and how Java turns plain numbers into objects.
+
+<LearningObjectives items={[
+  "Why every class is a descendant of `Object`, and the three Object methods you must know: `toString`, `equals`, `getClass`.",
+  "How to write a robust `equals` method.",
+  "What `instanceof` and object casting do.",
+  "What wrapper classes are, and what autoboxing and unboxing mean.",
+]} />
+
+## The root of every class
+
+Java's classes form a family tree. At the very top sits one class called `Object`, which lives in the `java.lang` package. If you write a class without `extends`, Java quietly adds `extends Object` for you. So *every* class, including `String`, arrays and your own `Shape`, inherits from `Object` either directly or through its parents.
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/object-class-casting-and-wrappers" id="object-class-1">
+
+**Figure 9a.1** The class hierarchy is a tree with `Object` as its root. Classes get more general going up and more specific going down. The hollow triangle points at the parent.
+
+</SvgFigure>
+
+Because of this, a few methods exist on *every* object in Java. These three are on the syllabus:
+
+| Method | What it does | What Object's version does |
+| --- | --- | --- |
+| `String toString()` | Gives a text version of the object | Class name + `@` + a code in hexadecimal, e.g. `Shape@2f92e0f4` |
+| `boolean equals(Object obj)` | Asks "is this object equal to that one?" | Just `this == obj`: true only for the very same object |
+| `Class getClass()` | Tells you the object's real class while the program runs | Can't be changed: it is `final` |
+
+## `toString()`
+
+Whenever Java needs to turn an object into text, it calls `toString()`. That includes `System.out.println(sh)`: printing an object variable secretly calls `sh.toString()`. If your class doesn't write its own version, you get Object's version, which looks like gibberish:
+
+```java title="NoToString.java"
+Shape sh = new Shape("Yellow");      // suppose Shape does NOT override toString
+System.out.println(sh.toString());   // Shape@2f92e0f4   ← class name @ hash code (changes every run)
+System.out.println(sh);              // Shape@2f92e0f4   ← exactly the same: println calls toString()
+```
+
+The part after `@` is the object's **hash code**, a number Java uses to tell objects apart, written in hexadecimal. It is not useful to a human, so you should **always override `toString()`** to return something meaningful:
+
+```java title="Shape.java (toString)"
+@Override
+public String toString() {
+    return "I am a " + colour + " shape";    // now println(sh) shows: I am a Yellow shape
+}
+```
+
+## `equals()`
+
+You already know that `==` on objects compares *addresses* (see [memory diagrams](/docs/sem3/csi247/06-object-oriented-programming/notes/drawing-memory-diagrams)). `equals` exists so that a class can define what "equal" means for its *data*. Object's own version just uses `==`, so until you override it, two different objects are never equal even if they hold identical data.
+
+```java title="EqualsDemo.java"
+String str = "Mine";
+System.out.println(str.equals("Mine"));   // true:  String overrides equals to compare the letters
+
+Float a = Float.valueOf(22);
+Integer b = Integer.valueOf(22);
+System.out.println(a.equals(b));          // false: different classes (Float vs Integer), so not equal
+```
+
+### A robust `equals`, line by line
+
+A good `equals` must cope with every possible thing it could be handed: the same object, `null`, an object of a completely different class, and finally a real candidate. Note the parameter type is `Object`, not `Shape`: that is what makes it a true override of Object's method.
+
+```java title="Shape.java (equals)"
+@Override
+public boolean equals(Object o) {
+    if (o == this) {                     // 1. the very same object? then of course it's equal
+        return true;
+    }
+    if (o == null || this.getClass() != o.getClass()) {
+        return false;                    // 2. nothing at all, or a different class → not equal
+    }
+    Shape sh = (Shape) o;                // 3. CAST: we now know o is a Shape, so treat it as one
+    return this.getColour().equals(sh.getColour());   // 4. compare the data that matters
+}
+```
+
+Step 3 is needed because the variable `o` has type `Object`, and the compiler only lets you call methods that type has. `Object` has no `getColour()`, so we first tell Java "trust me, it's a Shape".
+
+<Callout type="note">
+
+Your lecture also shows a second version that uses `if (!(obj instanceof Book)) return false;` instead of comparing `getClass()`. Both are accepted. The difference: `instanceof` also says yes to subclasses, while `getClass() !=` demands exactly the same class. Appendix D has more detail, including `hashCode`.
+
+</Callout>
+
+## `getClass()`
+
+`getClass()` returns an object describing the object's *real* class at run time. Its `getName()` method gives the full name as text. It is declared `final`, so no class can override it.
+
+```java title="GetClassDemo.java"
+Object o = new String("CSI247");          // variable type: Object.  Real object: a String
+Class myClass = o.getClass();
+System.out.println("o belongs to class " + myClass.getName());
+```
+
+```text
+o belongs to class java.lang.String
+```
+
+## Testing a type: `instanceof`
+
+`instanceof` is an operator (like `+` or `>`) that asks "is this object an instance of that class or interface?" and produces `true` or `false`. Syntax: `object instanceof ClassName`.
+
+- `new Circle() instanceof Circle` → `true`
+- `new Circle() instanceof Shape` → `true` (a Circle *is a* Shape)
+- `new Circle() instanceof Object` → `true` (everything is an Object)
+- `null instanceof Shape` → `false` (null is not an instance of anything)
+
+## Casting objects
+
+Casting means telling Java to treat a value as a different type, written as `(Type) value`. You've seen it with numbers: `int y = (int) 19.0;`. With objects, casting **does not change the object at all**; it only changes what type of variable you're looking at it through. It is only allowed between classes connected by an "is-a" relationship.
+
+```java title="CastDemo.java"
+Object o = new Circle("Yellow", 5);
+Shape sh = (Shape) o;          // ✓ fine: the object really is a Circle, and a Circle is a Shape
+
+Object t = "hello";
+Integer n = (Integer) t;       // ✗ compiles, but at run time: ClassCastException (a String is not an Integer)
+```
+
+<Callout type="tip">
+
+Check before you cast when you're not sure: `if (t instanceof Integer) { Integer n = (Integer) t; … }`
+
+</Callout>
+
+## Wrapper classes
+
+Primitive values like `7` or `true` are not objects. That's a problem whenever Java insists on objects, for example in collections such as `ArrayList`, which can only store objects. The fix is a set of **wrapper classes**: one class per primitive type, whose objects simply "wrap" one value.
+
+| Primitive | Wrapper class | Primitive | Wrapper class |
+| --- | --- | --- | --- |
+| `int` | `Integer` | `char` | `Character` |
+| `double` | `Double` | `boolean` | `Boolean` |
+| `long` | `Long` | `byte` | `Byte` |
+| `float` | `Float` | `short` | `Short` |
+
+*Table 9a.1 — Watch the two irregular names: `int` → `Integer` and `char` → `Character`. (Your slides write "Char"; the real class is `Character`.)*
+
+### Autoboxing and unboxing
+
+Java converts between the two automatically:
+
+- **Autoboxing**: primitive → wrapper object, automatically. `Integer n1 = 7;` really means `Integer n1 = Integer.valueOf(7);`
+- **Unboxing**: wrapper object → primitive, automatically. `int i = n1;` really means `int i = n1.intValue();`
+
+```java title="Wrappers.java"
+Integer n1 = 7;                          // autoboxing: 7 is wrapped in an Integer object
+Integer n2 = Integer.valueOf(7);         // the same thing written out by hand
+System.out.println(n1.equals(n2));       // true  — always compare wrapper objects with equals
+
+int i = n1;                              // unboxing: the int 7 is taken back out
+System.out.println(i + 1);               // 8
+
+Integer big1 = 1000, big2 = 1000;
+System.out.println(big1 == big2);        // false! two different objects, == compares addresses
+System.out.println(big1.equals(big2));   // true
+```
+
+<Callout type="mistake">
+
+Using `==` on wrapper objects. It compares addresses. To save memory Java reuses one object for small values (−128 to 127), so `==` can *seem* to work in small tests and then fail for 1000. Always use `.equals`. Also, `new Integer(7)` from older notes is deprecated; write `Integer.valueOf(7)` or just `7`.
+
+</Callout>
+
+<Callout type="key">
+
+Every class extends `Object` and inherits `toString`, `equals` and `getClass`. Override `toString` and `equals`. `instanceof` tests a type; a cast changes the variable's view, not the object. Wrappers turn primitives into objects; autoboxing and unboxing do it for you.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>What does <code>System.out.println(c)</code> print if <code>c</code>'s class doesn't override <code>toString</code>?</>}>
+
+Something like `Circle@1b6d3586`: the class name, an `@`, and the hash code in hexadecimal. It comes from `Object`'s `toString`.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why does a correct <code>equals</code> take an <code>Object</code> parameter instead of a <code>Shape</code>?</>}>
+
+To override a method you must copy its signature exactly, and Object's method is `equals(Object obj)`. A version with a `Shape` parameter would be a different (overloaded) method, and code like `list.contains(…)` would never call it.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Is <code>(new Rectangle()) instanceof Circle</code> true or false? Does it even compile?</>}>
+
+It doesn't compile: the compiler can see that a `Rectangle` can never be a `Circle` (neither is a subclass of the other). With a `Shape` variable instead, `Shape s = new Rectangle(); s instanceof Circle` compiles and gives `false`.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Name the wrapper classes of <code>int</code>, <code>char</code> and <code>double</code>.</>}>
+
+`Integer`, `Character`, `Double`.
+
+</CheckQuestion>
+
+</CheckQuestions>

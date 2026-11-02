@@ -122,13 +122,17 @@ Notes use only these. Everything else is either retired or rendered through one 
 |---|---|---|
 | Prose, `##`, `###`, lists | Teaching | |
 | Code block with `title="File.java"`, then an `Output` block | Programs and their output | separate unlabelled input and output blocks |
-| Figure with caption (`SiteDiagram`, image, `Mermaid`) | Diagrams | |
+| Figure with caption (`SvgFigure`, `SiteDiagram`, image) | Diagrams | `Mermaid` (retired: it loaded a library and ignored the theme) |
 | Table | Comparisons, traces | `ComparisonTable` (renders as a table) |
 | `Callout` with `note`, `tip`, `caution`, `mistake`, `key`, `analogy` | Asides, one meaning each | `PresetCard`, `HighlightCard`, `CommonMistake`, `RecognitionStrategy` |
 | `KeyTerm` | A definition or theorem | `Card`, `ConceptBlock`, `TheoremBlock`, MAT221 `Concept` and `Theorem` |
 | `Steps` | A procedure or a worked example | `StepByStep`, `MethodSteps`, `InteractiveStepper`, `FumaSteps` |
 | `LearningObjectives`, `Prerequisites` | Page opening | the generated chip row and top checklist |
 | Interactive pieces (`JavaTryIt`, `HaskellTryIt`, algorithm stories) | Running or watching code | one shared frame: title bar, stage, controls |
+| `ConceptFrame` with four `FrameBox` | The opening of a lesson that teaches from zero: the idea, the definition, why it works, what it is for (CSI247) | |
+| `TraceTable` | A table of a hand trace whose rows the reader reveals one at a time | a table of the answers shown at once |
+| `SvgFigure` | A hand-drawn SVG figure kept as data in `content/figure-data`, with a caption | |
+| `MemoryDiagram` | The exam memory diagram, stepped one line of Java at a time or shown finished | |
 
 Retired components keep working: they render through the standard element, so old pages look consistent before their content is migrated.
 

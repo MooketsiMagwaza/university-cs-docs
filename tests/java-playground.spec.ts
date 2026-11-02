@@ -12,11 +12,11 @@ test('runs Java safely, reports exact diagnostics, and recovers after limits', a
 
   await editor.fill(`public class Main {
     public static void main(String[] args) {
-        for (int i = 0; i < 1000; i++) System.out.println(i);
+        for (int i = 0; i < 3000; i++) System.out.println(i);
     }
 }`);
   await run.click();
-  await expect(page.getByText('Output limit exceeded (500 lines or 64 KiB).')).toBeVisible();
+  await expect(page.getByText('Output limit exceeded (2000 lines or 256 KiB).')).toBeVisible();
 
   await editor.fill(`public class Main {
     public static void main(String[] args) {
@@ -47,9 +47,9 @@ test('runs Java safely, reports exact diagnostics, and recovers after limits', a
   await editor.fill(`public class Main {
     public static void main(String[] args) {
         String block = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-        for (int i = 0; i < 700; i++) System.out.print(block);
+        for (int i = 0; i < 3000; i++) System.out.print(block);
     }
 }`);
   await run.click();
-  await expect(page.getByText('Output limit exceeded (500 lines or 64 KiB).')).toBeVisible();
+  await expect(page.getByText('Output limit exceeded (2000 lines or 256 KiB).')).toBeVisible();
 });

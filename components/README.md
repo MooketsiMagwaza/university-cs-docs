@@ -19,7 +19,7 @@ Every course page is built from the same small set of components. The page struc
 | `Steps` and `Step` | A procedure or a worked example | `title` on `Steps`; `title` on each `Step` |
 | `Callout` | An aside with one meaning | `type`: `note`, `tip`, `caution`, `mistake`, `key`, `analogy`; optional `title` |
 | `CheckQuestions` and `CheckQuestion` | "Check your understanding" at the end of a notes page | `question` on each `CheckQuestion`; the answer is its children |
-| `SiteDiagram`, `Mermaid`, `SafeImage` | Figures | see the component |
+| `SvgFigure`, `SiteDiagram`, `SafeImage` | Figures | `SvgFigure` shows a drawn SVG kept as data (see Java lesson pieces); `SiteDiagram` draws a simple flowchart from text; `SafeImage` an image |
 | `ExcalidrawCanvas` | A drawn map of a whole topic, read-only, with pan, zoom and full screen. Overview pages only | `src` (a file under `public/diagrams`), `title`, `expectedMB` (the file size). At 3 MB or more it loads on a click; smaller files load as they scroll into view |
 | `ComparisonTable` | A comparison (renders as a table) | |
 | `JavaTryIt`, `HaskellTryIt`, `CodeTryIt` and the algorithm stories | Running or watching code | see the component |
@@ -324,6 +324,21 @@ The questions live in JSON under `content/predict-data/`, mirroring the path of 
 
 If the points have the same x, or there are fewer than two, the plot says why there is no line, and when every y is equal the correlation is reported as not defined.
 
+## Java lesson pieces
+
+The CSI247 lessons (written in the style of the "Java Foundations" reference course, see [docs/plans/csi247-java-foundations-handoff.md](../docs/plans/csi247-java-foundations-handoff.md)) add four pieces to the standard elements. Their styles are in `app/styles/java-lessons.css` (class names `jf-*`).
+
+| Piece | Use | Props and data |
+|---|---|---|
+| `ConceptFrame` with `FrameBox` | The four-box opening of a lesson: the idea, the definition, why it works, what it is for | `label` on each `FrameBox`; the children are Markdown |
+| `TraceTable` | A Markdown table whose rows are hidden until the reader reveals them (next row, all, hide again), for tracing by hand | wrap an ordinary table; blank lines around it |
+| `SvgFigure` | A hand-drawn SVG figure with a caption | `src` (the page path without `.json`) and `id`; the SVG is stored in `content/figure-data/<page path>.json` as `{ "<id>": { "alt": "...", "svg": "<svg>...</svg>" } }`, and the caption is the children. The SVG uses the classes `f-b`, `f-g`, `ln`, `h`, `s`, `m` ... defined for `.jf-figure`, so it follows the theme |
+| `MemoryDiagram` | The exam memory diagram: stack left, heap right, addresses and arrows, old values crossed out | `scenario` (one of 13 ids in `lib/csi247/memory-scenarios.ts`: `basics student course marks shape alist llbuild lltrav book alstudents llslide llq dll`) and `static` for the finished diagram only. By default it steps through the Java one line at a time |
+
+A memory-diagram scenario is a short builder script: `memoryBuilder().code([...lines])`, then `v` (a stack variable), `arr`, `obj`, `val` (a String or boxed value) and `node` (a linked-list node) to create things, `set` and `sv` to change a slot or a variable (the old value is kept and crossed out), `unv` and `drop` to remove one, `clean` to forget the crossings, and `snap(line, note)` once per line of code. An object nothing points to is drawn faded with "unreachable, garbage". `npm run test:memory-diagram` builds every scenario and draws every step. `LearningObjectives` items may contain `inline code` in backticks.
+
+`node scripts/convert-java-foundations.mjs <java-foundations.html>` converts the reference course into these pieces; the handoff file explains how its output was placed in the chapters.
+
 ## Decoding the questions
 
 Every review page ends with a `## Decoding the questions` section that teaches how to read a question before answering it. `<CommandWords />` shows the shared table of command words (define, explain, compare and so on), and `<DecodeQuestion>` works through a real question from the topic. Course-specific dictionaries live in `content/decoding/<course>.json`.
@@ -338,6 +353,7 @@ These still work, because each one renders through a standard element, but new c
 
 | Retired | Use instead |
 |---|---|
+| `Mermaid` | `SvgFigure` (a drawn SVG; `node scripts/convert-mermaid-figures.mjs <folder> --write` converts a flowchart) or `SiteDiagram`. Mermaid loaded a diagram library in the browser and drew the default Mermaid look, which does not follow the site theme. No page uses it any more |
 | `Card`, `HighlightCard`, `ConceptBlock`, `TheoremBlock` | `KeyTerm` (`label="Theorem" tone="purple"` for a theorem) |
 | `PresetCard`, `CommonMistake`, `RecognitionStrategy` | `Callout` |
 | `StepByStep`, `MethodSteps`, `InteractiveStepper`, `FumaSteps` | `Steps` |

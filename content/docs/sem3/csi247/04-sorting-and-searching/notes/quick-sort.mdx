@@ -1,0 +1,133 @@
+---
+title: "Quick sort"
+description: "Pick a pivot."
+---
+
+Put everything smaller to its left and everything else to its right. Then sort each side the same way.
+
+<ConceptFrame>
+
+<FrameBox label="The idea">
+
+Lining up a class by height: pick one student. Everyone shorter moves to their left, everyone taller to their right. That student is now exactly where they belong. Repeat within each group.
+
+</FrameBox>
+
+<FrameBox label="The definition">
+
+**Partition** the range around a chosen **pivot** so that elements smaller than the pivot come before it and the rest after it. The pivot is then in its final position. Recursively quick sort the two sides.
+
+</FrameBox>
+
+<FrameBox label="Why it works">
+
+A pivot that splits the range roughly in half gives about log *n* levels of O(*n*) partitioning, so O(*n* log *n*). A pivot that's always the smallest or largest value only peels off one element per level, so *n* levels and O(*n*²).
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+Usually the fastest general-purpose sort in practice: in-place, with small, simple steps that suit how computer memory works. Java sorts arrays of primitives with a quick sort variant.
+
+</FrameBox>
+
+</ConceptFrame>
+
+## Partitioning
+
+All the real work happens in the **partition** step. Unlike merge sort, which does its work when *combining*, quick sort does its work when *dividing*; once both sides are sorted, the whole range is automatically sorted, because everything on the left is smaller than the pivot and everything on the right is not.
+
+We'll use the simplest correct method, the **Lomuto partition scheme**, which takes the last element of the range as the pivot. It sweeps an index `j` from left to right and keeps a boundary `i` such that everything before `i` is smaller than the pivot. Whenever `a[j]` is smaller than the pivot, it's swapped to position `i` and the boundary moves right. At the end, the pivot is swapped into position `i`, between the two zones.
+
+<SvgFigure src="sem3/csi247/04-sorting-and-searching/notes/quick-sort" id="quick-1">
+
+**Figure 22.1** The Lomuto partition. `j` scans the unexamined zone; each value smaller than the pivot is swapped into the blue zone at `i`. Finally the pivot is swapped into the gap between the zones, which is its permanent home.
+
+</SvgFigure>
+
+### A worked partition
+
+Partition `[8, 3, 7, 1, 5]`. The pivot is the last element, 5. The boundary `i` starts at 0.
+
+<table><tr><th><code>j</code></th><th><code>a[j]</code></th><th>&lt; 5?</th><th>Action</th><th>Array afterwards</th><th><code>i</code></th></tr><tr><td>0</td><td>8</td><td>no</td><td>leave it</td><td><code>[8, 3, 7, 1, 5]</code></td><td>0</td></tr><tr><td>1</td><td>3</td><td>yes</td><td>swap a[0] ↔ a[1], then i++</td><td><code>[3, 8, 7, 1, 5]</code></td><td>1</td></tr><tr><td>2</td><td>7</td><td>no</td><td>leave it</td><td><code>[3, 8, 7, 1, 5]</code></td><td>1</td></tr><tr><td>3</td><td>1</td><td>yes</td><td>swap a[1] ↔ a[3], then i++</td><td><code>[3, 1, 7, 8, 5]</code></td><td>2</td></tr><tr><td>end</td><td colSpan={3}>swap the pivot a[4] into a[i] = a[2]</td><td><code>[3, 1, 5, 8, 7]</code></td><td>return 2</td></tr></table>
+
+5 is now final at index 2. Quick sort then recursively sorts `[3, 1]` and `[8, 7]`.
+
+## The code
+
+```java title="QuickSort.java"
+public static void quickSort(int[] a) {
+    quickSort(a, 0, a.length - 1);          // public entry point hides the indexes from callers
+}
+
+// Sorts a[lo..hi] (both ends included)
+private static void quickSort(int[] a, int lo, int hi) {
+    if (lo >= hi) return;                   // BASE CASE: 0 or 1 element
+    int p = partition(a, lo, hi);           // the pivot lands at its FINAL index p
+    quickSort(a, lo, p - 1);                // sort everything smaller than the pivot
+    quickSort(a, p + 1, hi);                // sort everything else
+}
+
+// Lomuto partition — the pivot is the last element of the range
+private static int partition(int[] a, int lo, int hi) {
+    int pivot = a[hi];
+    int i = lo;                             // INVARIANT: a[lo..i-1] < pivot
+
+    for (int j = lo; j < hi; j++) {         // j scans the not-yet-examined region
+        if (a[j] < pivot) {
+            swap(a, i, j);                  // move it into the "smaller" zone…
+            i++;                            // …and grow that zone by one
+        }
+    }
+
+    swap(a, i, hi);                         // put the pivot between the two zones
+    return i;                               // the pivot's final position
+}
+```
+
+## Analysis
+
+- **Best and average case, O(*n* log *n*).** If pivots split ranges into roughly equal parts, there are about log *n* levels, each doing O(*n*) comparisons in total. With random data, splits are good enough on average to give the same result.
+- **Worst case, O(*n*²).** With the last element as pivot, an *already sorted* (or reverse-sorted) array is the worst input: the pivot is always the largest value, so each partition only removes one element. That's *n* levels with (*n*−1) + (*n*−2) + … comparisons, and the recursion is *n* calls deep, which can cause a `StackOverflowError` on large arrays.
+- **Space:** in-place, with O(log *n*) recursion stack on average (O(*n*) in the worst case).
+- **Not stable:** the long-distance swaps can jump an element over an equal one.
+
+## Avoiding the worst case
+
+- **Random pivot.** Pick a random index in the range, swap that element to the end, then partition as normal. No particular input can then reliably trigger the worst case.
+- **Median of three.** Look at the first, middle and last elements and use the middle-sized one of the three as the pivot. This fixes the sorted-input problem cheaply.
+- **Many duplicates.** Lomuto partitioning slows down badly when the range is full of equal values. A *three-way* partition (smaller / equal / larger) handles that case well.
+
+```java title="RandomPivot.java"
+import java.util.concurrent.ThreadLocalRandom;
+
+private static int randomPartition(int[] a, int lo, int hi) {
+    int r = ThreadLocalRandom.current().nextInt(lo, hi + 1);   // random index in lo..hi (hi+1 is excluded)
+    swap(a, r, hi);                                             // move the random pivot to the end…
+    return partition(a, lo, hi);                                // …then partition exactly as before
+}
+```
+
+<Callout type="key">
+
+Partition puts the pivot in its final place with smaller elements to its left. Average O(*n* log *n*), in-place and very fast; worst case O(*n*²) with consistently bad pivots, so choose pivots randomly or by median of three. Not stable.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={"What input makes last-element-pivot quick sort slowest?"}>
+
+Already sorted or reverse-sorted data. The pivot is always the largest (or smallest) value, so each partition removes only one element, giving *n* levels and O(*n*²) comparisons.
+
+</CheckQuestion>
+
+<CheckQuestion question={"Merge sort and quick sort are both divide and conquer. Where does each do its main work?"}>
+
+Merge sort splits trivially and does its work combining (merging). Quick sort does its work dividing (partitioning) and needs no combine step.
+
+</CheckQuestion>
+
+</CheckQuestions>

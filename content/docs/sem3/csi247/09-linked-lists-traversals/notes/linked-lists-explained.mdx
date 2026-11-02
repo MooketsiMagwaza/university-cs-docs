@@ -1,0 +1,333 @@
+---
+title: "Linked lists"
+description: "A linked list stores each value in its own little object, called a node, and each node holds the address of the next one."
+---
+
+No shifting, no growing, no wasted slots: to insert, you just change a couple of arrows.
+
+<LearningObjectives items={[
+  "What nodes, `head`, `next` and `null` mean in a linked list.",
+  "How to draw linked lists in memory diagrams, and how every insert and delete changes the arrows.",
+  "How to walk through a list with a `cur` variable, with a trace table.",
+  "Singly versus doubly linked lists.",
+  "How to use Java's `LinkedList` class, and when to choose it over `ArrayList`.",
+]} />
+
+<ConceptFrame>
+
+<FrameBox label="The idea">
+
+A treasure hunt. Each clue (node) holds a prize (the data) and tells you where the next clue is hidden (the next address). You only need to know where the first clue is; the last clue says "the end".
+
+</FrameBox>
+
+<FrameBox label="The definition">
+
+A **linked list** is a linear data structure that stores data in **nodes**. Each node holds a data item and a reference (`next`) to the following node; the last node's `next` is `null`. A variable called `head` refers to the first node.
+
+</FrameBox>
+
+<FrameBox label="Why it works">
+
+The nodes don't need to sit next to each other in memory, because each one carries the address of the next. So adding a node never requires moving the others: you just reconnect the arrows around it.
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+Collections whose size is unknown and that change a lot, especially adding and removing at the front or in the middle. Also the building block for stacks and queues.
+
+</FrameBox>
+
+</ConceptFrame>
+
+## Why not just use an ArrayList?
+
+On the [ArrayList page](/docs/sem3/csi247/08-collections/notes/lists-and-arraylist) we saw that `add(i, e)` and `remove(i)` are slow because they shift elements, and that a full ArrayList must copy everything into a bigger array. A linked list avoids both. The price: there is no index arithmetic. To reach the 500th element you must start at the head and follow 499 arrows.
+
+## The parts of a linked list
+
+- **Node**: one element of the list. It has two parts: `data` (the value; can be a primitive or a reference) and `next` (the address of the next node).
+- **head**: a reference to the first node. It isn't a node itself, just an arrow to one. If the list is empty, `head` is `null`.
+- **The end**: the last node's `next` is `null`. Some lists also keep a **tail** reference to the last node.
+
+The nodes are *not* stored side by side in memory; that's why their addresses below jump around (100, then 290). The arrows hold them together.
+
+<MemoryDiagram scenario="llslide" static />
+
+**Figure 28.1** The lecture's example: a list called `names` with two nodes. `names` holds 100, the address of the first node. That node holds 33 and the address 290 of the second node, which holds 41 and `null` (the end).
+
+<Callout type="note">
+
+A linked list is a **recursive data structure**: a list is either empty (`null`), or a node followed by… a smaller list. That's why many linked-list methods can be written recursively.
+
+</Callout>
+
+## The Node class
+
+```java title="Node.java"
+class Node {
+    int data;          // the value stored in this node
+    Node next;         // the address of the next node (null if this is the last one)
+
+    Node(int data) {
+        this.data = data;
+        this.next = null;    // a brand-new node isn't linked to anything yet
+    }
+}
+```
+
+Look at the field `Node next`: a `Node` contains a reference to another `Node`. That's allowed because it's only an address, not a whole node inside a node.
+
+## Changing a list, one arrow at a time
+
+Every linked-list operation is just a few assignments to `head` or to some node's `next`. Step through the code below. Each line changes exactly one box. This is also exactly how to answer a "draw the memory after this code" question about linked lists.
+
+<MemoryDiagram scenario="llbuild" />
+
+Reading expressions like `head.next.next`: go left to right, following one arrow per dot. `head` → the first node; `.next` → follow its next arrow to the second node; `.next` → follow that node's next arrow to the third node.
+
+<Callout type="mistake" title="Order matters">
+
+When inserting, **link the new node to the rest of the list first**, then link the previous node to the new node. In the other order you overwrite the only address of the rest of the list, and it's lost for ever. For adding at the front: `n.next = head;` *then* `head = n;`.
+
+</Callout>
+
+## Walking through a list (traversal)
+
+There are no indexes, so to visit every node we use a helper variable, usually called `cur` (current), that starts at `head` and keeps stepping to `cur.next` until it falls off the end (becomes `null`).
+
+<MemoryDiagram scenario="lltrav" />
+
+<TraceTable>
+
+| Pass | `cur` | `cur != null`? | Prints `cur.data` | `cur = cur.next` gives |
+| --- | --- | --- | --- | --- |
+| 1 | 367 | true | 12 | 100 |
+| 2 | 100 | true | 33 | 450 |
+| 3 | 450 | true | 57 | 290 |
+| 4 | 290 | true | 41 | null |
+| end | null | false | — | loop stops |
+
+</TraceTable>
+
+<Callout type="mistake">
+
+Writing `head = head.next` to walk the list. That moves the head itself, so the nodes you walked past are lost (nothing points to them any more). Always walk with a separate `cur` variable.
+
+</Callout>
+
+## A complete singly linked list class
+
+```java title="MyLinkedList.java"
+public class MyLinkedList {
+
+    private static class Node {          // a node lives inside the list class
+        int data;
+        Node next;
+        Node(int data) { this.data = data; }
+    }
+
+    private Node head;                   // first node (null when empty)
+    private int size;
+
+    // Add at the front: O(1), no matter how long the list is
+    public void addFirst(int value) {
+        Node n = new Node(value);        // 1. make the node
+        n.next = head;                   // 2. it points at the old first node
+        head = n;                        // 3. head points at it
+        size++;
+    }
+
+    // Add at the back: O(n), because we must walk to the last node
+    public void addLast(int value) {
+        Node n = new Node(value);
+        if (head == null) {              // empty list: new node is also the first
+            head = n;
+        } else {
+            Node cur = head;
+            while (cur.next != null) {   // stop ON the last node (its next is null)
+                cur = cur.next;
+            }
+            cur.next = n;
+        }
+        size++;
+    }
+
+    // Insert after the first node holding target
+    public void insertAfter(int target, int value) {
+        Node cur = head;
+        while (cur != null && cur.data != target) {
+            cur = cur.next;
+        }
+        if (cur == null) return;         // target not found
+        Node n = new Node(value);
+        n.next = cur.next;               // FIRST: new node grabs the rest of the list
+        cur.next = n;                    // THEN: cur points at the new node
+        size++;
+    }
+
+    // Remove the first node: O(1)
+    public int removeFirst() {
+        if (head == null) throw new RuntimeException("List is empty");
+        int value = head.data;
+        head = head.next;                // skip over the old first node
+        size--;
+        return value;
+    }
+
+    // Remove the first node holding target
+    public boolean remove(int target) {
+        if (head == null) return false;
+        if (head.data == target) { head = head.next; size--; return true; }
+        Node prev = head;                // we need the node BEFORE the one to delete
+        while (prev.next != null && prev.next.data != target) {
+            prev = prev.next;
+        }
+        if (prev.next == null) return false;   // not found
+        prev.next = prev.next.next;            // jump over it
+        size--;
+        return true;
+    }
+
+    public int size() { return size; }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("[");
+        Node cur = head;
+        while (cur != null) {
+            sb.append(cur.data);
+            if (cur.next != null) sb.append(", ");
+            cur = cur.next;
+        }
+        return sb.append("]").toString();
+    }
+}
+```
+
+```text title="Using it"
+list.addLast(33); list.addLast(41);   → [33, 41]
+list.addFirst(12);                    → [12, 33, 41]
+list.insertAfter(33, 57);             → [12, 33, 57, 41]
+list.remove(33);                      → [12, 57, 41]
+list.removeFirst()                    → returns 12, list is [57, 41], size 2
+```
+
+Why does `remove` look for the node *before* the target? In a singly linked list you can only follow arrows forwards. To cut a node out you must change the `next` of the node in front of it, and once you're standing on the target, there's no way back. A doubly linked list fixes that.
+
+## Singly versus doubly linked lists
+
+In a **doubly linked list** each node has *two* references: `next` to the following node and `prev` to the previous one. You can walk in both directions, and with a `tail` reference you can add or remove at *either* end in O(1). The cost is one extra reference per node, and every insert or delete must update twice as many arrows.
+
+<MemoryDiagram scenario="dll" static />
+
+**Figure 28.2** A doubly linked list. Each node is \[prev | data | next\]. The first node's `prev` and the last node's `next` are `null`. `head` points at the first node and `tail` at the last.
+
+## Java's `LinkedList` class
+
+You rarely write your own linked list in real programs: `java.util.LinkedList<E>` is a generic, doubly linked list that implements both `List` and `Deque` (a double-ended queue).
+
+| Method | What it does | Cost |
+| --- | --- | --- |
+| `add(E e)` | Appends to the end | O(1) |
+| `add(int i, E e)` | Inserts at position `i` | O(*n*) to walk there |
+| `addFirst(E e)` | Inserts at the front | O(1) |
+| `get(int i)` | Element at position `i` | O(*n*) |
+| `getFirst()` / `getLast()` | First / last element | O(1) |
+| `set(int i, E e)` | Replaces the element at `i` | O(*n*) |
+| `contains(Object o)` | Is `o` in the list? | O(*n*) |
+| `remove()` / `removeFirst()` | Removes and returns the first element | O(1) |
+| `removeLast()` | Removes and returns the last element | O(1) |
+| `remove(int i)` | Removes the element at `i` | O(*n*) |
+| `size()`, `toArray()`, `toString()` | Count, copy to array, text |   |
+
+### The lecture's snippet, traced
+
+```java title="Fruits.java"
+LinkedList<String> fruits = new LinkedList<String>();
+System.out.println(fruits.size());
+fruits.add("Mango");
+fruits.add("Orange");
+fruits.add("Grapes");
+fruits.add("Guava");
+System.out.println(fruits);
+fruits.add(0, "Lemon");
+System.out.println(fruits);
+fruits.set(1, "Lime");
+System.out.println(fruits);
+System.out.println("There are " + fruits.size() + " fruits");
+fruits.removeFirst();
+System.out.println(fruits);
+fruits.removeLast();
+System.out.println(fruits.toString());
+```
+
+<TraceTable>
+
+| Statement | List afterwards | Printed |
+| --- | --- | --- |
+| `println(fruits.size())` | `[]` | `0` |
+| four `add` calls | `[Mango, Orange, Grapes, Guava]` |   |
+| `println(fruits)` |   | `[Mango, Orange, Grapes, Guava]` |
+| `add(0, "Lemon")` | `[Lemon, Mango, Orange, Grapes, Guava]` |   |
+| `println(fruits)` |   | `[Lemon, Mango, Orange, Grapes, Guava]` |
+| `set(1, "Lime")` | `[Lemon, Lime, Orange, Grapes, Guava]` | (Mango replaced) |
+| `println(fruits)` |   | `[Lemon, Lime, Orange, Grapes, Guava]` |
+| `println("There are "…)` |   | `There are 5 fruits` |
+| `removeFirst()` | `[Lime, Orange, Grapes, Guava]` |   |
+| `println(fruits)` |   | `[Lime, Orange, Grapes, Guava]` |
+| `removeLast()` | `[Lime, Orange, Grapes]` |   |
+| `println(fruits.toString())` |   | `[Lime, Orange, Grapes]` |
+
+</TraceTable>
+
+## `ArrayList` or `LinkedList`?
+
+| Operation | `ArrayList` | `LinkedList` | Why |
+| --- | --- | --- | --- |
+| `get(i)` / `set(i, e)` | O(1) | O(*n*) | array index jump vs. walking from the head |
+| add at the end | O(1)\* | O(1) | \*occasional grow; LinkedList keeps a tail |
+| add / remove at the front | O(*n*) | O(1) | shifting vs. changing one or two arrows |
+| add / remove in the middle | O(*n*) shift | O(*n*) to walk there, then O(1) |   |
+| memory per element | one slot | node + 2 references | plus possibly unused capacity in an ArrayList |
+
+Rule of thumb: lots of reading by position → `ArrayList`. Lots of adding and removing at the ends (stacks, queues) → `LinkedList`. When unsure, `ArrayList` is usually faster in practice.
+
+<Callout type="key">
+
+Node = \[data | next\]. `head` points to the first node; the last `next` is `null`. Insert: link the new node to the rest first, then link to it. Delete: make the previous node skip it. Traverse with `cur = head; while (cur != null) { …; cur = cur.next; }`. Doubly linked nodes add `prev`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>Draw the memory after: <code>Node a = new Node(5); a.next = new Node(9); a.next.next = new Node(2); Node b = a.next; b.data = 7;</code></>}>
+
+Three nodes (addresses 100, 200, 300). `a.next.next` means "the next field of the node after a", i.e. the 9 node's next. `b` points at the second node, so `b.data = 7` changes 9 to 7, and `a.next.data` is now 7 as well.
+
+<MemoryDiagram scenario="llq" static />
+
+</CheckQuestion>
+
+<CheckQuestion question={<>What does this method return for the list 12 → 57 → 41? <code>int f(Node cur) &#123; int c = 0; while (cur != null) &#123; c++; cur = cur.next; &#125; return c; &#125;</code></>}>
+
+\3. It counts the nodes: the size of the list.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Why is <code>get(i)</code> slow on a linked list?</>}>
+
+The nodes are scattered in memory, so there's no way to calculate where the `i`-th one is. You must start at `head` and follow `i` next arrows: O(*n*).
+
+</CheckQuestion>
+
+<CheckQuestion question={<>A list has <code>head → A → B → C</code>. Write the one line that removes B.</>}>
+
+`head.next = head.next.next;` A's next now points straight to C, and nothing points to B any more.
+
+</CheckQuestion>
+
+</CheckQuestions>

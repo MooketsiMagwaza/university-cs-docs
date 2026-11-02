@@ -1,132 +1,187 @@
 ---
-title: "Inheritance, Subclasses and super"
-description: "Move shared Shape state into a superclass, trace construction, and distinguish inherited members from private representation."
+title: "Inheritance"
+description: "Build a specific class on top of a general one: reuse what they share, then add or change what is different."
 ---
 
-Inheritance lets a new class reuse and extend the accessible behaviour of an existing class.
+<LearningObjectives items={[
+  "What a superclass and subclass are, and the \"is-a\" test.",
+  "The keywords `extends`, `super`, `protected` and the annotation `@Override`.",
+  "The order in which constructors run.",
+  "When *not* to use inheritance.",
+]} />
 
-<Mermaid chart={`classDiagram
-  class Shape {
-    -String colour
-    +Shape(String colour)
-    +getColour() String
-    +setColour(String colour) void
-    +toString() String
-  }
-  class Circle {
-    -double radius
-    +Circle(String colour, double radius)
-    +getArea() double
-  }
-  class Rectangle {
-    -double width
-    -double height
-    +Rectangle(String colour, double width, double height)
-    +getArea() double
-  }
-  Shape <|-- Circle
-  Shape <|-- Rectangle`} caption="Circle and Rectangle are specialised Shapes; common colour behaviour lives once in Shape." />
+<ConceptFrame>
 
-## 1. The is-a test
+<FrameBox label="The idea">
 
-Use inheritance when the sentence “a subclass **is a** superclass” is true:
+A dog *is an* animal. Everything true of every animal (it has a name, it eats) is automatically true of a dog, so you shouldn't have to write it twice.
 
-- a Circle is a Shape;
-- a Rectangle is a Shape;
-- an Account is **not** a Scanner, so that inheritance would be meaningless.
+</FrameBox>
 
-Inheritance is not merely a way to avoid typing code. It establishes a substitutability relationship.
+<FrameBox label="The definition">
 
-## 2. Superclass implementation
+`class Dog extends Animal` makes `Dog` a **subclass** that inherits the fields and methods of its **superclass** `Animal`. The subclass may add new members and **override** (replace) inherited methods.
 
-~~~java
-public class Shape {
-    private String colour;
+</FrameBox>
 
-    public Shape(String colour) {
-        this.colour = colour;
+<FrameBox label="Why it works">
+
+Shared code lives in one place, so fixing it once fixes every subclass. And because a `Dog` is an `Animal`, a dog can be used anywhere an animal is expected, which is the foundation of polymorphism.
+
+</FrameBox>
+
+<FrameBox label="What it is for">
+
+Code reuse, plus a family tree of types that mirrors the real world: general ideas at the top, specialised versions underneath.
+
+</FrameBox>
+
+</ConceptFrame>
+
+## Vocabulary
+
+The general class is called the **superclass** (also *parent class* or *base class*). The specialised class is the **subclass** (also *child class* or *derived class*). The subclass *inherits* from the superclass. Together they form a **class hierarchy**, usually drawn as a tree with the most general class at the top.
+
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/inheritance-and-super" id="inheritance-1">
+
+**Figure 8.1** A class hierarchy in UML style (UML is a standard diagram notation). The hollow triangle points at the parent. Orange: overridden (changed) behaviour. Green: new behaviour only that subclass has. `name` and `eat()` are inherited unchanged.
+
+</SvgFigure>
+
+## The keywords that make it work
+
+- `extends` names the parent class. A Java class may extend exactly **one** class (this is called *single inheritance*). A class without `extends` automatically extends the built-in class `Object`, so every class in Java ultimately descends from `Object`.
+- `super(…)` calls the parent's constructor. It must be the *first* statement in the subclass constructor, because the parent's part of the object has to be built before the child's part. If you don't write it, Java inserts `super()` with no arguments for you, which only works if the parent has a no-argument constructor.
+- `super.method()` calls the parent's version of a method from inside an overriding method, letting you *extend* the parent's behaviour rather than replace it entirely.
+- `@Override` is an *annotation*: a note to the compiler that says "I intend this method to replace an inherited one". If you misspell the name or get the parameters wrong, the compiler reports an error, instead of silently creating a brand-new, unrelated method.
+- `protected` is an access level between `private` and `public`: the member is visible inside its own class, to subclasses, and to other classes in the same package (a *package* is a named folder of related classes).
+
+## Example: Animal, Dog and Cat
+
+```java title="Animal.java"
+// SUPERCLASS: the general concept
+public class Animal {
+    protected String name;              // protected → subclasses can use it directly
+
+    public Animal(String name) {
+        this.name = name;
     }
 
-    public String getColour() {
-        return colour;
+    public void eat() {                 // shared behaviour — every subclass inherits it unchanged
+        System.out.println(name + " is eating.");
     }
 
-    public void setColour(String colour) {
-        this.colour = colour;
+    public String speak() {             // a generic default that subclasses may override
+        return "...";
     }
+}
+```
+
+```java title="Dog.java · Cat.java"
+// SUBCLASS: a specialised Animal.   extends = "is-a"
+public class Dog extends Animal {
+
+    public Dog(String name) {
+        super(name);                    // MUST come first: build the Animal part of this object
+    }
+
+    @Override                           // compiler checks that Animal really has speak()
+    public String speak() {
+        return "Woof!";                 // replaces Animal's version for Dogs
+    }
+
+    public void fetch() {               // brand-new behaviour only Dogs have
+        System.out.println(name + " fetches the ball.");   // `name` is inherited (protected)
+    }
+}
+
+public class Cat extends Animal {
+    public Cat(String name) { super(name); }
 
     @Override
-    public String toString() {
-        return colour + " shape";
+    public String speak() {
+        return super.speak() + " Meow"; // super.speak() runs Animal's version → "... Meow"
     }
 }
-~~~
+```
 
-The private field belongs to the Shape part of every subclass object. Subclass code cannot access it directly; it uses inherited public/protected behaviour.
+<Callout type="note">
 
-## 3. Subclass construction
+Each `public` class must be in its own file named after it, so in a real project `Dog` and `Cat` go in `Dog.java` and `Cat.java`. Listings sometimes show two classes together just to save space.
 
-~~~java
-public class Circle extends Shape {
-    private double radius;
+</Callout>
 
-    public Circle(String colour, double radius) {
-        super(colour);       // Construct the Shape part first.
-        this.radius = radius;
-    }
+```java title="Using them"
+Dog rex = new Dog("Rex");
+rex.eat();                          // inherited from Animal  → Rex is eating.
+rex.fetch();                        // Dog's own method       → Rex fetches the ball.
+System.out.println(rex.speak());    // overridden             → Woof!
 
-    public double getRadius() {
-        return radius;
-    }
-}
-~~~
+Cat tom = new Cat("Tom");
+System.out.println(tom.speak());    // extended with super    → ... Meow
+```
 
-<div className="not-prose my-6 mx-auto max-w-xl rounded-2xl border border-fd-border p-5">
-  <div className="rounded-xl border-2 border-blue-500 bg-blue-500/5 p-4"><strong>Circle object</strong><div className="mt-3 rounded-lg border border-fd-border p-3"><strong>inherited Shape state</strong><br/><code>colour = "Blue"</code></div><div className="mt-3 rounded-lg border border-emerald-600 p-3"><strong>Circle state</strong><br/><code>radius = 2.0</code></div></div>
-</div>
+## Constructor chaining
 
-Construction order for <code>new Circle("Blue", 2.0)</code>:
+When you create a `Dog`, Java builds the object from the top of the hierarchy down. The `Dog` constructor's first act is to call `super(name)`, which runs `Animal`'s constructor, whose own first (invisible) act is to call `Object`'s constructor. Only when the parent parts are complete does the rest of the `Dog` constructor run. This guarantees that by the time subclass code runs, every inherited field has already been set up.
 
-| Step | Statement/effect | Object state |
-|---:|---|---|
-| 1 | allocate one Circle object | fields have defaults |
-| 2 | <code>super("Blue")</code> | Shape colour becomes Blue |
-| 3 | <code>this.radius = 2.0</code> | Circle radius becomes 2.0 |
-| 4 | constructor returns reference | object is ready |
+<SvgFigure src="sem3/csi247/06-object-oriented-programming/notes/inheritance-and-super" id="inheritance-2">
 
-If a subclass constructor does not explicitly call <code>super(...)</code>, Java inserts <code>super()</code>. Compilation fails when the superclass has no accessible no-argument constructor.
+**Figure 8.2** Construction always flows from the top of the hierarchy down: `Object` → `Animal` → `Dog`.
 
-## 4. What is and is not inherited
+</SvgFigure>
 
-| Member | Subclass object has it? | Subclass code directly names it? |
-|---|---|---|
-| public method | yes | yes |
-| protected method/field | yes | subject to package/subclass access rules |
-| package-private member | yes | only from same package |
-| private field/method | object contains superclass state | no direct access |
-| superclass constructor | invoked during construction | not inherited as a callable subclass method |
+## What is and isn't inherited
 
-## 5. super and this
+- **Public and protected** fields and methods are inherited and usable directly in the subclass.
+- **Private** fields are still part of every subclass object (a `Dog` really does contain the `Animal` data), but the subclass's code can't name them directly. It must use the parent's public or protected methods, such as a getter.
+- **Constructors are not inherited.** Each class writes its own and chains to the parent with `super(…)`.
+- A method marked `final` can't be overridden, and a class marked `final` (like `String`) can't be extended at all.
 
-- <code>this</code> is the current complete object.
-- <code>super(...)</code> invokes a superclass constructor and must be the first constructor statement.
-- <code>super.method()</code> explicitly invokes the superclass implementation of an inherited method.
+## When not to use inheritance
 
-~~~java
-@Override
-public String toString() {
-    return super.toString() + ", circle radius " + radius;
-}
-~~~
+Use inheritance only when the "is-a" sentence is genuinely true and every behaviour of the parent makes sense for the child. A famous counter-example from Java's own early library: `Stack` extends `Vector` (a list type). A stack should only allow adding and removing at the top, but because it inherits everything a list can do, you can call `insertElementAt(x, 0)` on a stack and break its rules. When you just want to *use* another class's abilities, hold an instance of it as a field instead. That's called composition, and it has its own page.
 
-## 6. Exam-style practice
+<Callout type="mistake">
 
-1. Refactor duplicated Circle/Rectangle colour code into Shape. [10]
-2. Draw the one-object memory model for a Circle's inherited and declared fields. [6]
-3. Trace constructor order and identify a missing-super compilation error. [8]
-4. Classify public/protected/package/private members by subclass access. [8]
-5. Decide whether five proposed relationships pass the is-a test. [5]
+Forgetting `super(…)` when the parent has no no-argument constructor. Java tries to insert `super()` automatically, finds no matching constructor, and reports a compile error such as *"constructor Animal in class Animal cannot be applied to given types"*.
+
+</Callout>
+
+<Callout type="mistake">
+
+Leaving out `@Override`. If you write `public String Speak()` with a capital S, you've created a new, separate method, and calls to `speak()` still run the parent's version. With `@Override`, the compiler would have caught it.
+
+</Callout>
+
+<Callout type="key">
+
+`extends` means "is-a", and a class has only one parent. The parent is built first via `super(…)`. Override to change behaviour, always with `@Override`. Prefer composition when "is-a" isn't really true.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question={<>Why must <code>super(…)</code> be the first statement in a constructor?</>}>
+
+Because the parent's part of the object must be fully set up before the subclass's code runs, so that inherited fields are already valid when the subclass uses them.
+
+</CheckQuestion>
+
+<CheckQuestion question={"Does a subclass object contain its parent's private fields?"}>
+
+Yes, the data is there, but the subclass's code cannot access those fields by name. It must use public or protected methods of the parent.
+
+</CheckQuestion>
+
+<CheckQuestion question={<>Which class does <code>public class Car &#123; &#125;</code> extend?</>}>
+
+`Object`. Every class without an explicit `extends` extends `Object` automatically.
+
+</CheckQuestion>
+
+</CheckQuestions>
 
 <QuizRef src="sem3/csi247/06-object-oriented-programming/notes/inheritance-and-super" id="inheritance" />
-
-Continue with [Overriding and Polymorphism](/docs/sem3/csi247/06-object-oriented-programming/notes/overriding-and-polymorphism).

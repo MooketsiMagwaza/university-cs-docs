@@ -41,7 +41,7 @@ const semesters = [
   {
     label: 'Semester V',
     eyebrow: 'Advanced study',
-    status: null,
+    status: 'In progress',
     href: '/docs/sem5',
     description: 'Algorithm design and advanced data-structure problem solving.',
     courses: ['CSI323'],
