@@ -7,6 +7,8 @@
  * Keeping the questions out of the MDX keeps notes readable and lets the data be validated and reused on its own.
  */
 
+import { SAFE_DATA_PATH, dataVersion, lazyDataUrl } from './lazy-data';
+
 export type QuizLevel = 'foundation' | 'developing' | 'exam';
 
 export type QuizQuestionData = {
@@ -38,10 +40,13 @@ export type QuizFile = {
   quizzes: Record<string, QuizData>;
 };
 
-const SAFE_PATH = /^[A-Za-z0-9][A-Za-z0-9/_.-]*$/;
-
-export async function loadQuiz(src: string, id: string) {
-  if (!SAFE_PATH.test(src) || src.includes('..')) {
+/**
+ * What the page needs to know about a quiz without carrying its questions: the title, how many questions there are and
+ * the address of the data file (see lib/lazy-data.ts). Throws at build time, as before, when the file or the id is
+ * missing.
+ */
+export async function describeQuiz(src: string, id: string) {
+  if (!SAFE_DATA_PATH.test(src) || src.includes('..')) {
     throw new Error(`QuizRef: invalid src "${src}".`);
   }
 
@@ -61,9 +66,7 @@ export async function loadQuiz(src: string, id: string) {
 
   return {
     title: quiz.title,
-    questions: quiz.questions.map((question) => ({
-      ...question,
-      code: Array.isArray(question.code) ? question.code.join('\n') : question.code,
-    })),
+    count: quiz.questions.length,
+    url: lazyDataUrl('quiz', src, dataVersion(`quiz:${src}`, file)),
   };
 }
