@@ -49,8 +49,8 @@ const texts = (drawing) => {
   return out;
 };
 
-test('there are thirty scenarios and each one builds and draws every step', () => {
-  assert.equal(memoryScenarioIds.length, 30);
+test('there are thirty-four scenarios and each one builds and draws every step', () => {
+  assert.equal(memoryScenarioIds.length, 34);
   for (const id of memoryScenarioIds) {
     const sc = buildMemoryScenario(id);
     assert.ok(sc.steps.length >= 1, `${id} has steps`);
@@ -247,4 +247,27 @@ test('the polymorphism scenario stores different classes in one Shape array', ()
   assert.equal(last.objs.find((o) => o.addr === 200).t, 'Circle');
   assert.equal(last.objs.find((o) => o.addr === 300).t, 'Rectangle');
   assert.equal(last.vars.find((v) => v.n === 'a0').v.t, '28.27');
+});
+
+test('the array scenarios of Lecture 5 end with the contents the lecture asks for', () => {
+  const dry = finalState(buildMemoryScenario('arrdry')).objs.find((o) => o.addr === 100);
+  assert.deepEqual(dry.cells.map((c) => c.v.t), ['5', '6', '9', '19', '23', '37']);
+  assert.ok(dry.cells[3].old.includes('14'), 'the first value of numbers[3] is crossed out');
+  const loop = finalState(buildMemoryScenario('arrloop')).objs.find((o) => o.addr === 100);
+  assert.equal(loop.cells.length, 14);
+  assert.deepEqual(loop.cells.map((c) => c.v.t), ['0', '2', '0', '4', '0', '6', '0', '8', '0', '10', '0', '12', '0', '14']);
+  const init = finalState(buildMemoryScenario('arrinit'));
+  assert.equal(init.objs.find((o) => o.addr === 100).cells[2].v.t, '-7');
+  assert.equal(init.objs.find((o) => o.addr === 300).cells[1].v.r, 500);
+});
+
+test('a method receives copies of its arguments and its boxes disappear on return', () => {
+  const sc = buildMemoryScenario('callcopy');
+  const during = sc.steps[4].s;
+  assert.equal(during.vars.find((v) => v.n === 'price').v.t, '10.75');
+  assert.equal(during.vars.find((v) => v.n === 'total').v.t, '10.0', 'total is not changed by the method');
+  const after = finalState(sc);
+  assert.ok(!after.vars.some((v) => v.n === 'price'), 'the parameter boxes are gone');
+  assert.equal(after.vars.find((v) => v.n === 't').v.t, '0.75');
+  assert.equal(after.vars.find((v) => v.n === 'total').v.t, '10.0');
 });

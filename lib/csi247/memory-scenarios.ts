@@ -710,6 +710,89 @@ const scenarios: Record<string, Builder> = {
     B.v('a1', '10.0', { y: 420 }).snap(4, 'shapes[1].getArea(): the object is a Rectangle, so Rectangle\'s getArea runs: 2 x 5 = 10.0. The same call, two different methods: this is polymorphism.');
     return B.done('Polymorphism: one call, the method of the object');
   },
+
+  arrinit() {
+    const B = memoryBuilder().code([
+      'int[] nums = {10, 6, -7, 9, 19};',
+      "char[] grades = {'A', 'B', 'C', 'D', 'E', 'F'};",
+      'String[] villages = {"Mochudi", "Serowe", "Kanye"};',
+    ]);
+    B.snap(-1, "Lecture 5's exercise: draw the memory diagram for the three initialisers. Each variable will hold an address; each array lives on the heap.");
+    B.arr(100, 5, { x: 240, y: 30, cw: 62, fill: 0, t: 'int[]' }).v('nums', { r: 100 }, { y: 30 });
+    [10, 6, -7, 9, 19].forEach((v, i) => B.set(100, i, v));
+    B.snap(0, 'The braces make the array and fill it in one step: five cells, indexes 0 to 4, holding 10, 6, -7, 9 and 19. nums holds the address 100.');
+    B.arr(200, 6, { x: 240, y: 160, cw: 50, fill: 0, t: 'char[]' }).v('grades', { r: 200 }, { y: 160 });
+    ['A', 'B', 'C', 'D', 'E', 'F'].forEach((v, i) => B.set(200, i, "'" + v + "'"));
+    B.snap(1, 'A char array of six cells at 200, each holding one character.');
+    B.arr(300, 3, { x: 240, y: 290, cw: 90, t: 'String[]' }).v('villages', { r: 300 }, { y: 290 });
+    B.val(400, '"Mochudi"', { x: 600, y: 270, t: 'String' }).val(500, '"Serowe"', { x: 600, y: 340, t: 'String' }).val(600, '"Kanye"', { x: 600, y: 410, t: 'String' });
+    B.set(300, 0, { r: 400 }).set(300, 1, { r: 500 }).set(300, 2, { r: 600 });
+    B.snap(2, 'A String array holds references, not strings. Each cell holds the address of its own String object (400, 500, 600). The int and char arrays hold the values themselves; this one holds arrows.');
+    return B.done('Initialising arrays of int, char and String');
+  },
+
+  arrloop() {
+    const B = memoryBuilder().code([
+      'int n = 10;',
+      'int[] numbers = new int[n + 4];',
+      'for (int i = 0; i < numbers.length; i++) {',
+      '    if (i % 2 == 1) {',
+      '        numbers[i] = i + 1;',
+    ]);
+    B.snap(-1, "Lecture 5's loop exercise: (a) draw the memory, (b) give the output. The array has n + 4 = 14 cells, and only the odd indexes are written.");
+    B.v('n', 10, { y: 30 }).snap(0, 'int n = 10; a primitive box.');
+    B.arr(100, 14, { x: 240, y: 90, cw: 46, fill: 0, t: 'int[]' }).v('numbers', { r: 100 }, { y: 90 });
+    B.snap(1, 'new int[n + 4] is new int[14]: indexes 0 to 13, all 0. numbers.length is 14.');
+    for (let i = 1; i < 14; i += 2) {
+      B.set(100, i, i + 1).snap(4, 'i = ' + i + ' is odd (i % 2 == 1), so numbers[' + i + '] = ' + i + ' + 1 = ' + (i + 1) + ' and the program prints ' + (i + 1) + '. The even indexes keep 0.');
+    }
+    B.snap(2, 'The loop ends at i = 14. The program prints 2, 4, 6, 8, 10, 12, 14, one per line, and then numbers.length, 14.');
+    return B.done('A loop that writes the odd cells');
+  },
+
+  arrdry() {
+    const B = memoryBuilder().code([
+      'int[] numbers = new int[6];',
+      'numbers[0] = 5;',
+      'for (int i = 1; i < numbers.length; i++) {',
+      '    numbers[i] = i * i + 5;',
+      '    if (i > 2) {',
+      '        numbers[i] = 2 * numbers[i] - numbers[i - 1];',
+    ]);
+    B.snap(-1, "Lecture 5's dry-run exercise: find the contents of numbers after the code. Work one value of i at a time and cross out, never erase.");
+    B.arr(100, 6, { x: 240, y: 40, cw: 62, fill: 0, t: 'int[]' }).v('numbers', { r: 100 }, { y: 40 });
+    B.snap(0, 'A new int array of six cells, all 0.');
+    B.set(100, 0, 5).snap(1, 'numbers[0] = 5.');
+    B.set(100, 1, 6).snap(3, 'i = 1: numbers[1] = 1 x 1 + 5 = 6. The condition i > 2 is false, so nothing else happens.');
+    B.set(100, 2, 9).snap(3, 'i = 2: numbers[2] = 2 x 2 + 5 = 9. i > 2 is false.');
+    B.set(100, 3, 14).snap(3, 'i = 3: numbers[3] = 3 x 3 + 5 = 14 first.');
+    B.set(100, 3, 19).snap(5, 'i = 3 is greater than 2, so numbers[3] = 2 x 14 - numbers[2] = 28 - 9 = 19.');
+    B.set(100, 4, 21).snap(3, 'i = 4: numbers[4] = 4 x 4 + 5 = 21 first.');
+    B.set(100, 4, 23).snap(5, 'numbers[4] = 2 x 21 - numbers[3] = 42 - 19 = 23. Note that numbers[3] is the NEW value 19.');
+    B.set(100, 5, 30).snap(3, 'i = 5: numbers[5] = 5 x 5 + 5 = 30 first.');
+    B.set(100, 5, 37).snap(5, 'numbers[5] = 2 x 30 - numbers[4] = 60 - 23 = 37. Final contents: 5, 6, 9, 19, 23, 37.');
+    return B.done('Dry run: the contents of numbers');
+  },
+
+  callcopy() {
+    const B = memoryBuilder().code([
+      'double total = 10;',
+      'double t = addTax(total, 7.5);',
+      '// inside addTax(double price, double rate):',
+      '//   double tax = price * rate / 100;',
+      '//   price = price + tax;',
+      '//   return tax;',
+    ]);
+    B.snap(-1, "Lecture 3's Common Error 1: trying to modify a parameter. A method receives a COPY of each argument.");
+    B.v('total', '10.0', { y: 30 }).snap(0, 'double total = 10; main has a variable total holding 10.0.');
+    B.v('price', '10.0', { y: 130 }).v('rate', '7.5', { y: 210 });
+    B.snap(1, 'addTax(total, 7.5) is called. A new set of boxes is made for the method: price receives a COPY of total (10.0) and rate receives 7.5. total is not connected to price.');
+    B.v('tax', '0.75', { y: 290 }).snap(3, 'double tax = price * rate / 100 = 10.0 x 7.5 / 100 = 0.75, a local variable of addTax.');
+    B.sv('price', '10.75').snap(4, 'price = price + tax changes only the method\'s own box: 10.75. total is still 10.0. The change has no effect outside the method.');
+    B.unv('price').unv('rate').unv('tax').v('t', '0.75', { y: 130 });
+    B.snap(1, 'return tax sends the value 0.75 back and the method ends: its boxes (price, rate, tax) disappear. main stores the value in t. total is still 10.0.');
+    return B.done('Parameters are copies');
+  },
 };
 
 export const memoryScenarioIds = Object.keys(scenarios);
