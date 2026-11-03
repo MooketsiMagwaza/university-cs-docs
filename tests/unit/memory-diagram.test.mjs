@@ -49,8 +49,8 @@ const texts = (drawing) => {
   return out;
 };
 
-test('there are thirty-four scenarios and each one builds and draws every step', () => {
-  assert.equal(memoryScenarioIds.length, 34);
+test('there are forty scenarios and each one builds and draws every step', () => {
+  assert.equal(memoryScenarioIds.length, 40);
   for (const id of memoryScenarioIds) {
     const sc = buildMemoryScenario(id);
     assert.ok(sc.steps.length >= 1, `${id} has steps`);
@@ -270,4 +270,27 @@ test('a method receives copies of its arguments and its boxes disappear on retur
   assert.ok(!after.vars.some((v) => v.n === 'price'), 'the parameter boxes are gone');
   assert.equal(after.vars.find((v) => v.n === 't').v.t, '0.75');
   assert.equal(after.vars.find((v) => v.n === 'total').v.t, '10.0');
+});
+
+test('the sorting scenarios end with the sorted array', () => {
+  const vals = (id) => finalState(buildMemoryScenario(id)).objs.find((o) => o.addr === 100).cells.map((c) => c.v.t);
+  assert.deepEqual(vals('bubblesort'), ['18', '29', '63', '72', '85']);
+  assert.deepEqual(vals('selectionsort'), ['18', '29', '63', '72', '85']);
+  assert.deepEqual(vals('insertionsort'), ['18', '29', '63', '72', '85']);
+  assert.deepEqual(vals('mergearrays'), ['13', '20', '36', '54']);
+});
+
+test('binary search narrows low and high and ends with a hit or an empty search space', () => {
+  const hit = finalState(buildMemoryScenario('binsearch'));
+  assert.equal(hit.vars.find((v) => v.n === 'mid').v.t, '1');
+  assert.equal(hit.vars.find((v) => v.n === 'high').v.t, '3');
+  const miss = finalState(buildMemoryScenario('binmiss'));
+  assert.equal(miss.vars.find((v) => v.n === 'low').v.t, '4');
+  assert.equal(miss.vars.find((v) => v.n === 'high').v.t, '3', 'low > high ends the loop');
+});
+
+test('merge copies the halves into separate left and right arrays', () => {
+  const last = finalState(buildMemoryScenario('mergearrays'));
+  assert.deepEqual(last.objs.find((o) => o.addr === 200).cells.map((c) => c.v.t), ['20', '36']);
+  assert.deepEqual(last.objs.find((o) => o.addr === 300).cells.map((c) => c.v.t), ['13', '54']);
 });
