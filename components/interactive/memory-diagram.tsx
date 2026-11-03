@@ -27,7 +27,7 @@ function Drawing({ drawing, label }: { drawing: DrawingData; label: string }) {
       role="img"
       aria-label={label}
       viewBox={`0 0 ${drawing.width} ${drawing.height}`}
-      style={{ maxWidth: drawing.width, minWidth: Math.round(drawing.width * 0.72) }}
+      style={{ maxWidth: drawing.width, minWidth: Math.round(drawing.width * 0.82) }}
     >
       <defs>
         {marker('mA', 'mk-t')}
