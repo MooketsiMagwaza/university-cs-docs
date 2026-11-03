@@ -13,6 +13,40 @@ const config = {
   },
   // Allow cross-origin dev requests from your network IP
   allowedDevOrigins: ['100.124.114.119'],
+  typescript: {
+    // CI type-checks in its own step (`types:check`) and sets this for the build so the project is not checked twice.
+    // Everywhere else the build still fails on a type error.
+    ignoreBuildErrors: process.env.SKIP_BUILD_TYPECHECK === '1',
+  },
+  async headers() {
+    // Everything under /_next/static has a hashed name and Next already sends it as immutable for a year. The files
+    // below keep their names from one deployment to the next, so they cannot be immutable: a day in the browser and a
+    // week of serving the old copy while a new one is fetched, so a changed file can take up to a day to reach a returning
+    // reader. Prerendered HTML needs no rule: Next and Vercel send it
+    // with `s-maxage=31536000` (cached at the edge until the next deploy) and the browser revalidates it, which is the
+    // safe choice because a cached page from before a deploy would point at script files the deploy removed.
+    const day = 86400;
+    const unhashed = `public, max-age=${day}, stale-while-revalidate=${7 * day}`;
+    const cache = (source, value) => ({ source, headers: [{ key: 'Cache-Control', value }] });
+    return [
+      cache('/files/:path*', unhashed),
+      cache('/diagrams/:path*', unhashed),
+      cache('/videos/:path*', unhashed),
+      cache('/images/:path*', unhashed),
+      cache('/java-playground/:path*', unhashed),
+      cache('/logo.png', unhashed),
+      cache('/og-image.png', unhashed),
+      cache('/og-social.png', unhashed),
+      // The Excalidraw canvases are JSON, but the extension is unknown to most servers, which then send them as an opaque
+      // download and do not compress them.
+      {
+        source: '/diagrams/:path*.excalidraw',
+        headers: [{ key: 'Content-Type', value: 'application/json; charset=utf-8' }],
+      },
+      // Search results depend only on the query and the deployed content, so the edge may keep them.
+      cache('/api/search', 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400'),
+    ];
+  },
   async redirects() {
     const mat221Topics = [
       ['foundations', '01-foundations'],
@@ -32,7 +66,7 @@ const config = {
       ['taylor', '15-taylor-series'],
     ];
     const mat221Pages = ['', '/questions', '/quiz', '/review', '/exam-practice'];
-    return [
+    const rules = [
       ...mat221Topics.flatMap(([sourceSlug, destinationSlug]) => mat221Pages.map((suffix) => ({
         source: `/topics/${sourceSlug}${suffix}`,
         destination: `/docs/sem3/mat221/${destinationSlug}/${suffix === '/exam-practice' ? 'review' : suffix ? suffix.slice(1) : 'notes'}`,
@@ -192,6 +226,18 @@ const config = {
         permanent: true,
       },
     ];
+
+    // An old Exam address on a topic whose folder was renamed or moved would go to the old Review address and then to the
+    // new one: two hops. The wildcard rules above still serve every topic that was not renamed; these send the renamed
+    // ones straight to the final Review address, so every old URL redirects in one hop (PERF-05).
+    const legacyExam = rules
+      .filter((rule) => rule.source.startsWith('/docs/') && rule.source.endsWith('/review') && !rule.source.includes(':'))
+      .flatMap((rule) => ['exam', 'exam-practice'].map((page) => ({
+        source: rule.source.replace(/review$/, page),
+        destination: rule.destination,
+        permanent: true,
+      })));
+    return [...legacyExam, ...rules];
   },
   async rewrites() {
     const mat221VideoFiles = [
