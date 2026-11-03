@@ -1,7 +1,7 @@
 'use client';
 
 import { createElement, useId, useMemo, useState, type ReactNode } from 'react';
-import { drawDiagram, finalState, type SvgNode } from '@/lib/csi247/memory-diagram';
+import { drawFinal, drawStep, type Drawing as DrawingData, type SvgNode } from '@/lib/csi247/memory-draw';
 import { buildMemoryScenario } from '@/lib/csi247/memory-scenarios';
 
 const reactName = (name: string) => (name === 'class' ? 'className' : name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()));
@@ -15,10 +15,10 @@ function renderNode(node: SvgNode, key: number, uid: string): ReactNode {
   return createElement(node.tag, props, node.text ?? node.children.map((child, i) => renderNode(child, i, uid)));
 }
 
-function Drawing({ drawing, label }: { drawing: ReturnType<typeof drawDiagram>; label: string }) {
+function Drawing({ drawing, label }: { drawing: DrawingData; label: string }) {
   const uid = useId().replace(/:/g, '');
   const marker = (id: string, tone: string) => (
-    <marker id={`${uid}-${id}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+    <marker id={`${uid}-${id}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
       <path d="M0 0L10 5L0 10z" className={tone} />
     </marker>
   );
@@ -53,7 +53,7 @@ export function MemoryDiagram({ scenario, static: isStatic = false }: { scenario
     return (
       <div className="jf-mem jf-mem-static">
         <div className="jf-mem-stage">
-          <Drawing drawing={drawDiagram(finalState(sc), sc.opts)} label={`Memory diagram: ${sc.title}`} />
+          <Drawing drawing={drawFinal(sc)} label={`Memory diagram: ${sc.title}`} />
         </div>
       </div>
     );
@@ -78,7 +78,7 @@ export function MemoryDiagram({ scenario, static: isStatic = false }: { scenario
         </div>
       ) : null}
       <div className="jf-mem-stage">
-        <Drawing drawing={drawDiagram(step.s, sc.opts)} label={`Memory diagram: ${sc.title}, step ${index}`} />
+        <Drawing drawing={drawStep(sc, index)} label={`Memory diagram: ${sc.title}, step ${index}`} />
       </div>
       <p className="jf-mem-note" aria-live="polite">
         {step.note}
