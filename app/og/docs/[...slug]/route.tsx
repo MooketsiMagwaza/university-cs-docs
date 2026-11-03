@@ -1,4 +1,4 @@
-import { getPageImage, source } from '@/lib/source';
+import { source } from '@/lib/source';
 import { notFound } from 'next/navigation';
 import { ImageResponse } from 'next/og';
 import { generate as DefaultImage } from 'fumadocs-ui/og';
@@ -20,9 +20,9 @@ export async function GET(_req: Request, { params }: RouteContext<'/og/docs/[...
   );
 }
 
+// No image is made at build time. Drawing about 700 PNGs (satori and a WebAssembly rasteriser each) is a large share of
+// the build, and only a link preview ever asks for one. The first request for an address draws it and, because
+// `revalidate` is false, every later request is answered from the cache until the next deploy (PERF-02).
 export function generateStaticParams() {
-  return source.getPages().map((page) => ({
-    lang: page.locale,
-    slug: getPageImage(page).segments,
-  }));
+  return [];
 }
