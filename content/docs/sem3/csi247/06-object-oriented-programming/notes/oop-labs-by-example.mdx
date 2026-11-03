@@ -1,0 +1,718 @@
+---
+title: "OOP Labs by Example"
+description: "Lab 5 (Doctor, GP and Surgeon with a UML diagram, super, overriding and a tester that reads a data file and writes three output files) and Lab 6 question 1 (the abstract Employee, Teacher and Admin and a payroll program), solved in full."
+---
+
+Lab 5 and Lab 6 are the two labs that turn Lecture 4 and Lecture 11 into programs. Lab 5 asks for a UML class diagram and then an inheritance hierarchy of doctors: a `Doctor`, a `GP` that earns an allowance, and a `Surgeon` paid per procedure, with a tester that reads a data file and sends each doctor to one of three output files. Lab 6 asks for an abstract `Employee` with a `Teacher` and an `Admin`, and a `RunPayroll` class that reads employee records into an `Employee` array and writes the pay. This lesson solves both in full, with every output taken from a real run, and flags the places where the lab sheet is ambiguous. Lab 5 part 1 (merge sort) is in the sorting chapter and Lab 6 question 2 (interfaces) is in [Abstraction, Polymorphism and Interfaces by Example](/docs/sem3/csi247/06-object-oriented-programming/notes/abstraction-and-interfaces-by-example).
+
+<LearningObjectives items={[
+  'Draw the UML class diagram of an inheritance hierarchy and turn it into classes with extends and super',
+  'Override methods of a super class, and call the super class version with super',
+  'Read records from a text file, decide the type of object from the record, and write results to output files',
+  'Write an abstract class with overloaded constructors, an abstract method, toString and equals, and concrete sub classes',
+  'Use an array of the super class to hold objects of different sub classes and total their pay polymorphically',
+]} />
+
+<Prerequisites items={[
+  'Classes by Example and Inheritance and Overriding by Example in this chapter',
+  'Abstraction, Polymorphism and Interfaces by Example in this chapter',
+  'Reading and writing text files with `Scanner` and `PrintWriter`, from the Java Fundamentals chapter',
+]} />
+
+## 1. How to answer a lab question
+
+1. **Read.** List the classes, the instance variables and the methods the sheet asks for, and what the tester must produce.
+2. **Draw.** A UML diagram shows the hierarchy before any code: each class with its details, an arrow from each sub class to its super class.
+3. **Write the classes from the top.** Super class first, then each sub class with `extends`, `super(...)` on the first line of its constructor, and `@Override` on the methods it changes.
+4. **Test with a tester class.** Put the data in a file, read it a line at a time, create the object that the line describes, and write or print the result.
+
+## 2. Lab 5, parts 2 and 3: doctors
+
+### UML class diagram
+
+The sheet describes the classes in words, and asks for the diagram before the code. A `Doctor` has a last name, a first name and a basic pay; a `GP` adds a percentage rate for an allowance; a `Surgeon` adds the number of monthly procedures and the rate per procedure.
+
+```text
+                  Doctor
+      - lastName: String
+      - firstName: String
+      - basicPay: double
+      + Doctor(lastName: String, firstName: String, basicPay: double)
+      + getters and setters
+      + tagName(): String
+      + calculatePay(): double
+            ^                       ^
+            |                       |
+           GP                    Surgeon
+      - rate: double          - procedures: int
+      + GP(... , rate)        - rate: double
+      + getRate(): double     + Surgeon(... , procedures, rate)
+      + setRate(...): void    + getters and setters
+      + tagName(): String     + tagName(): String
+      + calculatePay(): double + calculatePay(): double
+```
+
+The two arrows point to the super class. Because `GP` and `Surgeon` redefine `tagName` and `calculatePay`, they list those methods again.
+
+### The classes
+
+```java title="Doctor.java"
+public class Doctor {
+    private String lastName;
+    private String firstName;
+    private double basicPay;
+
+    public Doctor(String lastName, String firstName, double basicPay) {
+        this.lastName = lastName;
+        this.firstName = firstName;
+        this.basicPay = basicPay;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public double getBasicPay() {
+        return basicPay;
+    }
+
+    public void setBasicPay(double basicPay) {
+        this.basicPay = basicPay;
+    }
+
+    // details for the tag: "Dr." last name, then the initial of the first name
+    public String tagName() {
+        return "Dr. " + lastName + " " + firstName.charAt(0) + ".";
+    }
+
+    public double calculatePay() {
+        return basicPay;
+    }
+}
+```
+
+`tagName()` returns the tag in the sheet's format, `Dr. Monei T.` for the last name Monei and the first name Tebogo.
+
+A GP receives an allowance that is a percentage of the basic pay. The constructor takes the three parameters of the super class plus the rate, and **the first line calls the super class constructor with `super(...)`**.
+
+```java title="GP.java"
+public class GP extends Doctor {
+    private double rate;                       // allowance as a percentage of basic pay, e.g. 10 means 10%
+
+    public GP(String lastName, String firstName, double basicPay, double rate) {
+        super(lastName, firstName, basicPay);  // must be the first statement
+        this.rate = rate;
+    }
+
+    public double getRate() {
+        return rate;
+    }
+
+    public void setRate(double rate) {
+        this.rate = rate;
+    }
+
+    @Override
+    public String tagName() {
+        return super.tagName() + " (GP)";      // partial overriding: the Doctor tag, then "(GP)"
+    }
+
+    @Override
+    public double calculatePay() {
+        return super.calculatePay() + getBasicPay() * rate / 100;   // monthly pay + allowance
+    }
+}
+```
+
+A surgeon is a specialist doctor paid a fixed rate per procedure. The sheet says "the salary is calculated as monthly pay + (number of surgeries * procedure rate)", but its bullet for the method says "Override `calculatePay()` to return the doctor's monthly pay". The bullet contradicts the paragraph; the solution follows the formula in the paragraph, and the one-line difference is marked in the code.
+
+```java title="Surgeon.java"
+public class Surgeon extends Doctor {
+    private int procedures;                    // number of procedures in the month
+    private double rate;                       // rate per procedure
+
+    public Surgeon(String lastName, String firstName, double basicPay, int procedures, double rate) {
+        super(lastName, firstName, basicPay);
+        this.procedures = procedures;
+        this.rate = rate;
+    }
+
+    public int getProcedures() {
+        return procedures;
+    }
+
+    public void setProcedures(int procedures) {
+        this.procedures = procedures;
+    }
+
+    public double getRate() {
+        return rate;
+    }
+
+    public void setRate(double rate) {
+        this.rate = rate;
+    }
+
+    @Override
+    public String tagName() {
+        return super.tagName() + " (Surgeon)";
+    }
+
+    @Override
+    public double calculatePay() {
+        return getBasicPay() + procedures * rate;   // the paragraph's formula; the bullet says only getBasicPay()
+    }
+}
+```
+
+A quick test of the three classes before the file work:
+
+```java title="DoctorQuickTest.java"
+public class DoctorQuickTest {
+    // Question (Lab 5): create one of each doctor and print the tag and the pay.
+    public static void main(String[] args) {
+        Doctor d = new Doctor("Monei", "Tebogo", 30000);
+        Doctor g = new GP("Dube", "Neo", 28000, 10);
+        Doctor s = new Surgeon("Moeng", "Kagiso", 40000, 6, 500);
+        Doctor[] all = {d, g, s};                       // one array holds all three kinds
+        for (Doctor x : all) {
+            System.out.println(x.tagName() + " " + String.format("%.2f", x.calculatePay()));
+        }
+    }
+}
+```
+
+```text
+Dr. Monei T. 30000.00
+Dr. Dube N. (GP) 30800.00
+Dr. Moeng K. (Surgeon) 43000.00
+```
+
+The same two calls, `tagName()` and `calculatePay()`, give a different result for each kind, because the method of the actual object's class runs. The GP's pay is the basic pay plus 10% of it (28000 + 2800), and the surgeon's is 40000 + 6 x 500.
+
+### The tester: data.txt to three output files
+
+The file has one doctor per line: `Lastname;Firstname(s);pay;rate;number of procedures`. The rate and the number of procedures are optional; the rate is kept for both GPs and Surgeons, and the number of procedures only for Surgeons. So a line with three items is a plain doctor, with four it is a GP, and with five it is a Surgeon. The tester sends the tag and the monthly pay of every GP to `gps.txt`, every Surgeon to `surgeons.txt` and every other doctor to `doctors.txt`. The program below writes the sample `data.txt` into a temporary folder first, so that it can run by itself; with your own file the reading starts at `new Scanner(new File("data.txt"))`.
+
+```java title="DoctorTester.java"
+import java.io.File;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Scanner;
+
+public class DoctorTester {
+    // Reads one line of data.txt and builds the right kind of doctor.
+    static Doctor parse(String line) {
+        String[] f = line.split(";");
+        double pay = Double.parseDouble(f[2]);
+        if (f.length == 3) {
+            return new Doctor(f[0], f[1], pay);
+        } else if (f.length == 4) {
+            return new GP(f[0], f[1], pay, Double.parseDouble(f[3]));
+        } else {
+            return new Surgeon(f[0], f[1], pay, Integer.parseInt(f[4]), Double.parseDouble(f[3]));   // the file has rate before procedures
+        }
+    }
+
+    static void show(String title, File file) throws Exception {
+        System.out.println(title + ":");
+        Scanner in = new Scanner(file);
+        while (in.hasNextLine()) {
+            System.out.println("  " + in.nextLine());
+        }
+        in.close();
+    }
+
+    public static void main(String[] args) throws Exception {
+        File dir = Files.createTempDirectory("doctors").toFile();
+        dir.deleteOnExit();
+        File data = new File(dir, "data.txt");
+        data.deleteOnExit();
+        PrintWriter out = new PrintWriter(data);
+        out.println("Monei;Tebogo;30000");
+        out.println("Dube;Neo;28000;10");
+        out.println("Seretse;Amo Kago;35000;12.5");
+        out.println("Moeng;Kagiso;40000;500;6");
+        out.println("Jones;Lesego;45000;750;4");
+        out.println("Kago;Thomas;26000;5");
+        out.close();
+
+        File gpFile = new File(dir, "gps.txt");
+        File surgeonFile = new File(dir, "surgeons.txt");
+        File doctorFile = new File(dir, "doctors.txt");
+        gpFile.deleteOnExit();
+        surgeonFile.deleteOnExit();
+        doctorFile.deleteOnExit();
+        PrintWriter gps = new PrintWriter(gpFile);
+        PrintWriter surgeons = new PrintWriter(surgeonFile);
+        PrintWriter doctors = new PrintWriter(doctorFile);
+
+        ArrayList<Doctor> all = new ArrayList<Doctor>();
+        Scanner in = new Scanner(data);
+        while (in.hasNextLine()) {                          // one line at a time
+            all.add(parse(in.nextLine()));
+        }
+        in.close();
+
+        for (Doctor d : all) {
+            String line = d.tagName() + " " + String.format("%.2f", d.calculatePay());
+            if (d instanceof GP) {
+                gps.println(line);
+            } else if (d instanceof Surgeon) {
+                surgeons.println(line);
+            } else {
+                doctors.println(line);
+            }
+        }
+        gps.close();
+        surgeons.close();
+        doctors.close();
+
+        show("gps.txt", gpFile);
+        show("surgeons.txt", surgeonFile);
+        show("doctors.txt", doctorFile);
+    }
+}
+```
+
+```text
+gps.txt:
+  Dr. Dube N. (GP) 30800.00
+  Dr. Seretse A. (GP) 39375.00
+  Dr. Kago T. (GP) 27300.00
+surgeons.txt:
+  Dr. Moeng K. (Surgeon) 43000.00
+  Dr. Jones L. (Surgeon) 48000.00
+doctors.txt:
+  Dr. Monei T. 30000.00
+```
+
+What to observe. `parse` decides the type from the number of items on the line, and the rest of the program never needs to know which class an element is: it calls `tagName()` and `calculatePay()` and the right version runs. Only the choice of output file uses `instanceof`; the `Surgeon` and the `GP` tests come before the plain `else`, because both are also `Doctor` objects. A GP's pay is 10% above the basic pay (28000 becomes 30800.00), a rate of 12.5 gives 35000 plus 4375 (39375.00), and a surgeon's pay adds procedures times rate (40000 + 3000).
+
+<Callout type="mistake" title="Common error">
+
+Writing a sub class constructor without `super(...)` on its first line when the super class has no no-argument constructor. The compiler reports `constructor Doctor in class Doctor cannot be applied to given types` (required: String,String,double; found: no arguments), because it inserts `super()` for you.
+
+</Callout>
+
+### Exam question 1: GP pay and the tag (6 marks)
+
+Give the tag and the monthly pay of a GP Seretse, first names "Amo Kago", basic pay 35000, allowance 12.5%. Explain which `tagName` and `calculatePay` run, and where the `Doctor` versions are used. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A GP object, two results (a tag and a pay), and an explanation of the method calls that produce them.
+
+</Step>
+
+<Step title="2. Plan">
+
+The tag is "Dr." the last name and the initial of the first name; the GP adds "(GP)". The pay is basic pay plus the allowance, the rate as a percentage of the basic pay.
+
+</Step>
+
+<Step title="3. Solution">
+
+The tag is `Dr. Seretse A. (GP)`: only the first character of "Amo Kago" is used. The pay is 35000 + 35000 x 12.5 / 100 = 35000 + 4375 = `39375.00`. `GP.tagName()` runs first and calls `super.tagName()`, which is the `Doctor` version that builds "Dr. Seretse A.", then adds " (GP)". `GP.calculatePay()` calls `super.calculatePay()`, the `Doctor` version that returns the basic pay, and adds the allowance.
+
+</Step>
+
+<Step title="4. Check">
+
+These are the values in the `gps.txt` line printed by `DoctorTester`: `Dr. Seretse A. (GP) 39375.00`. The `Doctor` versions are reached only through `super`, which is partial overriding.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Lab 6, question 1: payroll with an abstract Employee
+
+A private school pays full-time and part-time teachers, and its administrators, differently. The sheet asks for an abstract class `Employee` (name, ID, several non-default constructors by overloading, setters and getters, an abstract `computeSalary()`, `toString` and `equals`), a concrete `Teacher` (subject, hours worked in a month, pay for each hour) and a concrete `Admin` (monthly salary, role), and a `RunPayroll` class.
+
+```java title="Employee.java"
+public abstract class Employee {
+    private String name;
+    private int id;
+
+    public Employee(String name, int id) {          // overloaded, non-default constructors
+        this.name = name;
+        this.id = id;
+    }
+
+    public Employee(String name) {
+        this(name, 0);                              // calls the other constructor
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public abstract double computeSalary();         // each kind of employee calculates its own
+
+    @Override
+    public String toString() {
+        return name + " (" + id + ")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        Employee other = (Employee) o;
+        return id == other.id && name.equals(other.name);
+    }
+}
+```
+
+```java title="Teacher.java"
+public class Teacher extends Employee {
+    private String subject;
+    private int hours;                              // hours worked in a month
+    private double hourlyRate;                      // pay for each hour worked
+
+    public Teacher(String name, int id, String subject, int hours, double hourlyRate) {
+        super(name, id);
+        this.subject = subject;
+        this.hours = hours;
+        this.hourlyRate = hourlyRate;
+    }
+
+    public Teacher(String name, int id, String subject) {
+        this(name, id, subject, 0, 0.0);
+    }
+
+    public String getSubject() {
+        return subject;
+    }
+
+    public void setSubject(String subject) {
+        this.subject = subject;
+    }
+
+    public int getHours() {
+        return hours;
+    }
+
+    public void setHours(int hours) {
+        this.hours = hours;
+    }
+
+    public double getHourlyRate() {
+        return hourlyRate;
+    }
+
+    public void setHourlyRate(double hourlyRate) {
+        this.hourlyRate = hourlyRate;
+    }
+
+    @Override
+    public double computeSalary() {
+        return hours * hourlyRate;                  // hours worked x hourly rate
+    }
+
+    @Override
+    public String toString() {
+        return super.toString() + " teaches " + subject;
+    }
+
+    @Override
+    public boolean equals(Object o) {               // the same subject, ID and salary
+        if (!(o instanceof Teacher))
+            return false;
+        Teacher other = (Teacher) o;
+        return subject.equals(other.subject) && getId() == other.getId() && computeSalary() == other.computeSalary();
+    }
+}
+```
+
+```java title="Admin.java"
+public class Admin extends Employee {
+    private double monthlySalary;
+    private String role;                            // secretary, bursar and so on
+
+    public Admin(String name, int id, String role, double monthlySalary) {
+        super(name, id);
+        this.role = role;
+        this.monthlySalary = monthlySalary;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
+    }
+
+    public double getMonthlySalary() {
+        return monthlySalary;
+    }
+
+    public void setMonthlySalary(double monthlySalary) {
+        this.monthlySalary = monthlySalary;
+    }
+
+    @Override
+    public double computeSalary() {
+        return monthlySalary;
+    }
+
+    @Override
+    public String toString() {
+        return super.toString() + " is the " + role;
+    }
+
+    @Override
+    public boolean equals(Object o) {               // the same role, ID and salary
+        if (!(o instanceof Admin))
+            return false;
+        Admin other = (Admin) o;
+        return role.equals(other.role) && getId() == other.getId() && computeSalary() == other.computeSalary();
+    }
+}
+```
+
+The sheet says `Employee.equals()` should "override class Object's `toString`"; this is a slip, and it is `equals` that overrides `equals`. The `Teacher` and `Admin` versions follow the sheet: two teachers are equal when they teach the same subject and have the same ID and salary, and the `instanceof` test makes a teacher never equal to an admin.
+
+### The payroll program
+
+A record of an admin has four pieces of information (`Mary Jones;15263;Secretary;4000`) and a record of a teacher has five (`Tom Ndlovu;15323;English;120;95.67`). `RunPayroll` reads each line, creates the right `Employee`, stores it in an `Employee` array, calculates the salaries, writes `teacherspay.txt` and `adminpay.txt` with a total at the end of each, and displays the totals and the month's wage bill. The sheet asks for about 30 records; eight are used here. As in the doctors program, the file is written first so that the program runs on its own.
+
+```java title="RunPayroll.java"
+import java.io.File;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.util.Scanner;
+
+public class RunPayroll {
+    public static void main(String[] args) throws Exception {
+        File dir = Files.createTempDirectory("payroll").toFile();
+        dir.deleteOnExit();
+        File data = new File(dir, "employees.txt");
+        data.deleteOnExit();
+        PrintWriter out = new PrintWriter(data);
+        out.println("Mary Jones;15263;Secretary;4000");
+        out.println("Tom Ndlovu;15323;English;120;95.67");
+        out.println("Neo Dube;15324;Maths;100;110");
+        out.println("Amo Seretse;15401;Bursar;5500");
+        out.println("Kagiso Moeng;15402;Science;90;120.5");
+        out.println("Lesego Kago;15403;Maths;110;110");
+        out.println("Thato Banda;15404;Principal;9000");
+        out.println("Mpho Wangu;15405;History;80;99.99");
+        out.close();
+
+        Employee[] employees = new Employee[30];
+        int count = 0;
+        Scanner in = new Scanner(data);
+        while (in.hasNextLine()) {
+            String[] f = in.nextLine().split(";");
+            if (f.length == 4) {                            // an admin record has 4 pieces
+                employees[count++] = new Admin(f[0], Integer.parseInt(f[1]), f[2], Double.parseDouble(f[3]));
+            } else {                                        // a teacher record has 5
+                employees[count++] = new Teacher(f[0], Integer.parseInt(f[1]), f[2],
+                        Integer.parseInt(f[3]), Double.parseDouble(f[4]));
+            }
+        }
+        in.close();
+
+        File teachersFile = new File(dir, "teacherspay.txt");
+        File adminFile = new File(dir, "adminpay.txt");
+        teachersFile.deleteOnExit();
+        adminFile.deleteOnExit();
+        PrintWriter teachersOut = new PrintWriter(teachersFile);
+        PrintWriter adminOut = new PrintWriter(adminFile);
+        double teachersTotal = 0;
+        double adminTotal = 0;
+        for (int i = 0; i < count; i++) {
+            Employee e = employees[i];
+            double pay = e.computeSalary();                 // the method of the object's own class
+            String line = e.getName() + " " + String.format("%.2f", pay);
+            if (e instanceof Teacher) {
+                teachersOut.println(line);
+                teachersTotal += pay;
+            } else {
+                adminOut.println(line);
+                adminTotal += pay;
+            }
+        }
+        teachersOut.println("Total " + String.format("%.2f", teachersTotal));
+        adminOut.println("Total " + String.format("%.2f", adminTotal));
+        teachersOut.close();
+        adminOut.close();
+
+        System.out.println("teachers: " + String.format("%.2f", teachersTotal));
+        System.out.println("admin staff: " + String.format("%.2f", adminTotal));
+        System.out.println("wage bill: " + String.format("%.2f", teachersTotal + adminTotal));
+
+        Scanner shown = new Scanner(teachersFile);
+        while (shown.hasNextLine()) {
+            System.out.println("teacherspay.txt: " + shown.nextLine());
+        }
+        shown.close();
+    }
+}
+```
+
+```text
+teachers: 53424.60
+admin staff: 18500.00
+wage bill: 71924.60
+teacherspay.txt: Tom Ndlovu 11480.40
+teacherspay.txt: Neo Dube 11000.00
+teacherspay.txt: Kagiso Moeng 10845.00
+teacherspay.txt: Lesego Kago 12100.00
+teacherspay.txt: Mpho Wangu 7999.20
+teacherspay.txt: Total 53424.60
+```
+
+The loop never asks what kind of employee `e` is to calculate the pay: `e.computeSalary()` is polymorphic, and only the choice of file and total uses `instanceof`. The totals add the five teachers (53424.60) and the three administrators (18500.00) to a wage bill of 71924.60.
+
+### Equal employees
+
+```java title="EmployeeEquality.java"
+public class EmployeeEquality {
+    // Question (Lab 6): when are two teachers equal, and when is a teacher equal to an admin?
+    public static void main(String[] args) {
+        Teacher neo = new Teacher("Neo Dube", 15324, "Maths", 100, 110);
+        Teacher same = new Teacher("Neo Dube", 15324, "Maths", 100, 110);
+        Teacher otherId = new Teacher("Neo Dube", 15999, "Maths", 100, 110);
+        Teacher otherSubject = new Teacher("Neo Dube", 15324, "Physics", 100, 110);
+        Admin admin = new Admin("Neo Dube", 15324, "Bursar", 11000);
+
+        System.out.println(neo.equals(same));
+        System.out.println(neo.equals(otherId));
+        System.out.println(neo.equals(otherSubject));
+        System.out.println(neo.equals(admin));
+        System.out.println(neo);
+        System.out.println(admin);
+        System.out.println(new Teacher("Kago", 7, "Art").computeSalary());
+    }
+}
+```
+
+```text
+true
+false
+false
+false
+Neo Dube (15324) teaches Maths
+Neo Dube (15324) is the Bursar
+0.0
+```
+
+The teachers are equal only when the subject, the ID and the salary all match. The admin has the same name, ID and a salary of 11000, but a teacher is never equal to an admin because the `instanceof Teacher` test fails. The last line shows the shorter overloaded constructor, which gives a teacher no hours and so a salary of 0.0.
+
+### Exam question 2: the payroll rules (8 marks)
+
+For the employees `Teacher("Tom", 1, "English", 120, 95.67)`, `Admin("Mary", 2, "Secretary", 4000)` and `Teacher("Lerato", 3, "English", 60, 100)`, give the salary of each, state which pair is equal under the lab's rules (if any), and say why `new Employee("Tom")` is rejected. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three salaries, an equality check using the lab's rules, and an explanation of why the abstract class cannot be created.
+
+</Step>
+
+<Step title="2. Plan">
+
+A teacher earns hours x hourly rate and an admin earns the monthly salary. Teachers are equal when the subject, ID and salary are all the same.
+
+</Step>
+
+<Step title="3. Solution">
+
+Tom: 120 x 95.67 = 11480.40. Mary: 4000.00. Lerato: 60 x 100 = 6000.00. No pair is equal: Tom and Lerato both teach English, but their IDs (1 and 3) and salaries differ, and an admin is never equal to a teacher. `new Employee("Tom")` is rejected with `Employee is abstract; cannot be instantiated`, because `Employee` has the abstract method `computeSalary()`.
+
+</Step>
+
+<Step title="4. Check">
+
+The salary formulas are the ones in `RunPayroll` above, which calculated 11480.40 for Tom. The equality result follows from the two-line rule of the sheet: all three of subject, ID and salary must match.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Draw the UML hierarchy first, with the arrows pointing to the super class. Write the super class, then each sub class with `extends`, `super(...)` as the first statement of its constructor and `@Override` on the methods it changes; call the parent version with `super.method()` when the sub class only adds to it. Decide the type of object from the data (here, the number of items on a line), keep the objects in an array or list of the super class, and call the overridden methods: the right version runs for each element. Use `instanceof` only for choices that depend on the type, such as which file to write. An abstract class with an abstract `computeSalary()` cannot be instantiated; the concrete sub classes implement it.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why must the GP constructor call super(...) on its first line?">
+
+The `Doctor` part of the object has to be initialised first, and `Doctor` has no no-argument constructor, so the compiler cannot insert one. `super(lastName, firstName, basicPay)` passes the values and must be the first statement.
+
+</CheckQuestion>
+
+<CheckQuestion question="How does the tester decide whether a line of data.txt is a plain doctor, a GP or a Surgeon?">
+
+By the number of items after splitting at the semicolons: three is a plain doctor, four (with a rate) is a GP, and five (rate and procedures) is a Surgeon.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does super.tagName() do inside GP, and what would happen if the method were not overridden?">
+
+It calls the `Doctor` version, which returns "Dr." the last name and the initial, and the GP adds " (GP)". Without the override a GP would have the same tag as any other doctor.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does the payroll loop call e.computeSalary() without knowing whether e is a Teacher or an Admin?">
+
+`e` has the type `Employee`, and `computeSalary()` is overridden in each sub class. Java runs the method of the object's own class, so the same call gives hours x rate for a teacher and the monthly salary for an admin.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is a Teacher never equal to an Admin under the lab's equals rules?">
+
+`Teacher.equals` begins with an `instanceof Teacher` test, which is false for an `Admin`, so it returns false before it compares the subject, ID or salary.
+
+</CheckQuestion>
+
+</CheckQuestions>

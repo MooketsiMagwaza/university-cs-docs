@@ -1,0 +1,717 @@
+---
+title: "OOP Exam Practice"
+description: "Eight exam questions on classes, inheritance, polymorphism, abstraction and interfaces, each with a four-step answer: a memory diagram of references, constructor order, the overload and override trap, UML to Java, extends with implements, repairing a hierarchy from the compiler messages, and the definitions the lectures ask for."
+---
+
+These are the question forms Lecture 4, Lecture 11 and Labs 5 and 6 lead to. Memory diagrams are a large part of the assessments, so the first question is a diagram of objects and references; the others ask for a trace, a class written from a UML diagram, a repair from compiler messages and the definitions of the core features. Every program here was compiled with `--release 8` and run, and the compiler messages are real. Work each question on paper before opening the answer. The lessons that teach the material are [Classes by Example](/docs/sem3/csi247/06-object-oriented-programming/notes/classes-by-example), [Inheritance and Overriding by Example](/docs/sem3/csi247/06-object-oriented-programming/notes/inheritance-by-example), [Abstraction, Polymorphism and Interfaces by Example](/docs/sem3/csi247/06-object-oriented-programming/notes/abstraction-and-interfaces-by-example) and [OOP Labs by Example](/docs/sem3/csi247/06-object-oriented-programming/notes/oop-labs-by-example).
+
+<LearningObjectives items={[
+  'Draw the memory for objects, aliases and method calls, and say which objects are shared',
+  'Trace constructor calls through this(...) and super(...), and predict which overloaded or overridden method runs',
+  'Write a class from a UML diagram, and a class that extends one class and implements an interface',
+  'Repair a class hierarchy from the compiler messages',
+  'State the core features of OOP, and compare an abstract class with an interface',
+]} />
+
+<Prerequisites items={[
+  'The four OOP lessons of this chapter',
+  'Drawing memory diagrams: the stack on the left, the heap on the right, addresses and arrows',
+]} />
+
+## 1. How to answer these questions
+
+1. **Read.** Underline the command words: *draw*, *trace*, *write*, *state*, *explain*, *compare*.
+2. **Plan.** Name the classes and the relationships (extends, implements, an object held by a variable).
+3. **Solve.** For a trace, write the output line by line. For a diagram, draw every variable, every object and every address.
+4. **Check.** Count the objects created by `new`, and check that every call has the right number and types of arguments.
+
+## 2. Memory: references and aliases
+
+### Exam question 1: objects and aliases (8 marks)
+
+Draw the state of memory after this code and state what is printed. (8 marks)
+
+```java
+Acct a = new Acct(1, 100.0);
+Acct b = new Acct(2, 50.0);
+Acct c = a;
+c.deposit(25.0);
+a = b;
+a.deposit(5.0);
+System.out.println(a.getNumber() + " " + b.getBalance() + " " + c.getBalance() + " " + (a == b) + " " + (c == b));
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two objects are created with `new`, and three variables hold their addresses. The question is what each variable holds after each line.
+
+</Step>
+
+<Step title="2. Plan">
+
+Draw the stack variables `a`, `b` and `c`, and the two `Acct` objects on the heap with their addresses. `c = a` copies an address, so no new object is created. `a = b` changes where `a` points and leaves the first object to `c`.
+
+</Step>
+
+<Step title="3. Solution">
+
+Heap: object 200 (number 1, balance 100.0) and object 400 (number 2, balance 50.0). After `Acct c = a`: `a` and `c` both hold 200. `c.deposit(25.0)` follows the address 200, so the balance there becomes 125.0 (100.0 crossed out). `a = b`: `a` now holds 400, like `b`. `a.deposit(5.0)` follows 400, so that balance becomes 55.0. Final: `a` and `b` hold 400; `c` holds 200.
+
+```java title="Acct.java"
+public class Acct {
+    private int number;
+    private double balance;
+
+    public Acct(int number, double balance) {
+        this.number = number;
+        this.balance = balance;
+    }
+
+    public void deposit(double amount) {
+        balance = balance + amount;
+    }
+
+    public int getNumber() {
+        return number;
+    }
+
+    public double getBalance() {
+        return balance;
+    }
+}
+```
+
+```java title="AliasTrace.java"
+public class AliasTrace {
+    public static void main(String[] args) {
+        Acct a = new Acct(1, 100.0);
+        Acct b = new Acct(2, 50.0);
+        Acct c = a;
+        c.deposit(25.0);
+        a = b;
+        a.deposit(5.0);
+        System.out.println(a.getNumber() + " " + b.getBalance() + " " + c.getBalance() + " " + (a == b) + " " + (c == b));
+    }
+}
+```
+
+```text
+2 55.0 125.0 true false
+```
+
+</Step>
+
+<Step title="4. Check">
+
+There are two objects, because `new` ran twice. `a == b` is true because they hold the same address, and `c == b` is false. The first account was changed only through `c`, and `a` was moved off it before its `deposit`. The lesson's account diagram follows the same pattern:
+
+<MemoryDiagram scenario="account" />
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+Drawing `Acct c = a` as a second box with a copy of the object. Assigning a reference variable copies the address, not the object, so both names reach the same object and a change through one is seen through the other.
+
+</Callout>
+
+## 3. Constructors and method calls
+
+### Exam question 2: the order of constructors (6 marks)
+
+State the output of `new B()` and explain the order. (6 marks)
+
+```java
+class A {
+    A() { System.out.println("A()"); }
+    A(int x) { this(); System.out.println("A(int)"); }
+}
+class B extends A {
+    B() { super(5); System.out.println("B()"); }
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+One object of class `B`; the printed lines come from three constructors, so the order of the calls matters.
+
+</Step>
+
+<Step title="2. Plan">
+
+A constructor starts by running another constructor: `super(...)` runs one of the super class, and `this(...)` runs another of the same class. Its own body runs afterwards.
+
+</Step>
+
+<Step title="3. Solution">
+
+`new B()` starts `B()`, whose first statement is `super(5)`, so `A(int)` starts. Its first statement is `this()`, so `A()` runs and prints `A()`. Control returns to `A(int)`, which prints `A(int)`, and then to `B()`, which prints `B()`.
+
+```java title="A.java"
+public class A {
+    A() {
+        System.out.println("A()");
+    }
+
+    A(int x) {
+        this();
+        System.out.println("A(int)");
+    }
+}
+```
+
+```java title="B.java"
+public class B extends A {
+    B() {
+        super(5);
+        System.out.println("B()");
+    }
+}
+```
+
+```java title="ConstructorOrder.java"
+public class ConstructorOrder {
+    public static void main(String[] args) {
+        new B();
+    }
+}
+```
+
+```text
+A()
+A(int)
+B()
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The output is `A()`, `A(int)`, `B()`: the super class is always initialised before the sub class body runs, and `this(...)` and `super(...)` must each be the first statement of the constructor.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: overloading against overriding (8 marks)
+
+Give the output of the two calls and explain why they differ. (8 marks)
+
+```java
+class P {
+    void show(Object o) { System.out.println("P-Object"); }
+    void show(String s) { System.out.println("P-String"); }
+}
+class C extends P {
+    @Override void show(Object o) { System.out.println("C-Object"); }
+}
+// in main:
+P p = new C();
+p.show("x");
+Object o = "x";
+p.show(o);
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A `P` variable holds a `C`. Two calls, one with a `String` argument and one through an `Object` variable.
+
+</Step>
+
+<Step title="2. Plan">
+
+Two decisions are made. The **compiler** chooses the method signature from the static types of the arguments (overloading). At **run time** Java runs the version of that signature in the object's own class (overriding).
+
+</Step>
+
+<Step title="3. Solution">
+
+`p.show("x")`: the argument is a `String`, so the compiler chooses `show(String)`. `C` does not override that signature, so the `P` version runs: `P-String`. `p.show(o)`: the static type of `o` is `Object`, so the compiler chooses `show(Object)`, which `C` overrides, so `C-Object` is printed, although the object is really a `String`.
+
+```java title="P.java"
+public class P {
+    void show(Object o) {
+        System.out.println("P-Object");
+    }
+
+    void show(String s) {
+        System.out.println("P-String");
+    }
+}
+```
+
+```java title="C.java"
+public class C extends P {
+    @Override
+    void show(Object o) {
+        System.out.println("C-Object");
+    }
+}
+```
+
+```java title="OverloadTrap.java"
+public class OverloadTrap {
+    public static void main(String[] args) {
+        P p = new C();
+        p.show("x");
+        Object o = "x";
+        p.show(o);
+    }
+}
+```
+
+```text
+P-String
+C-Object
+```
+
+</Step>
+
+<Step title="4. Check">
+
+This is the same pattern as `equals(Shape)` against `equals(Object)` in the inheritance lesson: the signature is fixed by the compile-time types, and only an overridden signature is replaced by the sub class version.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Writing classes
+
+### Exam question 4: UML to Java (10 marks)
+
+Write the class for this UML diagram and a tester that creates two books, applies a 10% discount to one, and prints the results of `equals` and `toString`. Two books are equal when their titles and prices are identical. (10 marks)
+
+```text
++-----------------------------------------+
+|                  Book                   |
++-----------------------------------------+
+| - title: String                         |
+| - price: double                         |
++-----------------------------------------+
+| + Book(title: String, price: double)    |
+| + getTitle(): String                    |
+| + getPrice(): double                    |
+| + discount(percent: double): void       |
+| + equals(other: Book): boolean          |
+| + toString(): String                    |
++-----------------------------------------+
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A class with two private attributes, a constructor, two getters, a `void` method with a parameter, `equals` and `toString`; then a tester.
+
+</Step>
+
+<Step title="2. Plan">
+
+A `-` becomes `private`, a `+` becomes `public`, `name: type` becomes `type name`, and `method(p: type): returnType` becomes `returnType method(type p)`. `discount` reduces the price by the percentage.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Book.java"
+public class Book {
+    private String title;
+    private double price;
+
+    public Book(String title, double price) {
+        this.title = title;
+        this.price = price;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public double getPrice() {
+        return price;
+    }
+
+    public void discount(double percent) {
+        price = price - price * percent / 100;
+    }
+
+    public boolean equals(Book other) {
+        return title.equals(other.title) && price == other.price;
+    }
+
+    public String toString() {
+        return title + " P" + String.format("%.2f", price);
+    }
+}
+```
+
+```java title="BookTester.java"
+public class BookTester {
+    public static void main(String[] args) {
+        Book b1 = new Book("Java", 200.00);
+        Book b2 = new Book("Java", 200.00);
+        System.out.println(b1.equals(b2));
+        b1.discount(10);
+        System.out.println(b1.equals(b2));
+        System.out.println(b1);
+        System.out.println(b2);
+    }
+}
+```
+
+```text
+true
+false
+Java P180.00
+Java P200.00
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Every member of the diagram is in the class with the same name, type and access. The books are equal until `b1` is discounted: 200.00 less 10% is 180.00, so the prices differ. The UML `equals(other: Book)` takes a `Book`, so it overloads `Object.equals` as in the lecture.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: extends and implements (8 marks)
+
+A `Vehicle` has a name and an abstract method `wheels()`; `toString` returns the name and the number of wheels. A `Bike` has two wheels. An interface `Electric` has a constant `RANGE_KM` and a method `charge()`. Write `ElectricBike`, which is a `Bike` and is `Electric`, and show how it is used through a `Vehicle` variable and through an `Electric` variable. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+One abstract class, one interface and two concrete classes. The last class extends one class and implements one interface.
+
+</Step>
+
+<Step title="2. Plan">
+
+`Vehicle` is abstract, because `wheels()` has no body. `Bike` implements `wheels()`. `Electric` has a method with no body and a constant. `ElectricBike extends Bike implements Electric` implements `charge()` and inherits the rest.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Vehicle.java"
+public abstract class Vehicle {
+    private String name;
+
+    public Vehicle(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public abstract int wheels();
+
+    @Override
+    public String toString() {
+        return name + " with " + wheels() + " wheels";
+    }
+}
+```
+
+```java title="Bike.java"
+public class Bike extends Vehicle {
+    public Bike(String name) {
+        super(name);
+    }
+
+    @Override
+    public int wheels() {
+        return 2;
+    }
+}
+```
+
+```java title="Electric.java"
+public interface Electric {
+    int RANGE_KM = 50;                 // a constant: public static final
+    void charge();
+}
+```
+
+```java title="ElectricBike.java"
+public class ElectricBike extends Bike implements Electric {
+    public ElectricBike(String name) {
+        super(name);
+    }
+
+    @Override
+    public void charge() {
+        System.out.println(getName() + " charging, range " + RANGE_KM + " km");
+    }
+}
+```
+
+```java title="VehicleTester.java"
+public class VehicleTester {
+    public static void main(String[] args) {
+        ElectricBike zip = new ElectricBike("E-Zip");
+        Vehicle v = zip;                              // seen as a Vehicle
+        Electric e = zip;                             // seen as an Electric
+        System.out.println(v);
+        e.charge();
+        System.out.println((v instanceof Bike) + " " + (v instanceof Electric));
+        Vehicle plain = new Bike("City");
+        System.out.println(plain + " " + (plain instanceof Electric));
+    }
+}
+```
+
+```text
+E-Zip with 2 wheels
+E-Zip charging, range 50 km
+true true
+City with 2 wheels false
+```
+
+`new Vehicle("x")` is rejected with `Vehicle is abstract; cannot be instantiated`.
+
+</Step>
+
+<Step title="4. Check">
+
+One object has three types: `ElectricBike`, `Bike` (and `Vehicle`) through extends, and `Electric` through implements. `Vehicle` and `Electric` can each see only their own members: `e.getName()` would be rejected, because an `Electric` variable knows only `charge()`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Repair a hierarchy
+
+### Exam question 6: fix the errors (8 marks)
+
+State the compiler message for each fault and the repair. (8 marks)
+
+```java
+class Animal {
+    private String name;
+    Animal(String n) { name = n; }
+    String speak() { return "..."; }
+    final void breathe() { }
+}
+class Cat extends Animal {
+    Cat() { }                                   // (1)
+    public String toString() { return name; }   // (2)
+    int speak() { return 1; }                   // (3)
+    void breathe() { }                          // (4)
+    abstract void jump();                       // (5)
+}
+// in main:
+Animal a = new Cat();
+a.jump();                                       // (6)
+Cat c = new Animal("x");                        // (7)
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Seven faults, each with a message and a repair. They cover constructors, private access, overriding, final, abstract and the types of variables.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check each against the rules: a sub class constructor runs a super class constructor; private members are not inherited; an overriding method keeps the return type and may not override a final method; an abstract method needs an abstract class; a variable knows only the members of its own type.
+
+</Step>
+
+<Step title="3. Solution">
+
+| | Compiler message | Repair |
+|---|---|---|
+| (1) | `error: constructor Animal in class Animal cannot be applied to given types;` (required: String; found: no arguments) | `Cat() { super("cat"); }` |
+| (2) | `error: name has private access in Animal` | add a getter `getName()` to `Animal` and use it |
+| (3) | `error: speak() in Cat cannot override speak() in Animal` (return type int is not compatible with String) | `String speak() { return "meow"; }` |
+| (4) | `error: breathe() in Cat cannot override breathe() in Animal` (overridden method is final) | remove the method from `Cat` |
+| (5) | `error: Cat is not abstract and does not override abstract method jump() in Cat` | make `Cat` abstract, or give `jump` a body |
+| (6) | `error: cannot find symbol` (symbol: method jump(), location: variable a of type Animal) | add `jump()` to `Animal`, or cast: `((Cat) a).jump()` |
+| (7) | `error: incompatible types: Animal cannot be converted to Cat` | `Cat c = new Cat();` (a super class object is not a sub class object) |
+
+</Step>
+
+<Step title="4. Check">
+
+All seven lines were compiled together, and javac reported these seven messages. Messages (2) and (3) can be fixed independently of the rest, but (1) must be fixed for the class to have a way of initialising the `name` it cannot see.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. The definitions the lectures ask for
+
+### Exam question 7: the core features of OOP (9 marks)
+
+State the four core features of OOP covered in Lecture 11, with a one-sentence definition and a Java example for each. (9 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four features, three marks for the first two and the others split between definition and example: a short answer with an example each.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the lecture's wording for each definition, then give an example from the shapes or accounts.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Feature | Definition | Example |
+|---|---|---|
+| Inheritance | one class acquires the functionality of another class and adds new functionality, avoiding duplicated code | `class Circle extends Shape` inherits `colour`, `getColour()` and `setColour()` |
+| Encapsulation | keeping all the relevant data and methods inside an object and making only a small part visible; hides the implementation | `private double balance` reached only through `getBalance()` and `deposit()` |
+| Abstraction | focusing on what an operation does, not how; achieved with abstract classes and interfaces | `public abstract double getArea();` in `Shape` |
+| Polymorphism | an object can exist in more than one form; a call runs the method of the object's own class | `Shape s = new Circle(...); s.getArea();` runs `Circle`'s `getArea` |
+
+</Step>
+
+<Step title="4. Check">
+
+Each example is a program already run in this chapter. Two further points mark an answer: polymorphism is achieved by overriding (dynamic) and overloading (static), and abstraction by an abstract class or an interface.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: abstract class or interface? (6 marks)
+
+Compare an abstract class with an interface under four headings. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four headings, so a table with one row for each; each cell is a fact from the lecture.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compare what each may contain, how it is used, how many a class may use, and the level of abstraction.
+
+</Step>
+
+<Step title="3. Solution">
+
+| | Abstract class | Interface |
+|---|---|---|
+| Contents | instance variables, constructors, concrete methods and abstract methods | method signatures that are public and abstract, and constants; no instance variables, no constructor |
+| Used with | `extends` | `implements` |
+| How many | a class extends only one class | a class can implement several interfaces, and an interface can extend several interfaces |
+| Abstraction | 0 to 100% | 100% |
+
+Neither can be instantiated. A concrete class must implement every abstract method.
+
+</Step>
+
+<Step title="4. Check">
+
+The `ElectricBike` above uses both: it extends one class, `Bike`, and implements one interface, `Electric`. The reason for the third row is that a class has one set of inherited data and code, while an interface only promises methods.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+For a diagram, every `new` makes one object; a variable holds an address; `b = a` copies the address, so both reach the same object. A constructor runs another first: `super(...)` for the super class, `this(...)` for the same class, then its own body. The compiler chooses the method signature from the static types (overloading); at run time the object's own class supplies an overridden version. Write a class from a UML diagram member by member. A class extends one class and implements any number of interfaces; an abstract class cannot be instantiated and an interface has public abstract methods. Repair from the message: constructors need `super(...)`, private members need getters, overriding keeps the return type and may not override `final`, and a variable knows only the members of its own type. The four features are inheritance, encapsulation, abstraction and polymorphism.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="After Acct c = a, how many Acct objects exist, and what happens to the object at a when a = b is executed?">
+
+Still the objects created by `new`: two in this code. `c = a` copies the address. `a = b` moves `a` to the second object; the first object is still reached through `c`.
+
+</CheckQuestion>
+
+<CheckQuestion question="In what order do A(), A(int) and B() print for new B() when B calls super(5) and A(int) calls this()?">
+
+`A()`, `A(int)`, `B()`. The constructor `B()` starts `A(int)`, which starts `A()`; each prints after the constructor it called has finished.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does p.show(o) print C-Object although the object is a String?">
+
+The compiler chooses `show(Object)` from the static type of `o`, which is `Object`. `C` overrides that signature, so `C`'s version runs. `show(String)` is chosen only when the static type is `String`, and `C` does not override it.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can an Electric variable not call getName() on an ElectricBike?">
+
+A variable knows only the members of its own type. `Electric` declares `charge()` and the constant; `getName()` belongs to `Vehicle`, so the call does not compile.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can a class implement several interfaces but extend only one class?">
+
+Interfaces hold only method signatures, with no data, so several can be combined. A class has its own inherited data and method code, and Java allows one super class to keep that unambiguous.
+
+</CheckQuestion>
+
+</CheckQuestions>

@@ -1,0 +1,781 @@
+---
+title: "Abstraction, Polymorphism and Interfaces by Example"
+description: "Encapsulation, polymorphism, abstract classes and interfaces from Lecture 11 and Lab 6 question 2: the Shape getArea exercise, the Test, Mist and Bob interfaces, multiple interfaces, interfaces that extend interfaces, with the real compiler messages."
+---
+
+The second half of Lecture 11 covers the three remaining OOP ideas. **Encapsulation** hides the data inside a class. **Polymorphism** lets one call run different methods for objects of different classes. **Abstraction** shows what an operation does without saying how, and is achieved with abstract classes and interfaces. The lecture sets two exercises (an abstract `getArea` for the shapes, and the `Test`, `Mist` and `Bob` interface classes) and Lab 6 question 2 adds a method `methodD`, a second interface `Test2` and multiple interfaces. This lesson works through all of it, one change at a time, with every output taken from a real run. It extends [Abstract Classes and Interfaces](/docs/sem3/csi247/06-object-oriented-programming/notes/abstract-classes-and-interfaces) and [Inheritance and Overriding by Example](/docs/sem3/csi247/06-object-oriented-programming/notes/inheritance-by-example).
+
+<LearningObjectives items={[
+  'Explain encapsulation and the four access modifiers, and show data hiding with private variables and public methods',
+  'Explain polymorphism, and separate dynamic polymorphism (overriding) from static polymorphism (overloading)',
+  'Write an abstract class with an abstract method, extend it with concrete classes, and state what cannot be done with it',
+  'Write an interface, implement it with a class, use multiple interfaces, and extend one interface from another',
+  'Answer Lab 6 question 2: methodD, the class Done, the interface Test2 and a class that implements two interfaces',
+]} />
+
+<Prerequisites items={[
+  'Inheritance and Overriding by Example in this chapter: extends, super, @Override',
+  'Classes by Example in this chapter: constructors, getters and setters',
+  'Arrays of objects and the memory diagram of a reference',
+]} />
+
+## 1. The templates
+
+```text
+Abstract method:       public abstract double getArea();                     no body, a semicolon
+Abstract class:        public abstract class Shape { ... }                   cannot be instantiated
+Interface:             public interface Name { void method(); }              methods are public and abstract
+Implement:             class C implements Name { public void method() { ... } }
+Many interfaces:       class C implements InterfaceA, InterfaceB { ... }
+Interface extends:     public interface Aa extends Bb, Cc { }
+Polymorphic call:      Shape s = new Circle(...);  s.getArea();             runs Circle's getArea
+```
+
+## 2. Encapsulation
+
+**Encapsulation** keeps all the relevant data and methods inside an object and makes a small part of the object visible to the world. In Java the instance variables are declared `private` and the methods `public`, so the data is reached only through the object's public methods (getters and setters). The advantages are data hiding and protection, implementation freedom, flexibility, code reuse and easier testing.
+
+| Access modifier | Visibility |
+|---|---|
+| `public` (+) | in the class and outside it |
+| `protected` (#) | in the class, other classes of the same package and all sub classes |
+| default (no modifier) | only within the package |
+| `private` (-) | only inside the class |
+
+```java title="Locker.java"
+public class Locker {
+    private int code = 1234;          // hidden: no other class can read or change it
+    private int tries = 0;
+
+    public boolean unlock(int attempt) {
+        tries++;
+        return attempt == code;
+    }
+
+    public int getTries() {
+        return tries;
+    }
+}
+```
+
+```java title="LockerDemo.java"
+public class LockerDemo {
+    // Question (Lecture 11): how does a class that hides its data still let other classes use it?
+    public static void main(String[] args) {
+        Locker locker = new Locker();
+        System.out.println(locker.unlock(1111));
+        System.out.println(locker.unlock(1234));
+        System.out.println(locker.getTries());
+    }
+}
+```
+
+```text
+false
+true
+2
+```
+
+The caller does not know the code or how `unlock` works: it only knows the interface of the class, as with a `Scanner`. Reading the variable directly does not compile: `System.out.println(locker.code)` gives `error: code has private access in Locker`. A `protected`, default or `public` member of a class in the same package compiles from another class.
+
+<Callout type="mistake" title="Common error">
+
+Making instance variables `public` so that other classes can use them. That removes the protection and the freedom to change how the data is stored. Keep them private and add a getter or setter.
+
+</Callout>
+
+## 3. Polymorphism
+
+**Polymorphism** is the OOP concept in which an object's type is determined at run time because an object can exist in many forms: a `Shape` can be a `Circle`, a `Rectangle`, and so on. Objects of different classes can be treated in the same way, and a method call runs the method of the object's class. With polymorphism the sub classes originate from the same super class.
+
+The classes below are the lecture's shapes with an abstract `getArea()` (section 4 explains the abstract part).
+
+```java title="Shape.java"
+public abstract class Shape {
+    private String colour;
+
+    public Shape(String colour) {
+        this.colour = colour;
+    }
+
+    public String getColour() {
+        return colour;
+    }
+
+    public abstract double getArea();               // every kind of shape calculates its own area
+
+    @Override
+    public String toString() {
+        return colour + " shape, area " + String.format("%.2f", getArea());
+    }
+}
+```
+
+```java title="Circle.java"
+public class Circle extends Shape {
+    private int radius;
+
+    public Circle(String colour, int radius) {
+        super(colour);
+        this.radius = radius;
+    }
+
+    @Override
+    public double getArea() {
+        return Math.PI * radius * radius;
+    }
+}
+```
+
+```java title="Rectangle.java"
+public class Rectangle extends Shape {
+    private int height;
+    private int width;
+
+    public Rectangle(String colour, int height, int width) {
+        super(colour);
+        this.height = height;
+        this.width = width;
+    }
+
+    @Override
+    public double getArea() {
+        return height * width;
+    }
+}
+```
+
+```java title="PolyDemo.java"
+public class PolyDemo {
+    // The lecture's method: it accepts any Shape.
+    public static boolean isGreater(Shape a, Shape b) {
+        return a.getArea() > b.getArea();
+    }
+
+    // Question (Lecture 11): the same call on objects of different sub classes.
+    public static void main(String[] args) {
+        Circle c = new Circle("Red", 3);
+        Rectangle r = new Rectangle("Blue", 2, 5);
+        System.out.println(isGreater(c, r));           // c and r belong to different sub classes of Shape
+
+        Shape[] shapes = {c, r, new Circle("Green", 1)};
+        for (Shape s : shapes) {
+            System.out.println(s + " | " + (s instanceof Circle));
+        }
+    }
+}
+```
+
+```text
+true
+Red shape, area 28.27 | true
+Blue shape, area 10.00 | false
+Green shape, area 3.14 | true
+```
+
+`isGreater` takes two `Shape` parameters, yet it is called with a `Circle` and a `Rectangle`: a sub class is compatible with its super class. Inside it, `a.getArea()` runs the `getArea` of the class of the actual object, so the same expression calculates a circle's area and a rectangle's area. The `println(s)` calls `toString()`, which is written once in `Shape` and calls the right `getArea()` for each element.
+
+<MemoryDiagram scenario="polymorph" />
+
+Polymorphism is achieved in two ways. **Method overriding** is dynamic polymorphism: a sub class has a different implementation than its super class (`toString`, `equals` and `getArea` above). **Method overloading** is static polymorphism: two methods share a name and differ in the number or types of parameters, like the two `substring` methods of `String`.
+
+```java title="StaticPoly.java"
+public class StaticPoly {
+    public static void main(String[] args) {
+        String course = "Computer Science";
+        System.out.println(course.substring(9));        // String substring(int beginIndex)
+        System.out.println(course.substring(0, 8));     // String substring(int beginIndex, int endIndex)
+    }
+}
+```
+
+```text
+Science
+Computer
+```
+
+Every reference type is polymorphic because every class inherits from `Object`: writing `toString()` or `equals(Object o)` overrides the `Object` versions, which is why `println` works with so many types.
+
+## 4. Abstract classes
+
+`getArea()` cannot be calculated in `Shape`: its only instance variable is `colour`, and the dimensions are in the sub classes. So `getArea` is declared **abstract** in `Shape`, with no body, and each sub class implements it. An **abstract class** is declared with the keyword `abstract`, may contain abstract and non-abstract methods, **cannot be instantiated**, and is designed to be extended by a **concrete** class that implements every abstract method. The keyword `abstract` is not repeated in the sub class method.
+
+This is the lecture's `Dog` example, with its `main` in `Russel`:
+
+```java title="Dog.java"
+public abstract class Dog {
+    abstract void bark();               // note the empty method body
+}
+```
+
+```java title="Russel.java"
+public class Russel extends Dog {
+    public void bark() {                // implements the bark method
+        System.out.println("Baaaaark");
+    }
+
+    public static void main(String[] args) {
+        Dog myDog = new Russel();
+        myDog.bark();                   // runs Russel's bark
+    }
+}
+```
+
+```text
+Baaaaark
+```
+
+The variable has the type `Dog`, which cannot be instantiated, but the object is a `Russel`. The compiler messages for the usual mistakes:
+
+| Mistake | Compiler message |
+|---|---|
+| `Shape s = new Shape();` for an abstract `Shape` | `error: Shape is abstract; cannot be instantiated` |
+| a concrete `Circle extends Shape` that does not implement `getArea()` | `error: Circle is not abstract and does not override abstract method getArea() in Shape` |
+| `abstract void bark() { }` with a body | `error: abstract methods cannot have a body` |
+| `void sit();` in a class, with no body and no `abstract` | `error: missing method body, or declare abstract` |
+
+An abstract class offers anything from 0 to 100% abstraction: it may have no abstract methods, though a class with an abstract method must itself be abstract.
+
+### The lecture's exercise: equal areas
+
+The exercise adds the abstract `getArea()`, implements it in `Circle` and `Rectangle`, changes `equals` so that two shapes are equal when their areas are identical, and writes a tester.
+
+```java title="AreaShape.java"
+public abstract class AreaShape {
+    private String colour;
+
+    public AreaShape(String colour) {
+        this.colour = colour;
+    }
+
+    public abstract double getArea();
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;
+        if (!(o instanceof AreaShape))
+            return false;
+        return getArea() == ((AreaShape) o).getArea();     // equal when the areas are identical
+    }
+}
+```
+
+```java title="AreaRectangle.java"
+public class AreaRectangle extends AreaShape {
+    private int height;
+    private int width;
+
+    public AreaRectangle(String colour, int height, int width) {
+        super(colour);
+        this.height = height;
+        this.width = width;
+    }
+
+    @Override
+    public double getArea() {
+        return height * width;
+    }
+}
+```
+
+```java title="AreaCircle.java"
+public class AreaCircle extends AreaShape {
+    private int radius;
+
+    public AreaCircle(String colour, int radius) {
+        super(colour);
+        this.radius = radius;
+    }
+
+    @Override
+    public double getArea() {
+        return Math.PI * radius * radius;
+    }
+}
+```
+
+```java title="AreaTester.java"
+public class AreaTester {
+    public static void main(String[] args) {
+        AreaShape a = new AreaRectangle("Red", 2, 6);
+        AreaShape b = new AreaRectangle("Blue", 3, 4);
+        AreaShape c = new AreaCircle("Red", 2);
+        System.out.println(a.getArea() + " " + b.getArea() + " " + String.format("%.2f", c.getArea()));
+        System.out.println(a.equals(b));
+        System.out.println(a.equals(c));
+        System.out.println(c.equals(new AreaCircle("Green", 2)));
+    }
+}
+```
+
+```text
+12.0 12.0 12.57
+true
+false
+true
+```
+
+A 2 by 6 and a 3 by 4 rectangle have the same area, 12.0, so they are equal even though their colours differ; the circle's area is 12.57. Two circles of radius 2 are equal. Because `equals` uses only the abstract method `getArea()`, one `equals` in the base class serves every sub class.
+
+### Exam question 1: polymorphism and abstract classes (8 marks)
+
+An abstract class `Employee` has an abstract method `computeSalary()`. A `Teacher` returns hours multiplied by rate and an `Admin` returns a fixed monthly salary. State why `new Employee()` is rejected, how an `Employee[]` can hold both kinds, and what a loop that calls `computeSalary()` on each element prints for a Teacher of 10 hours at 50.0 and an Admin of 400.0. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three parts: why the abstract class cannot be created, how one array holds two classes, and the output of a polymorphic call.
+
+</Step>
+
+<Step title="2. Plan">
+
+An abstract class cannot be instantiated. A sub class is compatible with its super class, so the array has the type of the super class. Each element's own `computeSalary()` runs: 10 x 50.0 = 500.0 and 400.0.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Employee.java"
+public abstract class Employee {
+    private String name;
+
+    public Employee(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public abstract double computeSalary();
+}
+```
+
+```java title="Teacher.java"
+public class Teacher extends Employee {
+    private int hours;
+    private double rate;
+
+    public Teacher(String name, int hours, double rate) {
+        super(name);
+        this.hours = hours;
+        this.rate = rate;
+    }
+
+    @Override
+    public double computeSalary() {
+        return hours * rate;
+    }
+}
+```
+
+```java title="Admin.java"
+public class Admin extends Employee {
+    private double monthly;
+
+    public Admin(String name, double monthly) {
+        super(name);
+        this.monthly = monthly;
+    }
+
+    @Override
+    public double computeSalary() {
+        return monthly;
+    }
+}
+```
+
+```java title="PayLoop.java"
+public class PayLoop {
+    public static void main(String[] args) {
+        Employee[] staff = {new Teacher("Mary", 10, 50.0), new Admin("Tom", 400.0)};
+        for (Employee e : staff) {
+            System.out.println(e.getName() + " " + e.computeSalary());
+        }
+    }
+}
+```
+
+```text
+Mary 500.0
+Tom 400.0
+```
+
+`new Employee()` is rejected with `Employee is abstract; cannot be instantiated`.
+
+</Step>
+
+<Step title="4. Check">
+
+The array type is `Employee[]` and each element is a different sub class. The call `e.computeSalary()` is the same expression for both, and the result differs because the method of the element's own class runs.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Interfaces
+
+An **interface** defines what an object can do: a collection of method signatures (empty methods), declared with the keyword `interface`. It has no instance variables (it may have constants), no constructor, and cannot be instantiated. Its methods are `public` and `abstract` by default, and it is compiled like a class (`Aa.java` gives `Aa.class`). An interface must be implemented by a concrete class using `implements`, and one class can implement several interfaces. Reasons to use interfaces: to achieve **full abstraction** (100%), for security (only the "what" is shown, not the "how"), and to enable **multiple inheritance**, because a class can extend only one class but can implement many interfaces.
+
+The lecture's `Test` interface, the abstract class `Mist` that implements only `methodA`, and the concrete class `Bob` that implements the rest:
+
+```java title="Test.java"
+public interface Test {
+    public abstract void methodA();
+    public abstract void methodB();
+    public abstract void methodC();
+}
+```
+
+```java title="Mist.java"
+abstract class Mist implements Test {
+    public void methodA() {                     // implements only one method of the interface
+        System.out.println("Testing");
+    }
+}
+```
+
+```java title="Bob.java"
+class Bob extends Mist {
+    public void methodB() {
+        System.out.println("Hello");
+    }
+
+    public void methodC() {
+        System.out.println("There");
+    }
+}
+```
+
+```java title="TestTester.java"
+public class TestTester {
+    // Question (Lecture 11): what is the output of the tester?
+    public static void main(String[] args) {
+        Test t = new Bob();
+        t.methodA();
+        t.methodB();
+        t.methodC();
+    }
+}
+```
+
+```text
+Testing
+Hello
+There
+```
+
+`Mist` is abstract because it leaves two methods unimplemented; `Bob` extends it and supplies them, so a `Bob` can be held in a `Test` variable. The real messages for the mistakes:
+
+| Mistake | Compiler message |
+|---|---|
+| `void methodA() { }` in the implementing class (no `public`) | `error: methodA() in Bob cannot implement methodA() in Test` with `attempting to assign weaker access privileges; was public` |
+| a concrete class that implements only some of the interface's methods | `error: Bob is not abstract and does not override abstract method methodD(int) in Test` (when the interface has `methodD`) |
+| `Test u = new Test();` | `error: Test is abstract; cannot be instantiated` |
+| `t.extra()` where `extra` is only in `Bob` and `t` is a `Test` | `error: cannot find symbol` (symbol: method extra(), location: variable t of type Test) |
+| `Test.MAX = 6;` for an interface constant | `error: cannot assign a value to static final variable MAX` |
+| `private void methodA();` in an interface, as on the lecture's slide | not allowed: an interface method is public, and under Java 8 the compiler reports `private interface methods are not supported in -source 8` |
+| `class Two extends A, B` | `error: '{' expected` (a class extends only one class) |
+
+<Callout type="mistake" title="Common error">
+
+Implementing an interface method without `public`. Interface methods are public, and an implementing method cannot have weaker access, so write `public void methodA()`.
+
+</Callout>
+
+### Multiple interfaces
+
+The lecture's `InterfaceA` and `InterfaceB` (with the `private` removed) and a class that implements both:
+
+```java title="InterfaceA.java"
+public interface InterfaceA {
+    void methodA();
+}
+```
+
+```java title="InterfaceB.java"
+public interface InterfaceB {
+    void methodB();
+}
+```
+
+```java title="Multi.java"
+class Multi implements InterfaceA, InterfaceB {
+    public void methodA() {
+        System.out.println("Interface A method!");
+    }
+
+    public void methodB() {
+        System.out.println("Interface B method!!!!.");
+    }
+}
+```
+
+```java title="MultiTester.java"
+public class MultiTester {
+    public static void main(String[] args) {
+        Multi testing = new Multi();
+        testing.methodA();
+        testing.methodB();
+
+        InterfaceA a = testing;               // the same object seen through each interface
+        InterfaceB b = testing;
+        a.methodA();
+        b.methodB();
+    }
+}
+```
+
+```text
+Interface A method!
+Interface B method!!!!.
+Interface A method!
+Interface B method!!!!.
+```
+
+The same object can be seen through either interface, so a class that implements two interfaces can be used wherever either is expected. An interface can also extend one or more interfaces; then a class that implements the sub interface must implement the methods of all of them.
+
+```java title="Walker.java"
+public interface Walker {
+    void walk();
+}
+```
+
+```java title="Swimmer.java"
+public interface Swimmer {
+    void swim();
+}
+```
+
+```java title="Amphibian.java"
+public interface Amphibian extends Walker, Swimmer {       // extends more than one interface
+    void croak();
+}
+```
+
+```java title="Frog.java"
+public class Frog implements Amphibian {
+    public void walk() {
+        System.out.println("hop");
+    }
+
+    public void swim() {
+        System.out.println("paddle");
+    }
+
+    public void croak() {
+        System.out.println("ribbit");
+    }
+
+    public static void main(String[] args) {
+        Frog f = new Frog();
+        f.walk();
+        f.swim();
+        f.croak();
+        Walker w = f;
+        System.out.println(w instanceof Swimmer);
+    }
+}
+```
+
+```text
+hop
+paddle
+ribbit
+true
+```
+
+### Interfaces in UML
+
+An interface is drawn like a class, with the label `<<interface>>` above its name and its abstract methods below; the classes that implement it are linked to it.
+
+```text
+           <<interface>>
+               Test
+        + methodA()
+        + methodB()
+        + methodC()
+          ^           ^
+          |           |
+        Mist        (Bob extends Mist)
+   (abstract)
+```
+
+Java has many built-in interfaces: `Comparable` and `Iterable` in `java.lang`; `Closeable`, `Flushable` and `Serializable` in `java.io`; `Collection`, `List`, `Iterator` and `Queue` in `java.util`. The names are often adjectives ending in "able".
+
+## 6. Lab 6, question 2: methodD, Test2 and multiple interfaces
+
+Lab 6 question 2 asks you to type the interface classes, fix the errors, write a tester, and then add: (a) `methodD` in the interface `Test`, which accepts an `int n` and displays "Done, bye!" `n` times, one per line, a class `Done` that implements it, and a test; (b) an interface `Test2` with `methodE`, which accepts a string and displays its last character as many times as the string has characters, on one line, and `methodF`, which displays "Multiple inheritance achieved!", with the tester modified for them.
+
+Adding `methodD` to `Test` itself breaks `Bob`, which does not implement it: `error: Bob is not abstract and does not override abstract method methodD(int) in Test`. Either every class that implements `Test` gets the method, or the new method goes in a sub interface:
+
+```java title="TestPlus.java"
+public interface TestPlus extends Test {
+    void methodD(int n);
+}
+```
+
+```java title="Done.java"
+public class Done extends Bob implements TestPlus {
+    public void methodD(int n) {
+        for (int i = 0; i < n; i++) {
+            System.out.println("Done, bye!");        // one per line
+        }
+    }
+}
+```
+
+```java title="Test2.java"
+public interface Test2 {
+    void methodE(String s);
+    void methodF();
+}
+```
+
+```java title="Both.java"
+public class Both extends Bob implements Test2 {       // one class, two sources of behaviour
+    public void methodE(String s) {
+        String last = s.substring(s.length() - 1);
+        for (int i = 0; i < s.length(); i++) {
+            System.out.print(last);                    // n times, on one line
+        }
+        System.out.println();
+    }
+
+    public void methodF() {
+        System.out.println("Multiple inheritance achieved!");
+    }
+}
+```
+
+```java title="LabTester.java"
+public class LabTester {
+    public static void main(String[] args) {
+        TestPlus d = new Done();
+        d.methodA();
+        d.methodD(3);
+
+        Both both = new Both();
+        both.methodB();                // from Bob, through the class it extends
+        both.methodE("Mist");
+        both.methodE("Kago");
+        both.methodF();
+
+        Test2 t2 = both;               // the same object through the interface Test2
+        t2.methodF();
+    }
+}
+```
+
+```text
+Testing
+Done, bye!
+Done, bye!
+Done, bye!
+Hello
+tttt
+oooo
+Multiple inheritance achieved!
+Multiple inheritance achieved!
+```
+
+`Done` inherits `methodA`, `methodB` and `methodC` from `Bob` through `Mist`, and adds `methodD`. `Both` shows multiple inheritance of behaviour: it extends one class (`Bob`) and implements an interface (`Test2`); `methodE("Mist")` prints the last letter `t` four times because "Mist" has four characters.
+
+### Exam question 2: fix the interface code (6 marks)
+
+State the compiler error for each fault and the repair. (6 marks)
+
+```java
+public interface Printable {
+    private void print();                 // (1)
+}
+class Page implements Printable {
+    void print() { System.out.println("page"); }     // (2)
+}
+class Report extends Page, Summary { }                // (3)
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three faults, each with a message and a repair. They are the three interface mistakes the lecture's slides show or invite.
+
+</Step>
+
+<Step title="2. Plan">
+
+An interface's methods are public and abstract. An implementing method must be public. A class can extend only one class but may implement several interfaces.
+
+</Step>
+
+<Step title="3. Solution">
+
+(1) `private` is not allowed on an interface method (under Java 8 the compiler reports `private interface methods are not supported in -source 8`); write `void print();` or `public void print();`. (2) `void print()` has weaker access than the public interface method: `error: print() in Page cannot implement print() in Printable` with `attempting to assign weaker access privileges; was public`; write `public void print()`. (3) `class Report extends Page, Summary` gives `error: '{' expected`; a class extends one class, so make `Summary` an interface and write `class Report extends Page implements Summary`.
+
+</Step>
+
+<Step title="4. Check">
+
+Faults (2) and (3) have the same messages as the `Bob` and `Two` examples in the table above, and fault (1) is the lecture's slide 86 interface. After the repairs, `Page` and `Report` compile.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Encapsulation: private data, public methods, and the data reached only through getters and setters; the access modifiers are `public`, `protected`, default and `private`. Polymorphism: a call runs the method of the object's own class (overriding, dynamic) and overloaded methods share a name but differ in parameters (static). Abstraction: an abstract class (the `abstract` keyword, an abstract method with a semicolon and no body, no instances, extended by a concrete class that implements every abstract method) offers 0 to 100% abstraction; an interface offers 100%, has public abstract methods and no constructor, is implemented with `implements`, can be implemented several at a time and can extend several interfaces. A class extends only one class. An implementing method must be public.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does the abstract Shape class not implement getArea, and what must the sub classes do?">
+
+`Shape` has only the instance variable `colour`, which cannot give an area; the dimensions are in the sub classes. So `getArea` is abstract in `Shape`, and every concrete sub class must implement it, or the compiler reports that the class is not abstract and does not override it.
+
+</CheckQuestion>
+
+<CheckQuestion question="How can isGreater(Shape a, Shape b) accept a Circle and a Rectangle, and which getArea runs?">
+
+A sub class is compatible with its super class, so both objects can be passed as `Shape`. `a.getArea()` runs the `getArea` of the class of the actual object, a `Circle` or a `Rectangle`: polymorphism.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is the difference between dynamic and static polymorphism?">
+
+Dynamic polymorphism is method overriding: the method that runs is chosen at run time by the object's class. Static polymorphism is method overloading: methods share a name and differ in the number or types of parameters, as with the two `substring` methods.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can a class implement many interfaces but extend only one class?">
+
+Interfaces contain only method signatures, with no data, so combining several does not create conflicts; this is how Java enables multiple inheritance. Classes hold data and method code, so Java allows one super class: `class Two extends A, B` is rejected.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does adding methodD to the interface Test break the class Bob, and how does a sub interface avoid it?">
+
+`Bob` is concrete, so it must implement every method of its interface; the compiler reports that it does not override `methodD(int)`. Putting `methodD` in a sub interface, `TestPlus extends Test`, leaves `Test` and `Bob` unchanged; only the new class `Done` implements `TestPlus`.
+
+</CheckQuestion>
+
+</CheckQuestions>
