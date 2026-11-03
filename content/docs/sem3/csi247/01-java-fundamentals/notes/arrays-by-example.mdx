@@ -1,0 +1,639 @@
+---
+title: "Arrays by Example"
+description: "One- and two-dimensional arrays, the memory model, index errors, passing arrays to methods, arrays of Strings and arrays of objects, from Lecture 5, with the dry-run exercise and the faults on the slides."
+---
+
+Lecture 5 starts from a problem that variables cannot solve: reading 50 quiz marks and then displaying those at or above the average. To keep the marks you need a collection, and the simplest is an array. The lecture covers declaring and initialising one-dimensional and two-dimensional arrays, adding and retrieving values, the index-out-of-bounds error, passing arrays to methods (initialise, read, print, find the largest, average), arrays of `String` and arrays of objects. This lesson works through the slides and their exercises, one change at a time, with every output taken from a real run. It extends [Arrays and Methods](/docs/sem3/csi247/01-java-fundamentals/notes/arrays-and-methods) and [Arrays and Arrays of Objects](/docs/sem3/csi247/01-java-fundamentals/notes/arrays-and-objects).
+
+<LearningObjectives items={[
+  'Explain why an array is needed, declare and initialise one- and two-dimensional arrays, and draw their memory',
+  'Store and retrieve values with an index, use length, and explain the index-out-of-bounds error',
+  'Dry-run a loop that fills an array and give the contents',
+  'Write methods that take an array: initialise, read, print, find the index of the largest element, search and average',
+  'Use arrays of Strings and arrays of objects, and avoid the null element and format faults',
+]} />
+
+<Prerequisites items={[
+  'Methods by Example and Java Basics by Example in this chapter',
+  'Classes by Example in the Object-Oriented Programming chapter, for the Account class',
+  'Drawing memory diagrams: a variable holds an address; an array lives on the heap',
+]} />
+
+## 1. The templates
+
+```text
+Declare and create:   dataType[] arr1 = new dataType[intExp];               intExp is an integral value
+2-D:                  dataType[][] arr2 = new dataType[intExp1][intExp2];
+Initialise:           int[] nums = {10, 6, -7, 9, 19};
+Store:                arrayName[intExp] = expression;                        0 <= intExp <= arrayName.length - 1
+Retrieve:             arrayName[intExp]
+Length:               arrayName.length                                       an attribute, not a method
+Parameter:            public int indexOfMax(int[] numbers) { ... }
+```
+
+## 2. Why an array: Joe's problem
+
+Joe was asked to write a program that reads 50 quiz marks from the keyboard and then displays all marks that are greater than or equal to the average mark. His program reads a mark into one variable inside a loop, adds it to a sum, and calculates the average, with a blank where the display should be.
+
+```java title="JoeAttempt.java"
+import java.util.Scanner;
+
+public class JoeAttempt {
+    // Question (Lecture 5): can Joe display the marks that are at least the average?
+    public static void main(String[] args) {
+        Scanner scan = new Scanner("40 85 62 71 90 55");     // stands in for the keyboard
+        double mark = 0, average, sum = 0.0;
+        int count = 6;
+        for (int i = 1; i <= count; i++) {
+            mark = scan.nextDouble();
+            sum += mark;
+        }
+        average = sum / count;
+        System.out.println("average " + average);
+        System.out.println("marks still in memory: just " + mark);
+    }
+}
+```
+
+```text
+average 67.16666666666667
+marks still in memory: just 55.0
+```
+
+Joe cannot find the marks at or above the average: each new mark replaces the old one, so all marks except the last are lost. The solution is to keep the marks as a collection. A **collection** is a group of related things (objects); any two objects in it should be comparable. An **array** is a collection of items of the **same data type**; each item is stored in its own cell, numbered from 0 to `array.length - 1`, and it supports adding and retrieving an element.
+
+```java title="JoeSolution.java"
+import java.util.Scanner;
+
+public class JoeSolution {
+    public static void main(String[] args) {
+        Scanner scan = new Scanner("40 85 62 71 90 55");
+        double[] marks = new double[6];
+        double sum = 0.0;
+        for (int i = 0; i < marks.length; i++) {
+            marks[i] = scan.nextDouble();                    // keep every mark
+            sum += marks[i];
+        }
+        double average = sum / marks.length;
+        System.out.println("average " + average);
+        for (int i = 0; i < marks.length; i++) {
+            if (marks[i] >= average) {
+                System.out.println(marks[i]);
+            }
+        }
+    }
+}
+```
+
+```text
+average 67.16666666666667
+85.0
+71.0
+90.0
+```
+
+With the marks kept, a second loop can compare each one with the average. The lecture's advantages of arrays: direct access to data (quick retrieval), a versatile structure (basic data such as `int` and complex data such as objects), and storage efficiency (the elements occupy contiguous memory). The disadvantages: a fixed size, problems with insertion and deletion, possible memory allocation problems, and not flexible enough for complex structures.
+
+## 3. Creating arrays and the memory model
+
+```java title="ArrayBasics.java"
+public class ArrayBasics {
+    // Question (Lecture 5): what does a new array contain, and what are length and the 2-D form?
+    public static void main(String[] args) {
+        int[] numbers = new int[10];                         // an array of 10 integer values
+        String[] courses = new String[7];                    // an array of 7 references to String objects
+        System.out.println(numbers[0] + " " + numbers[9] + " " + numbers.length);
+        System.out.println(courses[0] + " " + courses.length);
+
+        int[] nums = {10, 6, -7, 9, 19};                     // declare and initialise
+        char[] grades = {'A', 'B', 'C', 'D', 'E', 'F'};
+        String[] villages = {"Mochudi", "Serowe", "Kanye"};
+        System.out.println(nums[2] + " " + grades[5] + " " + villages[1]);
+
+        int[] data;                                          // declare
+        data = new int[5];                                   // create
+        data[0] = 10;                                        // store values
+        data[1] = 6;
+        data[2] = -7;
+        System.out.println(data[0] + data[1] + data[2] + " " + data[3]);
+
+        int[][] grid = new int[3][4];                        // 2-D: 3 rows of 4 cells
+        for (int r = 0; r < grid.length; r++) {
+            for (int c = 0; c < grid[r].length; c++) {
+                grid[r][c] = r * c;
+            }
+        }
+        for (int r = 0; r < grid.length; r++) {
+            System.out.println(java.util.Arrays.toString(grid[r]));
+        }
+        System.out.println(grid.length + " rows, " + grid[0].length + " columns");
+    }
+}
+```
+
+```text
+0 0 10
+null 7
+-7 F Serowe
+9 0
+[0, 0, 0, 0]
+[0, 1, 2, 3]
+[0, 2, 4, 6]
+3 rows, 4 columns
+```
+
+A new `int` array is full of 0s, and a new `String` array is full of `null`: an array of objects holds references, and no object exists until you create one. `length` is an attribute, so there are no parentheses. A two-dimensional array is an array of rows: `grid.length` is the number of rows and `grid[r].length` the number of columns.
+
+Draw the memory for the lecture's three initialisers (an `int` array, a `char` array and a `String` array) before stepping through the diagram:
+
+<MemoryDiagram scenario="arrinit" />
+
+<Callout type="mistake" title="Common error">
+
+Writing `numbers.length()` for an array. `length` is an attribute of an array, a method of a `String`. The compiler reports `error: cannot find symbol` (symbol: method length(), location: variable numbers of type int[]).
+
+</Callout>
+
+## 4. Adding values to an array, and the index
+
+To store a value use `arrayName[intExp] = expression;`. The index is an integral expression satisfying `0 <= intExp <= arrayName.length - 1`, and `arrayName[intExp]` can be used like a variable. The lecture's loop, with its exercise: draw the memory diagram, and give the output.
+
+```java title="OddCells.java"
+public class OddCells {
+    // Question (Lecture 5): draw the memory diagram, and give the output.
+    public static void main(String[] args) {
+        int n = 10;
+        int[] numbers = new int[n + 4];
+        for (int i = 0; i < numbers.length; i++) {
+            if (i % 2 == 1) {
+                numbers[i] = i + 1;
+                System.out.printf("%d\n", numbers[i]);
+            }
+        }
+        System.out.printf("%d\n", numbers.length);
+    }
+}
+```
+
+```text
+2
+4
+6
+8
+10
+12
+14
+14
+```
+
+The array has `n + 4` = 14 cells and the loop writes only the odd indexes, so it prints 2, 4, 6, 8, 10, 12, 14 and then 14. Step through the memory:
+
+<MemoryDiagram scenario="arrloop" />
+
+### The index out of bounds error
+
+An **ArrayIndexOutOfBounds** error comes from trying to access a cell that does not exist. It is caught only at **run time**: the program compiles. For `int[] numbers = new int[10]` the indexes run from 0 to 9, so `numbers[-1]` and `numbers[10]` cause the error.
+
+```java title="IndexErrors.java"
+public class IndexErrors {
+    public static void main(String[] args) {
+        int[] numbers = new int[10];
+        numbers[9] = 1;                                  // the last valid index
+        try {
+            numbers[10] = 1;
+        } catch (ArrayIndexOutOfBoundsException e) {
+            System.out.println("numbers[10]: " + e.getClass().getName());
+        }
+        try {
+            System.out.println(numbers[-1]);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            System.out.println("numbers[-1]: " + e.getClass().getName());
+        }
+        int[] none = null;
+        try {
+            System.out.println(none[0]);
+        } catch (NullPointerException e) {
+            System.out.println("array never created: " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+numbers[10]: java.lang.ArrayIndexOutOfBoundsException
+numbers[-1]: java.lang.ArrayIndexOutOfBoundsException
+array never created: java.lang.NullPointerException
+```
+
+An array that was declared but never created is `null`, and using it throws `NullPointerException` (the compiler says `variable d might not have been initialized` when the variable has no value at all).
+
+## 5. Retrieving values: the dry-run exercise
+
+To retrieve a value use its index: `arrayName[intExp]`. The lecture's exercise: dry-run the code to find the contents of `numbers` after it runs.
+
+```java title="DryRun.java"
+public class DryRun {
+    public static void main(String[] args) {
+        int[] numbers = new int[6];
+        numbers[0] = 5;
+        for (int i = 1; i < numbers.length; i++) {
+            numbers[i] = i * i + 5;
+            if (i > 2) {
+                numbers[i] = 2 * numbers[i] - numbers[i - 1];
+            }
+        }
+        System.out.println(java.util.Arrays.toString(numbers));
+    }
+}
+```
+
+```text
+[5, 6, 9, 19, 23, 37]
+```
+
+Work one value of `i` at a time, and use the **new** value of the previous cell: for `i = 3` the cell first becomes 3 x 3 + 5 = 14, then 2 x 14 - `numbers[2]` = 28 - 9 = 19; for `i = 4` it becomes 21, then 2 x 21 - 19 = 23 (the new 19, not 14); for `i = 5` it becomes 30, then 60 - 23 = 37.
+
+<MemoryDiagram scenario="arrdry" />
+
+## 6. Arrays as formal parameters
+
+An array can be passed to a method. The parameter receives a copy of the **reference**, so the method works on the caller's array. The lecture's methods live in a class; a tester creates an object and calls them.
+
+```java title="ArrayTools.java"
+import java.util.Scanner;
+
+public class ArrayTools {
+    public boolean search(int[] listA, int x) {
+        boolean found = false;
+        for (int i = 0; i < listA.length; i++) {
+            if (listA[i] == x) {
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    public void initArray(int[] numbers, int initVal) {        // a) initialise to a specific value
+        for (int i = 0; i < numbers.length; i++) {
+            numbers[i] = initVal;
+        }
+    }
+
+    public void readIntoArray(int[] numbers, Scanner sc) {     // b) read data into an array
+        for (int i = 0; i < numbers.length; i++) {
+            numbers[i] = sc.nextInt();
+        }
+    }
+
+    public void printArray(int[] numbers) {                    // c) print the contents
+        System.out.printf("{");
+        for (int i = 0; i < numbers.length; i++) {
+            System.out.printf("%d ", numbers[i]);
+        }
+        System.out.printf("}");
+    }
+
+    public int indexOfMax(int[] numbers) {                     // d) index of the largest element
+        int index = 0;                                         // assume numbers[0] is the largest
+        for (int i = 1; i < numbers.length; i++) {
+            if (numbers[i] > numbers[index]) {
+                index = i;
+            }
+        }
+        return index;
+    }
+
+    public double computeArrayAverage(int[] numbers) {         // e) the average
+        double sum = 0.0, average = 0.0;
+        for (int i = 0; i < numbers.length; i++) {
+            sum = sum + numbers[i];
+        }
+        if (numbers.length != 0) {
+            average = sum / numbers.length;
+        }
+        return average;
+    }
+}
+```
+
+```java title="ArrayToolsDemo.java"
+import java.util.Scanner;
+
+public class ArrayToolsDemo {
+    // Question (Lecture 5): use each method on an array.
+    public static void main(String[] args) {
+        ArrayTools pa = new ArrayTools();
+        int[] numbers = {3, 1, -2, 6, 8};
+        int num = 16;
+        System.out.printf("%s\n", pa.search(numbers, num));            // the lecture's call
+        System.out.printf("%s\n", pa.search(numbers, 6));
+
+        pa.printArray(numbers);
+        System.out.println();
+        System.out.println("index of max: " + pa.indexOfMax(numbers) + ", average: " + pa.computeArrayAverage(numbers));
+
+        int[] filled = new int[4];
+        pa.initArray(filled, 7);                                       // the method changes the caller's array
+        pa.printArray(filled);
+        System.out.println();
+
+        pa.readIntoArray(filled, new Scanner("5 10 15 20"));
+        pa.printArray(filled);
+        System.out.println();
+
+        int[] empty = new int[0];
+        System.out.println(pa.computeArrayAverage(empty));              // length 0: no division
+
+        try {
+            pa.initArray(null, 0);                                     // the array must have been created
+        } catch (NullPointerException e) {
+            System.out.println("initArray(null): " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+false
+true
+{3 1 -2 6 8 }
+index of max: 4, average: 3.2
+{7 7 7 7 }
+{5 10 15 20 }
+0.0
+initArray(null): java.lang.NullPointerException
+```
+
+`initArray` changed the array of the caller, because the method received the address of the same array (contrast with a `double` parameter, which is a copy). `indexOfMax` assumes the first element is the largest and replaces `index` whenever a larger one appears; it returns the position, here 4 (the value 8). `computeArrayAverage` tests `numbers.length != 0` so that an empty array gives 0.0 instead of a division by zero. Each method notes that the array MUST have been created: a `null` array raises `NullPointerException`.
+
+<Callout type="mistake" title="Common error">
+
+Passing an array that was declared but not created, or a `Scanner` that was not created. The method fails with `NullPointerException` when it first uses the parameter.
+
+</Callout>
+
+## 7. Arrays of String objects
+
+`String[] classList = new String[5];` makes five references, all `null`. Assign a string to a cell: `classList[0] = "Ame";` (the same as `new String("Ame")`). Thereafter `classList[i]` can be treated like any `String` variable.
+
+```java title="StringCells.java"
+public class StringCells {
+    public static void main(String[] args) {
+        String[] classList = new String[5];
+        classList[0] = "Ame";
+
+        System.out.printf("%d\n", classList[0].length());
+        System.out.printf("%s\n", classList[0].toUpperCase());
+        System.out.printf("%s\n", classList[0].charAt(2));
+        System.out.printf("%d\n", classList[0].indexOf('e'));
+        System.out.printf("%d\n", classList[0].indexOf('f'));
+        System.out.printf("%s\n", classList[0].equals("ame"));
+
+        try {
+            System.out.println(classList[1].length());            // a cell that was never assigned
+        } catch (NullPointerException e) {
+            System.out.println("classList[1].length(): " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+3
+AME
+e
+2
+-1
+false
+classList[1].length(): java.lang.NullPointerException
+```
+
+The six lines are the lecture's: length 3, upper case, the character at index 2, the index of `e` (2), the index of `f` (-1: not found) and `equals("ame")` (false: the case differs). The last call fails: `classList[1]` is `null`, and a method cannot be called on `null`.
+
+## 8. Arrays of objects of other classes
+
+`ClassName[] identifier = new ClassName[intExp];` declares the array; each cell must then be given an object: `accs[0] = new Account(190, 450.0);`. The lecture's statements use an `Account` class.
+
+```java title="Account.java"
+public class Account {
+    private int number;
+    private double balance;
+
+    public Account(int number, double balance) {
+        this.number = number;
+        this.balance = balance;
+    }
+
+    public int getNumber() {
+        return number;
+    }
+
+    public void setBalance(double balance) {
+        this.balance = balance;
+    }
+
+    public double getBalance() {
+        return balance;
+    }
+
+    public boolean equals(Account other) {
+        return number == other.getNumber();
+    }
+}
+```
+
+```java title="AccountArray.java"
+public class AccountArray {
+    // Question (Lecture 5): what do the slide's statements do?
+    public static void main(String[] args) {
+        Account[] accs = new Account[5];
+        accs[0] = new Account(190, 450.0);
+        accs[0].setBalance(500.55);
+        System.out.printf("%.2f\n", accs[0].getBalance());
+
+        try {
+            System.out.printf("%d\n", accs[0].getBalance());       // the slide's statement: %d for a double
+        } catch (java.util.IllegalFormatConversionException e) {
+            System.out.println("%d with a double: " + e.getClass().getName());
+        }
+
+        try {
+            System.out.printf("%s\n", accs[0].equals(accs[3]));     // the slide's statement: accs[3] was never assigned
+        } catch (NullPointerException e) {
+            System.out.println("equals(accs[3]): " + e.getClass().getName());
+        }
+
+        accs[3] = new Account(190, 10.0);
+        System.out.printf("%s\n", accs[0].equals(accs[3]));
+    }
+}
+```
+
+```text
+500.55
+%d with a double: java.util.IllegalFormatConversionException
+equals(accs[3]): java.lang.NullPointerException
+true
+```
+
+Two of the slide's statements fail at run time. `printf("%d", ...)` expects an integer, and `getBalance()` returns a `double`, so use `%.2f`. `accs[0].equals(accs[3])` passes a `null` reference because `accs[3]` was never assigned, and `equals` then calls a method on `null`. After `accs[3]` is given an account with the same number, the comparison works and gives true.
+
+<MemoryDiagram scenario="student" />
+
+### Exam question 1: draw and read an array (6 marks)
+
+Draw the memory for `int[] nums = {10, 6, -7, 9, 19};` and `String[] villages = {"Mochudi", "Serowe", "Kanye"};`. State `nums.length`, `nums[2]`, `villages[1]` and `villages[3]`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two arrays to draw, and four reads. The last read, index 3 of a three-cell array, is not valid.
+
+</Step>
+
+<Step title="2. Plan">
+
+An array variable holds an address. The `int` array's cells hold the values themselves; the `String` array's cells hold the addresses of `String` objects.
+
+</Step>
+
+<Step title="3. Solution">
+
+`nums` holds the address of an `int[]` of five cells (indexes 0 to 4) holding 10, 6, -7, 9, 19. `villages` holds the address of a `String[]` of three cells; each cell holds the address of its own `String` object (Mochudi, Serowe, Kanye). `nums.length` is 5, `nums[2]` is -7, `villages[1]` is `Serowe`, and `villages[3]` throws `ArrayIndexOutOfBoundsException` because the valid indexes are 0 to 2.
+
+</Step>
+
+<Step title="4. Check">
+
+`ArrayBasics` printed `-7 F Serowe` for `nums[2]`, `grades[5]` and `villages[1]`. The picture of the three initialisers is the `arrinit` diagram above.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: write an array method (8 marks)
+
+Write a method `countAbove(int[] numbers, double limit)` that returns how many elements are greater than `limit`, and a method `indexOfMin(int[] numbers)` that returns the position of the smallest element. Show both on `{3, 1, -2, 6, 8}` with the limit being the average. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two methods that take an array, and a test: the average of the array is 3.2.
+
+</Step>
+
+<Step title="2. Plan">
+
+`countAbove` loops over every element with a counter. `indexOfMin` is `indexOfMax` with the comparison reversed: assume index 0 and replace it when a smaller value is found.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="MoreArrayMethods.java"
+public class MoreArrayMethods {
+    public static int countAbove(int[] numbers, double limit) {
+        int count = 0;
+        for (int i = 0; i < numbers.length; i++) {
+            if (numbers[i] > limit) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public static int indexOfMin(int[] numbers) {
+        int index = 0;
+        for (int i = 1; i < numbers.length; i++) {
+            if (numbers[i] < numbers[index]) {
+                index = i;
+            }
+        }
+        return index;
+    }
+
+    public static void main(String[] args) {
+        int[] numbers = {3, 1, -2, 6, 8};
+        double sum = 0;
+        for (int v : numbers) {
+            sum += v;
+        }
+        double average = sum / numbers.length;
+        System.out.println("average " + average);
+        System.out.println("above the average: " + countAbove(numbers, average));
+        System.out.println("index of min: " + indexOfMin(numbers));
+    }
+}
+```
+
+```text
+average 3.2
+above the average: 2
+index of min: 2
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The average is 16 / 5 = 3.2. The elements above 3.2 are 6 and 8, so the count is 2. The smallest element is -2, at index 2.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+An array is a collection of items of one data type, in cells numbered 0 to `length - 1`, reached by an index; `length` is an attribute. A new `int` array holds 0s, a new object array holds `null`, and the array variable holds an address, so passing an array to a method lets the method change the caller's array. Creating and initialising: `new type[n]`, `{a, b, c}`, and `new type[r][c]` for two dimensions. An index outside 0 to `length - 1` fails at run time with `ArrayIndexOutOfBoundsException`; an array that was never created, or a null cell used as an object, fails with `NullPointerException`. For a dry run, take one value of the loop variable at a time and use the new values of earlier cells. `printf` needs a matching specifier: `%d` for integers, `%.2f` for decimals.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can Joe's program not display the marks above the average?">
+
+It reads each mark into one variable, so every new mark replaces the previous one and only the last survives. The marks must be kept in a collection, such as an array, so that a second loop can compare each with the average.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does a new String array contain, and what happens if you call length() on one of its cells?">
+
+Every cell is `null`, because an array of objects holds references and no `String` has been created. Calling a method on a `null` cell throws `NullPointerException`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which indexes are valid for new int[10], and when is the error found?">
+
+0 to 9. `numbers[-1]` and `numbers[10]` compile, and fail at run time with `ArrayIndexOutOfBoundsException`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can initArray change the array of the caller but addTax cannot change total?">
+
+An array variable holds an address, and the parameter is a copy of that address, so both point at the same array. `total` is a primitive, so the method receives a copy of the value.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does printf of a double with %d throw an exception?">
+
+`%d` expects an integer, and the value is a `double`, so the format conversion fails with `IllegalFormatConversionException`. Use `%.2f` (or `%f`) for a `double`.
+
+</CheckQuestion>
+
+</CheckQuestions>

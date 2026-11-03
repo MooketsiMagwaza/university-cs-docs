@@ -1,0 +1,600 @@
+---
+title: "Methods by Example"
+description: "Implement and invoke methods from Lecture 3: parameters and return values, parameter passing by copy, multiple and missing return statements, void methods, stubs, repeating code as a method, and the scope of variables, with the real compiler messages."
+---
+
+Lecture 3 is about methods: how to implement one, how to invoke it, how parameter passing works, and how the scope of a variable relates to a method. Its running example is a method that finds the volume of a cube. The lecture also names two common errors (modifying a parameter and a missing return statement), gives the steps for implementing a method, and ends with the rules of scope. This lesson runs every example, changes it one step at a time, and shows the real compiler message for each fault. Every output is from a real run. It extends [Methods, Parameters, Returns and Scope](/docs/sem3/csi247/01-java-fundamentals/notes/methods-parameters-scope).
+
+<LearningObjectives items={[
+  'Write a method declaration (modifiers, return type, name, parameters) and its body, and invoke it',
+  'Explain parameter passing: actual and formal parameters, and why a method cannot change the caller\'s variable',
+  'Use return values, several return statements and void methods, and avoid the missing return error',
+  'Follow the steps to implement a method, design test cases, and use a stub',
+  'Determine the scope of a variable (local, block, global) and say which declarations overlap legally',
+]} />
+
+<Prerequisites items={[
+  'Java Basics by Example in this chapter: variables, loops, Scanner and printf',
+  'Drawing memory diagrams of variables',
+]} />
+
+## 1. The templates
+
+```text
+Declaration:      modifiers returnType methodName(type param1, type param2) { body }
+                  public static double cubeVolume(double length) { double volume = length * length * length; return volume; }
+Invocation:       double result = cubeVolume(2);                       actual parameters (arguments) in the same order and types
+void method:      public static void boxString(String str) { ... }     no value is returned; return; ends it early
+Comment:          /** purpose @param name description @return description */
+```
+
+A **method** is a block of related statements that serves one task, placed between `{` and `}`. It has a name (following the rules of variable names) and `( )`, the place that receives the input. Methods differ: some only give something to the environment, some only take something, and some do both. Methods already used include `main()`, `Scanner.nextInt()`, `String.length()`, `Math.max()` and `Integer.parseInt()`.
+
+## 2. Implementing and invoking a method
+
+When one method calls another, the caller passes values, the called method starts, uses the values, does its job and returns the answer. In `double z = Math.pow(2, 3);`, `main` passes two parameters, `Math.pow` calculates and returns 8, and `main` stores the return value in `z`.
+
+To implement a method for the volume of a cube: pick a name (`cubeVolume`), give a type and name for each parameter (`double length`), specify the type of the return value (`double`) and add modifiers (`public static`). The **body** is surrounded by curly braces, contains variable declarations and statements, and returns the answer.
+
+```java title="Cubes.java"
+public class Cubes {
+    /**
+     * Computes the volume of a cube.
+     * @param sideLength the side length of the cube
+     * @return the volume
+     */
+    public static double cubeVolume(double sideLength) {
+        double volume = sideLength * sideLength * sideLength;
+        return volume;
+    }
+
+    public static void main(String[] args) {
+        double result1 = cubeVolume(2);
+        double result2 = cubeVolume(10);
+        System.out.printf("A cube of length 2 has volume %f", result1);
+        System.out.printf("A cube of length 10 has volume %f", result2);
+    }
+}
+```
+
+```text
+A cube of length 2 has volume 8.000000A cube of length 10 has volume 1000.000000
+```
+
+The two results are stored in local variables and printed. The output of the slide's version runs together because its `printf` has no `%n`: the repaired version below ends each format with a new line and shows two decimal places.
+
+```java title="CubesFixed.java"
+public class CubesFixed {
+    public static double cubeVolume(double sideLength) {
+        return sideLength * sideLength * sideLength;
+    }
+
+    public static void main(String[] args) {
+        System.out.printf("A cube of length 2 has volume %.2f%n", cubeVolume(2));
+        System.out.printf("A cube of length 10 has volume %.2f%n", cubeVolume(10));
+        System.out.println(cubeVolume(1.5));
+    }
+}
+```
+
+```text
+A cube of length 2 has volume 8.00
+A cube of length 10 has volume 1000.00
+3.375
+```
+
+The comment before the method is a Javadoc comment: it starts with `/**`, ends with `*/`, notes the purpose of the method and describes each parameter (`@param`) and the return value (`@return`).
+
+## 3. Parameter passing
+
+The parameter value in the call is called the **actual parameter** or argument; it may be the contents of a variable or a literal such as 2. The parameter variable named in the method declaration is the **formal parameter**, and is used as a variable inside the called method. Both must be of the same (compatible) data type. The steps for `cubeVolume(2)`: the value 2 is copied into `sideLength`; the body computes the volume; the answer is returned.
+
+**Common Error 1: trying to modify parameters.** A **copy** of the value is passed, so the called method can change its own copy but not the original in the calling method.
+
+```java title="CopyDemo.java"
+public class CopyDemo {
+    public static double addTax(double price, double rate) {
+        double tax = price * rate / 100;
+        price = price + tax;                  // changes only the method's own copy
+        return tax;
+    }
+
+    public static double addTaxFixed(double price, double rate) {
+        return price + price * rate / 100;    // return the new price instead
+    }
+
+    public static void main(String[] args) {
+        double total = 10;
+        double t = addTax(total, 7.5);
+        System.out.println("total after addTax: " + total);
+        System.out.println("tax returned: " + t);
+
+        total = addTaxFixed(total, 7.5);       // the caller stores the result
+        System.out.println("total after addTaxFixed: " + total);
+    }
+}
+```
+
+```text
+total after addTax: 10.0
+tax returned: 0.75
+total after addTaxFixed: 10.75
+```
+
+The memory diagram shows what the call does: `price` is a new box that receives a copy of `total`, the method changes its own box, and the box is gone when the method returns.
+
+<MemoryDiagram scenario="callcopy" />
+
+<Callout type="mistake" title="Common error">
+
+Expecting `addTax(total, 7.5)` to change `total`. The method gets a copy of the value, so `total` is still 10.0 afterwards. To send a new value back, return it and assign it: `total = addTaxFixed(total, 7.5);`.
+
+</Callout>
+
+## 4. Return values
+
+A method may return one value. The return type is in the declaration, and the `return` statement does two things: the method terminates immediately, and the value is returned to the calling method. The value's data type must match the return type. A method can have several `return` statements, but **every branch must have one**.
+
+```java title="ReturnRules.java"
+public class ReturnRules {
+    public static double cubeVolume(double sideLength) {
+        if (sideLength < 0) {
+            return 0;                          // the method ends here for a negative side
+        }
+        return sideLength * sideLength * sideLength;
+    }
+
+    public static int sign(double x) {         // the lecture's example, repaired
+        if (x < 0) {
+            return -1;
+        }
+        if (x > 0) {
+            return 1;
+        }
+        return 0;                              // the branch the lecture forgot: x is 0
+    }
+
+    public static void main(String[] args) {
+        System.out.println(cubeVolume(3) + " " + cubeVolume(-3));
+        System.out.println(sign(-7.5) + " " + sign(0) + " " + sign(12));
+    }
+}
+```
+
+```text
+27.0 0.0
+-1 0 1
+```
+
+**Common Error 2: a missing return statement.** The lecture's `sign` method has returns for x below 0 and above 0 but nothing for x equal to 0. The compiler complains whenever some branch has no return: `error: missing return statement`. Make sure all conditions are handled.
+
+## 5. Methods without return values, and return without a value
+
+It is not compulsory for a method to return a value. The return type `void` means nothing is returned, no `return` statement is required, and the method may still generate output. A `return;` with no value in a `void` method terminates it immediately.
+
+```java title="BoxStrings.java"
+public class BoxStrings {
+    public static void boxString(String str) {
+        int n = str.length();
+        if (n == 0) {
+            return;                                    // return immediately: nothing to box
+        }
+        for (int i = 0; i < n + 2; i++) {
+            System.out.print("-");
+        }
+        System.out.println();
+        System.out.println("!" + str + "!");
+        for (int i = 0; i < n + 2; i++) {
+            System.out.print("-");
+        }
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        boxString("Hello");
+        boxString("");
+        boxString("CSI247");
+    }
+}
+```
+
+```text
+-------
+!Hello!
+-------
+--------
+!CSI247!
+--------
+```
+
+The empty string printed nothing at all, because of the early `return;`.
+
+## 6. Steps to implement a method
+
+1. Describe what the method should do.
+2. Determine the method's inputs, if any.
+3. Determine the data types of the inputs and of the return value, if any.
+4. Write pseudocode for the desired result.
+5. Implement the method body.
+6. Test the method: **design the test cases first**.
+
+The lecture's example is `pyramidVolume(h, b)` for a pyramid with a square base of side b and height h: the base area is `b * b` and the volume is `h * baseArea / 3`.
+
+```java title="PyramidTests.java"
+public class PyramidTests {
+    public static double pyramidVolume(double h, double b) {
+        double baseArea = b * b;
+        return h * baseArea / 3;
+    }
+
+    public static void main(String[] args) {
+        // test cases chosen first: height, side, expected volume
+        double[][] cases = {{1, 3, 3.0}, {6, 2, 8.0}, {0, 5, 0.0}, {9, 10, 300.0}};
+        for (double[] c : cases) {
+            double actual = pyramidVolume(c[0], c[1]);
+            System.out.println("h=" + c[0] + " b=" + c[1] + " expected " + c[2] + " got " + actual
+                    + (actual == c[2] ? " ok" : " FAIL"));
+        }
+    }
+}
+```
+
+```text
+h=1.0 b=3.0 expected 3.0 got 3.0 ok
+h=6.0 b=2.0 expected 8.0 got 8.0 ok
+h=0.0 b=5.0 expected 0.0 got 0.0 ok
+h=9.0 b=10.0 expected 300.0 got 300.0 ok
+```
+
+Programming tips from the lecture: keep methods short (generally one screen), break into sub-methods if the code is too long, trace your methods, and use **stubs** when writing larger programs: unfinished methods that return a dummy value.
+
+```java title="StubDemo.java"
+public class StubDemo {
+    public static String digitNameStub(int digit) {
+        return "mumble";                               // a stub: compiles, returns a dummy value
+    }
+
+    public static String digitName(int digit) {        // the finished method
+        String[] names = {"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
+        return names[digit];
+    }
+
+    public static void main(String[] args) {
+        System.out.println(digitNameStub(7) + " " + digitName(7));
+        System.out.println(digitName(0) + " " + digitName(9));
+    }
+}
+```
+
+```text
+mumble seven
+zero nine
+```
+
+## 7. Repeating code as a method
+
+Repetitive code is a candidate for a method: the logic is the same and only the values differ. The lecture prompts for an hour between 1 and 12 and a minute between 0 and 59 with two copies of the same `while` loop. A parameterised method replaces both.
+
+In the lecture the method creates its own `Scanner in = new Scanner(System.in)`, starts with `int input = 0;` and loops `while (input < low || input > high)`. The version below takes the `Scanner` as a parameter, so that it can run on a fixed string of "typed" values (20, -3 and 8 for the hours, then 75 and 30 for the minutes), and otherwise keeps the lecture's logic.
+
+```java title="RangeReader.java"
+import java.util.Scanner;
+
+public class RangeReader {
+    /**
+     * Prompts a user to enter a value in a given range until the user provides a valid input.
+     * @param in the source of the typed values
+     * @param low the low end of the range
+     * @param high the high end of the range
+     * @return the value provided by the user
+     */
+    public static int readValueBetween(Scanner in, int low, int high) {
+        int input = 0;                                    // the lecture's starting value
+        while (input < low || input > high) {
+            System.out.printf("Enter value between %d and %d: ", low, high);
+            input = in.nextInt();
+            System.out.println(input);                    // echo what the user typed
+        }
+        return input;
+    }
+
+    public static void main(String[] args) {
+        Scanner typed = new Scanner("20 -3 8 75 30");
+        int hours = readValueBetween(typed, 1, 12);       // 1 - 12
+        int minutes = readValueBetween(typed, 0, 59);     // 0 - 59
+        System.out.println(hours + ":" + minutes);
+    }
+}
+```
+
+```text
+Enter value between 1 and 12: 20
+Enter value between 1 and 12: -3
+Enter value between 1 and 12: 8
+8:0
+```
+
+The hours work: 20 and -3 are rejected and 8 is accepted. The minutes do not: the method never asked. The starting value 0 is already inside the range 0 to 59, so the loop condition is false at once and the method returns 0 without reading anything. The lecture uses this very method for both ranges, so for the minutes it is wrong. The repair is to start with a value that is certainly outside the range, for example `low - 1`.
+
+```java title="RangeReaderFixed.java"
+import java.util.Scanner;
+
+public class RangeReaderFixed {
+    public static int readValueBetween(Scanner in, int low, int high) {
+        int input = low - 1;                              // always outside the range, so the loop runs at least once
+        while (input < low || input > high) {
+            System.out.printf("Enter value between %d and %d: ", low, high);
+            input = in.nextInt();
+            System.out.println(input);
+        }
+        return input;
+    }
+
+    public static void main(String[] args) {
+        Scanner typed = new Scanner("20 -3 8 75 30");
+        int hours = readValueBetween(typed, 1, 12);
+        int minutes = readValueBetween(typed, 0, 59);
+        System.out.println(hours + ":" + minutes);
+    }
+}
+```
+
+```text
+Enter value between 1 and 12: 20
+Enter value between 1 and 12: -3
+Enter value between 1 and 12: 8
+Enter value between 0 and 59: 75
+Enter value between 0 and 59: 30
+8:30
+```
+
+Now the same method gave the hours (20 and -3 rejected, 8 accepted) and the minutes (75 rejected, 30 accepted), so the two copies of the loop became one method called twice with different low and high values.
+
+<Callout type="mistake" title="Common error">
+
+Starting a validation loop with a value that may already be valid. If the starting value passes the test, the loop never runs and no input is read. Start with a value outside the range, or use a `do-while` loop, which always runs once.
+
+</Callout>
+
+## 8. Variable scope
+
+The **scope** of a variable is the part of the program in which it is visible. A variable can be declared inside a method (a **local** variable; parameter variables are like local ones), inside a block `{ }` (**block scope**, from the declaration to the end of the block), or outside a method (sometimes called global scope, usable and changeable by any method).
+
+```java title="ScopeExamples.java"
+public class ScopeExamples {
+    public static int same;                         // 'global'
+
+    public static int square(int n) {
+        int result = n * n;                          // result is local to square
+        return result;
+    }
+
+    public static void main(String[] args) {
+        int sum = 0;                                 // local to main
+        for (int i = 1; i <= 10; i++) {              // i is visible only inside the for
+            int square = i * i;                      // square is visible only inside the block
+            sum = sum + square;
+        }
+        System.out.println(sum);
+
+        int result = square(3) + square(4);          // main's result and square's result are different variables
+        System.out.println(result);
+
+        int total = 0;
+        for (int i = 1; i <= 10; i++) {              // the first i is gone, so the name can be reused
+            total = total + i;
+        }
+        for (int i = 1; i <= 10; i++) {              // a second, different i
+            total = total + i * i;
+        }
+        System.out.println(total);
+
+        int same = 0;                                // a local variable with the name of the 'global' one
+        for (int i = 1; i <= 10; i++) {
+            same = same + i * i;
+        }
+        System.out.println(same + " " + ScopeExamples.same);
+    }
+}
+```
+
+```text
+385
+25
+440
+385 0
+```
+
+Reading it line by line. `sum` is a local variable of `main`; `i` and `square` exist only inside the loop. The `result` of `square` and the `result` of `main` do not overlap, so they are different variables. The two `for` loops each have their own `i`. A local variable may have the same name as a global one: the local `same` is used while it is in scope, and the global `same` is unchanged (0), but this is not a good idea.
+
+The compiler messages for the scope mistakes in the lecture, from real compiles:
+
+| Code | Compiler message |
+|---|---|
+| `cubeVolume()` uses `sideLength`, a local variable of `main` | `error: cannot find symbol` (symbol: variable sideLength) |
+| a block declares `int n = i * i;` inside a method with the parameter `n` | `error: variable n is already defined in method sumOfSquares(int)` |
+| a variable declared inside a `for` block is printed after the loop | `error: cannot find symbol` (symbol: variable sq) |
+| `int count = 5; int count = 6;` in the same scope | `error: variable count is already defined in method main(String[])` |
+
+Variables, including parameter variables, must have unique names within their scope. Two variables with the same name may exist only if their scopes do not overlap.
+
+<Callout type="mistake" title="Common error">
+
+Declaring a variable inside a loop or `if` block and using it after the block. It stops existing at the closing brace. Declare it before the block if it is needed afterwards.
+
+</Callout>
+
+### Exam question 1: parameters and return (6 marks)
+
+State the output of the program and explain why `a` is unchanged. (6 marks)
+
+```java
+public static int twice(int x) {
+    x = x * 2;
+    return x;
+}
+// in main:
+int a = 5;
+int b = twice(a);
+twice(a);
+System.out.println(a + " " + b);
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+One method that changes its parameter and returns it, and three lines in `main`. The question is about copies and about the unused return value.
+
+</Step>
+
+<Step title="2. Plan">
+
+`twice(a)` copies the value 5 into `x`. The doubling changes `x` only. The returned value is used only where it is assigned.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="TwiceDemo.java"
+public class TwiceDemo {
+    public static int twice(int x) {
+        x = x * 2;
+        return x;
+    }
+
+    public static void main(String[] args) {
+        int a = 5;
+        int b = twice(a);
+        twice(a);                       // the returned 10 is thrown away
+        System.out.println(a + " " + b);
+    }
+}
+```
+
+```text
+5 10
+```
+
+`a` is unchanged because `x` is a copy of its value, so doubling `x` leaves `a` at 5. `b` receives the returned 10. The second call computes 10 and discards it.
+
+</Step>
+
+<Step title="4. Check">
+
+The output is `5 10`. To change `a`, assign the result: `a = twice(a);`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: write and repair a method (6 marks)
+
+Write a method `grade(int mark)` that returns "A" for 75 or more, "B" for 60 to 74, "C" for 50 to 59 and "F" below 50, then say what the compiler reports if the last branch is missing. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A method with a parameter and four possible results, and a question about a missing branch. Every branch must return a value.
+
+</Step>
+
+<Step title="2. Plan">
+
+Test from the highest boundary down, so that each branch needs only one comparison. Finish with a `return` for every other case.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="GradeMethod.java"
+public class GradeMethod {
+    public static String grade(int mark) {
+        if (mark >= 75) {
+            return "A";
+        }
+        if (mark >= 60) {
+            return "B";
+        }
+        if (mark >= 50) {
+            return "C";
+        }
+        return "F";                       // every other mark: the branch that must not be forgotten
+    }
+
+    public static void main(String[] args) {
+        System.out.println(grade(75) + grade(74) + grade(60) + grade(59) + grade(50) + grade(49));
+    }
+}
+```
+
+```text
+ABBCCF
+```
+
+If the final `return "F";` is removed, the compiler reports `error: missing return statement`, because a mark below 50 reaches the end of the method without a value.
+
+</Step>
+
+<Step title="4. Check">
+
+The boundary marks 75, 74, 60, 59, 50 and 49 give A, B, B, C, C and F. The test cases were chosen at the boundaries, as the lecture says: design the test cases first.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A method has a name, parameters with types, a return type and a body; invoke it with arguments of the expected number, order and types, and use or store the returned value. Parameters are copies: a method changes only its own copy, so return the new value and assign it. The `return` ends the method and sends back a value of the declared type; every branch needs one (otherwise: missing return statement); `void` methods need none, and `return;` ends them early. Implement a method by describing it, finding its inputs and types, writing pseudocode, coding the body and testing with cases designed first; use stubs for unfinished methods. A variable is visible only in its scope: local to a method, local to a block, or outside any method; names must be unique within overlapping scopes.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What is the difference between an actual parameter and a formal parameter?">
+
+The actual parameter (argument) is the value in the call, such as 2 or the contents of a variable. The formal parameter is the variable named in the method declaration that receives a copy of that value.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does addTax(total, 7.5) not change total?">
+
+The method receives a copy of the value of `total` in its parameter `price`. Changing `price` changes the copy only; the original in the calling method is untouched. Return the new value and assign it to change `total`.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does the compiler report for a method whose last branch has no return, and how is it fixed?">
+
+`error: missing return statement`. Make sure every condition is handled, for example by ending with a final `return` for the remaining case.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does return; do in a void method?">
+
+It terminates the method immediately, without a value. In `boxString`, an empty string returns at once and prints nothing.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can two methods each declare a variable called result?">
+
+A variable declared inside a method is visible only inside that method, so the two scopes do not overlap, and the two variables are different. The same holds for a variable declared in two separate blocks.
+
+</CheckQuestion>
+
+</CheckQuestions>

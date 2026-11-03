@@ -1,0 +1,681 @@
+---
+title: "Java Fundamentals Exam Practice"
+description: "Eight exam questions on the first chapter, each with a four-step answer: memory diagrams of values and references, parameter passing with arrays, a two-dimensional array, repairing a program in stages, file errors, an in-place array method, scope, and choosing a data structure."
+---
+
+These are the question forms Lectures 1, 2, 3 and 5 and Labs 1 and 2 lead to. Memory diagrams are a large part of the assessments, so the first questions ask for one; the others ask you to trace a program, write a method, repair a program from the compiler messages, and choose a structure. Every program here was compiled with `--release 8` and run, and the compiler messages are real. Work each question on paper before opening the answer. The lessons that teach the material are [Data Structures by Example](/docs/sem3/csi247/01-java-fundamentals/notes/data-structures-by-example), [Java Basics by Example](/docs/sem3/csi247/01-java-fundamentals/notes/java-basics-by-example), [Methods by Example](/docs/sem3/csi247/01-java-fundamentals/notes/methods-by-example), [Arrays by Example](/docs/sem3/csi247/01-java-fundamentals/notes/arrays-by-example) and [Lay-buy Labs by Example](/docs/sem3/csi247/01-java-fundamentals/notes/laybuy-labs-by-example).
+
+<LearningObjectives items={[
+  'Draw and read memory diagrams for primitives, Strings, arrays and method calls',
+  'Trace programs that pass arrays and primitives to methods and fill two-dimensional arrays',
+  'Repair a program from the compiler messages, knowing that javac reports errors in stages',
+  'Write array methods that change the caller\'s array, and handle file exceptions',
+  'Choose a data structure for a described use',
+]} />
+
+<Prerequisites items={[
+  'The five lessons of this chapter',
+  'Drawing memory diagrams: variables on the left, objects and arrays on the right, addresses and arrows',
+]} />
+
+## 1. How to answer these questions
+
+1. **Read.** Underline the command words: *draw*, *trace*, *write*, *repair*, *state*, *choose*.
+2. **Plan.** Name the variables, and for each say whether it holds a value or an address.
+3. **Solve.** For a trace, write the value of every variable after every statement. Never rub out: cross out the old value.
+4. **Check.** Count the arrays and objects created by `new`, and check each index against `length - 1`.
+
+## 2. Memory
+
+### Exam question 1: values, Strings and arrays (8 marks)
+
+Draw the memory after this code and state what is printed. (8 marks)
+
+```java
+int x = 10;
+int y = x;
+x = 20;
+String course = "CSI247";
+String copy = course;
+course = "CSI213";
+int[] a = {1, 2, 3};
+int[] b = a;
+b[0] = 9;
+System.out.println(x + " " + y);
+System.out.println(course + " " + copy);
+System.out.println(a[0] + " " + b[0] + " " + (a == b));
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three pairs of variables: two `int`s, two `String`s and two arrays. The question is which pairs are independent and which share an object.
+
+</Step>
+
+<Step title="2. Plan">
+
+A primitive variable holds its value, so `int y = x` copies the value. A reference variable holds an address, so `String copy = course` and `int[] b = a` copy the address. A `String` object is not changed by assigning a new string to a variable: the variable is pointed at another object.
+
+</Step>
+
+<Step title="3. Solution">
+
+`x` holds 10, crossed out and replaced by 20; `y` holds 10 (its own copy). `course` holds the address of the "CSI247" object, and `copy` the same address; `course = "CSI213"` points `course` at a new object, while `copy` still points at "CSI247". `a` holds the address of one `int[]` of three cells, and `b` holds the same address, so there is one array with two names; `b[0] = 9` changes the one array, so `a[0]` is 9 as well, and `a == b` is true.
+
+```java title="MemoryCheck.java"
+public class MemoryCheck {
+    public static void main(String[] args) {
+        int x = 10;
+        int y = x;
+        x = 20;
+        String course = "CSI247";
+        String copy = course;
+        course = "CSI213";
+        int[] a = {1, 2, 3};
+        int[] b = a;
+        b[0] = 9;
+        System.out.println(x + " " + y);
+        System.out.println(course + " " + copy);
+        System.out.println(a[0] + " " + b[0] + " " + (a == b));
+    }
+}
+```
+
+```text
+20 10
+CSI213 CSI247
+9 9 true
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The diagram has two int boxes, two String boxes with arrows to two different String objects, and two array variables with arrows to one array. The lesson's diagram for the first and third pairs:
+
+<MemoryDiagram scenario="basics" />
+
+</Step>
+
+</Steps>
+
+</details>
+
+<Callout type="mistake" title="Common error">
+
+Drawing `b = a` as a second array. For arrays and objects the assignment copies the address, so there is still one array, and a change through either name is seen through the other.
+
+</Callout>
+
+### Exam question 2: arrays and primitives as parameters (8 marks)
+
+State the output of the program and explain each of the three values. (8 marks)
+
+```java
+static void change(int[] arr, int n, String s) {
+    arr[0] = 99;
+    n = n + 1;
+    s = s + "!";
+    arr = new int[] {7, 7, 7};
+    arr[1] = 55;
+}
+// in main:
+int[] data = {1, 2, 3};
+int count = 10;
+String word = "hi";
+change(data, count, word);
+System.out.println(Arrays.toString(data) + " " + count + " " + word);
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three arguments of three kinds (an array, a primitive, a `String`) and four statements in the method that try to change them.
+
+</Step>
+
+<Step title="2. Plan">
+
+Every parameter is a copy. The copy of `data` is a copy of the address, so the first assignment reaches the caller's array. `n` is a copy of a value. `s = s + "!"` makes a new `String` and points the parameter at it. `arr = new int[]...` points the parameter at a new array.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="PassTrace.java"
+import java.util.Arrays;
+
+public class PassTrace {
+    static void change(int[] arr, int n, String s) {
+        arr[0] = 99;                       // follows the copied address: changes the caller's array
+        n = n + 1;                         // changes the copy of the value
+        s = s + "!";                       // a new String; the parameter now points at it
+        arr = new int[] {7, 7, 7};         // the parameter now points at a new array
+        arr[1] = 55;                       // changes the new array only
+    }
+
+    public static void main(String[] args) {
+        int[] data = {1, 2, 3};
+        int count = 10;
+        String word = "hi";
+        change(data, count, word);
+        System.out.println(Arrays.toString(data) + " " + count + " " + word);
+    }
+}
+```
+
+```text
+[99, 2, 3] 10 hi
+```
+
+`data` is `[99, 2, 3]`: the first assignment followed the address and changed the caller's array; the later `arr = new int[]...` moved only the parameter, so the 55 never reached `data`. `count` is 10 and `word` is `hi`: a primitive and a `String` variable in the caller cannot be changed by the method.
+
+</Step>
+
+<Step title="4. Check">
+
+Only the first statement reaches the caller. A method changes the caller's array by working on its elements, but cannot make the caller's variable point at another array.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Tracing programs
+
+### Exam question 3: a two-dimensional array (8 marks)
+
+Give the contents of the array and the row sums and column sums printed by the program. (8 marks)
+
+```java
+int[][] t = new int[3][4];
+for (int r = 0; r < t.length; r++) {
+    for (int c = 0; c < t[r].length; c++) {
+        t[r][c] = r + c;
+    }
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three rows of four cells; each cell is the sum of its row and column index. Then the sums of each row and each column.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the grid by rows. Row `r` is `r, r+1, r+2, r+3`.
+
+</Step>
+
+<Step title="3. Solution">
+
+| | col 0 | col 1 | col 2 | col 3 | row sum |
+|---|---|---|---|---|---|
+| row 0 | 0 | 1 | 2 | 3 | 6 |
+| row 1 | 1 | 2 | 3 | 4 | 10 |
+| row 2 | 2 | 3 | 4 | 5 | 14 |
+| column sum | 3 | 6 | 9 | 12 | |
+
+```java title="TableSums.java"
+public class TableSums {
+    public static void main(String[] args) {
+        int[][] t = new int[3][4];
+        for (int r = 0; r < t.length; r++) {
+            for (int c = 0; c < t[r].length; c++) {
+                t[r][c] = r + c;
+            }
+        }
+        for (int r = 0; r < t.length; r++) {
+            int sum = 0;
+            for (int c = 0; c < t[r].length; c++) {
+                sum += t[r][c];
+            }
+            System.out.println("row " + r + ": " + sum);
+        }
+        for (int c = 0; c < t[0].length; c++) {
+            int sum = 0;
+            for (int r = 0; r < t.length; r++) {
+                sum += t[r][c];
+            }
+            System.out.print("col " + c + ": " + sum + "  ");
+        }
+        System.out.println();
+    }
+}
+```
+
+```text
+row 0: 6
+row 1: 10
+row 2: 14
+col 0: 3  col 1: 6  col 2: 9  col 3: 12
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The output agrees with the table: row sums 6, 10, 14 and column sums 3, 6, 9, 12. In the column loop the outer loop runs over the columns (`t[0].length`) and the inner loop over the rows (`t.length`).
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 4: scope and the global variable (6 marks)
+
+State the output of the program and the value of `ScopeTrace.count` at the end. (6 marks)
+
+```java
+static int count = 3;
+static int addOne(int count) {
+    count = count + 1;
+    return count;
+}
+// in main:
+int a = addOne(count);
+System.out.println(a + " " + count);
+int count = 50;
+System.out.println(count + " " + ScopeTrace.count);
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A global variable and a parameter with the same name, then a local variable declared in `main` with the same name again.
+
+</Step>
+
+<Step title="2. Plan">
+
+The scope of a local variable starts at its declaration. Before `int count = 50;` the name `count` in `main` means the global one. Inside `addOne`, the parameter hides the global.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="ScopeTrace.java"
+public class ScopeTrace {
+    static int count = 3;                          // global
+
+    static int addOne(int count) {                 // the parameter hides the global
+        count = count + 1;
+        return count;
+    }
+
+    public static void main(String[] args) {
+        int a = addOne(count);                     // here count is the global: 3, copied into the parameter
+        System.out.println(a + " " + count);
+        int count = 50;                            // a local variable hides the global from here on
+        System.out.println(count + " " + ScopeTrace.count);
+    }
+}
+```
+
+```text
+4 3
+50 3
+```
+
+`addOne(count)` receives a copy of the global 3, returns 4, and does not change the global; so the first line is `4 3`. After `int count = 50;` the name means the local variable, so the second line is `50 3`: the global is reached with its class name and is still 3.
+
+</Step>
+
+<Step title="4. Check">
+
+Three different variables are named `count`: the global, the parameter of `addOne`, and the local of `main`. They are legal together because their scopes do not overlap in a way that repeats a name in the same scope.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Repairing programs
+
+### Exam question 5: repair from the messages (8 marks)
+
+The program below does not compile. Give the compiler messages and the repairs. (8 marks)
+
+```java
+public class Broken {
+    public static int bigger(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+    }
+
+    public static void main(String[] args) {
+        int total;
+        total++;
+        int[] marks = new int[3];
+        int n = marks.length();
+        String s = marks[0];
+        double d = bigger(2, 3, 4);
+        for (int i = 0; i < 3; i++) {
+            int sq = i * i;
+        }
+        System.out.println(sq);
+    }
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Seven faults in one program. `javac` does not report them all at once: it first reports the faults of names and types, and reports the faults found by checking the flow of the program only when those are fixed.
+
+</Step>
+
+<Step title="2. Plan">
+
+Compile, repair what is reported, and compile again. Expect more than one round.
+
+</Step>
+
+<Step title="3. Solution">
+
+Round 1, four errors about names and types:
+
+| Line | Compiler message | Repair |
+|---|---|---|
+| `int n = marks.length();` | `error: cannot find symbol` (symbol: method length(), location: variable marks of type int[]) | `marks.length`, an attribute |
+| `String s = marks[0];` | `error: incompatible types: int cannot be converted to String` | `int s = marks[0];` |
+| `bigger(2, 3, 4)` | `error: method bigger in class Broken cannot be applied to given types;` (required: int,int) | `bigger(2, 3)` |
+| `System.out.println(sq);` | `error: cannot find symbol` (symbol: variable sq) | `sq` stops existing at the end of the `for` block: print inside the loop or declare it before |
+
+Once those four are repaired (the `println(sq)` moved inside the loop, where `sq` exists), the compiler checks the flow of the program and reports the second round:
+
+| Line | Compiler message | Repair |
+|---|---|---|
+| the end of `bigger` | `error: missing return statement` | add `return b;` |
+| `total++;` | `error: variable total might not have been initialized` | `int total = 0;` |
+
+</Step>
+
+<Step title="4. Check">
+
+Both rounds were run on this program, and the messages above are the ones javac printed. The flow errors (missing return, variable not initialised) did not appear in the first round: fix the type and name errors first, and expect new messages to appear.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: file input and exceptions (8 marks)
+
+The method `countLines(String name)` below does not compile. Give the message, give two repairs, and say what else the method must do. (8 marks)
+
+```java
+static int countLines(String name) {
+    Scanner in = new Scanner(new FileReader(name));
+    int lines = 0;
+    while (in.hasNextLine()) {
+        in.nextLine();
+        lines++;
+    }
+    return lines;
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A method that reads a file. `new FileReader(name)` can throw `FileNotFoundException`, a checked exception, so the compiler insists that it is handled.
+
+</Step>
+
+<Step title="2. Plan">
+
+Either declare the exception with `throws`, or catch it in the method. And the file should be closed when the reading is finished.
+
+</Step>
+
+<Step title="3. Solution">
+
+The message is `error: unreported exception FileNotFoundException; must be caught or declared to be thrown`. Repair 1 declares it, so the caller must handle it; repair 2 catches it, here returning -1 for a missing file. The scanner is closed in both.
+
+```java title="FileFix.java"
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.PrintWriter;
+import java.util.Scanner;
+
+public class FileFix {
+    // repair 1: declare the exception; the caller must handle it
+    static int countLines(String name) throws FileNotFoundException {
+        Scanner in = new Scanner(new FileReader(name));
+        int lines = 0;
+        while (in.hasNextLine()) {
+            in.nextLine();
+            lines++;
+        }
+        in.close();
+        return lines;
+    }
+
+    // repair 2: catch the exception and report -1 for a missing file
+    static int countLinesSafe(String name) {
+        try {
+            return countLines(name);
+        } catch (FileNotFoundException e) {
+            return -1;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        File f = File.createTempFile("lines", ".txt");
+        f.deleteOnExit();
+        PrintWriter out = new PrintWriter(f);
+        out.println("one");
+        out.println("two");
+        out.println("three");
+        out.close();
+        System.out.println(countLinesSafe(f.getPath()));
+        System.out.println(countLinesSafe("no-such-file.txt"));
+    }
+}
+```
+
+```text
+3
+-1
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The existing file gives 3 and the missing file gives -1, with no crash. `close()` is called on the scanner, because an open file that is not closed holds its resources, and for an output file the data may not even be written.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Writing a method
+
+### Exam question 7: reverse an array in place (8 marks)
+
+Write a method `reverse(int[] a)` that reverses the array in place, without creating another array, and show it on `{3, 1, -2, 6, 8}`. Say why the method does not need to return anything. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A method on an array, in place. The method parameter is a copy of the address, so working on the elements changes the caller's array.
+
+</Step>
+
+<Step title="2. Plan">
+
+Swap the first and the last element, then the second and the second last, and stop at the middle. For `n` elements, `i` runs from 0 to `n / 2 - 1`, and element `i` is swapped with element `n - 1 - i`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="ReverseArray.java"
+import java.util.Arrays;
+
+public class ReverseArray {
+    public static void reverse(int[] a) {
+        for (int i = 0; i < a.length / 2; i++) {
+            int temp = a[i];                  // swap a[i] with its mirror cell
+            a[i] = a[a.length - 1 - i];
+            a[a.length - 1 - i] = temp;
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] numbers = {3, 1, -2, 6, 8};
+        reverse(numbers);
+        System.out.println(Arrays.toString(numbers));
+        int[] even = {1, 2, 3, 4};
+        reverse(even);
+        System.out.println(Arrays.toString(even));
+    }
+}
+```
+
+```text
+[8, 6, -2, 1, 3]
+[4, 3, 2, 1]
+```
+
+The method returns nothing, because it received the address of the caller's array and changed that array. The loop stops at `a.length / 2`: if it went to the end, every pair would be swapped twice and the array would be back as it was. For an odd length the middle cell stays where it is.
+
+</Step>
+
+<Step title="4. Check">
+
+Five elements: the pairs are (0, 4) and (1, 3), and the middle cell 2 is unchanged, giving `[8, 6, -2, 1, 3]`. Four elements: pairs (0, 3) and (1, 2), giving `[4, 3, 2, 1]`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Choosing a data structure
+
+### Exam question 8: which structure? (6 marks)
+
+For each use, choose a data structure from Lecture 1 and give one reason: (a) print jobs waiting for a printer; (b) the Back button of a browser; (c) a program that needs quick access to element number 500 of a fixed list of 1000 marks; (d) memory that is allocated and released in pieces of different sizes. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four uses; the lecture's application areas give the structures: queues for process scheduling such as printing, a stack for the Back button, arrays for direct access, linked lists for dynamic memory allocation.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each use, ask which operation matters most: the order of removal, direct access by position, or growing and shrinking.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Use | Structure | Reason |
+|---|---|---|
+| (a) print jobs | queue | the first job to arrive is the first to be served: first in, first out |
+| (b) the Back button | stack | the page visited last is the first one to go back to: last in, first out |
+| (c) element number 500 of 1000 marks | array | direct access by index, quick retrieval, elements in contiguous memory |
+| (d) dynamic memory allocation | linked list | the number of items changes, and nodes are added and removed without moving the others |
+
+</Step>
+
+<Step title="4. Check">
+
+Each row names the property that the lecture gives for the structure: arrays give direct access, linked lists are dynamic, and queues and stacks control the order of removal. These are the structures the later chapters implement.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+For a diagram, a primitive variable holds its value and a reference variable holds an address; assigning a reference copies the address, so arrays and objects are shared and a new `String` is a new object. A method receives copies: it can change the caller's array through the copied address, but not the caller's primitive or its variable. Fill and trace 2-D arrays one row at a time; row sums use the inner loop over the columns. Local variables hide globals only from their declaration; reach a global with its class name. `javac` reports errors in stages: names and types first, flow errors (missing return, not initialised) after. File methods either declare or catch `FileNotFoundException`, and close the file. An in-place method works on the elements; a loop that reverses stops at the middle. Choose a structure by the operation that matters: queue (first in, first out), stack (last in, first out), array (direct access), linked list (dynamic).
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="After copy = course and then a new string is assigned to course, what does copy hold, and why?">
+
+`copy` still refers to the "CSI247" object. Assigning a new string to `course` points that variable at another `String` object; it does not change the object that `copy` refers to.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does arr = new int[]{7, 7, 7} inside a method not change the caller's array?">
+
+The parameter is a copy of the address. Assigning a new array moves the copy to a different array; the caller's variable still holds the old address. Changing an element (`arr[0] = 99`) follows the address and does reach the caller's array.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does javac not report a missing return statement in the first round of errors?">
+
+It reports errors about names and types first. Errors found by checking the flow of the program, such as a missing return or a variable that might not have been initialised, appear only after those are fixed, so the compiler must be run again.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does a loop that reverses an array in place stop at length / 2?">
+
+Each pass swaps a pair of cells. If the loop ran to the end it would swap every pair a second time and restore the original order. For an odd length the middle cell has no partner.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which data structure suits a Back button, and which a print queue?">
+
+A stack for the Back button: the most recently visited page is the first to go back to (last in, first out). A queue for print jobs: the first job to arrive is printed first (first in, first out).
+
+</CheckQuestion>
+
+</CheckQuestions>
