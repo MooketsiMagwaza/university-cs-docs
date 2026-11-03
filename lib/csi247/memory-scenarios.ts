@@ -666,6 +666,50 @@ const scenarios: Record<string, Builder> = {
     B.snap(5, 'add(1, "Net") inserts between DB and DSA: the list walks to index 1, the new node (700) points back at 600 and forward at 400, then 600.next and 400.prev are changed to 700. No element is shifted. size 3: DB, Net, DSA.');
     return B.done('Lab 8: a LinkedList of course names');
   },
+
+  account() {
+    const B = memoryBuilder().code([
+      'FullAccount first = new FullAccount(21347, 38763.87);',
+      'FullAccount second = new FullAccount(61342, 0.00);',
+      'second.deposit(500.00);',
+      'first.withdraw(1000.00);',
+      'first.transferFunds(second, 500.00);',
+      'FullAccount third = first;',
+      'third.setNumber(99999);',
+    ]);
+    B.snap(-1, 'Lecture 4\'s Account class, as memory. Every object has its own instance variables, and a variable of a class type holds an address.');
+    B.obj(200, [['accNumber', 21347], ['balance', '38763.87']], { x: 260, y: 30, w: 210, t: 'FullAccount' }).v('first', { r: 200 }, { y: 30 });
+    B.snap(0, 'new FullAccount(21347, 38763.87) makes an object (200) and the constructor copies its two arguments into the object\'s own instance variables. first holds the address.');
+    B.obj(400, [['accNumber', 61342], ['balance', '0.00']], { x: 560, y: 30, w: 210, t: 'FullAccount' }).v('second', { r: 400 }, { y: 140 });
+    B.snap(1, 'A second object (400). The two accounts do not share balances: each object has its own copy of every instance variable.');
+    B.set(400, 'balance', '500.00').snap(2, 'second.deposit(500.00): the method runs on the object second points to (400), so balance = 0.00 + 500.00. The old value is crossed out.');
+    B.set(200, 'balance', '37763.87').snap(3, 'first.withdraw(1000.00): balance = 38763.87 - 1000.00 on the object at 200. The other account is not touched.');
+    B.set(200, 'balance', '37263.87').set(400, 'balance', '1000.00');
+    B.snap(4, 'first.transferFunds(second, 500.00): first has enough (37763.87 >= 500), so it withdraws 500.00 from itself and calls second.deposit(500.00). The parameter "to" holds the address 400 while the method runs, so both objects change.');
+    B.v('third', { r: 200 }, { y: 250 }).snap(5, 'FullAccount third = first copies the address 200. There is still ONE account at 200 and two names for it.');
+    B.set(200, 'accNumber', 99999).snap(6, 'third.setNumber(99999) follows the address to the object at 200, so first.getNumber() now returns 99999 as well. No new object was created.');
+    return B.done('Account objects: own values, a transfer, an alias');
+  },
+
+  polymorph() {
+    const B = memoryBuilder().code([
+      'Shape[] shapes = new Shape[2];',
+      'shapes[0] = new Circle("Red", 3);',
+      'shapes[1] = new Rectangle("Blue", 2, 5);',
+      'double a0 = shapes[0].getArea();',
+      'double a1 = shapes[1].getArea();',
+    ]);
+    B.snap(-1, 'Polymorphism, as memory. The array has the type Shape[], but each cell can hold the address of any kind of Shape.');
+    B.arr(100, 2, { x: 260, y: 30, cw: 90, t: 'Shape[]' }).v('shapes', { r: 100 }, { y: 30 });
+    B.snap(0, 'new Shape[2] makes an array of two references, both null. No Circle or Rectangle exists yet.');
+    B.obj(200, [['colour', '"Red"'], ['radius', 3]], { x: 260, y: 170, w: 210, t: 'Circle' }).set(100, 0, { r: 200 });
+    B.snap(1, 'A Circle object (200) holds the Shape part (colour) and its own part (radius). The Shape cell holds the address: a Circle is a Shape.');
+    B.obj(300, [['colour', '"Blue"'], ['height', 2], ['width', 5]], { x: 540, y: 170, w: 210, t: 'Rectangle' }).set(100, 1, { r: 300 });
+    B.snap(2, 'A Rectangle object (300) goes in the second cell. Both cells have the static type Shape; the objects they point to have different classes.');
+    B.v('a0', '28.27', { y: 330 }).snap(3, 'shapes[0].getArea(): Java looks at the object the cell points to (a Circle) at run time and runs Circle\'s getArea: 3.14159... x 3 x 3 = 28.27.');
+    B.v('a1', '10.0', { y: 420 }).snap(4, 'shapes[1].getArea(): the object is a Rectangle, so Rectangle\'s getArea runs: 2 x 5 = 10.0. The same call, two different methods: this is polymorphism.');
+    return B.done('Polymorphism: one call, the method of the object');
+  },
 };
 
 export const memoryScenarioIds = Object.keys(scenarios);

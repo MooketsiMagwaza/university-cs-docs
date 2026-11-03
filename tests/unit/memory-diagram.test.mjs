@@ -49,8 +49,8 @@ const texts = (drawing) => {
   return out;
 };
 
-test('there are twenty-eight scenarios and each one builds and draws every step', () => {
-  assert.equal(memoryScenarioIds.length, 28);
+test('there are thirty scenarios and each one builds and draws every step', () => {
+  assert.equal(memoryScenarioIds.length, 30);
   for (const id of memoryScenarioIds) {
     const sc = buildMemoryScenario(id);
     assert.ok(sc.steps.length >= 1, `${id} has steps`);
@@ -226,4 +226,25 @@ test('the LinkedList scenario keeps both directions of every link consistent', (
   assert.equal(f(700, 'next').r, 400);
   assert.equal(f(400, 'prev').r, 700);
   assert.equal(f(400, 'next').t, 'null');
+});
+
+test('the account scenario changes two objects in a transfer and shares one object through an alias', () => {
+  const last = finalState(buildMemoryScenario('account'));
+  const field = (a, n) => last.objs.find((o) => o.addr === a).cells.find((c) => c.n === n).v;
+  assert.equal(field(200, 'balance').t, '37263.87');
+  assert.equal(field(400, 'balance').t, '1000.00');
+  assert.equal(field(200, 'accNumber').t, '99999');
+  assert.equal(last.vars.find((v) => v.n === 'third').v.r, 200);
+  assert.equal(last.vars.find((v) => v.n === 'first').v.r, 200);
+  assert.ok(last.objs.find((o) => o.addr === 200).cells.find((c) => c.n === 'balance').old.includes('37763.87'));
+});
+
+test('the polymorphism scenario stores different classes in one Shape array', () => {
+  const last = finalState(buildMemoryScenario('polymorph'));
+  const arr = last.objs.find((o) => o.addr === 100);
+  assert.equal(arr.cells[0].v.r, 200);
+  assert.equal(arr.cells[1].v.r, 300);
+  assert.equal(last.objs.find((o) => o.addr === 200).t, 'Circle');
+  assert.equal(last.objs.find((o) => o.addr === 300).t, 'Rectangle');
+  assert.equal(last.vars.find((v) => v.n === 'a0').v.t, '28.27');
 });
