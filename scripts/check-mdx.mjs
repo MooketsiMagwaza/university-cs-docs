@@ -3,11 +3,15 @@
  * Compiles MDX pages with the site's math plugin, so a syntax error (a stray `<` or `{` in prose, an unclosed tag, a
  * fence inside a tag without blank lines) shows up in a second instead of in the production build.
  *
+ *   node scripts/check-mdx.mjs                       (only the pages changed since the last commit, plus new ones)
+ *   node scripts/check-mdx.mjs --since origin/main   (only the pages changed since that commit; use it on a branch)
+ *   node scripts/check-mdx.mjs --all                 (every page under content/docs; CI uses this)
  *   node scripts/check-mdx.mjs content/docs/sem3/csi243/10-reasoning-revision/notes/proofs-of-programs-i.mdx
  *   node scripts/check-mdx.mjs content/docs/sem3/csi243/07-higher-order        (every .mdx under a folder)
  *
  * It does not render anything and does not check that components exist. Exit code 1 when a page does not compile.
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,11 +19,11 @@ import { compile } from '@mdx-js/mdx';
 import remarkMath from 'remark-math';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const targets = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
-if (!targets.length) {
-  console.error('Usage: node scripts/check-mdx.mjs <file or folder>...');
-  process.exit(2);
-}
+const args = process.argv.slice(2);
+const flag = (name) => args.includes(name);
+const sinceIndex = args.indexOf('--since');
+const since = sinceIndex >= 0 ? args[sinceIndex + 1] : undefined;
+const targets = args.filter((arg, index) => !arg.startsWith('--') && !(sinceIndex >= 0 && index === sinceIndex + 1));
 
 const files = [];
 const collect = (target) => {
@@ -31,7 +35,37 @@ const collect = (target) => {
     else if (entry.name.endsWith('.mdx')) files.push(child);
   }
 };
-targets.forEach(collect);
+
+const git = (...gitArgs) => execFileSync('git', gitArgs, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split(/\r?\n/).filter(Boolean);
+
+/** The .mdx pages under content/docs that differ from `base` (or from HEAD), including staged, unstaged and new files. */
+function changedPages() {
+  const names = new Set([
+    ...git('diff', '--name-only', '--diff-filter=ACMR', since ? `${since}...HEAD` : 'HEAD', '--', 'content/docs'),
+    ...(since ? git('diff', '--name-only', '--diff-filter=ACMR', 'HEAD', '--', 'content/docs') : []),
+    ...git('ls-files', '--others', '--exclude-standard', '--', 'content/docs'),
+  ]);
+  return [...names].filter((name) => name.endsWith('.mdx') && fs.existsSync(path.join(root, name)));
+}
+
+if (flag('--all')) {
+  collect('content/docs');
+} else if (targets.length) {
+  targets.forEach(collect);
+} else {
+  let changed;
+  try {
+    changed = changedPages();
+  } catch {
+    console.error('Could not ask git which pages changed, so every page is checked (pass --all to say so).');
+    changed = null;
+  }
+  if (changed === null) collect('content/docs');
+  else if (!changed.length) {
+    console.log('MDX check: no changed pages (pass --all to check every page).');
+    process.exit(0);
+  } else changed.forEach(collect);
+}
 
 let failed = 0;
 for (const file of files.sort()) {

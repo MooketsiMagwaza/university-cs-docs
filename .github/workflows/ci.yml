@@ -30,7 +30,22 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+          # Caches the npm download cache (~/.npm), so `npm ci` unpacks from disk instead of downloading. The
+          # node_modules folder itself is not cached: restoring it costs about as much as `npm ci` from a warm cache,
+          # and the install also runs `fumadocs-mdx` and the native binaries are tied to the runner.
           cache: npm
+
+      - name: Cache the Next.js build (Turbopack) and the TypeScript build info
+        # `.next/cache` holds Turbopack's build cache, so a build after a small change recompiles only what changed;
+        # tsconfig.json keeps the incremental type-check state there too. A changed lock file starts a new cache,
+        # a changed source file restores the nearest earlier one.
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'components/**', 'lib/**', 'features/**', 'content/**', 'next.config.mjs', 'source.config.ts', 'tsconfig.json') }}
+          restore-keys: |
+            ${{ runner.os }}-next-${{ hashFiles('package-lock.json') }}-
+            ${{ runner.os }}-next-
 
       - name: Install dependencies
         run: npm ci
@@ -41,24 +56,38 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Audit content architecture and learning data
-        run: npm run audit:content:full && npm run test:csi247-markdown && npm run test:csi247-illustrations
-
-      - name: Report how far each course is from the content standard
-        # Report only: it prints the summary table and does not fail the build until the open orders are done.
-        run: npm run audit:content-standard
-
-      - name: Run unit tests
-        run: npm run test:unit
-
-      - name: Compile and run the Java examples in the CSI141 and CSI142 notes
-        run: npm run verify:java-notes
-
-      - name: Type check
-        run: npm run types:check
+      - name: Content checks, unit tests and type check (in parallel)
+        # These are independent of each other and of the build, so they run side by side: every MDX page compiles,
+        # the content and learning-data audits pass, the unit tests pass, the Java examples compile and the types check.
+        # The content-standard report is report-only: it prints the summary table and does not fail the build until
+        # the open orders are done (CI-04). A failing task prints its whole output; the others print their last lines.
+        run: >
+          node scripts/run-parallel.mjs --limit 4
+          "node scripts/check-mdx.mjs --all"
+          audit:content:full
+          test:csi247-markdown
+          test:csi247-illustrations
+          audit:content-standard
+          test:unit
+          verify:java-notes
+          types:check
 
       - name: Production build
+        # `types:check` above already type-checked the project, so the build does not do it a second time.
         run: npm run build
+        env:
+          SKIP_BUILD_TYPECHECK: "1"
+
+      - name: Report page sizes against the budget
+        # Report only until the pages that are over budget are recorded (`npm run audit:page-budget -- --write-known`
+        # after a full build, then commit scripts/page-budget.json and drop `--report`).
+        run: npm run audit:page-budget -- --report
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
