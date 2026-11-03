@@ -1,0 +1,655 @@
+---
+title: "Searching and Sorting Exam Practice"
+description: "Eight exam questions on searching and sorting, each with a four-step answer: bubble, insertion and selection sort passes on new arrays, a recursive binary search trace, three binary search bugs, a merge of unequal halves, the choice of algorithm, and the numbers of Lab 4."
+---
+
+These are the question forms Lectures 8 and 9 and Labs 4 and 5 lead to. Sorting questions ask for the array at the end of each pass; searching questions ask for comparisons or for the values of `low`, `mid` and `high`; the memory-diagram form asks for the arrays that `merge` creates. Every program here was compiled with `--release 8` and run, so the arrays shown are the real ones. Work each question on paper before opening the answer. The lessons that teach the material are [Searching by Example](/docs/sem3/csi247/04-sorting-and-searching/notes/searching-by-example), [Bubble, Insertion and Selection Sort by Example](/docs/sem3/csi247/04-sorting-and-searching/notes/simple-sorts-by-example) and [Merge Sort by Example](/docs/sem3/csi247/04-sorting-and-searching/notes/merge-sort-by-example).
+
+<LearningObjectives items={[
+  'Show the array at the end of each pass of bubble, insertion and selection sort',
+  'Trace a recursive binary search and find the bugs in an incorrect one',
+  'Show the arrays created by merge and the values written back',
+  'Choose between linear and binary search, and between the sorting algorithms, and justify the choice',
+  'State the numbers of a search on the arrays of Lab 4',
+]} />
+
+<Prerequisites items={[
+  'The three searching and sorting lessons of this chapter',
+  'Recursion by Example in the Recursion chapter',
+]} />
+
+## 1. How to answer these questions
+
+1. **Read.** Underline what is asked: the array after **each pass**, the comparisons, the index returned, the calls made.
+2. **Plan.** Name the algorithm and write its rule for one pass: compare neighbours (bubble), insert the next item (insertion), swap the smallest into place (selection), halve (binary search, merge sort).
+3. **Solve.** Write the whole array after every pass. Never skip a pass that changes nothing: the question may count passes.
+4. **Check.** The array at the end must be sorted and must contain the same items; a search must return an index whose element equals the key, or -1.
+
+## 2. Sorting passes
+
+### Exam question 1: bubble sort passes (6 marks)
+
+Sort `42 15 8 23 4 16` with the lecture's bubble sort (n passes of n - 1 comparisons) and show the array at the end of each pass. How many passes change the array? (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Six items, so six passes of five comparisons, and a count of the passes that make a change.
+
+</Step>
+
+<Step title="2. Plan">
+
+In each pass compare each pair of neighbours from the left and swap the pair when the left one is larger. The largest unsorted value reaches its place at the right end in every pass.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="BubblePasses.java"
+import java.util.Arrays;
+
+public class BubblePasses {
+    public static void main(String[] args) {
+        int[] arr = {42, 15, 8, 23, 4, 16};
+        System.out.println("start:  " + Arrays.toString(arr));
+        for (int i = 0; i < arr.length; i++) {
+            boolean changed = false;
+            for (int j = 0; j < arr.length - 1; j++) {
+                if (arr[j] > arr[j + 1]) {
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                    changed = true;
+                }
+            }
+            System.out.println("pass " + (i + 1) + ": " + Arrays.toString(arr) + (changed ? "" : "  (no change)"));
+        }
+    }
+}
+```
+
+```text
+start:  [42, 15, 8, 23, 4, 16]
+pass 1: [15, 8, 23, 4, 16, 42]
+pass 2: [8, 15, 4, 16, 23, 42]
+pass 3: [8, 4, 15, 16, 23, 42]
+pass 4: [4, 8, 15, 16, 23, 42]
+pass 5: [4, 8, 15, 16, 23, 42]  (no change)
+pass 6: [4, 8, 15, 16, 23, 42]  (no change)
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The largest values go to the right end one per pass: 42 in pass 1, then 23, 16, 15 and 8. The array is sorted after pass 4, so four passes change the array and passes 5 and 6 change nothing. That is why the improved bubble sort stops when a pass makes no swap.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: insertion sort passes (6 marks)
+
+Sort the lecture's second exercise array `63 29 72 85 18 49 3 54` with insertion sort and show the array after each insertion. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Eight items, so seven insertions (the first item is the sorted part to start with). After each one, the sorted prefix is one item longer.
+
+</Step>
+
+<Step title="2. Plan">
+
+For `i` from 1 to 7: take `arr[i]`, shift the larger items of the sorted prefix one place right, and drop the item into the gap.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="InsertionPasses.java"
+import java.util.Arrays;
+
+public class InsertionPasses {
+    public static void main(String[] args) {
+        int[] arr = {63, 29, 72, 85, 18, 49, 3, 54};
+        System.out.println("start:  " + Arrays.toString(arr));
+        for (int i = 1; i < arr.length; i++) {
+            int temp = arr[i];
+            int j = i;
+            while (j > 0 && temp < arr[j - 1]) {
+                arr[j] = arr[j - 1];
+                j--;
+            }
+            arr[j] = temp;
+            System.out.println("i = " + i + ": " + Arrays.toString(arr));
+        }
+    }
+}
+```
+
+```text
+start:  [63, 29, 72, 85, 18, 49, 3, 54]
+i = 1: [29, 63, 72, 85, 18, 49, 3, 54]
+i = 2: [29, 63, 72, 85, 18, 49, 3, 54]
+i = 3: [29, 63, 72, 85, 18, 49, 3, 54]
+i = 4: [18, 29, 63, 72, 85, 49, 3, 54]
+i = 5: [18, 29, 49, 63, 72, 85, 3, 54]
+i = 6: [3, 18, 29, 49, 63, 72, 85, 54]
+i = 7: [3, 18, 29, 49, 54, 63, 72, 85]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+After each pass the first `i + 1` items are in order. The items 72 and 85 were already in place, so the passes for `i = 2` and `i = 3` changed nothing. 18, 49, 3 and 54 each moved left past the larger items of the sorted prefix: 4, 3, 6 and 3 places.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: selection sort passes (6 marks)
+
+Sort `63 29 72 85 18 49 3 54` with selection sort and show the array after each pass, with the position of the smallest value found. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Eight items, so seven passes. For each pass, the position `minIndex` of the smallest value in the unsorted part and the array after the swap.
+
+</Step>
+
+<Step title="2. Plan">
+
+In pass `i`, search positions `i` to 7 for the smallest value and swap it with position `i`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="SelectionPasses.java"
+import java.util.Arrays;
+
+public class SelectionPasses {
+    public static void main(String[] args) {
+        int[] arr = {63, 29, 72, 85, 18, 49, 3, 54};
+        System.out.println("start:  " + Arrays.toString(arr));
+        for (int i = 0; i < arr.length - 1; i++) {
+            int minIndex = i;
+            for (int j = i + 1; j < arr.length; j++) {
+                if (arr[j] < arr[minIndex]) {
+                    minIndex = j;
+                }
+            }
+            int temp = arr[minIndex];
+            arr[minIndex] = arr[i];
+            arr[i] = temp;
+            System.out.println("i = " + i + ", smallest at " + minIndex + ": " + Arrays.toString(arr));
+        }
+    }
+}
+```
+
+```text
+start:  [63, 29, 72, 85, 18, 49, 3, 54]
+i = 0, smallest at 6: [3, 29, 72, 85, 18, 49, 63, 54]
+i = 1, smallest at 4: [3, 18, 72, 85, 29, 49, 63, 54]
+i = 2, smallest at 4: [3, 18, 29, 85, 72, 49, 63, 54]
+i = 3, smallest at 5: [3, 18, 29, 49, 72, 85, 63, 54]
+i = 4, smallest at 7: [3, 18, 29, 49, 54, 85, 63, 72]
+i = 5, smallest at 6: [3, 18, 29, 49, 54, 63, 85, 72]
+i = 6, smallest at 7: [3, 18, 29, 49, 54, 63, 72, 85]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+After pass `i` the first `i + 1` positions hold the `i + 1` smallest values, in order. Each pass makes one swap, and some swaps move a large value a long way, such as 63 to the position of 3.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Searching
+
+### Exam question 4: trace a recursive binary search (8 marks)
+
+Trace the recursive binary search for the key 63 in `{3, 8, 18, 23, 29, 42, 49, 54, 63, 72, 85, 90}`: for each call give `low`, `high`, `mid` and `arr[mid]`, and the result. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Twelve sorted items, indexes 0 to 11. One row per call. The method is recursive, so each row is a new call with a smaller range.
+
+</Step>
+
+<Step title="2. Plan">
+
+`mid = low + (high - low) / 2`. If `arr[mid]` equals the key return `mid`; if it is smaller call with `mid + 1` and `high`; if larger call with `low` and `mid - 1`; if `low > high` return -1.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="RecursiveTrace.java"
+public class RecursiveTrace {
+    static int binarySearch(int[] arr, int key, int low, int high, int depth) {
+        String pad = "";
+        for (int k = 0; k < depth; k++) {
+            pad += "  ";
+        }
+        if (low > high) {
+            System.out.println(pad + "low=" + low + " high=" + high + ": empty, return -1");
+            return -1;
+        }
+        int mid = low + (high - low) / 2;
+        System.out.println(pad + "low=" + low + " high=" + high + " mid=" + mid + " arr[mid]=" + arr[mid]);
+        if (arr[mid] == key) {
+            return mid;
+        } else if (arr[mid] < key) {
+            return binarySearch(arr, key, mid + 1, high, depth + 1);
+        } else {
+            return binarySearch(arr, key, low, mid - 1, depth + 1);
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] arr = {3, 8, 18, 23, 29, 42, 49, 54, 63, 72, 85, 90};
+        System.out.println("key 63 -> index " + binarySearch(arr, 63, 0, arr.length - 1, 0));
+        System.out.println("key 50 -> index " + binarySearch(arr, 50, 0, arr.length - 1, 0));
+    }
+}
+```
+
+```text
+low=0 high=11 mid=5 arr[mid]=42
+  low=6 high=11 mid=8 arr[mid]=63
+key 63 -> index 8
+low=0 high=11 mid=5 arr[mid]=42
+  low=6 high=11 mid=8 arr[mid]=63
+    low=6 high=7 mid=6 arr[mid]=49
+      low=7 high=7 mid=7 arr[mid]=54
+        low=7 high=6: empty, return -1
+key 50 -> index -1
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Index 8 holds 63. Each call is made with half the range of the one above it, so the result comes back unchanged through the calls above. The second search, for 50, ends when the range is empty and returns -1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: find the bugs in a binary search (9 marks)
+
+Three versions of binary search each contain one bug. For each, say what goes wrong and give the repair. (9 marks)
+
+- **A:** the loop condition is `while (low < high)`.
+- **B:** the search starts with `high = arr.length`.
+- **C:** a smaller key sets `high = mid - 1` but a larger key sets `low = mid`.
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three one-line bugs in the search. For each: the symptom and the repair.
+
+</Step>
+
+<Step title="2. Plan">
+
+Run each version on a case that exposes it: a key in the last remaining cell for A, a key larger than every element for B, and a key in the upper half for C. Cap the loop of C so that the demonstration ends.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="BuggySearches.java"
+public class BuggySearches {
+    static int bugA(int[] arr, int key) {
+        int low = 0, high = arr.length - 1;
+        while (low < high) {                         // should be low <= high
+            int mid = low + (high - low) / 2;
+            if (arr[mid] == key) return mid;
+            else if (arr[mid] < key) low = mid + 1;
+            else high = mid - 1;
+        }
+        return -1;
+    }
+
+    static int bugB(int[] arr, int key) {
+        int low = 0, high = arr.length;              // should be arr.length - 1
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (arr[mid] == key) return mid;
+            else if (arr[mid] < key) low = mid + 1;
+            else high = mid - 1;
+        }
+        return -1;
+    }
+
+    static int bugC(int[] arr, int key) {
+        int low = 0, high = arr.length - 1, passes = 0;
+        while (low <= high && passes < 8) {          // the cap only ends the demonstration
+            passes++;
+            int mid = low + (high - low) / 2;
+            if (arr[mid] == key) return mid;
+            else if (arr[mid] < key) low = mid;      // should be mid + 1
+            else high = mid - 1;
+        }
+        return -2;                                   // -2 means: still looping when the cap was reached
+    }
+
+    public static void main(String[] args) {
+        int[] arr = {8, 18, 23, 29, 34};
+        System.out.println("A: key 29 is at index 3, bugA says " + bugA(arr, 29) + "; key 34 is at index 4, bugA says " + bugA(arr, 34));
+        try {
+            System.out.println(bugB(arr, 99));
+        } catch (ArrayIndexOutOfBoundsException e) {
+            System.out.println("B: key 99 -> " + e.getClass().getName());
+        }
+        System.out.println("B: key 23 -> " + bugB(arr, 23));
+        System.out.println("C: key 34 -> " + bugC(arr, 34) + " (-2 means it was still looping)");
+        System.out.println("C: key 23 -> " + bugC(arr, 23));
+    }
+}
+```
+
+```text
+A: key 29 is at index 3, bugA says 3; key 34 is at index 4, bugA says -1
+B: key 99 -> java.lang.ArrayIndexOutOfBoundsException
+B: key 23 -> 2
+C: key 34 -> -2 (-2 means it was still looping)
+C: key 23 -> 2
+```
+
+A: with `low < high` the loop stops as soon as the search space is a single cell, so a key sitting in that last cell is never compared and the method returns -1. Repair: `low <= high`. B: `high = arr.length` is one past the last index; for a key larger than every element `mid` reaches `arr.length` and `arr[mid]` throws `ArrayIndexOutOfBoundsException`. Repair: `arr.length - 1`. C: `low = mid` does not move `low` past the cell that was just rejected; when `low` and `mid` are equal the search space never shrinks and the loop never ends (the capped demonstration returns -2). Repair: `low = mid + 1`.
+
+</Step>
+
+<Step title="4. Check">
+
+All three bugs are in the lines that update the search space or its limits, which are the lines to check first. Notice that A and B give a right answer for many keys (23 is found by B), so a few tests are not enough: test the first, last and middle elements and a key larger than all and smaller than all.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: choose an algorithm (8 marks)
+
+Choose linear search or binary search, and a sorting algorithm, for each: (a) a list of 20 unsorted items searched once; (b) a sorted list of one million items searched many times; (c) sorting a list that is nearly sorted; (d) sorting a very large list; (e) a list that must be sorted before binary search. Justify each choice. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Five situations; each needs an algorithm and a reason that uses a fact from the lectures: the cost, whether the data must be sorted, or the size.
+
+</Step>
+
+<Step title="2. Plan">
+
+Linear search: small or unsorted data, easy to implement, O(n). Binary search: sorted data only, O(log n). Insertion sort: few items or nearly sorted data. Merge sort: O(n log n) for large lists.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Situation | Choice | Reason |
+|---|---|---|
+| (a) 20 unsorted items, searched once | linear search | the data is unsorted and small; sorting first would cost more than the search; linear search is easy to implement |
+| (b) a million sorted items, searched many times | binary search | the data is sorted, and about 20 passes replace up to a million comparisons |
+| (c) a nearly sorted list | insertion sort | few items need to move, so fewer moves are needed and the overheads are low |
+| (d) a very large list | merge sort | O(n log n) against O(n²) for bubble, insertion and selection sort; the price is extra memory |
+| (e) sorting before binary search | merge sort (for a large list) | binary search requires a sorted array, and the sort is done once and paid for by the many searches |
+
+</Step>
+
+<Step title="4. Check">
+
+Rows (a) and (b) are the lecture's application areas: linear search for small collections and unsorted data, binary search for sorted data with random access. Row (c) is the lecture's advice for insertion sort, and row (d) uses its summary of the four time complexities.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Memory: merge and the lab
+
+### Exam question 7: the arrays made by merge (8 marks)
+
+Show the contents of `left` and `right`, and each value written to `arr`, when `merge(arr, 0, 2, 4)` is called on `{10, 40, 90, 20, 60}`. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A merge of unequal halves: indexes 0 to 2 (three items) and 3 to 4 (two items). Both halves are already sorted: `10 40 90` and `20 60`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`size1 = m - s + 1 = 3`, `size2 = e - m = 2`. Copy the halves into `left` and `right`, then take the smaller front item each time, and copy the rest of whichever half is left.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="MergeQuestion.java"
+import java.util.Arrays;
+
+public class MergeQuestion {
+    public static void main(String[] args) {
+        int[] arr = {10, 40, 90, 20, 60};
+        int s = 0, m = 2, e = 4;
+        int[] left = Arrays.copyOfRange(arr, s, m + 1);
+        int[] right = Arrays.copyOfRange(arr, m + 1, e + 1);
+        System.out.println("left " + Arrays.toString(left) + " right " + Arrays.toString(right));
+        int i = 0, j = 0, cur = s;
+        while (i < left.length && j < right.length) {
+            if (left[i] <= right[j]) {
+                System.out.println("left[" + i + "]=" + left[i] + " <= right[" + j + "]=" + right[j] + ": arr[" + cur + "] = " + left[i]);
+                arr[cur++] = left[i++];
+            } else {
+                System.out.println("left[" + i + "]=" + left[i] + " >  right[" + j + "]=" + right[j] + ": arr[" + cur + "] = " + right[j]);
+                arr[cur++] = right[j++];
+            }
+        }
+        while (i < left.length) {
+            System.out.println("copy the rest of left: arr[" + cur + "] = " + left[i]);
+            arr[cur++] = left[i++];
+        }
+        while (j < right.length) {
+            System.out.println("copy the rest of right: arr[" + cur + "] = " + right[j]);
+            arr[cur++] = right[j++];
+        }
+        System.out.println(Arrays.toString(arr));
+    }
+}
+```
+
+```text
+left [10, 40, 90] right [20, 60]
+left[0]=10 <= right[0]=20: arr[0] = 10
+left[1]=40 >  right[0]=20: arr[1] = 20
+left[1]=40 <= right[1]=60: arr[2] = 40
+left[2]=90 >  right[1]=60: arr[3] = 60
+copy the rest of left: arr[4] = 90
+[10, 20, 40, 60, 90]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The result is sorted and has the five original values. Four comparisons were made; the last item, 90, was copied from the unfinished `left` without a comparison. Draw `left` and `right` as two small arrays with their own addresses, apart from `arr`, with `i`, `j` and `cur` as variables on the stack.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: Lab 4 numbers (6 marks)
+
+In Lab 4 the second array holds the first 50 positive even integers, stored by a `while` loop. Give the index at which binary search finds 2, 36 and 100, what it returns for 37 and 101, and the number of passes of the loop for 100. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The array is 2, 4, 6, ..., 100 at indexes 0 to 49: the value at index `i` is `2 * (i + 1)`. So the index of an even value `v` is `v / 2 - 1`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Work out the indexes by the formula, then check them and count the passes for the last element with the program.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Lab4Numbers.java"
+public class Lab4Numbers {
+    static int passes;
+
+    static int binarySearch(int[] arr, int key, int start, int end) {
+        int low = start, high = end;
+        passes = 0;
+        while (low <= high) {
+            passes++;
+            int mid = low + (high - low) / 2;
+            if (arr[mid] == key) return mid;
+            else if (arr[mid] < key) low = mid + 1;
+            else high = mid - 1;
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+        int[] evens = new int[50];
+        int count = 0, next = 2;
+        while (count < evens.length) {
+            evens[count++] = next;
+            next += 2;
+        }
+        for (int key : new int[] {2, 36, 100, 37, 101}) {
+            int at = binarySearch(evens, key, 0, evens.length - 1);
+            System.out.println("key " + key + ": index " + at + ", " + passes + " passes");
+        }
+    }
+}
+```
+
+```text
+key 2: index 0, 5 passes
+key 36: index 17, 3 passes
+key 100: index 49, 6 passes
+key 37: index -1, 5 passes
+key 101: index -1, 6 passes
+```
+
+By the formula, 2 is at index 0, 36 at index 17 and 100 at index 49. The odd key 37 and the key 101 (above every element) are not there, so the result is -1. The number of passes for 100 is 6.
+
+</Step>
+
+<Step title="4. Check">
+
+The program agrees with the formula. 100 is the last element, so its search follows the right-hand path all the way, which is the longest. A search of 50 items needs at most 6 passes, because 2⁶ = 64 is the first power of two above 50.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+For a sorting question write the whole array after every pass. Bubble sort moves the largest unsorted value to the right end in each pass; insertion sort grows a sorted prefix by inserting the next item; selection sort swaps the smallest unsorted value into position `i`. A binary search trace needs `low`, `high`, `mid` and `arr[mid]` for every pass (or call), with `mid = low + (high - low) / 2`; it ends on a match or when `low > high`. The common bugs are `low < high` (misses the last cell), `high = arr.length` (out of bounds) and `low = mid` (never ends). Linear search suits small or unsorted data; binary search needs sorted data and costs O(log n); insertion sort suits small or nearly sorted lists; merge sort is O(n log n) and needs extra memory. `merge` copies the halves into `left` and `right` and writes the smaller front item back; it makes at most one comparison for each item written.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why do the last passes of the lecture's bubble sort change nothing?">
+
+Each pass puts the next largest value in place. Once all values are in place the remaining passes find no neighbours out of order. The lecture's version still makes them, which is why an improved version stops after a pass with no swap.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does selection sort do in pass i, and how many swaps does it make in all?">
+
+It finds the smallest value in positions `i` to the end and swaps it into position `i`. It makes one swap per pass, so at most `n - 1` swaps.
+
+</CheckQuestion>
+
+<CheckQuestion question="What goes wrong with while (low < high) in binary search?">
+
+When the search space is a single cell, `low` equals `high`, the loop stops, and the key in that cell is never compared: the method returns -1 for a key that is present. The condition is `low <= high`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is low = mid, instead of low = mid + 1, a bug?">
+
+The cell at `mid` has already been rejected. If `low` becomes `mid`, the search space may not shrink (for example when `low` and `mid` are equal), and the loop never ends.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which sorting algorithm suits a nearly sorted list, and which a very large list?">
+
+Insertion sort for a nearly sorted list: few items have to move. Merge sort for a very large list: O(n log n) against O(n squared), at the cost of extra memory.
+
+</CheckQuestion>
+
+</CheckQuestions>

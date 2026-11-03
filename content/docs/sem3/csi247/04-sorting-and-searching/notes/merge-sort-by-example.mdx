@@ -1,0 +1,504 @@
+---
+title: "Merge Sort by Example"
+description: "Merge sort from Lecture 9 and Lab 5 part 1: divide and conquer, the recursive mergeSort and the merge method of the lab, the lecture's example and exercise traced level by level, the lab's test program, and why it costs O(n log n)."
+---
+
+Merge sort is the fourth algorithm of Lecture 9 and the efficient one. It uses the **divide and conquer** principle: break a problem into smaller sub-problems that are easy to manage, solve each one on its own, and combine the solutions to solve the main problem. Merge sort is recursive: it keeps dividing the array into halves until each piece has one element (and so is sorted), then merges the sorted halves into bigger sorted arrays until it has the final sorted array. The lecture leaves the `merge` method to Lab 5 "to ensure clean and easy to understand code". This lesson works through the algorithm, the lab's `merge`, the lecture's example and exercise, and the lab's test program, with every output taken from a real run. It extends [Merge Sort](/docs/sem3/csi247/04-sorting-and-searching/notes/merge-sort).
+
+<LearningObjectives items={[
+  'Describe divide and conquer, and how merge sort divides, sorts recursively and merges',
+  'Write mergeSort(arr, start, end) and the merge method of Lab 5, and say what merge does with its two copied arrays',
+  'Trace merge sort level by level for the lecture\'s example and its exercise array',
+  'Write the Lab 5 test: generate 30 random marks, sort them, display them, and repeat until the user stops',
+  'Explain why merge sort is O(n log n) and compare its cost with the O(n squared) sorts',
+]} />
+
+<Prerequisites items={[
+  'Simple Sorts by Example and Searching by Example in this chapter',
+  'Recursion by Example in the Recursion chapter: a base case and recursive calls on smaller parts',
+  'Drawing memory diagrams of arrays, including arrays created inside a method',
+]} />
+
+## 1. The templates
+
+```text
+mergeSort(arr, start, end):  if (start < end) { mid = (start + end) / 2;
+                                                mergeSort(arr, start, mid);        sort the left half
+                                                mergeSort(arr, mid + 1, end);      sort the right half
+                                                merge(arr, start, mid, end); }     merge the two sorted halves
+merge(arr, s, m, e):         copy arr[s..m] into left and arr[m+1..e] into right,
+                             then write the smaller front item back into arr until both are used up
+```
+
+The algorithm in words: if there are items remaining, divide them into halves, merge sort the left half, merge sort the right half, and merge the left and right halves. There are two operations: recursively divide the array into smaller arrays until each has one element (and is therefore sorted), and conquer the sorting task by merging the small sorted arrays into one sorted array. It is a more efficient algorithm because it keeps breaking the problem into halves: its time complexity is O(n log n).
+
+## 2. The lecture's method and the lab's merge
+
+This is the lecture's `mergeSort`, followed by the `merge` method given in Lab 5. The lab says to study `merge` carefully, implement it and fix all errors; as printed here it compiles and sorts correctly.
+
+```java title="MergeSorter.java"
+import java.util.Arrays;
+
+public class MergeSorter {
+    public static void merge(int arr[], int s, int m, int e) {
+        int size1 = m - s + 1;                  // number of elements to go into the L sub-array
+        int size2 = e - m;                      // number of elements to go into the R sub-array
+        int left[] = new int[size1];            // create left sub-array
+        int right[] = new int[size2];           // create right sub-array
+        for (int i = 0; i < size1; i++)         // copy data into the sub-arrays
+            left[i] = arr[s + i];
+        for (int j = 0; j < size2; j++)
+            right[j] = arr[m + 1 + j];
+
+        int i = 0;                              // initial index of left array
+        int j = 0;                              // initial index of right array
+        int cur = s;                            // initial index of final array
+
+        while (i < size1 && j < size2) {        // compare sub-array items to get the smallest
+            if (left[i] <= right[j]) {
+                arr[cur] = left[i];
+                i++;
+            } else {
+                arr[cur] = right[j];
+                j++;
+            }
+            cur++;                              // increment final array's index
+        }
+        while (i < size1) {                     // copy items left in L sub-array: they are the next smallest
+            arr[cur] = left[i];
+            i++;
+            cur++;
+        }
+        while (j < size2) {                     // copy items left in the R sub-array to the final array
+            arr[cur] = right[j];
+            j++;
+            cur++;
+        }
+    }
+
+    public static void mergeSort(int arr[], int start, int end) {
+        if (start < end) {
+            int mid = (start + end) / 2;        // find the midpoint
+            mergeSort(arr, start, mid);         // recursively sort the L half
+            mergeSort(arr, mid + 1, end);       // recursively sort the R half
+            merge(arr, start, mid, end);        // merge all into 1 array
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] a = {63, 29, 72, 85, 18, 49, 3, 54};
+        mergeSort(a, 0, a.length - 1);
+        System.out.println(Arrays.toString(a));
+    }
+}
+```
+
+```text
+[3, 18, 29, 49, 54, 63, 72, 85]
+```
+
+`merge` does the real work. The two halves of the range `s` to `e` are already sorted. It copies them into two new arrays, `left` and `right`, then repeatedly writes the smaller of the two front items back into `arr` at index `cur`; when one copy is used up, the rest of the other is copied. The stage `left[i] <= right[j]` takes the left item when the two are equal, which keeps equal items in their original order. The picture shows the merge of `20 36` and `13 54`:
+
+<MemoryDiagram scenario="mergearrays" />
+
+<Callout type="mistake" title="Common error">
+
+Merging in place without copying the halves. If the smaller item is written straight over `arr[cur]` before the original has been read, values are overwritten and lost. That is why `merge` first copies the two halves into `left` and `right`.
+
+</Callout>
+
+## 3. Tracing the lecture's example and exercise
+
+The lecture's example sorts `20 36 54 13`: divide into `20 36` and `54 13`, divide those into single items, merge `20` and `36` into `20 36`, merge `54` and `13` into `13 54`, and merge those into `13 20 36 54`. The program below runs a traced copy of the algorithm that prints each divide and each merge, indented by depth. Then it runs the lecture's exercise array, `63 29 72 85 18 49 3 54`, and an array of five items, whose halves are unequal.
+
+```java title="MergeTrace.java"
+import java.util.Arrays;
+
+public class MergeTrace {
+    static int merges;
+    static int comparisons;
+
+    static void merge(int arr[], int s, int m, int e) {
+        int[] left = Arrays.copyOfRange(arr, s, m + 1);
+        int[] right = Arrays.copyOfRange(arr, m + 1, e + 1);
+        int i = 0, j = 0, cur = s;
+        while (i < left.length && j < right.length) {
+            comparisons++;
+            if (left[i] <= right[j]) {
+                arr[cur++] = left[i++];
+            } else {
+                arr[cur++] = right[j++];
+            }
+        }
+        while (i < left.length) {
+            arr[cur++] = left[i++];
+        }
+        while (j < right.length) {
+            arr[cur++] = right[j++];
+        }
+        merges++;
+    }
+
+    static String pad(int depth) {
+        String p = "";
+        for (int k = 0; k < depth; k++) {
+            p += "  ";
+        }
+        return p;
+    }
+
+    static void mergeSort(int arr[], int start, int end, int depth) {
+        if (start < end) {
+            int mid = (start + end) / 2;
+            System.out.println(pad(depth) + "divide " + Arrays.toString(Arrays.copyOfRange(arr, start, end + 1)));
+            mergeSort(arr, start, mid, depth + 1);
+            mergeSort(arr, mid + 1, end, depth + 1);
+            merge(arr, start, mid, end);
+            System.out.println(pad(depth) + "merge  " + Arrays.toString(Arrays.copyOfRange(arr, start, end + 1)));
+        }
+    }
+
+    static void run(int[] data) {
+        merges = 0;
+        comparisons = 0;
+        System.out.println("sorting " + Arrays.toString(data));
+        mergeSort(data, 0, data.length - 1, 1);
+        System.out.println("result  " + Arrays.toString(data) + ": " + merges + " merges, " + comparisons + " comparisons");
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        run(new int[] {20, 36, 54, 13});                      // the lecture's example
+        run(new int[] {63, 29, 72, 85, 18, 49, 3, 54});       // the lecture's exercise
+        run(new int[] {63, 29, 72, 85, 18});                  // an odd number of items
+    }
+}
+```
+
+```text
+sorting [20, 36, 54, 13]
+  divide [20, 36, 54, 13]
+    divide [20, 36]
+    merge  [20, 36]
+    divide [54, 13]
+    merge  [13, 54]
+  merge  [13, 20, 36, 54]
+result  [13, 20, 36, 54]: 3 merges, 5 comparisons
+
+sorting [63, 29, 72, 85, 18, 49, 3, 54]
+  divide [63, 29, 72, 85, 18, 49, 3, 54]
+    divide [63, 29, 72, 85]
+      divide [63, 29]
+      merge  [29, 63]
+      divide [72, 85]
+      merge  [72, 85]
+    merge  [29, 63, 72, 85]
+    divide [18, 49, 3, 54]
+      divide [18, 49]
+      merge  [18, 49]
+      divide [3, 54]
+      merge  [3, 54]
+    merge  [3, 18, 49, 54]
+  merge  [3, 18, 29, 49, 54, 63, 72, 85]
+result  [3, 18, 29, 49, 54, 63, 72, 85]: 7 merges, 14 comparisons
+
+sorting [63, 29, 72, 85, 18]
+  divide [63, 29, 72, 85, 18]
+    divide [63, 29, 72]
+      divide [63, 29]
+      merge  [29, 63]
+    merge  [29, 63, 72]
+    divide [85, 18]
+    merge  [18, 85]
+  merge  [18, 29, 63, 72, 85]
+result  [18, 29, 63, 72, 85]: 4 merges, 8 comparisons
+```
+
+Read the first run as the lecture's picture. The array is divided into `20 36` and `54 13` and each of those into single items (single items are sorted, and the recursion stops there because `start < end` is false); then the merges run back up: `20 36`, `13 54`, and the final `13 20 36 54`. For eight items there are three levels of division and 7 merges (always n - 1 merges for n items). For five items the midpoint `(start + end) / 2` makes the left half the bigger one, three items against two, as the lecture says: divide until each piece has one element, or two when an array has an odd number of elements.
+
+### Exam question 1: sort by merge sort (8 marks)
+
+Sort `63 29 72 85 18 49 3 54` using merge sort. Show the division and then each merge. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+An array of eight items. Show the divisions first (down to single items), and then the merges (back up), as in the lecture's example.
+
+</Step>
+
+<Step title="2. Plan">
+
+Divide in the middle each time: 8 items into 4 + 4, each 4 into 2 + 2, each 2 into 1 + 1. Then merge pairs of sorted pieces, always taking the smaller front item.
+
+</Step>
+
+<Step title="3. Solution">
+
+Divide: `63 29 72 85 | 18 49 3 54`, then `63 29 | 72 85 | 18 49 | 3 54`, then every item on its own. Merge level 1: `63 29` gives `29 63`; `72 85` gives `72 85`; `18 49` gives `18 49`; `3 54` gives `3 54`. Merge level 2: `29 63` and `72 85` give `29 63 72 85`; `18 49` and `3 54` give `3 18 49 54`. Merge level 3: `29 63 72 85` and `3 18 49 54` give `3 18 29 49 54 63 72 85`.
+
+</Step>
+
+<Step title="4. Check">
+
+The program `MergeTrace` printed the same divisions and merges for this array: its merge lines show `29 63`, `72 85`, `18 49`, `3 54`, then `29 63 72 85` and `3 18 49 54`, and the final array 3 18 29 49 54 63 72 85 (see the array printed in `MergeSorter`). The 7 merges are the 4 + 2 + 1 of the three levels.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: merge two sorted halves (6 marks)
+
+Show how `merge(arr, 0, 1, 3)` works on `{20, 36, 13, 54}`: the contents of `left` and `right`, and the value written to each cell of `arr`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+One call of `merge` with `s = 0`, `m = 1` and `e = 3`. The two halves, `20 36` and `13 54`, are each already sorted.
+
+</Step>
+
+<Step title="2. Plan">
+
+`size1 = m - s + 1 = 2` and `size2 = e - m = 2`. Copy the halves, then step through the loop with `i`, `j` and `cur` all starting at 0 and write the smaller front item each time.
+
+</Step>
+
+<Step title="3. Solution">
+
+`left = {20, 36}` and `right = {13, 54}`. Step 1: 20 against 13: `20 <= 13` is false, so `arr[0] = 13` and `j = 1`. Step 2: 20 against 54: `20 <= 54`, so `arr[1] = 20` and `i = 1`. Step 3: 36 against 54: `36 <= 54`, so `arr[2] = 36` and `i = 2`. The left array is used up, so the loop ends and the rest of `right` is copied: `arr[3] = 54`. The result is `{13, 20, 36, 54}`.
+
+</Step>
+
+<Step title="4. Check">
+
+The merge made 3 comparisons for 4 items (the last item is copied without a comparison). The `mergearrays` diagram above follows the same four writes.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Lab 5: testing merge sort
+
+Lab 5 part 1 asks for the application class to implement `mergeSort`, which accepts an array of `int` values and **returns** an array sorted with merge sort (calling `merge`), and to test it in `main`: with a `while` loop and `Math.random`, generate 30 `int` values between 0 and 100 (quiz 01 marks) and store them in an array; display the array before sorting; sort it; display it after sorting; and repeat all of this until the user decides to terminate.
+
+```java title="Lab5Test.java"
+import java.util.Arrays;
+import java.util.Scanner;
+
+public class Lab5Test {
+    // returns a sorted copy: the recursive method does the work on the copy
+    public static int[] mergeSort(int[] marks) {
+        int[] result = marks.clone();
+        MergeSorter.mergeSort(result, 0, result.length - 1);
+        return result;
+    }
+
+    static boolean isSorted(int[] a) {
+        for (int i = 1; i < a.length; i++) {
+            if (a[i - 1] > a[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static int sum(int[] a) {
+        int s = 0;
+        for (int v : a) {
+            s += v;
+        }
+        return s;
+    }
+
+    public static void main(String[] args) {
+        Scanner in = new Scanner("y y n");                    // stands in for the keyboard
+        String again = "y";
+        int round = 0;
+        while (again.equalsIgnoreCase("y")) {
+            round++;
+            int[] marks = new int[30];
+            int count = 0;
+            while (count < marks.length) {                     // the lab asks for a while loop
+                marks[count++] = (int) (Math.random() * 101);  // 0 to 100
+            }
+            int[] sorted = mergeSort(marks);
+            // The values are random, so the program shows facts that are always true.
+            System.out.println("round " + round + ": " + marks.length + " marks, sorted: " + isSorted(sorted)
+                    + ", same total: " + (sum(marks) == sum(sorted))
+                    + ", first <= last " + (sorted[0] <= sorted[29]) + ", lowest " + (sorted[0] >= 0) + ", highest " + (sorted[29] <= 100));
+            System.out.print("Sort another set (y/n)? ");
+            again = in.next();
+            System.out.println(again);
+        }
+        System.out.println("Goodbye");
+    }
+}
+```
+
+```text
+round 1: 30 marks, sorted: true, same total: true, first <= last true, lowest true, highest true
+Sort another set (y/n)? y
+round 2: 30 marks, sorted: true, same total: true, first <= last true, lowest true, highest true
+Sort another set (y/n)? y
+round 3: 30 marks, sorted: true, same total: true, first <= last true, lowest true, highest true
+Sort another set (y/n)? n
+Goodbye
+```
+
+The marks are random, so the output shows what is true on every run: the sorted array is in ascending order, it has the same total as the original (no value was lost or invented), the lowest value is not below 0 and the highest is not above 100. In the lab you also print the arrays before and after with `Arrays.toString`. `mergeSort` works on a copy (`clone()`), so the original array keeps its order for the "before" display. The loop repeats while the user answers y or Y and stops at any other answer.
+
+## 5. Why O(n log n)?
+
+Dividing in half repeatedly gives about log₂ n levels (3 levels for 8 items, 10 for 1000). At every level the merges together handle all n items once, so the work is about n x log n. Bubble, insertion and selection sort compare each item with many others, about n² in all. The program below counts the comparisons of merge sort on pseudo-random arrays of 8, 64 and 512 items (a fixed seed, so the counts are the same on every run) and compares them with the n(n - 1) comparisons of the lecture's bubble sort.
+
+```java title="MergeGrowth.java"
+import java.util.Random;
+
+public class MergeGrowth {
+    static long comparisons;
+
+    static void merge(int[] arr, int s, int m, int e) {
+        int[] left = java.util.Arrays.copyOfRange(arr, s, m + 1);
+        int[] right = java.util.Arrays.copyOfRange(arr, m + 1, e + 1);
+        int i = 0, j = 0, cur = s;
+        while (i < left.length && j < right.length) {
+            comparisons++;
+            if (left[i] <= right[j]) arr[cur++] = left[i++];
+            else arr[cur++] = right[j++];
+        }
+        while (i < left.length) arr[cur++] = left[i++];
+        while (j < right.length) arr[cur++] = right[j++];
+    }
+
+    static void mergeSort(int[] arr, int start, int end) {
+        if (start < end) {
+            int mid = (start + end) / 2;
+            mergeSort(arr, start, mid);
+            mergeSort(arr, mid + 1, end);
+            merge(arr, start, mid, end);
+        }
+    }
+
+    public static void main(String[] args) {
+        Random random = new Random(1);
+        for (int n : new int[] {8, 64, 512}) {
+            int[] data = new int[n];
+            for (int i = 0; i < n; i++) {
+                data[i] = random.nextInt(1000);
+            }
+            comparisons = 0;
+            mergeSort(data, 0, n - 1);
+            long bubble = (long) n * (n - 1);
+            System.out.println("n = " + n + ": merge sort " + comparisons + " comparisons, bubble sort " + bubble);
+        }
+    }
+}
+```
+
+```text
+n = 8: merge sort 17 comparisons, bubble sort 56
+n = 64: merge sort 308 comparisons, bubble sort 4032
+n = 512: merge sort 3957 comparisons, bubble sort 261632
+```
+
+From 8 to 64 items (eight times as many) the comparisons of merge sort grow about 18 times and those of bubble sort 72 times; from 64 to 512 items they grow about 13 times against about 65 times. At 512 items the lecture's bubble sort makes about 260 thousand comparisons, merge sort about four thousand. The price of merge sort is memory: `merge` creates two new arrays at every call, so it needs extra space as well as the recursion.
+
+<Callout type="mistake" title="Common error">
+
+Writing `mid = (start + end) / 2` and then recursing on `mergeSort(arr, start, mid - 1)` and `mergeSort(arr, mid, end)`. The halves are `start` to `mid` and `mid + 1` to `end`, as in the lecture; any other split either leaves out an item or never reaches the base case for a range of two items.
+
+</Callout>
+
+### Exam question 3: compare the costs (5 marks)
+
+State the time complexity of bubble, insertion, selection and merge sort, and say why merge sort is more efficient and what it costs. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four time complexities, a reason for the efficiency, and the cost of getting it.
+
+</Step>
+
+<Step title="2. Plan">
+
+The lecture's summary gives the four complexities. The reason is the halving; the cost is the extra arrays that `merge` creates.
+
+</Step>
+
+<Step title="3. Solution">
+
+Bubble sort, insertion sort and selection sort are each O(n²); merge sort is O(n log n). Merge sort is more efficient because it keeps breaking the problem into halves: there are about log n levels, and each level handles all n items once, instead of every item being compared with many others. The price is that it is more complex (the more efficient the algorithm, the more complex it is), is recursive, and uses extra memory for the arrays that `merge` creates.
+
+</Step>
+
+<Step title="4. Check">
+
+`MergeGrowth` shows the difference in numbers: for 512 items, merge sort made about four thousand comparisons where bubble sort makes 261,632. The same factor grows with n.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Merge sort uses divide and conquer and is recursive: if `start < end`, find `mid = (start + end) / 2`, sort `start` to `mid`, sort `mid + 1` to `end`, then `merge`. `merge` copies the two sorted halves into new `left` and `right` arrays and writes the smaller front item back into `arr` (taking the left item when they are equal), then copies what remains of whichever copy is not used up. A range of one item is already sorted. For n items there are n - 1 merges, about log n levels of division, and O(n log n) time, against O(n²) for bubble, insertion and selection sort; the cost is extra memory and complexity. The Lab 5 test generates 30 random values from 0 to 100 with a `while` loop, sorts them with a method that returns the sorted array, displays both and repeats until the user stops.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What is divide and conquer, and how does merge sort use it?">
+
+Break a problem into smaller, manageable sub-problems, solve each one, and combine the solutions. Merge sort divides the array into halves, sorts each half recursively, and merges the sorted halves into one sorted array.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does the recursion of mergeSort stop at a range of one element?">
+
+The test `start < end` is false when the range has one item, so no further calls are made. A single item is already sorted, so there is nothing to do before the merge.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does merge do with the two halves, and why does it copy them first?">
+
+It copies them into `left` and `right`, then writes the smaller front item of the two back into `arr` until both are used up. The copies are needed so that writing into `arr` does not overwrite values that have not been read yet.
+
+</CheckQuestion>
+
+<CheckQuestion question="How many merges does merge sort make for eight items?">
+
+Seven: four merges of single items into pairs, two merges of pairs into fours, and one merge of the two fours. In general n - 1 merges.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is merge sort O(n log n)?">
+
+The array is halved repeatedly, which gives about log n levels, and at each level the merges together process all n items once, so the work is about n log n.
+
+</CheckQuestion>
+
+</CheckQuestions>

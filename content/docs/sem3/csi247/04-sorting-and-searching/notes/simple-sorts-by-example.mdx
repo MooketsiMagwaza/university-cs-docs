@@ -1,0 +1,557 @@
+---
+title: "Bubble, Insertion and Selection Sort by Example"
+description: "The three simple sorting algorithms of Lecture 9, traced pass by pass on the lecture's exercise array: what each pass does, comparison and swap counts, the repaired insertion sort, the O(n squared) cost, and how to tell the algorithms apart from their passes."
+---
+
+Lecture 9 introduces sorting: arranging items in ascending or descending order by some criterion, which requires comparing values. It teaches four algorithms. The three **simple** ones, bubble sort, insertion sort and selection sort, are easy to implement and cost O(n²); merge sort, the fourth, is the next lesson. For each algorithm the lecture asks you to sort an array and show the contents at the end of each pass. This lesson does exactly that on the lecture's array, `63 29 72 85 18`, by running the lecture's code, one algorithm at a time, with every output taken from a real run. It extends [Sorting Fundamentals](/docs/sem3/csi247/04-sorting-and-searching/notes/sorting-fundamentals).
+
+<LearningObjectives items={[
+  'State what sorting is, and that ordering needs comparisons, for primitives and for objects',
+  'Describe how bubble sort, insertion sort and selection sort work, and trace each pass by pass',
+  'Write the three algorithms, repair the insertion sort of the slide, and sort in descending order',
+  'Count comparisons, swaps and shifts, and explain why all three are O(n squared)',
+  'Tell the algorithms apart from the array after each pass, and say when each is a good choice',
+]} />
+
+<Prerequisites items={[
+  'Searching by Example in this chapter, and Arrays by Example in the Java Fundamentals chapter',
+  'Nested loops and swapping two array elements through a temporary variable',
+  'Big-Oh notation: O(n squared) from the Time Complexity chapter',
+]} />
+
+## 1. The templates
+
+```text
+Swap:             int temp = arr[a];  arr[a] = arr[b];  arr[b] = temp;
+Bubble sort:      for i: for j = 0 .. length - 2: if (arr[j] > arr[j + 1]) swap arr[j], arr[j + 1]
+Insertion sort:   for i = 1 .. length - 1: temp = arr[i]; j = i; while (j > 0 && temp < arr[j - 1]) { arr[j] = arr[j - 1]; j--; }  arr[j] = temp;
+Selection sort:   for i = 0 .. length - 2: minIndex = i; for j = i + 1 .. length - 1: if (arr[j] < arr[minIndex]) minIndex = j;  swap arr[minIndex], arr[i]
+```
+
+**Sorting** arranges the items of a collection in some order, ascending or descending, based on some criterion. `{12, 7, 23, 9}` sorted ascending is `{7, 9, 12, 23}`. Ordering requires comparing values: which value should come first. For a group of primitive values such as `int` the comparison is easy (`15 > 5`); for objects of the same class, such as some lay-buy objects, Java needs a way to compare them, which is handled in a later lesson. The algorithms differ: they all arrange the items, but some are slow and some quick, and the more efficient an algorithm is, the more complex it is.
+
+## 2. Bubble sort
+
+Bubble sort is the simplest sorting algorithm and easy to implement. It passes through the list in several passes. In each pass it asks of every pair of **adjacent** items whether they are out of order; if they are, it swaps them, and if not it leaves them.
+
+The lecture's exercise: sort `63 29 72 85 18` with bubble sort, showing the array at the end of each pass. This is the lecture's method, with a print added at the end of each pass and two counters.
+
+```java title="BubbleTrace.java"
+import java.util.Arrays;
+
+public class BubbleTrace {
+    static int comparisons;
+    static int swaps;
+
+    public static void bubbleSort(int arr[]) {          // assume: ascending order
+        int temp;
+        for (int i = 0; i < arr.length; i++) {          // goes through all array elements
+            for (int j = 0; j < arr.length - 1; j++) {  // compare neighbours
+                comparisons++;
+                if (arr[j] > arr[j + 1]) {              // any need to swap neighbours?
+                    temp = arr[j];                      // swap neighbouring elements
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                    swaps++;
+                }
+            }
+            System.out.println("pass " + (i + 1) + ": " + Arrays.toString(arr));
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] a = {63, 29, 72, 85, 18};
+        System.out.println("start:  " + Arrays.toString(a));
+        bubbleSort(a);
+        System.out.println(comparisons + " comparisons, " + swaps + " swaps");
+
+        comparisons = 0;
+        swaps = 0;
+        bubbleSort(new int[] {1, 2, 3, 4, 5});            // already sorted
+        System.out.println("already sorted: " + comparisons + " comparisons, " + swaps + " swaps");
+    }
+}
+```
+
+```text
+start:  [63, 29, 72, 85, 18]
+pass 1: [29, 63, 72, 18, 85]
+pass 2: [29, 63, 18, 72, 85]
+pass 3: [29, 18, 63, 72, 85]
+pass 4: [18, 29, 63, 72, 85]
+pass 5: [18, 29, 63, 72, 85]
+20 comparisons, 5 swaps
+pass 1: [1, 2, 3, 4, 5]
+pass 2: [1, 2, 3, 4, 5]
+pass 3: [1, 2, 3, 4, 5]
+pass 4: [1, 2, 3, 4, 5]
+pass 5: [1, 2, 3, 4, 5]
+already sorted: 20 comparisons, 0 swaps
+```
+
+In pass 1, 63 and 29 are swapped, 63 and 72 are in order, 72 and 85 are in order, and 85 and 18 are swapped: the largest value, 85, has bubbled to the end. Each pass moves the next largest value to its place: 85 after pass 1, 72 after pass 2, 63 after pass 3, and the array is sorted after pass 4. The lecture's version always makes `n` passes of `n - 1` comparisons, here 5 x 4 = 20 comparisons, and the fifth pass changes nothing. The swaps are the 5 pairs that were out of order. An array that is already sorted still takes all 20 comparisons, with no swaps.
+
+<MemoryDiagram scenario="bubblesort" />
+
+### An improved bubble sort, and descending order
+
+Two changes avoid wasted work: after pass `i` the last `i` items are in place, so the inner loop can stop earlier, and a pass with no swap means the array is sorted. Changing the comparison from `>` to `<` sorts in descending order.
+
+```java title="BubbleVariants.java"
+import java.util.Arrays;
+
+public class BubbleVariants {
+    static int comparisons;
+
+    public static void improved(int arr[]) {
+        for (int i = 0; i < arr.length - 1; i++) {
+            boolean swapped = false;
+            for (int j = 0; j < arr.length - 1 - i; j++) {   // the last i items are already in place
+                comparisons++;
+                if (arr[j] > arr[j + 1]) {
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                    swapped = true;
+                }
+            }
+            if (!swapped) {
+                break;                                        // no swap in a whole pass: sorted
+            }
+        }
+    }
+
+    public static void descending(int arr[]) {
+        for (int i = 0; i < arr.length; i++) {
+            for (int j = 0; j < arr.length - 1; j++) {
+                if (arr[j] < arr[j + 1]) {                    // the changed comparison
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] a = {63, 29, 72, 85, 18};
+        improved(a);
+        System.out.println(Arrays.toString(a) + " in " + comparisons + " comparisons");
+
+        comparisons = 0;
+        improved(new int[] {1, 2, 3, 4, 5});
+        System.out.println("already sorted: " + comparisons + " comparisons");
+
+        int[] d = {63, 29, 72, 85, 18};
+        descending(d);
+        System.out.println("descending: " + Arrays.toString(d));
+    }
+}
+```
+
+```text
+[18, 29, 63, 72, 85] in 10 comparisons
+already sorted: 4 comparisons
+descending: [85, 72, 63, 29, 18]
+```
+
+The improved version needs 10 comparisons on the lecture's array instead of 20, and 4 on an array that is already sorted. Its time complexity is still O(n²): the disadvantage the lecture gives is that bubble sort loops through all the items in several passes.
+
+<Callout type="mistake" title="Common error">
+
+Writing `j < arr.length` as the inner loop limit of bubble sort. The loop compares `arr[j + 1]`, so on the last pass `j + 1` is `arr.length` and the program throws `ArrayIndexOutOfBoundsException`. The limit is `arr.length - 1`.
+
+</Callout>
+
+## 3. Insertion sort
+
+Insertion sort is like sorting a hand of cards. The list has a **sorted part** and an **unsorted part**. Assume the first item is the sorted part; then, for each item of the unsorted part, take it and **insert** it at the right place in the sorted part, moving the larger items one place to the right. It is easy to understand.
+
+The slide's method has a typing error. Its line `arr[j] = arr[j-1] )` ends with a closing bracket instead of a semicolon, and javac reports exactly one error: `error: ';' expected`. This is the repaired method, with a print after each insertion and a count of the items moved:
+
+```java title="InsertionTrace.java"
+import java.util.Arrays;
+
+public class InsertionTrace {
+    static int shifts;
+
+    public static void insertionSort(int arr[]) {       // assume: ascending order
+        int temp, j;
+        for (int i = 1; i < arr.length; ++i) {          // start from index 1
+            j = i;
+            temp = arr[i];                              // current item to sort
+            while (j > 0 && temp < arr[j - 1]) {
+                arr[j] = arr[j - 1];                    // move the larger item one place right
+                shifts++;
+                j--;
+            }
+            arr[j] = temp;                              // place the item at the right place
+            System.out.println("i = " + i + ": " + Arrays.toString(arr));
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] a = {63, 29, 72, 85, 18};
+        insertionSort(a);
+        System.out.println(shifts + " items moved");
+
+        shifts = 0;
+        insertionSort(new int[] {10, 20, 30, 50, 40});    // nearly sorted
+        System.out.println("nearly sorted: " + shifts + " item moved");
+
+        shifts = 0;
+        insertionSort(new int[] {5, 4, 3, 2, 1});         // reverse order
+        System.out.println("reverse order: " + shifts + " items moved");
+    }
+}
+```
+
+```text
+i = 1: [29, 63, 72, 85, 18]
+i = 2: [29, 63, 72, 85, 18]
+i = 3: [29, 63, 72, 85, 18]
+i = 4: [18, 29, 63, 72, 85]
+5 items moved
+i = 1: [10, 20, 30, 50, 40]
+i = 2: [10, 20, 30, 50, 40]
+i = 3: [10, 20, 30, 50, 40]
+i = 4: [10, 20, 30, 40, 50]
+nearly sorted: 1 item moved
+i = 1: [4, 5, 3, 2, 1]
+i = 2: [3, 4, 5, 2, 1]
+i = 3: [2, 3, 4, 5, 1]
+i = 4: [1, 2, 3, 4, 5]
+reverse order: 10 items moved
+```
+
+For `63 29 72 85 18`: with i = 1, 29 moves in front of 63; 72 and 85 are already in the right place for i = 2 and i = 3; the last item, 18, must move past all four sorted items, so the array is sorted at i = 4. The method moves five items in all: one for the 29 and four for the 18. A nearly sorted array moves only one, and an array in reverse order moves every item past every earlier one: 10 moves for 5 items.
+
+<MemoryDiagram scenario="insertionsort" />
+
+The lecture says to use insertion sort when the list has few items (few overheads, less memory) and when the list is nearly sorted (fewer moves needed). Its disadvantage: still inefficient, O(n²), though a little better than bubble sort.
+
+<Callout type="mistake" title="Common error">
+
+Writing the shifting loop as `while (temp < arr[j - 1])` without `j > 0 &&`. When the new item is smaller than everything before it, `j` reaches 0 and `arr[j - 1]` is `arr[-1]`: `ArrayIndexOutOfBoundsException`. The test `j > 0` must come first.
+
+</Callout>
+
+## 4. Selection sort
+
+Selection sort selects the first position, compares its element with all the elements after it and swaps if a smaller one is found; then it repeats with the remaining positions until the list is sorted. The sample method does this by finding the **index of the smallest** element of the unsorted part in each pass and swapping it into position `i`.
+
+```java title="SelectionTrace.java"
+import java.util.Arrays;
+
+public class SelectionTrace {
+    static int comparisons;
+
+    public static void selectionSort(int arr[]) {       // assume: ascending order
+        int minIndex, temp;
+        for (int i = 0; i < arr.length - 1; i++) {
+            minIndex = i;                               // initial index with the minimum value
+            for (int j = i + 1; j < arr.length; j++) {
+                comparisons++;
+                if (arr[j] < arr[minIndex])
+                    minIndex = j;                       // found an index with a new minimum value
+            }
+            temp = arr[minIndex];
+            arr[minIndex] = arr[i];
+            arr[i] = temp;
+            System.out.println("i = " + i + " (smallest was at " + minIndex + "): " + Arrays.toString(arr));
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] a = {63, 29, 72, 85, 18};
+        selectionSort(a);
+        System.out.println(comparisons + " comparisons");
+    }
+}
+```
+
+```text
+i = 0 (smallest was at 4): [18, 29, 72, 85, 63]
+i = 1 (smallest was at 1): [18, 29, 72, 85, 63]
+i = 2 (smallest was at 4): [18, 29, 63, 85, 72]
+i = 3 (smallest was at 4): [18, 29, 63, 72, 85]
+10 comparisons
+```
+
+The first pass finds that the smallest of all five, 18, is at index 4, and swaps it with 63. The second pass finds that the smallest of the rest, 29, is already in place (the swap is of an item with itself). The third swaps 63 into index 2, the fourth swaps 72 into index 3, and the array is sorted after `n - 1` = 4 passes. The number of comparisons is 4 + 3 + 2 + 1 = 10 whatever the order of the data. The lecture's disadvantage: it still loops through all the items several times, O(n²).
+
+<MemoryDiagram scenario="selectionsort" />
+
+## 5. Comparing the three
+
+All three are O(n²). The counts show how they differ on the same inputs. The program counts the comparisons and the moves of each algorithm (swaps for bubble and selection; shifts for insertion) on an array that is already sorted, one in reverse order and a mixed one, each of 8 items. The bubble sort is the lecture's version.
+
+```java title="SortCounts.java"
+public class SortCounts {
+    static int comparisons;
+    static int moves;
+
+    static void bubble(int[] a) {                         // the lecture's version: n passes of n - 1 comparisons
+        for (int i = 0; i < a.length; i++) {
+            for (int j = 0; j < a.length - 1; j++) {
+                comparisons++;
+                if (a[j] > a[j + 1]) {
+                    int t = a[j];
+                    a[j] = a[j + 1];
+                    a[j + 1] = t;
+                    moves++;
+                }
+            }
+        }
+    }
+
+    static void insertion(int[] a) {
+        for (int i = 1; i < a.length; i++) {
+            int temp = a[i];
+            int j = i;
+            while (j > 0) {
+                comparisons++;
+                if (temp < a[j - 1]) {
+                    a[j] = a[j - 1];
+                    moves++;
+                    j--;
+                } else {
+                    break;
+                }
+            }
+            a[j] = temp;
+        }
+    }
+
+    static void selection(int[] a) {
+        for (int i = 0; i < a.length - 1; i++) {
+            int min = i;
+            for (int j = i + 1; j < a.length; j++) {
+                comparisons++;
+                if (a[j] < a[min]) {
+                    min = j;
+                }
+            }
+            if (min != i) {
+                int t = a[min];
+                a[min] = a[i];
+                a[i] = t;
+                moves++;
+            }
+        }
+    }
+
+    static void report(String label, int[] data) {
+        String line = String.format("%-14s", label);
+        for (int algorithm = 0; algorithm < 3; algorithm++) {
+            comparisons = 0;
+            moves = 0;
+            int[] copy = data.clone();
+            if (algorithm == 0) bubble(copy);
+            else if (algorithm == 1) insertion(copy);
+            else selection(copy);
+            line += String.format("  %3d comparisons, %2d moves |", comparisons, moves);
+        }
+        System.out.println(line);
+    }
+
+    public static void main(String[] args) {
+        System.out.println("              |        bubble          |       insertion        |       selection        |");
+        report("sorted", new int[] {1, 2, 3, 4, 5, 6, 7, 8});
+        report("reverse order", new int[] {8, 7, 6, 5, 4, 3, 2, 1});
+        report("mixed", new int[] {5, 2, 7, 1, 8, 3, 6, 4});
+    }
+}
+```
+
+```text
+              |        bubble          |       insertion        |       selection        |
+sorted           56 comparisons,  0 moves |    7 comparisons,  0 moves |   28 comparisons,  0 moves |
+reverse order    56 comparisons, 28 moves |   28 comparisons, 28 moves |   28 comparisons,  4 moves |
+mixed            56 comparisons, 13 moves |   18 comparisons, 13 moves |   28 comparisons,  5 moves |
+```
+
+What to notice. Bubble sort (the lecture's version) always makes 56 comparisons for 8 items, however the data is arranged. Selection sort always makes 28 comparisons but at most 7 swaps, the fewest of the three. Insertion sort adapts to the data: 7 comparisons and no moves on a sorted array, but the full 28 moves on a reversed one. This is why the lecture recommends insertion sort for lists that are small or nearly sorted.
+
+| Algorithm | Idea | Time complexity | Good for |
+|---|---|---|---|
+| Bubble | swap adjacent items that are out of order, in several passes | O(n²) | simplicity; the slowest of the three |
+| Insertion | insert each item into the sorted part | O(n²), a little better than bubble sort | few items; nearly sorted lists; few overheads and less memory |
+| Selection | select the smallest of the unsorted part and swap it into place | O(n²) | few swaps |
+
+### Exam question 1: which algorithm? (6 marks)
+
+An array `{40, 10, 30, 20, 50}` is sorted by one of bubble, insertion and selection sort. The array after the first two passes is shown for three runs. Name the algorithm for each. (6 marks)
+
+| Run | After pass 1 | After pass 2 |
+|---|---|---|
+| A | `[10, 30, 20, 40, 50]` | `[10, 20, 30, 40, 50]` |
+| B | `[10, 40, 30, 20, 50]` | `[10, 30, 40, 20, 50]` |
+| C | `[10, 40, 30, 20, 50]` | `[10, 20, 30, 40, 50]` |
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three runs, each with the array after two passes. The passes of each algorithm have a recognisable pattern.
+
+</Step>
+
+<Step title="2. Plan">
+
+Bubble sort changes many neighbours in one pass and moves the largest value to the end. Insertion sort keeps a sorted prefix that grows by one item each pass. Selection sort puts the smallest remaining value in position `i` by one swap.
+
+</Step>
+
+<Step title="3. Solution">
+
+Run A is **bubble sort**: after pass 1 the largest value, 50, is at the end, and several neighbours have changed (40 and 10 swapped, 40 and 30 swapped, 40 and 20 swapped). Run B is **insertion sort**: after pass 1 the first two items (10, 40) are a sorted prefix, and after pass 2 the first three (10, 30, 40) are, while the rest are untouched. Run C is **selection sort**: after pass 1 the smallest value, 10, has been swapped to the front (10 and 40 exchanged places), and after pass 2 the smallest of the rest, 20, has been swapped into position 1.
+
+```java title="PassPatterns.java"
+import java.util.Arrays;
+
+public class PassPatterns {
+    public static void main(String[] args) {
+        int[] b = {40, 10, 30, 20, 50};
+        for (int pass = 1; pass <= 2; pass++) {                     // bubble: pass over all neighbours
+            for (int j = 0; j < b.length - 1; j++) {
+                if (b[j] > b[j + 1]) {
+                    int t = b[j];
+                    b[j] = b[j + 1];
+                    b[j + 1] = t;
+                }
+            }
+            System.out.println("bubble    pass " + pass + ": " + Arrays.toString(b));
+        }
+
+        int[] ins = {40, 10, 30, 20, 50};
+        for (int i = 1; i <= 2; i++) {                              // insertion: items 1 and 2
+            int temp = ins[i];
+            int j = i;
+            while (j > 0 && temp < ins[j - 1]) {
+                ins[j] = ins[j - 1];
+                j--;
+            }
+            ins[j] = temp;
+            System.out.println("insertion pass " + i + ": " + Arrays.toString(ins));
+        }
+
+        int[] sel = {40, 10, 30, 20, 50};
+        for (int i = 0; i <= 1; i++) {                              // selection: positions 0 and 1
+            int min = i;
+            for (int j = i + 1; j < sel.length; j++) {
+                if (sel[j] < sel[min]) min = j;
+            }
+            int t = sel[min];
+            sel[min] = sel[i];
+            sel[i] = t;
+            System.out.println("selection pass " + (i + 1) + ": " + Arrays.toString(sel));
+        }
+    }
+}
+```
+
+```text
+bubble    pass 1: [10, 30, 20, 40, 50]
+bubble    pass 2: [10, 20, 30, 40, 50]
+insertion pass 1: [10, 40, 30, 20, 50]
+insertion pass 2: [10, 30, 40, 20, 50]
+selection pass 1: [10, 40, 30, 20, 50]
+selection pass 2: [10, 20, 30, 40, 50]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The three algorithms give the three runs: A is the bubble lines, B the insertion lines and C the selection lines. The first pass of insertion and selection give the same array here, which is why the second pass is needed to tell them apart.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: count the moves (5 marks)
+
+State how many items insertion sort moves for `{5, 4, 3, 2, 1}` and for `{10, 20, 30, 50, 40}`, and say which of the two the lecture calls a good case for insertion sort. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two arrays and the number of moves in each; then the lecture's advice.
+
+</Step>
+
+<Step title="2. Plan">
+
+A move is one `arr[j] = arr[j - 1]`: the item being inserted passes one larger item. Count, for each item, how many larger items are before it.
+
+</Step>
+
+<Step title="3. Solution">
+
+For `{5, 4, 3, 2, 1}`: 4 passes one larger item, 3 passes two, 2 passes three and 1 passes four: 1 + 2 + 3 + 4 = 10 moves. For `{10, 20, 30, 50, 40}`: only 40 passes one item (50): 1 move. The nearly sorted list is the good case: the lecture says to use insertion sort when the list has few items and when it is nearly sorted, because fewer moves are needed.
+
+</Step>
+
+<Step title="4. Check">
+
+These are the figures printed by `InsertionTrace`: 1 item moved for the nearly sorted array and 10 for the reverse order. In the reverse case every item is inserted at the front, which is insertion sort's worst case, O(n²).
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Sorting arranges items in ascending or descending order, and needs comparisons. Bubble sort passes through the list swapping adjacent items that are out of order: the largest value reaches the end in pass 1 (the lecture's version always makes n passes of n - 1 comparisons). Insertion sort takes each item from the unsorted part and inserts it into the sorted part, moving larger items right (check `j > 0` first; the slide's `)` should be `;`): good for few or nearly sorted items. Selection sort finds the smallest item of the unsorted part and swaps it into position `i`: n - 1 swaps at most, and n(n - 1)/2 comparisons whatever the data. All three are O(n²). For descending order reverse the comparison. To identify an algorithm look at the passes: many neighbour swaps with the largest value at the end (bubble), a growing sorted prefix with the rest untouched (insertion), the smallest value swapped to the front (selection).
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What is the array 63 29 72 85 18 after pass 1 of bubble sort, and what is now in its place?">
+
+`[29, 63, 72, 18, 85]`. The largest value, 85, has bubbled to the end and is in its final place.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does the lecture's bubble sort make 20 comparisons even for an array that is already sorted?">
+
+It always makes `n` passes of `n - 1` comparisons and has no test for a pass without swaps: 5 x 4 = 20 for five items. An improved version stops after a pass with no swap and shortens the inner loop.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is wrong with arr[j] = arr[j-1] ) in the slide's insertion sort?">
+
+The closing bracket should be a semicolon. `javac` reports `error: ';' expected`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does selection sort make at most n - 1 swaps but still cost O(n squared)?">
+
+Each pass swaps once, so there are at most n - 1 swaps. But finding the smallest item needs comparisons with all the remaining items: (n - 1) + (n - 2) + ... + 1 comparisons, which grows as n².
+
+</CheckQuestion>
+
+<CheckQuestion question="When is insertion sort a good choice?">
+
+When the list has few items (few overheads and less memory) and when it is nearly sorted (fewer moves are needed).
+
+</CheckQuestion>
+
+</CheckQuestions>
