@@ -22,6 +22,7 @@ Live site: <https://university-cs-docs.vercel.app>
 - [Writing content](#writing-content)
 - [The Haskell practice runner](#the-haskell-practice-runner)
 - [Architecture](#architecture)
+- [Performance and scale](#performance-and-scale)
 - [Quality checks](#quality-checks)
 - [Contributing](#contributing)
 - [License](#license)
@@ -33,9 +34,9 @@ Live site: <https://university-cs-docs.vercel.app>
 | I | CSI131 Discrete Structures I, CSI141 Programming Principles, CSI161 Introduction to Computing, MAT111 Introductory Mathematics I, COM141 Communication and Academic Literacy Skills | Work in progress |
 | II | CSI132 Discrete Structures II, CSI142 Object-Oriented Programming, MAT122 Introductory Mathematics II, STA122 Introductory Concepts of Probability, COM142 Academic Writing | Work in progress |
 | III | CSI213 Discrete Structures III, CSI243 Functional Programming, CSI247 Data Structures, MAT221 Calculus II, MGT202 Management | Available |
-| V | CSI323 Algorithms | Available |
+| V | CSI323 Algorithms (also holds the hash tables, trees and graphs that moved out of CSI247) | Work in progress |
 
-Semesters I and II are marked as work in progress on the site. Do not rely on them as your only exam resource, and check every topic against current lectures and the official course outline.
+Semesters I, II and V are marked as work in progress on the site. Do not rely on them as your only exam resource, and check every topic against current lectures and the official course outline.
 
 ## How a course is organised
 
@@ -58,6 +59,8 @@ Other courses use the same ideas with their own structure. For example, CSI247 o
 - **In-browser Haskell runner** for CSI243: edit a course example and run it without installing anything. See [The Haskell practice runner](#the-haskell-practice-runner).
 - **Focus timer**: a Pomodoro timer that persists across pages, with settings and daily totals saved on the device.
 - **Resource hub**: a searchable file browser for lecture slides, lab manuals and PDFs, with in-page PDF preview.
+- **Memory diagrams** for the Java and data-structures courses: a stepper that draws the stack, the heap, every reference as an address with an arrow, and old values crossed out, one line of code at a time, for arrays, objects, `ArrayList`, `LinkedList`, stacks and queues. See [Memory diagrams](#memory-diagrams).
+- **Quizzes, flashcards and practice questions that load on demand**: their data is served as versioned static JSON, so a page carries only an address until the reader scrolls near the questions.
 - **Light and dark themes** and a responsive layout.
 - **Machine-readable output**: every page is also served as Markdown (append `.md`, or request `text/markdown`), with `/llms.txt` and `/llms-full.txt` indexes.
 - **Open graph images, a sitemap and a web manifest** generated from the content.
@@ -85,18 +88,33 @@ The site is then available at <http://localhost:3000>.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the development server |
-| `npm run build` | Create a production build |
+| `npm run dev` | Start the development server (Turbopack). The first request of a large page can take a while |
+| `npm run build` | Create a production build of the whole site. This needs several GB of free memory, see [Build memory](#build-memory) |
+| `DOCS_DIR=tmp/mini-docs npm run build` | Build only the pages in a folder, for a quick real build on a small machine |
 | `npm start` | Serve the production build locally |
+| `npm run check:quick` | The fast loop: content audits, unit tests and an MDX compile check, side by side |
+| `npm run check` | Content audits and the type check side by side, then a production build |
+| `npm run check:full` | `check` plus the browser tests and the CSI247 study-guide checks, for releases |
+| `npm run check:mdx` | Compile every MDX page and validate its frontmatter as YAML (about 5 s). Without `--all` it checks only the pages changed since the last commit |
 | `npm run types:check` | Generate MDX and route types, then run the TypeScript compiler |
-| `npm run check` | Type check and production build, the same checks CI runs |
+| `npm run test:unit` | All unit tests, in one run (about 2 s) |
+| `npm run test:memory-diagram` | The memory-diagram engine, including a check of every step of every scenario for overlaps, clipped text and arrows through boxes |
+| `npm run audit:content` | The content and data audits (quizzes, playgrounds, MDX code props, predict blocks, CSI247 architecture and Java, playground assets), run side by side |
+| `npm run audit:quizzes` | Quiz data, references and options |
+| `npm run audit:page-budget` | Page sizes of a finished build against the budget (`-- --report` prints without failing) |
+| `npm run verify:csi247-listings` | Compile and run the Java listings in the CSI247 lessons and compare the output shown; only lessons that changed since they last passed (`-- --force` checks all) |
+| `npm run test:browser` | The Playwright specs |
 | `npm run audit:mat221-fidelity` | Audit the MAT221 content module against its source |
 
-More audit and maintenance scripts live in `scripts/`.
+More audit, verifier and maintenance scripts live in `scripts/`; `package.json` lists them all.
 
-### If the build runs out of memory
+### Build memory
 
-Large MDX trees can exhaust Node's default heap. CI uses 8 GB. Raise the limit for a single command like this:
+The site compiles every MDX page into JavaScript, so building memory follows the weight of the content (code blocks and formulas most of all), not just the number of pages. On 2026-11-04, 730 pages passed GitHub's 16 GB runner but ran out of memory on Vercel's 8 GB build machine, until code blocks were turned into strings and the build used fewer workers there. A 16 GB desktop with other programs open usually cannot build the whole site.
+
+- For everyday work, build a few pages: copy them into `tmp/mini-docs` with the `meta.json` of every folder above them, then run `DOCS_DIR=tmp/mini-docs npm run build`.
+- Stop the dev server when you are done, and do not run a build, `tsc` and the dev server at the same time on a machine with less than about 3 GB free.
+- CI sets `NODE_OPTIONS=--max-old-space-size=8192`. To raise Node's heap for one command:
 
 ```bash
 # macOS and Linux
@@ -108,26 +126,38 @@ NODE_OPTIONS="--max-old-space-size=8192" npm run build
 $env:NODE_OPTIONS = "--max-old-space-size=8192"; npm run build
 ```
 
+Measurements, the page budget and more advice are in [docs/guides/performance.md](docs/guides/performance.md). Where the limits are and what to do about them is in [docs/plans/architecture-options.md](docs/plans/architecture-options.md).
+
 ### Deployment
 
-The site is deployed on Vercel. Importing the repository into Vercel is enough: it detects Next.js and uses `npm run build`. Vercel Analytics and Speed Insights are included.
+The site is deployed on Vercel. Importing the repository is enough: it detects Next.js and runs `npm run build`. Vercel Analytics and Speed Insights are included.
+
+- The Node version comes from `engines` in `package.json` (22.x); the project setting is overridden.
+- The build machine has 8 GB. `next.config.mjs` uses two build workers when `VERCEL` is set.
+- A deployed function larger than 250 MB fails the deployment after a successful build. Server code that joins `process.cwd()` with a path that is not a literal makes the bundler trace the whole project into that function; if the path is only used at build time, mark it `/*turbopackIgnore: true*/` (see `lib/lazy-data.ts`).
+- Set `VERCEL_BUILD_SYSTEM_REPORT=1` as an environment variable to print an out-of-memory report in the build log.
 
 ## Project layout
 
 ```text
-app/                    Next.js App Router: landing page, /docs, search API, llms endpoints, OG images
+app/                    Next.js App Router: landing page, /docs, search API, /data (quiz and practice JSON), llms endpoints, OG images
 components/             React components, registered globally for MDX (see components/README.md)
   callouts/ interactive/ layouts/ learning/ math/ visuals/
+  interactive/lazy.tsx    the large interactive components, each loaded only by the pages that use it
 content/
   docs/                 MDX pages, by semester and course (sem1/, sem2/, sem3/, sem5/)
   quiz-data/            Quiz questions kept out of the MDX files
+  practice-data/        Practice questions with marks and model answers
   flashcard-data/       Flashcard decks
-  curriculum/           Course outline data
-features/courses/       Self-contained course modules (MAT221)
-lib/                    Source loader, site config, shared helpers, the Haskell practice runner
+  figure-data/ playground-data/ predict-data/ decoding/ curriculum/ progress/
+features/               Course modules (MAT221, the CSI247 study guides), progress and the study timer
+lib/                    Source loader, site config, shared helpers, the Haskell practice runner,
+                        the code-block build step (code-as-string.ts) and the memory-diagram engine (csi247/)
 public/                 Images, diagrams, videos, and the downloadable files shown by the resource hub
-scripts/                Audit and maintenance scripts
-docs/                   Migration notes and plans
+scripts/                Audits, verifiers and build helpers
+tests/                  Unit tests (tests/unit) and Playwright specs
+docs/                   guides/ (how to write and measure), plans/ (handoffs, audits, the architecture assessment), content standard
+WORK_ORDERS.md          Requested work, its acceptance check and its state
 ```
 
 ### Key features
@@ -136,7 +166,7 @@ docs/                   Migration notes and plans
 - **Custom MDX Components**: A massive suite of React components designed for computer science notes, including interactive quizzes, step-by-step guides, mathematical proof environments, and function plotters.
 - **Browser Playgrounds**: Sandboxed HTML, JavaScript, Python, SQL, Haskell, and CSI247 Java practice environments.
 - **Visual Algorithm Labs**: Card-based searching and sorting traces with substituted conditions, active code lines, trace tables, recursion views, and complexity growth.
-- **Complete CSI247 Path**: The 2026 outline now runs from Java primitives/references, methods, classes, arrays, recursion, and Big-O through searching/sorting, packages, OOP, generics, Collections, and implemented lists, stacks, queues, hash tables, trees, and graphs.
+- **CSI247 Path**: The 2026 outline runs from Java primitives and references, methods, classes, arrays, recursion and Big-O through searching and sorting, packages, OOP, generics, the Collections framework, and implemented lists, stacks and queues, each chapter with a by-example lesson, an exam-practice lesson, a cheat sheet, flashcards, a quiz and marked practice questions. Hash tables, trees and graphs moved to CSI323 (Semester V, in progress).
 - **Resource Hub**: A centralized, searchable file browser for lecture slides, lab manuals, and supplementary PDFs.
 
 ## Writing content
@@ -183,14 +213,33 @@ npm run test:csi247-study-guides    # browser-check themes, traces, responsivene
 
 The topic-page download controls resolve through the checked-in manifest. Bubble sort and selection sort therefore receive separate HTML/PDF artifacts even though they share one MDX route.
 
-### Quizzes and flashcards
+### Quizzes, flashcards and practice questions
 
-Quiz questions and flashcards are stored as data files, not inline in the lesson text:
+Questions and cards are stored as data files, not inline in the lesson text:
 
-- New quiz data goes in audited JSON under `content/quiz-data/<semester>/<course>/` and is rendered with `<QuizRef src="..." id="..." />`. Some older chapter reviews still import a typed `quizData` array into `<Quiz />` while they migrate.
+- Quiz data goes in audited JSON under `content/quiz-data/<semester>/<course>/` and is rendered with `<QuizRef src="..." id="..." />`.
+- Practice questions (with marks and model answers) go under `content/practice-data/<semester>/<course>/` and are rendered with `<PracticeRef src="..." group="..." />`.
 - Flashcard decks go in `content/flashcard-data/<semester>/<course>/`.
 
+The site serves each quiz and practice file as static JSON at `/data/quiz/...` and `/data/practice/...`, with a hash of the content in the address, so a page carries only that address and the browser fetches the file when the questions come near the screen. Some older pages still pass their data inline (`<Quiz questions={...} />`, `<FlashcardDeck cards={...} />`); moving them is PERF-10 in `WORK_ORDERS.md`.
+
 Each quiz question has `question`, `options`, `correctIndex`, an `explanation`, and optionally `optionFeedback` with one entry per option. `npm run audit:quizzes` rejects malformed data, broken references, duplicate options, and unreferenced JSON quizzes.
+
+### Memory diagrams
+
+CSI247 lessons draw memory with `<MemoryDiagram scenario="alist" />`, which steps through a short piece of Java one line at a time, or `<MemoryDiagram scenario="student" static />` for the finished diagram. The drawing rules are in `content/docs/sem3/csi247/06-object-oriented-programming/notes/drawing-memory-diagrams.mdx`.
+
+A scenario is a builder call per line of code, in `lib/csi247/scenarios/` (arrays, objects, collections, linked lists, stacks and queues, sorting). No scenario contains a pixel position:
+
+- Objects are placed relative to each other, for example `{ right: 200 }` or `{ below: 300, slot: 2 }` (underneath slot 2 of the array at 300).
+- Box sizes come from the widest content the box ever holds across all steps, so nothing clips and nothing moves between steps.
+- Arrows are routed round boxes and labels by `lib/csi247/memory-route.ts`.
+
+Structures are drawn as they are really built: an `ArrayList` object points at an array of ten slots whose slots hold the addresses of separate element objects; a `LinkedList` object holds `head` (and `tail` and `size`) and points at nodes whose data points at its own object. `npm run test:memory-diagram` checks every step of every scenario, so a diagram with overlapping boxes, clipped text or an arrow through a box fails the test.
+
+### Code blocks
+
+A fenced block is highlighted by Shiki at build time and emitted as one HTML string (`lib/code-as-string.ts`); `components/interactive/mdx-pre.tsx` reads the language and text from it on the server. This keeps the compiled pages small (the main cost of the build) and avoids a mismatch between the server and the browser. `CODE_AS_STRING=0` turns the step off.
 
 ### Images and files
 
@@ -218,19 +267,39 @@ Embed an editable example in a note with `<HaskellTryIt code={...} />`, or the f
 
 | Area | Technology |
 |---|---|
-| Framework | Next.js 16 (App Router) with React 19 |
+| Framework | Next.js 16 (App Router, Turbopack) with React 19 |
 | Documentation engine | Fumadocs (core, UI and MDX) |
-| Language | TypeScript |
+| Language | TypeScript 7 |
 | Styling | Tailwind CSS 4, with theme tokens in `app/global.css` |
 | Mathematics | KaTeX through `remark-math` and `rehype-katex` |
+| Code highlighting | Shiki, through Fumadocs' `rehype-code` |
 | Interactive drawing | Excalidraw |
 | Motion | Framer Motion |
+| Hosting and checks | Vercel; GitHub Actions, CodeQL and Dependabot |
 
 Next.js 16 has breaking changes from earlier versions. When you change framework-level code, read the guides in `node_modules/next/dist/docs/` first.
 
 The site follows a single visual language: a warm paper background, ink-coloured borders, flat palette fills and hard offset shadows. New components should read the theme tokens in `app/global.css` rather than introduce their own colours.
 
+## Performance and scale
+
+Fumadocs compiles every MDX page into a JavaScript module that the bundler includes, so the memory a build needs grows with the amount of content, not only the number of pages. Code-heavy pages cost the most (CSI243 averages about 0.3 MB of compiled output per page against about 0.04 MB for CSI247), then pages with many formulas.
+
+What is in place: code blocks as strings, the large interactive components loaded only where they are used, quiz and practice data served on demand, long-lived cache headers for static files, a slimmer sidebar tree, parallel checks, and a page budget that CI reports. What is planned, with the measurements behind it, is in the `PERF-` and `ARCH-` rows of [WORK_ORDERS.md](WORK_ORDERS.md), [docs/guides/performance.md](docs/guides/performance.md) and [docs/plans/architecture-options.md](docs/plans/architecture-options.md). That assessment estimates the 8 GB build machine is crossed at roughly 1,180 pages with the current changes (an estimate, to be checked against each build), and recommends deciding about the content pipeline at about 1,000 pages.
+
+When you write content:
+
+- Prefer data files for questions and cards, and keep heavy code listings and long formula blocks to what a lesson needs.
+- Do not read folders from server code with `process.cwd()` and a computed path unless it is marked as build-time only (see Deployment).
+- Check a new page with `npm run check:quick`, and build a few pages with `DOCS_DIR` before a full build.
+
 ## Quality checks
+
+For a change to content, run the fast loop while you work:
+
+```bash
+npm run check:quick
+```
 
 Before opening a pull request, run:
 
@@ -241,11 +310,11 @@ npm run test:csi247-study-guides
 npm run check:full
 ```
 
-`npm run check` is the normal lean path: quiz references, CSI247 metadata and internal links, lesson Java, runtime provenance, type-checking, and a production build. GitHub Actions adds the focused browser smoke suite once. Generated-guide freshness, guide Java compilation, responsive/theme/print matrices, and every browser scenario remain available through `npm run check:full` for releases or large guide changes instead of slowing every pull request.
+`npm run check` is the normal lean path: the content audits (quiz references, CSI247 metadata and internal links, lesson Java, runtime provenance) and the type check side by side, then a production build. GitHub Actions runs the MDX compile check, the audits, the unit tests, the Java listing checks and the type check in parallel, then the production build, a report of page sizes against the budget, and the focused browser smoke suite once. Generated-guide freshness, guide Java compilation, responsive/theme/print matrices, and every browser scenario remain available through `npm run check:full` for releases or large guide changes instead of slowing every pull request.
 
-CodeQL, dependency review, and Dependabot cover repository security and dependency maintenance. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/content-architecture.md](docs/content-architecture.md) for the complete authoring contract.
+CodeQL, dependency review, and Dependabot cover repository security and dependency maintenance. Dependabot runs weekly (Monday 06:00, Africa/Johannesburg) and groups React packages together, development minor and patch updates, and production patch updates. See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/content-architecture.md](docs/content-architecture.md) for the complete authoring contract.
 
-`WORK_ORDERS.md` records requested repository work, its acceptance check and its delivery state.
+`WORK_ORDERS.md` records requested repository work, its acceptance check and its delivery state. Plans, audits and handoffs are in `docs/plans/`; how-to guides are in `docs/guides/`.
 
 ## Contributing
 
