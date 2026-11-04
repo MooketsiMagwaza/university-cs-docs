@@ -1,0 +1,836 @@
+---
+title: "Counting Steps and Big-O by Example"
+description: "Count the steps of sequences, selections, loops and nested loops with every constant set to 1, check each count with a program, and simplify T(n) to Big-O, with exam questions on each."
+---
+
+Lecture 7 gives one method for comparing algorithms without running them: count the primitive operations, write the count as a function T(n) of the input size, and keep its fastest-growing term as the Big-O. This lesson applies that method to many loops, one change at a time. Every count in it is checked by a program that counts the executions of each line, with every constant set to 1 as the lecture's convention allows. It extends [Measuring algorithms: Big-O](/docs/sem3/csi247/03-time-complexity/notes/algorithm-analysis) and [Counting steps: T(n)](/docs/sem3/csi247/03-time-complexity/notes/counting-steps).
+
+<LearningObjectives items={[
+  'Count the primitive operations of a sequence, a selection, a loop and a nested loop, and write T(n)',
+  'Explain why a loop condition runs one more time than its body',
+  'Change a loop one step at a time (the step, the bound, the number of loops) and say how T(n) changes',
+  'Simplify T(n) to Big-O by keeping the dominant term and dropping constants and lower-order terms',
+  'Compare two growth rates and explain why best, average and worst case differ',
+  'Say where O(log n) and O(n log n) come from, ready for binary search and merge sort',
+]} />
+
+<Prerequisites items={[
+  'Loops and methods in Java, from the Java Fundamentals chapter',
+  'The primitive operations and the three counting rules, from Counting steps: T(n)',
+]} />
+
+## 1. The counting template
+
+The lecture's estimation rules, in the order you apply them:
+
+```text
+1. Give every statement a constant: c1, c2, c3 ...   (each is one primitive operation: a declaration,
+   an assignment, an arithmetic operation, a comparison, an array index, a method call)
+2. Sequence:   add the times of the statements.
+3. Selection:  the condition, plus the larger of the if-block and the else-block.
+4. Loop:       the time of the loop statements multiplied by the number of repetitions.
+              The condition is checked n + 1 times; the body runs n times.
+5. Write T(n) = c1 + c2 + ..., then set every constant to 1 and collect the terms.
+6. Big-O:      keep the fastest-growing term, drop its coefficient and every lower-order term.
+```
+
+The programs below count with a counter named `steps`. A helper `check` adds one to `steps` every time a loop condition is evaluated, so the extra final check that ends a loop is counted too.
+
+```text
+static int steps;
+static boolean check(boolean condition) { steps++; return condition; }
+```
+
+## 2. One statement, a sequence and a selection
+
+### One statement and a sequence
+
+A single statement takes constant time. A sequence adds the times of its statements, so two statements take two steps. Neither depends on `n`, so both are constant time: O(1).
+
+### A selection takes the larger branch
+
+```java title="SelectionCount.java"
+public class SelectionCount {
+    // Question: count the steps of the slide's if/else, with every constant set to 1.
+    static int steps;
+
+    static boolean check(boolean condition) {
+        steps++;
+        return condition;
+    }
+
+    static int count(int a) {
+        steps = 0;
+        int val;
+        if (check(a > 0)) {                   // c1: the condition, once
+            steps++;
+            val = 10;                         // c2: the if-block
+        } else {
+            steps++;
+            val = 1;                          // c3: the else-block
+        }
+        return steps;
+    }
+
+    public static void main(String[] args) {
+        System.out.println("a = 5: " + count(5) + " steps");
+        System.out.println("a = -5: " + count(-5) + " steps");
+    }
+}
+```
+
+```text
+a = 5: 2 steps
+a = -5: 2 steps
+```
+
+Only one branch runs, so each path costs the condition plus one block: 2 steps. The rule T(n) = c1 + max(c2, c3) = 1 + max(1, 1) = 2 gives the same answer whichever branch runs, and it is constant: O(1).
+
+### A selection whose branches cost different amounts
+
+```java title="SelectionWithLoop.java"
+public class SelectionWithLoop {
+    // Question: one branch is a single statement, the other is a loop. Which one sets T(n)?
+    static int steps;
+
+    static boolean check(boolean condition) {
+        steps++;
+        return condition;
+    }
+
+    static int count(int a, int n) {
+        steps = 0;
+        int val = 0;
+        if (check(a > 0)) {                   // the condition: 1 step
+            steps++;
+            val = 10;                         // the if-block: 1 step
+        } else {
+            for (int i = 1; check(i <= n); i++, steps++) {   // condition n + 1, update n
+                steps++;
+                val = val + i;                // body: n steps
+            }
+        }
+        return steps;
+    }
+
+    public static void main(String[] args) {
+        System.out.println("if-block, n = 10: " + count(5, 10));
+        System.out.println("else-block, n = 10: " + count(-1, 10));
+        System.out.println("else-block, n = 100: " + count(-1, 100));
+    }
+}
+```
+
+```text
+if-block, n = 10: 2
+else-block, n = 10: 32
+else-block, n = 100: 302
+```
+
+The if-block costs the condition plus 1 = 2 steps whatever `n` is. The else-block costs the condition plus the loop: (n + 1) + n + n = 3n + 1 steps, so 3n + 2 in all. For the worst case, take the larger branch: T(n) = 1 + max(1, 3n + 1) = 3n + 2, which is O(n). The program shows 2 steps for the if-block and 32 and 302 for the else-block, which is 3n + 2 for n = 10 and n = 100.
+
+## 3. Basic repetition: a loop that runs n times
+
+### The slide's loop, counted line by line
+
+```java title="BasicRepetition.java"
+public class BasicRepetition {
+    // Question: count the steps of the slide's while loop, with every constant set to 1.
+    static int steps;
+
+    static boolean check(boolean condition) {
+        steps++;
+        return condition;
+    }
+
+    static int count(int n) {
+        steps = 0;
+        steps++;
+        int tot = 0;                          // c1: once
+        steps++;
+        int c = 1;                            // c2: once
+        while (check(c <= n)) {               // c3: n + 1 times
+            steps++;
+            tot = tot + c;                    // c4: n times
+            steps++;
+            c = c + 1;                        // c5: n times
+        }
+        return steps;
+    }
+
+    public static void main(String[] args) {
+        for (int n = 0; n <= 5; n++) {
+            System.out.println("n = " + n + ": T(n) = " + count(n) + ", 3n + 3 = " + (3 * n + 3));
+        }
+    }
+}
+```
+
+```text
+n = 0: T(n) = 3, 3n + 3 = 3
+n = 1: T(n) = 6, 3n + 3 = 6
+n = 2: T(n) = 9, 3n + 3 = 9
+n = 3: T(n) = 12, 3n + 3 = 12
+n = 4: T(n) = 15, 3n + 3 = 15
+n = 5: T(n) = 18, 3n + 3 = 18
+```
+
+T(n) = c1 + c2 + (n + 1)c3 + n c4 + n c5 = 1 + 1 + (n + 1) + n + n = 3n + 3. The count from the program equals 3n + 3 for every `n`, including 0, where the loop never runs but its condition is still checked once. The dominant term is 3n, so T(n) is proportional to `n`: O(n).
+
+### The step changes from 1 to 2
+
+The slide itself writes `c = c + 2` but still says the body runs `n` times. Count it to see what really happens.
+
+```java title="StepTwo.java"
+public class StepTwo {
+    // Question: the slide's loop with c = c + 2. How many times does the body run?
+    static int steps;
+
+    static boolean check(boolean condition) {
+        steps++;
+        return condition;
+    }
+
+    static int body;
+
+    static int count(int n) {
+        steps = 0;
+        body = 0;
+        steps++;
+        int tot = 0;
+        steps++;
+        int c = 1;
+        while (check(c <= n)) {
+            body++;
+            steps++;
+            tot = tot + c;
+            steps++;
+            c = c + 2;
+        }
+        return steps;
+    }
+
+    public static void main(String[] args) {
+        for (int n = 0; n <= 5; n++) {
+            int total = count(n);
+            System.out.println("n = " + n + ": body " + body + " times, T(n) = " + total);
+        }
+    }
+}
+```
+
+```text
+n = 0: body 0 times, T(n) = 3
+n = 1: body 1 times, T(n) = 6
+n = 2: body 1 times, T(n) = 6
+n = 3: body 2 times, T(n) = 9
+n = 4: body 2 times, T(n) = 9
+n = 5: body 3 times, T(n) = 12
+```
+
+`c` takes the values 1, 3, 5, so the body runs about `n / 2` times, and T(n) = 2 + (k + 1) + 2k = 3k + 3 where `k` is the number of passes. That is roughly 1.5n + 3. The formula changes, but the growth rate does not: it is still O(n). A constant step does not change the Big-O.
+
+### The bound and the comparison change
+
+```java title="LoopVariants.java"
+public class LoopVariants {
+    // Question: how many times are the condition and the body run by each loop header?
+    static int cond;
+    static int body;
+
+    static boolean check(boolean b) {
+        cond++;
+        return b;
+    }
+
+    static void a(int n) {
+        for (int i = 1; check(i <= n); i++) {
+            body++;
+        }
+    }
+
+    static void b(int n) {
+        for (int i = 0; check(i < n); i++) {
+            body++;
+        }
+    }
+
+    static void c(int n) {
+        for (int i = 1; check(i < n); i++) {
+            body++;
+        }
+    }
+
+    static void d(int n) {
+        for (int i = 1; check(i <= 10); i++) {
+            body++;
+        }
+    }
+
+    static void e(int n) {
+        for (int i = n; check(i >= 1); i--) {
+            body++;
+        }
+    }
+
+    static void show(String name, int n) {
+        System.out.println(name + " n = " + n + ": condition " + cond + ", body " + body);
+        cond = 0;
+        body = 0;
+    }
+
+    public static void main(String[] args) {
+        a(5);
+        show("i = 1; i <= n   ", 5);
+        b(5);
+        show("i = 0; i < n    ", 5);
+        c(5);
+        show("i = 1; i < n    ", 5);
+        d(5);
+        show("i = 1; i <= 10  ", 5);
+        e(5);
+        show("i = n; i >= 1; i--", 5);
+        d(500);
+        show("i = 1; i <= 10  ", 500);
+    }
+}
+```
+
+```text
+i = 1; i <= n    n = 5: condition 6, body 5
+i = 0; i < n     n = 5: condition 6, body 5
+i = 1; i < n     n = 5: condition 5, body 4
+i = 1; i <= 10   n = 5: condition 11, body 10
+i = n; i >= 1; i-- n = 5: condition 6, body 5
+i = 1; i <= 10   n = 500: condition 11, body 10
+```
+
+In every header the condition runs one time more than the body, as the lecture says. The headers `i = 1; i <= n` and `i = 0; i < n` and the countdown all run the body `n` times. Writing `i < n` from 1 runs it `n - 1` times: still O(n). A header with a constant bound (10) runs the body 10 times whatever `n` is, so it is O(1).
+
+<Callout type="mistake" title="Common error">
+
+Counting the condition of a loop `n` times instead of `n + 1`. The test that ends the loop is evaluated once more than the body runs: for `n = 0` the body runs 0 times but the condition is still checked once, which is why T(0) is 3 in the loop above and not 2.
+
+</Callout>
+
+### Exam question 1: a loop that steps by 3 (5 marks)
+
+Determine T(n) for the method below, setting every constant to 1, and give the Big-O. Work out the number of steps for `n = 10`. (5 marks)
+
+```java
+tot = 0;                  // c1
+c = 1;                    // c2
+while (c <= n) {          // c3
+    tot = tot + c;        // c4
+    c = c + 3;            // c5
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "determine", "give" and "work out". The method is the slide's loop with a step of 3. The number of passes depends on how many values of `c` are at most `n`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Count the passes `k`. The values of `c` are 1, 4, 7, 10 and so on. The condition is checked `k + 1` times, the two statements in the body run `k` times, and the two initialisations run once.
+
+</Step>
+
+<Step title="3. Solution">
+
+For `n = 10` the values are 1, 4, 7, 10, so `k = 4`. T = c1 + c2 + (k + 1)c3 + k c4 + k c5 = 1 + 1 + 5 + 4 + 4 = 15. In general `k` is about `n / 3`, so T(n) is about 2 + (n / 3 + 1) + 2n / 3 = n + 3.
+
+```java title="StepThree.java"
+public class StepThree {
+    // Question: the steps of the loop with c = c + 3.
+    static int steps;
+
+    static boolean check(boolean condition) {
+        steps++;
+        return condition;
+    }
+
+    static int count(int n) {
+        steps = 0;
+        steps++;
+        int tot = 0;
+        steps++;
+        int c = 1;
+        while (check(c <= n)) {
+            steps++;
+            tot = tot + c;
+            steps++;
+            c = c + 3;
+        }
+        return steps;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(count(10));
+        System.out.println(count(30));
+        System.out.println(count(300));
+    }
+}
+```
+
+```text
+15
+33
+303
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The program gives 15 for `n = 10`, which matches the hand count. For `n = 30` the values of `c` are 1, 4, ..., 28, so `k = 10` and T = 2 + 11 + 20 = 33 = 30 + 3; for `n = 300`, `k = 100` and T = 303. The growth is proportional to `n`: **O(n)**. The step of 3 only changes the coefficient.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Nested repetition: a loop inside a loop
+
+The statements inside the inner loop run `n` times for each of the `n` passes of the outer loop, so `n × n = n²` times. Statements in the outer loop but outside the inner loop run `n` times. The inner condition is checked `n + 1` times in each outer pass, so `n(n + 1)` times in all.
+
+### The slide's nested loop
+
+```java title="NestedBlock.java"
+public class NestedBlock {
+    // Question: count the steps of the slide's nested loop, with every constant set to 1.
+    static int steps;
+
+    static boolean check(boolean condition) {
+        steps++;
+        return condition;
+    }
+
+    static int count(int n) {
+        steps = 0;
+        steps++;
+        int c = 1;                            // c1: once
+        while (check(c <= n)) {               // c2: n + 1 times
+            steps++;
+            int i = 1;                        // c3: n times
+            while (check(i <= n)) {           // c4: n(n + 1) times
+                steps++;                      // c5: print i, n * n times
+                steps++;
+                i = i + 1;                    // c6: n * n times
+            }
+            steps++;
+            c = c + 1;                        // c7: n times
+        }
+        return steps;
+    }
+
+    public static void main(String[] args) {
+        for (int n = 0; n <= 5; n++) {
+            System.out.println("n = " + n + ": T(n) = " + count(n) + ", 3n^2 + 4n + 2 = " + (3 * n * n + 4 * n + 2));
+        }
+    }
+}
+```
+
+```text
+n = 0: T(n) = 2, 3n^2 + 4n + 2 = 2
+n = 1: T(n) = 9, 3n^2 + 4n + 2 = 9
+n = 2: T(n) = 22, 3n^2 + 4n + 2 = 22
+n = 3: T(n) = 41, 3n^2 + 4n + 2 = 41
+n = 4: T(n) = 66, 3n^2 + 4n + 2 = 66
+n = 5: T(n) = 97, 3n^2 + 4n + 2 = 97
+```
+
+T(n) = c1 + (n + 1)c2 + n c3 + n(n + 1)c4 + n² c5 + n² c6 + n c7 = 1 + (n + 1) + n + (n² + n) + n² + n² + n = 3n² + 4n + 2. The program agrees for every `n`. (The program counts the print as one step instead of printing, so the output stays short.) The fastest-growing term is 3n², so T(n) is proportional to n²: **O(n²)**.
+
+### Other shapes of loops, counted by the body
+
+The next program counts only how many times the innermost statement runs, for loops that differ from the slide's in one way each.
+
+```java title="NestedShapes.java"
+public class NestedShapes {
+    // Question: how many times does the innermost statement run for each shape?
+    static long constantInner(int n) {
+        long body = 0;
+        for (int i = 1; i <= n; i++) {
+            for (int j = 1; j <= 3; j++) {    // the inner bound does not depend on n
+                body++;
+            }
+        }
+        return body;
+    }
+
+    static long twoLevels(int n) {
+        long body = 0;
+        for (int i = 1; i <= n; i++) {
+            for (int j = 1; j <= n; j++) {
+                body++;
+            }
+        }
+        return body;
+    }
+
+    static long threeLevels(int n) {
+        long body = 0;
+        for (int i = 1; i <= n; i++) {
+            for (int j = 1; j <= n; j++) {
+                for (int k = 1; k <= n; k++) {
+                    body++;
+                }
+            }
+        }
+        return body;
+    }
+
+    static long dependentInner(int n) {
+        long body = 0;
+        for (int i = 1; i <= n; i++) {
+            for (int j = 1; j <= i; j++) {    // the inner bound depends on the outer variable
+                body++;
+            }
+        }
+        return body;
+    }
+
+    static long twoLoopsInSequence(int n) {
+        long body = 0;
+        for (int i = 1; i <= n; i++) {
+            body++;
+        }
+        for (int j = 1; j <= n; j++) {
+            body++;
+        }
+        return body;
+    }
+
+    static long loopThenNested(int n) {
+        long body = 0;
+        for (int i = 1; i <= n; i++) {
+            body++;
+        }
+        for (int i = 1; i <= n; i++) {
+            for (int j = 1; j <= n; j++) {
+                body++;
+            }
+        }
+        return body;
+    }
+
+    public static void main(String[] args) {
+        System.out.println("n | const inner | two levels | three levels | dependent | in sequence | loop then nested");
+        int[] sizes = {1, 2, 5, 10};
+        for (int n : sizes) {
+            System.out.println(n + " | " + constantInner(n) + " | " + twoLevels(n) + " | " + threeLevels(n) + " | "
+                + dependentInner(n) + " | " + twoLoopsInSequence(n) + " | " + loopThenNested(n));
+        }
+    }
+}
+```
+
+```text
+n | const inner | two levels | three levels | dependent | in sequence | loop then nested
+1 | 3 | 1 | 1 | 1 | 2 | 2
+2 | 6 | 4 | 8 | 3 | 4 | 6
+5 | 15 | 25 | 125 | 15 | 10 | 30
+10 | 30 | 100 | 1000 | 55 | 20 | 110
+```
+
+| Shape | Body runs | Big-O | Why |
+|---|---|---|---|
+| Inner loop with a constant bound | 3n | O(n) | the inner loop is a constant factor |
+| Two nested loops, both to `n` | n² | O(n²) | `n` times `n` |
+| Three nested loops | n³ | O(n³) | `n` times `n` times `n` |
+| Inner bound depends on the outer variable | n(n + 1) / 2 | O(n²) | 1 + 2 + ... + n; the constant 1/2 is dropped |
+| Two loops one after the other | 2n | O(n) | sequence: add, then drop the coefficient |
+| A loop, then a nested pair | n + n² | O(n²) | sequence: add, then keep the dominant term |
+
+The program's numbers fit the formulas: for `n = 10` they are 30, 100, 1000, 55, 20 and 110. Sequential blocks are added, nested blocks are multiplied, and the larger term wins.
+
+<Callout type="mistake" title="Common error">
+
+Multiplying two loops that are one after the other. Two loops in sequence cost `n + n = 2n`, which is O(n); only a loop **inside** a loop multiplies. Look at the braces: is the second loop within the body of the first?
+
+</Callout>
+
+### Exam question 2: count the nested loop for n = 3 (6 marks)
+
+For the slide's nested loop, complete the table of how many times each line runs for `n = 3`, state the total with every constant set to 1, and give the Big-O. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Complete the table" asks for a count for each of the seven lines. The formulas from the lecture are the starting point: `1`, `n + 1`, `n`, `n(n + 1)`, `n²`, `n²`, `n`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Substitute `n = 3` into each formula, add the counts, and compare with the general T(n) = 3n² + 4n + 2.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Line | Constant | Times | For `n = 3` |
+|---|---|---|---|
+| `c = 1;` | c1 | 1 | 1 |
+| `while (c <= n)` | c2 | n + 1 | 4 |
+| `i = 1;` | c3 | n | 3 |
+| `while (i <= n)` | c4 | n(n + 1) | 12 |
+| `print i;` | c5 | n × n | 9 |
+| `i = i + 1;` | c6 | n × n | 9 |
+| `c = c + 1;` | c7 | n | 3 |
+
+The total is 1 + 4 + 3 + 12 + 9 + 9 + 3 = **41**.
+
+</Step>
+
+<Step title="4. Check">
+
+The general formula gives 3 × 9 + 4 × 3 + 2 = 27 + 12 + 2 = 41, and the program above printed the same count for `n = 3`. The dominant term is 3n², so the Big-O is **O(n²)**.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. From T(n) to Big-O
+
+The lecture's rules: focus on the dominant term, drop constants, coefficients and lower-order terms, and remember that Big-O describes the worst case. They are safe because lower terms stop mattering as `n` grows.
+
+### The lecture's examples, and why the rules are safe
+
+| T(n) | Dominant term | Big-O |
+|---|---|---|
+| 7n − 3 | 7n | O(n) |
+| 8n² log n + 5n² + n | 8n² log n | O(n² log n) |
+| 3n² + 5n | 3n² | O(n²) |
+
+```java title="DominantTerm.java"
+public class DominantTerm {
+    // Question: do the lower-order terms and the coefficient really not matter for large n?
+    public static void main(String[] args) {
+        long[] sizes = {10, 1000, 100000, 10000000};
+        for (long n : sizes) {
+            double quadratic = (3.0 * n * n + 5.0 * n) / ((double) n * n);
+            double linear = (7.0 * n - 3.0) / n;
+            System.out.println("n = " + n + ": (3n^2 + 5n) / n^2 = " + String.format("%.4f", quadratic)
+                + ", (7n - 3) / n = " + String.format("%.4f", linear));
+        }
+    }
+}
+```
+
+```text
+n = 10: (3n^2 + 5n) / n^2 = 3.5000, (7n - 3) / n = 6.7000
+n = 1000: (3n^2 + 5n) / n^2 = 3.0050, (7n - 3) / n = 6.9970
+n = 100000: (3n^2 + 5n) / n^2 = 3.0001, (7n - 3) / n = 7.0000
+n = 10000000: (3n^2 + 5n) / n^2 = 3.0000, (7n - 3) / n = 7.0000
+```
+
+Dividing `3n² + 5n` by `n²` settles at 3 as `n` grows, because the `5n` part becomes negligible; dividing `7n − 3` by `n` settles at 7. So both grow at the rate of their dominant term, and the constant factor (3 or 7) is the only thing the notation drops.
+
+### Comparing two growth rates
+
+The lecture compares algorithm A, with time 2n, and algorithm B, with time 4 + 3n².
+
+```java title="CompareGrowth.java"
+public class CompareGrowth {
+    // Question: compare A, with time 2n, and B, with time 4 + 3n^2, as n grows.
+    public static void main(String[] args) {
+        long[] sizes = {1, 10, 100, 1000};
+        for (long n : sizes) {
+            long a = 2 * n;
+            long b = 4 + 3 * n * n;
+            System.out.println("n = " + n + ": A = " + a + ", B = " + b + ", B / A = " + String.format("%.1f", (double) b / a));
+        }
+    }
+}
+```
+
+```text
+n = 1: A = 2, B = 7, B / A = 3.5
+n = 10: A = 20, B = 304, B / A = 15.2
+n = 100: A = 200, B = 30004, B / A = 150.0
+n = 1000: A = 2000, B = 3000004, B / A = 1500.0
+```
+
+A grows in proportion to `n` (a linear rate) and B in proportion to n² (a quadratic rate). Each time `n` is multiplied by 10, A grows 10 times and B grows about 100 times, so the gap B / A keeps widening. For small `n` the constants hide this, which is why growth rates are compared for large `n`.
+
+### Exam question 3: simplify to Big-O (6 marks)
+
+Give the Big-O of (a) 4n³ + 100n² + 7, (b) 5 + 3n log n + 2n, and (c) 600n + 2. State which term dominates in each and why the others can be dropped. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three expressions, each needing a Big-O and a reason. The rules: keep the fastest-growing term, drop its coefficient, drop everything else.
+
+</Step>
+
+<Step title="2. Plan">
+
+Rank the terms of each by growth using the order from the lecture: 1, log n, n, n log n, n², n³. The highest-ranked term is the dominant term.
+
+</Step>
+
+<Step title="3. Solution">
+
+(a) The terms are n³, n² and a constant. n³ grows fastest, so the dominant term is 4n³, and the Big-O is **O(n³)**. (b) The terms are a constant, n log n and n. n log n grows faster than n, so the Big-O is **O(n log n)**. (c) 600n dominates the constant 2, so the Big-O is **O(n)**.
+
+</Step>
+
+<Step title="4. Check">
+
+The large coefficient 100 on n² in (a) and 600 on `n` in (c) do not change the answer: for large `n` the higher power always wins, as in the program above where the lower terms became negligible. A coefficient is never part of the Big-O.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Best, average and worst case
+
+The lecture defines three estimates: the best case (the shortest possible runtime), the average case (the expected runtime over inputs of size `n`, hard to calculate) and the worst case (the maximum runtime for size `n`, most commonly used, and crucial in domains such as surgery and air traffic control). A search through an unsorted array shows all three.
+
+```java title="BestAverageWorst.java"
+public class BestAverageWorst {
+    // Question: count the comparisons a search makes when the target is in each position.
+    static int comparisons(int[] a, int target) {
+        int count = 0;
+        for (int i = 0; i < a.length; i++) {
+            count++;
+            if (a[i] == target) {
+                return count;                 // found: stop at once
+            }
+        }
+        return count;                         // not found: every element was compared
+    }
+
+    public static void main(String[] args) {
+        int[] a = {14, 22, 31, 47, 58, 63, 72, 85};
+        int total = 0;
+        for (int target : a) {
+            int c = comparisons(a, target);
+            total += c;
+            System.out.println("target " + target + ": " + c + " comparisons");
+        }
+        System.out.println("target 99 (absent): " + comparisons(a, 99) + " comparisons");
+        System.out.println("average when present: " + (total / (double) a.length));
+    }
+}
+```
+
+```text
+target 14: 1 comparisons
+target 22: 2 comparisons
+target 31: 3 comparisons
+target 47: 4 comparisons
+target 58: 5 comparisons
+target 63: 6 comparisons
+target 72: 7 comparisons
+target 85: 8 comparisons
+target 99 (absent): 8 comparisons
+average when present: 4.5
+```
+
+The best case is 1 comparison (the target is first). The worst case is 8, equal to `n`, when the target is last or absent. The average over the eight present targets is 4.5, which is `(n + 1) / 2`. The best case is O(1), and both the average and the worst case grow in proportion to `n`, so they are O(n). The worst case is the one quoted because it is a guarantee.
+
+## 7. Where O(log n) and O(n log n) come from
+
+Lecture 7 lists O(log n) and O(n log n) among the common orders but shows no loop for them. The loop appears in the next two lectures: binary search (Lecture 8) keeps reducing the search space by half, and merge sort (Lecture 9) keeps breaking the problem into halves and has time complexity O(n log n). The shape that produces the logarithm is a loop that halves its counter.
+
+```java title="HalvingLoop.java"
+public class HalvingLoop {
+    // Question: how many times can a loop halve n before it reaches 1?
+    static int halvings(int n) {
+        int passes = 0;
+        for (int i = n; i > 1; i = i / 2) {
+            passes++;
+        }
+        return passes;
+    }
+
+    public static void main(String[] args) {
+        int[] sizes = {2, 8, 16, 1000, 1024, 1000000};
+        for (int n : sizes) {
+            System.out.println("n = " + n + ": " + halvings(n) + " passes");
+        }
+        System.out.println("n log n shape, n = 1024: " + 1024 * halvings(1024));
+    }
+}
+```
+
+```text
+n = 2: 1 passes
+n = 8: 3 passes
+n = 16: 4 passes
+n = 1000: 9 passes
+n = 1024: 10 passes
+n = 1000000: 19 passes
+n log n shape, n = 1024: 10240
+```
+
+Doubling `n` adds only one pass: 8 gives 3, 16 gives 4, and 1024 gives 10. Even a million needs only 19 passes, which is why O(log n) is graded "Good" in the lecture's table. A loop to `n` with a halving loop inside runs `n` times `log n`, the shape of O(n log n). The same loop idea is used again when binary search and merge sort are analysed in chapter 4.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Count the primitive operations of each line, add a sequence, take the condition plus the larger branch of a selection, and multiply a loop body by its number of repetitions. The condition of a loop runs one more time than its body. Nested loops multiply; loops one after another add. A constant step or a constant coefficient never changes the Big-O. Keep the dominant term and drop the rest: `3n² + 4n + 2` is O(n²). Big-O describes the worst case, and best, average and worst case can differ, as in a search. A loop that halves its counter runs about log n times, which is where O(log n) comes from.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="A for loop runs its body 6 times. How many times is its condition evaluated, and why?">
+
+Seven times: once before each of the 6 passes, plus one final evaluation that is false and ends the loop. In general the condition runs `n + 1` times for `n` passes.
+
+</CheckQuestion>
+
+<CheckQuestion question="The slide's loop uses c = c + 2. Does that change its Big-O?">
+
+No. The body runs about `n / 2` times and T(n) is about 1.5n + 3, but that is still proportional to `n`, so it is O(n). A constant step only changes the coefficient.
+
+</CheckQuestion>
+
+<CheckQuestion question="Two loops over n items sit one after the other. Another pair of loops is nested. What are the Big-O values?">
+
+One after the other: `n + n = 2n`, so O(n). Nested: `n × n = n²`, so O(n²). Sequence adds, nesting multiplies.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can 3n² + 5n be written as O(n²)?">
+
+For large `n` the term `5n` is negligible next to 3n²: dividing the whole expression by n² gives a value that settles near 3. Big-O keeps the dominant term and drops its coefficient and the lower-order terms.
+
+</CheckQuestion>
+
+<CheckQuestion question="A search of an array of n items can end after 1 comparison or after n. Which case is quoted as the Big-O, and why?">
+
+The worst case, O(n), because it is a guarantee for every input of size `n`. The best case (1 comparison) is the shortest possible time and the average case is hard to calculate.
+
+</CheckQuestion>
+
+</CheckQuestions>

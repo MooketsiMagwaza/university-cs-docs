@@ -1,0 +1,632 @@
+---
+title: "Classes by Example"
+description: "Write a user-defined class from Lecture 4: instance variables, constructors, void and value-returning methods, this, equals and toString, testing with a tester class, parameter passing, UML, method signatures and overloading."
+---
+
+Lecture 4 teaches how to write a class of your own. It uses an `Account` class throughout: identify the attributes and the operations, write the class, then write a separate tester class to check it. The lecture ends with exercises that finish the `Account` class (`deposit`, `withdraw`, `transferFunds` and more) and extend the tester, then a UML diagram, method signatures and overloading. This lesson builds the class step by step, answers the exercises with every output taken from a real run, and shows the compiler message for each common fault. It extends [Classes and Objects](/docs/sem3/csi247/06-object-oriented-programming/notes/classes-and-objects) and [Encapsulation](/docs/sem3/csi247/06-object-oriented-programming/notes/encapsulation).
+
+<LearningObjectives items={[
+  'Say the difference between a class and an object, and create objects with new',
+  'Write a class: private instance variables, constructors (including a default constructor and this), setters, getters, equals and toString',
+  'Write and run a tester class, and pass arguments whose types are compatible with the parameters',
+  'Complete the Account exercises: deposit, withdraw, transferFunds, a stronger equals and the tester conditions',
+  'Read a UML class diagram, write a method signature, and say which overloaded methods may share a class',
+]} />
+
+<Prerequisites items={[
+  'Methods, parameters and return values, from the Java Methods and Java Fundamentals chapter',
+  'Variables and the memory diagram of a reference',
+  'Strings, printing and the keyboard `Scanner`',
+]} />
+
+## 1. The templates
+
+```text
+Create an object:       ClassName identifier = new ClassName(actual_parameters);
+Class structure:        // import statements
+                        public class ClassName {
+                            // instance variables (attributes)
+                            // constructors
+                            // other methods
+                        }
+Instance variable:      private type identifier;
+Constructor:            public ClassName(formal_parameters) { ... }       same name as the class, no return type
+Setter (modifier):      public void setX(type newX) { x = newX; }
+Getter (accessor):      public type getX() { return x; }
+equals / toString:      public boolean equals(ClassName other) { ... }    public String toString() { ... }
+Invoke a method:        objectName.methodName(actual_parameters);
+```
+
+An **object** models a thing, real or abstract, and has values (attributes) and operations (methods). A **class** is a block of code that says how to create objects and what operations they have; an object is an instance of a class. The file must be named after the public class: `Account` is saved as `Account.java`, with no exceptions, and a class name starts with an upper-case letter.
+
+## 2. Objects and instance variables
+
+Each object has its own value for every instance variable. Two objects of the same class do not share them.
+
+```java title="Dog.java"
+public class Dog {
+    private String name;           // instance variables: declared in the class, outside any method
+    private int age;
+
+    public Dog(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void haveBirthday() {   // a void method: it changes the object and returns nothing
+        age = age + 1;
+    }
+}
+```
+
+```java title="DogDemo.java"
+public class DogDemo {
+    // Question (Lecture 4): create two Dog objects and show that each has its own values.
+    public static void main(String[] args) {
+        Dog d1 = new Dog("Fluffy", 1);
+        Dog d2 = new Dog("Rex", 4);
+        d1.haveBirthday();
+        System.out.println(d1.getName() + " " + d1.getAge());
+        System.out.println(d2.getName() + " " + d2.getAge());
+
+        Dog d3 = d1;                       // a second name for the same object
+        d3.haveBirthday();
+        System.out.println(d1.getAge() + " " + (d1 == d3) + " " + (d1 == d2));
+    }
+}
+```
+
+```text
+Fluffy 2
+Rex 4
+3 true false
+```
+
+`d1` and `d2` keep separate ages, so the birthday of one does not change the other. `d3 = d1` copies the address, not the object: there is still one Fluffy, and `d1.getAge()` shows both birthdays. The statement `Dog d1 = new Dog("Fluffy", 1)` can also be written in two lines, `Dog d1;` and then `d1 = new Dog("Fluffy", 1);`.
+
+## 3. The Account class, step by step
+
+The lecture's analysis: the attributes are the account number and the balance; the operations include changing the number, changing the balance, retrieving each, and comparing two accounts. Constructors have the **same name as the class** and **no return type**, and they initialise the instance variables. A class may have several. If you write none, Java adds a default constructor; once you write one, it does not.
+
+```java title="Account.java"
+public class Account {
+    // instance variables
+    private int accNumber;
+    private double balance;
+
+    // constructors
+    public Account() {
+        this(0, 0.0);                       // calls the other constructor
+    }
+
+    public Account(int newNumber, double newBalance) {
+        accNumber = newNumber;
+        balance = newBalance;
+    }
+
+    // other methods
+    public void setNumber(int newNumber) {  // setter: changes an instance variable
+        accNumber = newNumber;
+    }
+
+    public int getNumber() {                // getter: returns an instance variable
+        return accNumber;
+    }
+
+    public boolean equals(Account otherAcc) {
+        return (accNumber == otherAcc.getNumber());
+    }
+
+    public String toString() {
+        String accString;                   // local variable
+        accString = "Acc No = " + accNumber + "Balance = " + balance;
+        return accString;
+    }
+}
+```
+
+`this(0, 0.0)` is the second form of the default constructor on the slide; the first form sets `accNumber = 0; balance = 0.0;` directly. A getter must end with a `return` of the declared type. `equals` here says two accounts are equal when their account numbers are identical. The `toString` of the slide has no space before `Balance`, and the output shows it.
+
+### Testing the class
+
+A class has no `main`, so it cannot be run: it needs a tester. This is the lecture's tester exercise with the keyboard reading replaced by fixed numbers (the keyboard form is `Scanner keyboard = new Scanner(System.in); int number = keyboard.nextInt();`).
+
+```java title="AccountTester.java"
+public class AccountTester {
+    // Question (Lecture 4): create two accounts with unknown values, set their numbers, display them, report duplicates.
+    public static void main(String[] args) {
+        Account acc1 = new Account();               // account number and balance not known: the defaults
+        Account acc2 = new Account();
+        System.out.println(acc1);                    // println calls toString()
+
+        int num = 76575;
+        acc1.setNumber(num);                         // num is an int argument, setNumber receives an int
+        acc2.setNumber(76575);
+        System.out.println(acc1.getNumber() + " " + acc2.getNumber());
+
+        if (acc1.equals(acc2)) {
+            System.out.println("Wow! Duplicate detected");
+        } else {
+            System.out.println("They are different!");
+        }
+
+        acc2.setNumber(88100);
+        System.out.println(acc1.equals(acc2) ? "Wow! Duplicate detected" : "They are different!");
+    }
+}
+```
+
+```text
+Acc No = 0Balance = 0.0
+76575 76575
+Wow! Duplicate detected
+They are different!
+```
+
+The default constructor gave number 0 and balance 0.0. **Passing parameters**: the type on the passing side and on the receiving side must be compatible; `num` is an `int` and `setNumber` is defined with an `int` parameter. Passing a `String` to it is rejected at compile time.
+
+### What goes wrong
+
+```java title="ConstructorTraps.java"
+public class ConstructorTraps {
+    private int accNumber;
+
+    // the parameter has the same name as the instance variable and "this." is missing
+    public ConstructorTraps(int accNumber) {
+        accNumber = accNumber;
+    }
+
+    public int getNumber() {
+        return accNumber;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(new ConstructorTraps(7).getNumber());
+    }
+}
+```
+
+```text
+0
+```
+
+Inside the constructor, `accNumber` means the parameter, so the statement copies the parameter onto itself and the instance variable keeps its default 0. Write `this.accNumber = accNumber`, as `Dog` does. The compiler messages for the other common faults, from real compiles of an `Account` with only the two-parameter constructor:
+
+| Statement | Compiler message |
+|---|---|
+| `new Account()` when only `Account(int, double)` exists | `error: constructor Account in class Account cannot be applied to given types;` (required: int,double; found: no arguments) |
+| `acc.accNumber()` | `error: cannot find symbol` (symbol: method accNumber(), location: variable acc of type Account) |
+| `String s = acc.getNumber();` | `error: incompatible types: int cannot be converted to String` |
+| a method declared `public int getNumber() { }` with no `return` | `error: missing return statement` |
+| `acc.getNumber() = 5;` | `error: unexpected type` (required: variable, found: value) |
+
+<Callout type="mistake" title="Common error">
+
+Writing a constructor with a parameter named like the instance variable and leaving out `this.`. It compiles, and the object keeps its default value (0, 0.0, `null`), which shows up later as a wrong result.
+
+</Callout>
+
+### Exam question 1: write a class (8 marks)
+
+Write class `Student` with a private `name` (String) and `mark` (int), a constructor, a setter and getter for the mark, `equals` (two students are equal when their names and marks are identical) and `toString`. Write a tester that creates two students with the same details, one with a different mark, and prints the results of `equals` and the first student. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A class with two attributes and five kinds of member, and a tester. The `equals` rule uses both attributes.
+
+</Step>
+
+<Step title="2. Plan">
+
+Private instance variables, then the constructor (same name as the class, no return type), then `setMark` (void) and `getMark` (returns `int`), then `equals(Student other)` that compares the name with `equals` and the mark with `==`, then `toString` that returns a `String`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Student.java"
+public class Student {
+    private String name;
+    private int mark;
+
+    public Student(String name, int mark) {
+        this.name = name;
+        this.mark = mark;
+    }
+
+    public void setMark(int mark) {
+        this.mark = mark;
+    }
+
+    public int getMark() {
+        return mark;
+    }
+
+    public boolean equals(Student other) {
+        return name.equals(other.name) && mark == other.mark;
+    }
+
+    public String toString() {
+        return "Student " + name + ": " + mark;
+    }
+}
+```
+
+```java title="StudentTester.java"
+public class StudentTester {
+    public static void main(String[] args) {
+        Student s1 = new Student("Kago", 73);
+        Student s2 = new Student("Kago", 73);
+        Student s3 = new Student("Kago", 58);
+        System.out.println(s1.equals(s2));
+        System.out.println(s1.equals(s3));
+        System.out.println(s1);
+        s3.setMark(73);
+        System.out.println(s1.equals(s3));
+    }
+}
+```
+
+```text
+true
+false
+Student Kago: 73
+true
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`s1` and `s2` are different objects with the same values, so `equals` is true (`==` would be false). `s3` differs in the mark until `setMark` changes it. The strings are compared with `equals`, not `==`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Finishing the Account class: the lecture's exercises
+
+The lecture asks for `setBalance`, `getBalance`, `equalBalance`, `withdraw`, `deposit` and `transferFunds` (a `void` method that takes another account and transfers funds only if the first account has enough), and a stronger `equals`: accounts are equal when their numbers and their balances are identical.
+
+```java title="FullAccount.java"
+public class FullAccount {
+    private int accNumber;
+    private double balance;
+
+    public FullAccount(int newNumber, double newBalance) {
+        accNumber = newNumber;
+        balance = newBalance;
+    }
+
+    public void setNumber(int newNumber) {
+        accNumber = newNumber;
+    }
+
+    public int getNumber() {
+        return accNumber;
+    }
+
+    public void setBalance(double newBalance) {
+        balance = newBalance;
+    }
+
+    public double getBalance() {
+        return balance;
+    }
+
+    public boolean equalBalance(FullAccount other) {
+        return balance == other.getBalance();
+    }
+
+    public void deposit(double amount) {      // credit the account
+        balance = balance + amount;
+    }
+
+    public void withdraw(double amount) {     // debit the account
+        balance = balance - amount;
+    }
+
+    public void transferFunds(FullAccount to, double amount) {
+        if (balance >= amount) {               // only when there is enough in this account
+            withdraw(amount);
+            to.deposit(amount);
+        }
+    }
+
+    public boolean equals(FullAccount other) {
+        return accNumber == other.getNumber() && balance == other.getBalance();
+    }
+
+    public String toString() {
+        return "Acc No = " + accNumber + ", Balance = " + String.format("%.2f", balance);
+    }
+}
+```
+
+The tester of the exercise: create 21347 with a balance of P38763.87 and 61342 with P0.00; deposit an amount into the second; display "equal" or "Not equal"; withdraw P1000.00 from the first and display "overdrawn!" if the balance is negative; display "Man! You are rich" if the first has more than P20 000, otherwise "Warning: You need to save money!"; then carry out a withdrawal of the amount the user specifies only if the account ends with at least P1000, otherwise "Account has insufficient funds." The amounts that the user types are fixed here.
+
+```java title="FullAccountTester.java"
+public class FullAccountTester {
+    // Question (Lecture 4): the Account tester exercise.
+    static void tryWithdraw(FullAccount acc, double amount) {
+        if (acc.getBalance() - amount >= 1000.00) {
+            acc.withdraw(amount);
+            System.out.println("Withdrew " + amount + ", balance " + String.format("%.2f", acc.getBalance()));
+        } else {
+            System.out.println("Account has insufficient funds.");
+        }
+    }
+
+    public static void main(String[] args) {
+        FullAccount first = new FullAccount(21347, 38763.87);
+        FullAccount second = new FullAccount(61342, 0.00);
+
+        second.deposit(500.00);                          // the amount read from the keyboard
+        System.out.println(first.equals(second) ? "equal" : "Not equal");
+
+        first.withdraw(1000.00);
+        if (first.getBalance() < 0) {
+            System.out.println("overdrawn!");
+        }
+        if (first.getBalance() > 20000) {
+            System.out.println("Man! You are rich");
+        } else {
+            System.out.println("Warning: You need to save money!");
+        }
+
+        tryWithdraw(first, 30000.00);                    // leaves more than P1000
+        tryWithdraw(first, 7000.00);                     // would leave less than P1000
+
+        first.transferFunds(second, 500.00);
+        System.out.println(first + " | " + second);
+        first.transferFunds(second, 9999.00);            // not enough: nothing happens
+        System.out.println(first + " | " + second);
+    }
+}
+```
+
+```text
+Not equal
+Man! You are rich
+Withdrew 30000.0, balance 7763.87
+Account has insufficient funds.
+Acc No = 21347, Balance = 7263.87 | Acc No = 61342, Balance = 1000.00
+Acc No = 21347, Balance = 7263.87 | Acc No = 61342, Balance = 1000.00
+```
+
+`transferFunds` does nothing when the first account does not have enough, so the second output line is the same as the first. The `Account` in the lecture's own `equals(Account otherAcc)` takes an `Account`; the next lesson shows why that is an overload of `equals` and not an override of the `equals` that every class inherits from `Object`.
+
+<MemoryDiagram scenario="account" />
+
+### Exam question 2: complete a tester (8 marks)
+
+For `FullAccount` above, write statements that: create an account 5001 with P1500.00; deposit P250.50; withdraw P2000.00 only when the balance after the withdrawal would not be negative, otherwise print "Insufficient funds"; and print the balance with two decimal places. State what is printed. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four actions in order, and a condition on the withdrawal. The printed text depends on the arithmetic: 1500.00 + 250.50 is 1750.50, and 1750.50 - 2000.00 is negative.
+
+</Step>
+
+<Step title="2. Plan">
+
+Use the methods already written: the constructor, `deposit`, `getBalance`. The condition compares `getBalance() - 2000.00` with 0.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="BalanceCheck.java"
+public class BalanceCheck {
+    public static void main(String[] args) {
+        FullAccount acc = new FullAccount(5001, 1500.00);
+        acc.deposit(250.50);
+        if (acc.getBalance() - 2000.00 >= 0) {
+            acc.withdraw(2000.00);
+        } else {
+            System.out.println("Insufficient funds");
+        }
+        System.out.println(String.format("%.2f", acc.getBalance()));
+    }
+}
+```
+
+```text
+Insufficient funds
+1750.50
+```
+
+</Step>
+
+<Step title="4. Check">
+
+After the deposit the balance is 1750.50. The withdrawal would leave -249.50, so the `else` branch runs and the balance is unchanged. Each statement uses a method of the class and the type of each argument (`int`, `double`) is compatible with the parameter.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. UML class diagram
+
+A UML class diagram has three boxes: the **class name**, the **instance variables**, the **methods**. A minus sign (`-`) marks a private member and a plus sign (`+`) a public one. The lecture's diagram for `Account`:
+
+```text
++---------------------------------------------+
+|                   Account                   |
++---------------------------------------------+
+| - number: int                               |
+| - balance: double                           |
++---------------------------------------------+
+| + Account()                                 |
+| + Account(num: int, amount: double)         |
+| + setNumber(newNumber: int): void           |
+| + setBalance(newBalance: double): void      |
+| + getNumber(): int                          |
+| + getBalance(): double                      |
+| + deposit(amount: double): void             |
+| + withdraw(amount: double): void            |
+| + equals(another: Account): boolean         |
+| + toString(): String                        |
++---------------------------------------------+
+```
+
+To turn a diagram into Java: a `-` member becomes `private`, a `+` member `public`, `name: type` becomes `type name`, and `method(p: type): returnType` becomes `returnType method(type p)`.
+
+## 6. Method signatures and overloading
+
+A **method signature** is the method name plus the data types of the formal parameters. The return type is not part of it. **Overloading** means more than one method with the same name in a class, as with constructors and `substring`; overloaded methods must have different signatures.
+
+| Method definition | Method signature |
+|---|---|
+| `public int computeArea()` | `computeArea()` |
+| `public int square(int x)` | `square(int)` |
+| `public String xyz(int x, double y)` | `xyz(int,double)` |
+| `public void abc(double y, int x)` | `abc(double, int)` |
+
+```java title="Signatures.java"
+public class Signatures {
+    // the three methods have different signatures, so they can share the name
+    public String show(int x) {
+        return "int " + x;
+    }
+
+    public String show(double x) {
+        return "double " + x;
+    }
+
+    public String show(int x, double y) {
+        return "int,double " + x + " " + y;
+    }
+
+    public static void main(String[] args) {
+        Signatures s = new Signatures();
+        System.out.println(s.show(5));
+        System.out.println(s.show(5.0));
+        System.out.println(s.show(5, 2.5));
+        System.out.println(s.show('a'));          // a char widens to int
+    }
+}
+```
+
+```text
+int 5
+double 5.0
+int,double 5 2.5
+int 97
+```
+
+The arguments decide which method runs: an `int` argument calls the `int` version, a `double` the `double` version, and a `char` is widened to `int`. Methods that differ only in return type are not overloads:
+
+| Definitions in one class | Result |
+|---|---|
+| `public void ABC(int y, double c)` and `public int ABC(double x, int v)` | allowed: the signatures `ABC(int,double)` and `ABC(double,int)` differ |
+| `public void ABC(int y, double c)` and `public int ABC(int x, double v)` | `error: method ABC(int,double) is already defined in class Over` |
+
+<Callout type="mistake" title="Common error">
+
+Trying to overload by changing only the return type or the parameter names. Both have the signature `ABC(int,double)`, so the compiler reports the second as already defined.
+
+</Callout>
+
+### Exam question 3: which may share a class? (5 marks)
+
+For each pair, state whether both methods can be in the same class and give the signatures. (a) `public void f(int a, double b)` and `public double f(int a)`. (b) `public int g(String s)` and `public void g(String t)`. (c) `public void h(int a, double b)` and `public void h(double a, int b)`. (d) A constructor `Account(int n)` and a method `void Account(int n)`. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four pairs; for each, a yes or no and the two signatures. The signature is the name and the parameter types.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write each signature as `name(types)`. Pairs with different signatures are allowed. Pairs with the same signature are not, whatever the return types or parameter names.
+
+</Step>
+
+<Step title="3. Solution">
+
+(a) Allowed: `f(int,double)` and `f(int)` differ. (b) Not allowed: both are `g(String)`; the return types do not count. (c) Allowed: `h(int,double)` and `h(double,int)` differ in the order of the types. (d) Allowed by the compiler, but a different thing: the constructor has no return type and the method `void Account(int n)` is an ordinary method that happens to have the class name; this is a trap, because `new Account(5)` calls the constructor and never the method.
+
+</Step>
+
+<Step title="4. Check">
+
+(b) was confirmed by the equivalent case in the table above: the second definition is reported as already defined. In (c) the call `h(1, 2.0)` can only match the first definition, so there is no ambiguity.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+An object is an instance of a class: `ClassName id = new ClassName(args)`. Each object has its own instance variables, which are declared in the class outside the methods and are usually private. Constructors have the class name and no return type; if none is written Java supplies a default one, and after you write one it does not; `this(...)` calls another constructor and `this.x` names the instance variable when a parameter has the same name. Setters change an attribute (void), getters return it (a `return` of the declared type), `equals` compares two objects of the class and `toString` returns a `String`. A class is tested by a separate class with `main`, and the types passed must be compatible with the parameters. A signature is the name plus the parameter types; overloaded methods need different signatures, and the return type does not count.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can the Account class not be run on its own, and what do you write to test it?">
+
+A class that has no `main` method cannot be run. Write a separate tester class with a `main` that creates objects of the class and invokes its methods.
+
+</CheckQuestion>
+
+<CheckQuestion question="What happens to a constructor Account(int accNumber) that contains the statement accNumber = accNumber?">
+
+The statement copies the parameter onto itself, so the instance variable keeps its default value 0. Use `this.accNumber = accNumber`.
+
+</CheckQuestion>
+
+<CheckQuestion question="When does Java supply a default constructor, and what values does it give the instance variables?">
+
+When the class has no constructor at all. It sets numbers to 0 or 0.0, booleans to false, characters to the zero character and class types to `null`. Once you write any constructor, the default is no longer added.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does transferFunds do when the first account does not have enough, and why is the second account unchanged?">
+
+The `if (balance >= amount)` test fails, so neither `withdraw` nor `deposit` is called. Both accounts keep their balances.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which of these can be in one class: int f(int) and void f(int), or int f(int) and int f(double)?">
+
+Only the second pair. The first pair has the same signature `f(int)` and differs only in the return type. The second pair has `f(int)` and `f(double)`.
+
+</CheckQuestion>
+
+</CheckQuestions>

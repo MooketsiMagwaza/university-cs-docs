@@ -1,0 +1,914 @@
+---
+title: "Inheritance and Overriding by Example"
+description: "Build the Shape, Circle and Rectangle hierarchy of Lecture 11: extends, what a subclass can and cannot do, the Object methods, overriding and partial overriding, a robust equals, instanceof, casting and wrapper classes, with the real compiler messages."
+---
+
+Lecture 11 starts from duplicated code: a `Shape`, a `Circle` and a `Rectangle` that each repeat the attribute `colour` and the methods around it. **Inheritance** removes the duplication: the common parts go in a super class and the sub classes `extend` it. The lecture then covers what a sub class can and cannot do, the methods every class inherits from `Object`, overriding (including `@Override`, partial overriding with `super` and a better `equals`), `instanceof`, casting and wrapper classes, with several exercises. This lesson works through all of it with every output taken from a real run, and shows the real compiler message for the lecture's code that does not compile. It extends [Inheritance and super](/docs/sem3/csi247/06-object-oriented-programming/notes/inheritance-and-super) and [Overriding and Polymorphism](/docs/sem3/csi247/06-object-oriented-programming/notes/overriding-and-polymorphism).
+
+<LearningObjectives items={[
+  'Write a super class and sub classes with extends, and say what a sub class inherits and what it cannot',
+  'Classify statements about a class hierarchy as valid or not valid, and give the compiler message',
+  'Use the Object methods toString, equals and getClass, and explain the default output and why == is not equality',
+  'Override toString and equals, use @Override and super, and write a robust equals with getClass or instanceof',
+  'Use instanceof, casting, wrapper classes, autoboxing and unboxing',
+]} />
+
+<Prerequisites items={[
+  'Classes by Example in this chapter: constructors, getters, setters, equals and toString',
+  'Strings and the difference between == and equals',
+  'Drawing memory diagrams of objects and references',
+]} />
+
+## 1. The templates
+
+```text
+Inheritance:         public class Subclass extends Superclass { /* new fields and methods */ }
+Call the parent:     super(arguments);          first line of a sub class constructor
+                     super.method();            call the super class version of a method
+Override a method:   @Override
+                     public ReturnType method(sameParameters) { ... }
+Robust equals:       @Override public boolean equals(Object o) {
+                         if (o == this) return true;
+                         if (o == null || getClass() != o.getClass()) return false;
+                         ClassName other = (ClassName) o;  return ...compare the fields...;
+                     }
+Test a type:         if (obj instanceof ClassName) { ClassName c = (ClassName) obj; ... }
+```
+
+**Inheritance** is the OOP feature that lets one class acquire the functionality of another and add new functionality: use it when you have many kinds of data with something in common. The super class (base class) keeps what is common; the sub class (derived class) has one super class and may add instance variables, add methods, and override methods. A super class can have many sub classes. The relationship is "is-a": a `Rectangle` is a `Shape`. In UML an arrow points from the sub class to the super class.
+
+## 2. The Shape hierarchy
+
+```java title="Shape.java"
+public class Shape {
+    // instance variable
+    private String colour;
+
+    // constructors
+    public Shape() {
+        colour = "";
+    }
+
+    public Shape(String colour) {
+        this.colour = colour;
+    }
+
+    // rest of the methods
+    public void setColour(String col) {
+        this.colour = col;
+    }
+
+    public String getColour() {
+        return colour;
+    }
+
+    public String toString() {
+        return "I am a " + colour + " shape";
+    }
+
+    public boolean equals(Shape other) {
+        if (other == null)                 // checking that it has been created
+            return false;
+        else
+            return this.getColour().equals(other.getColour());
+    }
+}
+```
+
+```java title="Circle.java"
+public class Circle extends Shape {
+    // additional instance variable
+    private int radius;
+
+    // constructors
+    public Circle() {
+        this.radius = 0;
+    }
+
+    public Circle(String colour) {         // the lecture's sample code needs this one
+        super(colour);
+    }
+
+    public Circle(String colour, int radius) {
+        super(colour);                     // the super class constructor initialises colour
+        this.radius = radius;
+    }
+
+    // additional methods
+    public void setRadius(int radius) {
+        this.radius = radius;
+    }
+
+    public int getRadius() {
+        return radius;
+    }
+}
+```
+
+```java title="Rectangle.java"
+public class Rectangle extends Shape {
+    private int height;
+    private int width;
+
+    public Rectangle() {
+        this.height = 0;
+        this.width = 0;
+    }
+
+    public Rectangle(String colour) {
+        super(colour);
+    }
+
+    public Rectangle(String colour, int height, int width) {
+        super(colour);
+        this.height = height;
+        this.width = width;
+    }
+
+    public void setHeight(int height) {
+        this.height = height;
+    }
+
+    public void setWidth(int width) {
+        this.width = width;
+    }
+
+    public int getHeight() {
+        return height;
+    }
+
+    public int getWidth() {
+        return width;
+    }
+}
+```
+
+The lecture's `Circle` has only `Circle()` and `Circle(int radius)`, yet its sample code calls `new Circle("Yellow")`, and `Rectangle` has no `String` constructor either. Those calls need the constructors added above; section 4 shows the messages when they are missing.
+
+```java title="ShapeDemo.java"
+public class ShapeDemo {
+    // Question (Lecture 11): the sample code. Why is c.setColour("Pink") valid?
+    public static void main(String[] args) {
+        Shape sh = new Shape("Blue");
+        sh.setColour("Green");
+
+        Circle c = new Circle("Yellow");
+        c.setColour("Pink");                       // Circle inherited colour and setColour from Shape
+        System.out.println(c.getColour() + " " + c.getRadius());
+
+        Rectangle r = new Rectangle("Red");
+        System.out.println(r.toString());           // Rectangle inherited toString from Shape
+        System.out.println(sh);
+    }
+}
+```
+
+```text
+Pink 0
+I am a Red shape
+I am a Green shape
+```
+
+`Circle` and `Rectangle` never declare `setColour`, `getColour` or `toString`; they have them because `Shape` does. The `Rectangle` prints `I am a Red shape`, because the inherited `toString` is the `Shape` one. The inherited `colour` is not directly visible to the sub class (next section), which is why the sub classes call `getColour()`.
+
+<MemoryDiagram scenario="shape" />
+
+## 3. What a sub class can and cannot do
+
+A sub class **can**: inherit the public fields and methods of its super class; add new instance variables; add new methods; and override methods of the super class. A sub class **cannot**: remove the super class's instance variables and methods; inherit the **private** ones (it cannot use them directly); or inherit the super class **constructors**. A constructor of the super class is invoked implicitly when a sub class object is created, to initialise the super class's instance variables, so a sub class needs its own constructors, and the compiler assumes the default constructor if you write none.
+
+| Code | Compiler message | Why |
+|---|---|---|
+| `colour + " circle"` inside `Circle`, where `colour` is `private` in `Shape` | `error: colour has private access in Shape` | private members are not inherited: use `getColour()` |
+| a sub class constructor with no `super(...)` call, when the super class has only `Base(String c)` | `error: constructor Base in class Base cannot be applied to given types;` (required: String; found: no arguments) | the compiler inserts `super()`, and `Base` has no no-argument constructor |
+
+<Callout type="mistake" title="Common error">
+
+Using the super class's private instance variable in a sub class (the lecture's `Circle.toString` returns `colour + " circle with radius = " + radius`). It does not compile. Use the public getter `getColour()`, or make the variable `protected`, which is visible in the class, its package and its sub classes.
+
+</Callout>
+
+### Exercise: valid or not valid?
+
+The lecture's eleven statements, with the classes above. The valid ones were run:
+
+```java title="ClassifyValid.java"
+public class ClassifyValid {
+    // Question (Lecture 11): classify each statement as valid or not valid.
+    public static void main(String[] args) {
+        Shape s1 = new Shape();                         // a) valid
+        Shape s2 = new Shape("Green");                  // b) valid
+        s1.setColour("Red");                            // c) valid
+        boolean b = s1.equals(s2);                      // d) valid
+        System.out.println(s1.toString() + " | " + b);  // e) valid when written System.out
+        Shape s3 = new Rectangle();                     // f) valid: a Rectangle is a Shape
+        s3.setColour("Orange");                         // g) valid: Rectangle inherited it
+        Shape s5 = new Circle("Yellow");                // i) valid with the Circle(String) constructor
+        Shape r1 = new Rectangle("Blue");               // j) valid with the Rectangle(String) constructor
+        System.out.println(r1.equals(s3));              // k) valid: false, Blue is not Orange
+        System.out.println(s5);
+    }
+}
+```
+
+```text
+I am a Red shape | false
+false
+I am a Yellow shape
+```
+
+The two that do not compile, and the two that depend on the constructors, with the real messages:
+
+| | Statement | Result |
+|---|---|---|
+| e | `Systems.out.println(s1.toString());` | not valid: `error: package Systems does not exist` (the class is `System`) |
+| h | `Rectangle s4 = new Shape();` | not valid: `error: incompatible types: Shape cannot be converted to Rectangle` (a `Shape` is not necessarily a `Rectangle`) |
+| i | `Shape s5 = new Circle("Yellow");` | not valid with only `Circle()` and `Circle(int)`: `error: incompatible types: String cannot be converted to int`; valid once `Circle(String)` exists |
+| j | `Shape r1 = new Rectangle("Blue");` | not valid with only `Rectangle()` and `Rectangle(int,int)`: `error: no suitable constructor found for Rectangle(String)`; valid once `Rectangle(String)` exists |
+
+The rule behind f, g, i, j and k: a variable of the super class type can hold an object of any sub class, so `Shape s3 = new Rectangle()` is valid; the reverse is not, so `Rectangle s4 = new Shape()` is not.
+
+## 4. Types of inheritance and the UML diagram
+
+Java supports **single** inheritance (one class extends one other), **hierarchical** inheritance (several sub classes of one super class, like `Circle` and `Rectangle` of `Shape`) and **multi-level** inheritance (a chain: `A` extends `B` extends `C`). A class can extend only one class. The Java class hierarchy is a tree whose root is `Object`, in `java.lang`: every class inherits, directly or indirectly, from `Object`, and going down the tree classes become more specific.
+
+```text
+        Shape
+   - colour: String
+   + setColour(col: String): void
+   + getColour(): String
+   + toString(): String
+   + equals(other: Shape): boolean
+        ^                 ^
+        |                 |
+     Circle           Rectangle
+ - radius: int      - height: int
+ + setRadius(...)   - width: int
+ + getRadius()      + setHeight(...) + getHeight() ...
+                    + setWidth(...)  + getWidth()
+```
+
+The arrow points to the super class (the parent). To draw a hierarchy: draw each class, fill in its details, join the classes with a line, and put the arrow at the super class.
+
+## 5. The Object class: toString, getClass and equals
+
+`Object` defines methods that every class inherits. Its `toString` returns the class name, an `@` sign and the hexadecimal hash code, which is why a class that does not override it prints something like `Shape@2f92e0f4`.
+
+```java title="PlainShape.java"
+public class PlainShape {
+    private String colour;
+
+    public PlainShape(String colour) {
+        this.colour = colour;
+    }
+}
+```
+
+```java title="ObjectMethods.java"
+public class ObjectMethods {
+    // Question (Lecture 11): what do toString, getClass and equals give for the classes we did not override?
+    public static void main(String[] args) {
+        PlainShape sh = new PlainShape("Yellow");
+        String text = sh.toString();
+        System.out.println(text.startsWith("PlainShape@"));              // the hash code varies from run to run
+        System.out.println(("" + sh).equals(text));                      // printing a reference calls toString()
+
+        Object o = new String("CSI247");
+        Class myClass = o.getClass();
+        System.out.println("o belongs to class " + myClass.getName());
+
+        String str = "Mine";
+        System.out.println(str.equals("Mine"));                          // output No. 1
+        Float a = Float.valueOf(22);
+        Integer b = Integer.valueOf(22);
+        System.out.println(a.equals(b));                                 // output No. 2
+
+        Integer n1 = 7;
+        Integer n2 = Integer.valueOf(7);
+        System.out.println(n1.equals(n2) + " " + (n1 == n2));
+        Integer big1 = 1000;
+        Integer big2 = Integer.valueOf(1000);
+        System.out.println(big1.equals(big2) + " " + (big1 == big2));
+    }
+}
+```
+
+```text
+true
+true
+o belongs to class java.lang.String
+true
+false
+true true
+true false
+```
+
+The first two lines show that the default `toString` has the form `PlainShape@hash` and that `println(sh)` is the same as `println(sh.toString())`. `getClass()` is a `final` method that returns the object's run-time class, and `getName()` gives `java.lang.String`. The basic `equals` of `Object` is `this == obj`; `String` overrides it to compare the characters (true). `Float.equals(Integer)` is false: the objects are of different classes. For the wrapper objects, `equals` compares the values and `==` compares addresses, so use `equals`. The result of `==` for two `Integer` objects depends on the value, so never rely on it: for 7 the two lines show `equals` true and `==` true, but for 1000 `equals` is true and `==` is false.
+
+<Callout type="mistake" title="Common error">
+
+Comparing objects with `==`. It compares addresses, not the data. Override `equals` for your class and call `equals`; the lecture's recommendation is to always override both `toString` and `equals`.
+
+</Callout>
+
+## 6. Overriding
+
+**Method overriding**: a sub class inherits a method of the super class and changes its behaviour. The rules: the classes are connected by inheritance (the "is-a" relationship), and the two methods have the same name, the same return type and the same signature. `@Override` tells the compiler that you intend to override a method of the super class; if there is none, it is an error.
+
+```java title="LabelledCircle.java"
+public class LabelledCircle extends Circle {
+    public LabelledCircle(String colour, int radius) {
+        super(colour, radius);
+    }
+
+    @Override
+    public String toString() {
+        return getColour() + " circle with radius = " + getRadius();   // not colour: it is private in Shape
+    }
+}
+```
+
+**Partial overriding** is a sub class method that calls the super class version with `super`:
+
+```java title="PartialCircle.java"
+public class PartialCircle extends Circle {
+    public PartialCircle(String colour, int radius) {
+        super(colour, radius);
+    }
+
+    @Override
+    public String toString() {
+        return super.toString() + " with radius = " + getRadius();   // uses the Shape version, then adds to it
+    }
+}
+```
+
+```java title="LostSuper.java"
+public class LostSuper extends Circle {
+    public LostSuper(String colour, int radius) {
+        super(colour, radius);
+    }
+
+    @Override
+    public String toString() {
+        super.toString();                                             // the lecture's code: the returned text is thrown away
+        return getColour() + " circle with radius = " + getRadius();
+    }
+}
+```
+
+```java title="OverrideDemo.java"
+public class OverrideDemo {
+    // Question (Lecture 11): what do the overridden and partially overridden toString methods print?
+    public static void main(String[] args) {
+        Shape plain = new Circle("Pink", 3);                  // Circle did not override toString
+        Shape labelled = new LabelledCircle("Pink", 3);
+        Shape partial = new PartialCircle("Pink", 3);
+        Shape lost = new LostSuper("Pink", 3);
+
+        System.out.println(plain);
+        System.out.println(labelled);
+        System.out.println(partial);
+        System.out.println(lost);
+    }
+}
+```
+
+```text
+I am a Pink shape
+Pink circle with radius = 3
+I am a Pink shape with radius = 3
+Pink circle with radius = 3
+```
+
+The variables all have the type `Shape` and each object keeps its own class, so the version of `toString` that runs is the one of the object. `plain` uses the inherited `Shape` version. `partial` calls `super.toString()` and adds to the text it returns. `lost` calls `super.toString()` as a statement on its own: the returned `String` is discarded, so the call has no effect on the output.
+
+The mistakes the compiler catches, from a real compile:
+
+| Code | Compiler message |
+|---|---|
+| `@Override public String describe(int x)` when the super class has only `describe()` | `error: method does not override or implement a method from a supertype` |
+| `String toString() { ... }` with no `public` in a sub class | `error: toString() in Circle cannot override toString() in Object` with `attempting to assign weaker access privileges; was public` |
+| `public int describe()` when the inherited `describe()` returns `String` | `error: describe() in Circle cannot override describe() in Shape` with `return type int is not compatible with String` |
+
+The second row is also a fault in the lecture: its `Shape` is written with `String toString() {...}` and no `public`. An overriding method may not have weaker access than the method it overrides.
+
+### Exam question 1: trace overriding (6 marks)
+
+State the output of the program and explain the last line. (6 marks)
+
+```java
+class Animal {
+    String sound() { return "..."; }
+    String describe() { return "Animal says " + sound(); }
+}
+class Hound extends Animal {
+    @Override String sound() { return "Woof"; }
+}
+class Pup extends Hound {
+    @Override String sound() { return super.sound() + "!"; }
+}
+// in main:
+Animal a = new Animal();  Animal h = new Hound();  Animal p = new Pup();
+System.out.println(a.describe());
+System.out.println(h.describe());
+System.out.println(p.describe());
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three objects of three classes, all held in `Animal` variables, and one inherited method `describe` that calls `sound()`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`describe` is declared only in `Animal`, so all three calls run that code. Inside it, `sound()` runs the version of the object's own class. `Pup.sound()` calls `Hound.sound()` with `super` and adds `!`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Animal.java"
+public class Animal {
+    String sound() {
+        return "...";
+    }
+
+    String describe() {
+        return "Animal says " + sound();
+    }
+}
+```
+
+```java title="Hound.java"
+public class Hound extends Animal {
+    @Override
+    String sound() {
+        return "Woof";
+    }
+}
+```
+
+```java title="Pup.java"
+public class Pup extends Hound {
+    @Override
+    String sound() {
+        return super.sound() + "!";
+    }
+}
+```
+
+```java title="AnimalTrace.java"
+public class AnimalTrace {
+    public static void main(String[] args) {
+        Animal a = new Animal();
+        Animal h = new Hound();
+        Animal p = new Pup();
+        System.out.println(a.describe());
+        System.out.println(h.describe());
+        System.out.println(p.describe());
+    }
+}
+```
+
+```text
+Animal says ...
+Animal says Woof
+Animal says Woof!
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The same method `describe` gives three results because the call to `sound()` inside it is decided by the class of the object, not by the type of the variable: `...`, `Woof`, and for the `Pup` the `Hound` text plus `!`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 7. A better equals
+
+The `equals` written in `Shape` above takes a `Shape`, so it **overloads** the `equals(Object)` that `Object` provides; it does not override it. The lecture asks for a more robust version: consider the same object, `null`, and objects of other classes. Its two sample versions both fail to compile as printed:
+
+| The lecture's version | Compiler message |
+|---|---|
+| (a) `return (this.getColour().equals(sh.getColour() );` | `error: ')' expected` (a closing parenthesis is missing) |
+| (b) `if (o == null || !(obj instanceof Book))` in a method whose parameter is `obj` | `error: cannot find symbol` (symbol: variable o) |
+
+The versions below are written correctly, one with `getClass` and one with `instanceof`, together with the overloaded version for comparison. `TagClass` and `TagInstance` each have a sub class.
+
+```java title="TagOverload.java"
+public class TagOverload {
+    private String colour;
+
+    public TagOverload(String colour) {
+        this.colour = colour;
+    }
+
+    public boolean equals(TagOverload other) {          // overloads equals(Object), does not override it
+        return other != null && colour.equals(other.colour);
+    }
+}
+```
+
+```java title="TagClass.java"
+public class TagClass {
+    protected String colour;
+
+    public TagClass(String colour) {
+        this.colour = colour;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;                                 // the same object
+        if (o == null || this.getClass() != o.getClass())
+            return false;                                // nothing, or an object of another class
+        TagClass other = (TagClass) o;
+        return colour.equals(other.colour);
+    }
+}
+```
+
+```java title="BigTagClass.java"
+public class BigTagClass extends TagClass {
+    public BigTagClass(String colour) {
+        super(colour);
+    }
+}
+```
+
+```java title="TagInstance.java"
+public class TagInstance {
+    protected String colour;
+
+    public TagInstance(String colour) {
+        this.colour = colour;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this)
+            return true;
+        if (!(obj instanceof TagInstance))               // false for null as well
+            return false;
+        TagInstance other = (TagInstance) obj;
+        return colour.equals(other.colour);
+    }
+}
+```
+
+```java title="BigTagInstance.java"
+public class BigTagInstance extends TagInstance {
+    public BigTagInstance(String colour) {
+        super(colour);
+    }
+}
+```
+
+```java title="EqualsVersions.java"
+public class EqualsVersions {
+    // Question (Lecture 11): compare the three equals methods.
+    public static void main(String[] args) {
+        TagOverload t1 = new TagOverload("red");
+        TagOverload t2 = new TagOverload("red");
+        Object asObject = t2;
+        System.out.println("overload: " + t1.equals(t2) + " " + t1.equals(asObject));
+
+        TagClass c1 = new TagClass("red");
+        System.out.println("getClass: " + c1.equals(new TagClass("red")) + " " + c1.equals(new BigTagClass("red"))
+                + " " + c1.equals(null) + " " + c1.equals(c1));
+
+        TagInstance i1 = new TagInstance("red");
+        System.out.println("instanceof: " + i1.equals(new TagInstance("red")) + " " + i1.equals(new BigTagInstance("red"))
+                + " " + i1.equals(null) + " " + i1.equals(i1));
+    }
+}
+```
+
+```text
+overload: true false
+getClass: true false false true
+instanceof: true true false true
+```
+
+What to observe. The overloaded `equals(TagOverload)` is used when the argument's static type is `TagOverload`, but through an `Object` variable Java calls the inherited `Object.equals`, which compares addresses, so the second value is false for two equal tags. Both robust versions handle the same object (true) and `null` (false). They differ for an object of a sub class: `getClass()` makes a `TagClass` unequal to a `BigTagClass` (different classes), while `instanceof` accepts it (a `BigTagInstance` is a `TagInstance`). Which to use depends on whether a sub class object may equal a super class object.
+
+### The instanceof operator and casting
+
+`instanceof` tests whether an object is an instance of a class or interface (it is `false` for `null`). **Casting** converts an object from one class type to another, and needs an "is-a" relationship between them.
+
+```java title="CastDemo.java"
+public class CastDemo {
+    // Question (Lecture 11): when does a cast succeed, and what does instanceof test?
+    public static void main(String[] args) {
+        Shape sh = new Circle("Red", 3);
+        System.out.println((sh instanceof Circle) + " " + (sh instanceof Rectangle) + " " + (sh instanceof Shape));
+        Circle c = (Circle) sh;                          // an explicit cast from Shape down to Circle
+        System.out.println(c.getRadius());
+
+        try {
+            Rectangle bad = (Rectangle) sh;               // sh holds a Circle
+        } catch (ClassCastException e) {
+            System.out.println("cast to Rectangle: " + e.getClass().getName());
+        }
+
+        Object o = "text";
+        try {
+            Shape fromObject = (Shape) o;                  // an Object that is really a String
+        } catch (ClassCastException e) {
+            System.out.println("cast to Shape: " + e.getClass().getName());
+        }
+
+        Shape none = null;
+        System.out.println(none instanceof Shape);
+    }
+}
+```
+
+```text
+true false true
+3
+cast to Rectangle: java.lang.ClassCastException
+cast to Shape: java.lang.ClassCastException
+false
+```
+
+An upcast (a `Circle` to a `Shape`) needs no cast; a downcast needs the cast and is checked at run time. Without the cast, `Circle c = sh;` does not compile: `error: incompatible types: Shape cannot be converted to Circle`. Casting a `String` to `Integer` is rejected at compile time: `incompatible types: String cannot be converted to Integer`, because the two classes are not related.
+
+### Wrapper classes, autoboxing and unboxing
+
+Wrapper classes turn primitives into objects: `int` is `Integer`, `long` is `Long`, `double` is `Double`, `float` is `Float`, `boolean` is `Boolean`, `char` is `Character`, `byte` is `Byte`, `short` is `Short`. **Autoboxing** converts a primitive to its wrapper automatically (`Integer n1 = 7;`) and **unboxing** converts it back (`int i = n1;`).
+
+```java title="Wrappers.java"
+public class Wrappers {
+    // Question (Lecture 11): autoboxing and unboxing.
+    public static void main(String[] args) {
+        Integer n1 = 7;                       // autoboxing
+        Integer n2 = Integer.valueOf(7);
+        int i = n1;                           // unboxing
+        System.out.println(n1.equals(n2) + " " + i);
+        Double d = 2.5;
+        double back = d * 2;                  // unboxed for the arithmetic
+        System.out.println(back);
+    }
+}
+```
+
+```text
+true 7
+5.0
+```
+
+### Exam question 2: equals and toString for the sub classes (10 marks)
+
+Add `toString` and `equals` to `Circle` and `Rectangle` so that two objects are equal when all their instance variables are identical. A first attempt adds `equals(Object)` to each sub class of the lecture's `Shape`. For a red circle of radius 3, a red circle of radius 9 and a red rectangle, state what `red.equals(...)` prints in that attempt and why, then give a version that works. (10 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two parts: the result of a first attempt, with a reason, and a correct version. The first attempt keeps the lecture's `Shape`, which already has `equals(Shape)`.
+
+</Step>
+
+<Step title="2. Plan">
+
+When a method is called, the compiler chooses the **most specific** method that accepts the argument's static type. `Shape` has `equals(Shape)` and `Object` has `equals(Object)`; an argument of type `TrapCircle` or `TrapRectangle` is a `Shape`, so `equals(Shape)` wins, and it compares only the colour. The `equals(Object)` in the sub class is used only when the static type of the argument is `Object`. The cure is to have one `equals(Object)` all the way up the hierarchy and no overload.
+
+</Step>
+
+<Step title="3. Solution">
+
+The first attempt:
+
+```java title="TrapCircle.java"
+public class TrapCircle extends Shape {
+    private int radius;
+
+    public TrapCircle(String colour, int radius) {
+        super(colour);
+        this.radius = radius;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        TrapCircle other = (TrapCircle) o;
+        return getColour().equals(other.getColour()) && radius == other.radius;
+    }
+}
+```
+
+```java title="TrapRectangle.java"
+public class TrapRectangle extends Shape {
+    private int height;
+    private int width;
+
+    public TrapRectangle(String colour, int height, int width) {
+        super(colour);
+        this.height = height;
+        this.width = width;
+    }
+}
+```
+
+```java title="TrapTester.java"
+public class TrapTester {
+    public static void main(String[] args) {
+        TrapCircle red = new TrapCircle("Red", 3);
+        TrapCircle bigRed = new TrapCircle("Red", 9);
+        TrapRectangle redRect = new TrapRectangle("Red", 3, 3);
+        System.out.println(red.equals(bigRed));       // argument type TrapCircle, a Shape
+        System.out.println(red.equals(redRect));      // argument type TrapRectangle, a Shape
+        Object asObject = redRect;
+        System.out.println(red.equals(asObject));     // argument type Object
+    }
+}
+```
+
+```text
+true
+true
+false
+```
+
+The first two lines are wrong: a circle of radius 3 is not equal to a circle of radius 9 or to a rectangle. Both calls ran `Shape.equals(Shape)`, which compares the colour only. Only the call through the `Object` variable reached the sub class `equals`, and it returned false.
+
+A version that works has a single `equals(Object)` in the base class, and the sub classes call it with `super` (partial overriding):
+
+```java title="EqShape.java"
+public class EqShape {
+    private String colour;
+
+    public EqShape(String colour) {
+        this.colour = colour;
+    }
+
+    public String getColour() {
+        return colour;
+    }
+
+    @Override
+    public String toString() {
+        return "I am a " + colour + " shape";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;                        // nothing, or an object of another class
+        EqShape other = (EqShape) o;
+        return colour.equals(other.colour);
+    }
+}
+```
+
+```java title="EqCircle.java"
+public class EqCircle extends EqShape {
+    private int radius;
+
+    public EqCircle(String colour, int radius) {
+        super(colour);
+        this.radius = radius;
+    }
+
+    @Override
+    public String toString() {
+        return getColour() + " circle with radius = " + radius;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!super.equals(o))                    // same object, same class and same colour
+            return false;
+        EqCircle other = (EqCircle) o;           // safe: the classes are the same
+        return radius == other.radius;
+    }
+}
+```
+
+```java title="EqRectangle.java"
+public class EqRectangle extends EqShape {
+    private int height;
+    private int width;
+
+    public EqRectangle(String colour, int height, int width) {
+        super(colour);
+        this.height = height;
+        this.width = width;
+    }
+
+    @Override
+    public String toString() {
+        return getColour() + " rectangle " + height + " x " + width;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!super.equals(o))
+            return false;
+        EqRectangle other = (EqRectangle) o;
+        return height == other.height && width == other.width;
+    }
+}
+```
+
+```java title="EqTester.java"
+public class EqTester {
+    public static void main(String[] args) {
+        EqCircle red = new EqCircle("Red", 3);
+        EqCircle sameRed = new EqCircle("Red", 3);
+        EqCircle blue = new EqCircle("Blue", 3);
+        EqCircle bigRed = new EqCircle("Red", 9);
+        EqRectangle redRect = new EqRectangle("Red", 3, 3);
+        System.out.println(red);
+        System.out.println(red.equals(sameRed));
+        System.out.println(red.equals(blue));
+        System.out.println(red.equals(bigRed));
+        System.out.println(red.equals(redRect));
+    }
+}
+```
+
+```text
+Red circle with radius = 3
+true
+false
+false
+false
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Now every comparison goes to the one `equals(Object)`. The second red circle is equal (same class, colour and radius); the blue circle differs in colour; the circle of radius 9 differs in radius; and the red rectangle fails the `getClass()` test in `EqShape`, so it is not equal although its colour matches. The cast in `EqCircle.equals` is safe because `super.equals` has already confirmed the same class.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+`class Sub extends Super` gives the sub class the public members of the super class, which can add variables and methods and override methods; it cannot remove members, use the private ones directly, or inherit constructors (the super class constructor runs first, through an explicit `super(...)` or an implicit `super()`). A variable of the super class type can hold a sub class object, never the reverse. Every class inherits `toString` (`ClassName@hash`), `equals` (the same as `==`) and `getClass` from `Object`: override `toString` and `equals`, with `@Override`, the same signature and no weaker access. `super.method()` calls the parent version, and its result must be used. A robust `equals(Object)` tests the same object, `null`, the class (`getClass()` or `instanceof`), then casts and compares the fields. A downcast needs a cast and can throw `ClassCastException`. Compare wrapper objects with `equals`, not `==`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why can Circle call setColour although it never declares it, and why can it not use colour directly?">
+
+`Circle` extends `Shape`, so it inherits the public method `setColour`. The instance variable `colour` is private in `Shape`, and private members are not inherited, so the compiler reports `colour has private access in Shape`; use `getColour()`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is Shape s3 = new Rectangle() valid but Rectangle s4 = new Shape() not valid?">
+
+A `Rectangle` is a `Shape`, so a `Shape` variable can hold it. A `Shape` is not necessarily a `Rectangle`, so the compiler reports `incompatible types: Shape cannot be converted to Rectangle`.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does System.out.println(sh) print for a class that has not overridden toString, and why?">
+
+The inherited `Object.toString`: the class name, an `@` sign and the hexadecimal hash code, such as `Shape@2f92e0f4`. Printing a reference calls `toString()` behind the scenes.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is wrong with a toString method written as String toString() in a sub class, and with super.toString(); on its own line?">
+
+The first has weaker access than the public `toString` of `Object`, so it does not compile (weaker access privileges). The second compiles but the returned text is discarded, so it has no effect on the result.
+
+</CheckQuestion>
+
+<CheckQuestion question="How do getClass() and instanceof differ in an equals method?">
+
+`getClass() != o.getClass()` makes objects of a sub class unequal to objects of the super class. `instanceof` accepts a sub class object as an instance of the super class, and is `false` for `null`.
+
+</CheckQuestion>
+
+</CheckQuestions>

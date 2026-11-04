@@ -1,183 +1,178 @@
 ---
 title: "Cheat Sheet"
-description: "Lookup tables and Java templates for linear search, binary search, bubble sort, selection sort, insertion sort, and merge sort."
+description: "Fast reference for Lectures 8 and 9 and Labs 4 and 5: linear and binary search, bubble, insertion, selection and merge sort, their costs, how to tell the sorts apart, and the common bugs."
 ---
 
-Use this page for recall after completing the lessons. It gives templates and boundary rules, not the reasoning behind them.
+Use the [chapter notes](/docs/sem3/csi247/04-sorting-and-searching) for the explanations. This page is for lookup.
 
-## Placeholders and bounds
+## 1. Placeholders used in every template on this page
 
-| Name | Meaning | Initial value |
+| Placeholder | Meaning | Example |
 |---|---|---|
-| `i`, `j` | Current loop indexes | Depends on algorithm |
-| `low` | First possible binary-search index | `0` |
-| `high` | Last possible binary-search index | `arr.length - 1` |
-| `mid` | Overflow-safe midpoint | `low + (high - low) / 2` |
-| `current` | Saved insertion-sort value | `arr[i]` |
-| `minIndex` | Index of current minimum | `i` |
-| `-1` | Search key absent | Return after possibilities are exhausted |
+| `arr` | the array being searched or sorted | `int[] arr = {63, 29, 72, 85, 18}` |
+| `key` | the value searched for | `18` |
+| `low`, `high`, `mid` | the ends and the middle of the search space | `mid = low + (high - low) / 2` |
+| `start`, `end` | the ends of the range being merge sorted | `mergeSort(arr, 0, arr.length - 1)` |
 
-## Complexity lookup
+## 2. Searching (Lecture 8)
 
-| Algorithm | Precondition / guarantee | Best | Worst | Extra space |
-|---|---|---:|---:|---:|
-| Linear search | Any array; first match | `O(1)` | `O(n)` | `O(1)` |
-| Binary search | Sorted array | `O(1)` | `O(log n)` | `O(1)` iterative |
-| Bubble sort | Largest unsorted value final after each pass | `O(n)` optimized | `O(n²)` | `O(1)` |
-| Selection sort | Smallest unsorted value final after each pass | `O(n²)` | `O(n²)` | `O(1)` |
-| Insertion sort | Sorted prefix grows by one | `O(n)` | `O(n²)` | `O(1)` |
-| Merge sort | Sorted halves are merged | `O(n log n)` | `O(n log n)` | `O(n)` arrays |
-
-## Search templates
-
-```java
-static int linearSearch(int[] a, int key) {
-    for (int i = 0; i < a.length; i++) {
-        if (a[i] == key) return i;
-    }
-    return -1;
-}
-
-static int binarySearch(int[] a, int key) {
-    int low = 0, high = a.length - 1;
-    while (low <= high) {
-        int mid = low + (high - low) / 2;
-        if (a[mid] < key) low = mid + 1;
-        else if (a[mid] > key) high = mid - 1;
-        else return mid;
-    }
-    return -1;
-}
+```text
+Linear search:   for (int i = 0; i < arr.length; i++) { if (arr[i] == key) return i; }  return -1;
+Binary search:   while (low <= high) { int mid = low + (high - low) / 2;
+                     if (arr[mid] < key) low = mid + 1; else if (arr[mid] > key) high = mid - 1; else return mid; }  return -1;
 ```
 
-## Quadratic sort templates
+| | Linear search | Binary search |
+|---|---|---|
+| Requires | nothing (ordered or unordered) | a sorted array |
+| Idea | compare the key with each element in turn | compare with the middle element, keep the half that can hold the key |
+| Returns | the index, or -1 | the index, or -1 |
+| Best case | O(1): index 0 | O(1): the middle element |
+| Average case | O(n) | O(log n) |
+| Worst case | O(n): the last element or absent | O(log n) |
+| Use for | small collections, unsorted data | large sorted data with random access (arrays) |
+| Recursive form | `i == arr.length` returns -1; `arr[i] == key` returns `i`; else call with `i + 1` | `low > high` returns -1; equal returns `mid`; else call with `mid + 1, high` or `low, mid - 1` |
 
-```java
-static void bubbleSort(int[] a) {
-    for (int pass = 0; pass < a.length - 1; pass++) {
-        boolean swapped = false;
-        for (int j = 0; j < a.length - 1 - pass; j++) {
-            if (a[j] > a[j + 1]) {
-                int t = a[j]; a[j] = a[j + 1]; a[j + 1] = t;
-                swapped = true;
+Counts to remember: in `63 29 85 72 18 42 23 54 8 32`, key 18 takes 5 comparisons and 31 takes 10; in the ordered `8 18 23 29 34 42 54 63 72 85`, 18 takes 2 and 31 takes 5 with the early stop. For binary search on the ordered array, key 18 takes 2 passes (mid 4 then mid 1), key 31 takes 4 and returns -1. Binary search on an unsorted array silently gives wrong answers.
+
+## 3. Sorting (Lecture 9)
+
+```text
+Swap:        int temp = arr[a]; arr[a] = arr[b]; arr[b] = temp;
+Bubble:      for i: for (j = 0; j < arr.length - 1; j++) if (arr[j] > arr[j + 1]) swap arr[j], arr[j + 1]
+Insertion:   for (i = 1; i < arr.length; i++) { temp = arr[i]; j = i;
+                 while (j > 0 && temp < arr[j - 1]) { arr[j] = arr[j - 1]; j--; }  arr[j] = temp; }
+Selection:   for (i = 0; i < arr.length - 1; i++) { minIndex = i;
+                 for (j = i + 1; j < arr.length; j++) if (arr[j] < arr[minIndex]) minIndex = j;
+                 swap arr[minIndex], arr[i]; }
+Merge sort:  if (start < end) { mid = (start + end) / 2; mergeSort(arr, start, mid); mergeSort(arr, mid + 1, end); merge(arr, start, mid, end); }
+merge:       size1 = m - s + 1; size2 = e - m; copy arr[s..m] to left, arr[m+1..e] to right;
+             while (i < size1 && j < size2) arr[cur++] = (left[i] <= right[j]) ? left[i++] : right[j++];  then copy the rest
+```
+
+| Algorithm | Time | What a pass does | Telling sign in the passes |
+|---|---|---|---|
+| Bubble | O(n²) | compare adjacent items, swap those out of order | the largest unsorted value reaches the end in every pass; many neighbours change |
+| Insertion | O(n²), a little better | insert the next item into the sorted prefix, moving larger items right | a sorted prefix grows by one item; the rest is untouched |
+| Selection | O(n²) | find the smallest unsorted value, swap it into position `i` | the smallest value jumps to the front; at most `n - 1` swaps |
+| Merge | O(n log n) | divide into halves, sort each, merge | recursive; `n - 1` merges for `n` items; extra memory |
+
+Counts: for 5 items the lecture's bubble sort makes 20 comparisons (n passes of n - 1) even on a sorted array, selection sort makes 10 whatever the order, and insertion sort ranges from 0 moves (sorted) to 10 (reverse). Insertion sort suits few items and nearly sorted lists; merge sort suits large lists.
+
+```java title="SearchSortCheat.java"
+import java.util.Arrays;
+
+public class SearchSortCheat {
+    static int linearSearch(int[] arr, int key) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == key) return i;
+        }
+        return -1;
+    }
+
+    static int binarySearch(int[] arr, int key, int low, int high) {
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (arr[mid] < key) low = mid + 1;
+            else if (arr[mid] > key) high = mid - 1;
+            else return mid;
+        }
+        return -1;
+    }
+
+    static void bubbleSort(int[] arr) {
+        for (int i = 0; i < arr.length; i++) {
+            for (int j = 0; j < arr.length - 1; j++) {
+                if (arr[j] > arr[j + 1]) {
+                    int t = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = t;
+                }
             }
         }
-        if (!swapped) return;
     }
-}
 
-static void selectionSort(int[] a) {
-    for (int i = 0; i < a.length - 1; i++) {
-        int minIndex = i;
-        for (int j = i + 1; j < a.length; j++) {
-            if (a[j] < a[minIndex]) minIndex = j;
-        }
-        if (minIndex != i) {
-            int t = a[i]; a[i] = a[minIndex]; a[minIndex] = t;
+    static void insertionSort(int[] arr) {
+        for (int i = 1; i < arr.length; i++) {
+            int temp = arr[i];
+            int j = i;
+            while (j > 0 && temp < arr[j - 1]) {
+                arr[j] = arr[j - 1];
+                j--;
+            }
+            arr[j] = temp;
         }
     }
-}
 
-static void insertionSort(int[] a) {
-    for (int i = 1; i < a.length; i++) {
-        int current = a[i];
-        int j = i - 1;
-        while (j >= 0 && a[j] > current) {
-            a[j + 1] = a[j];
-            j--;
+    static void selectionSort(int[] arr) {
+        for (int i = 0; i < arr.length - 1; i++) {
+            int minIndex = i;
+            for (int j = i + 1; j < arr.length; j++) {
+                if (arr[j] < arr[minIndex]) minIndex = j;
+            }
+            int t = arr[minIndex]; arr[minIndex] = arr[i]; arr[i] = t;
         }
-        a[j + 1] = current;
+    }
+
+    static void merge(int[] arr, int s, int m, int e) {
+        int[] left = Arrays.copyOfRange(arr, s, m + 1);
+        int[] right = Arrays.copyOfRange(arr, m + 1, e + 1);
+        int i = 0, j = 0, cur = s;
+        while (i < left.length && j < right.length) {
+            arr[cur++] = (left[i] <= right[j]) ? left[i++] : right[j++];
+        }
+        while (i < left.length) arr[cur++] = left[i++];
+        while (j < right.length) arr[cur++] = right[j++];
+    }
+
+    static void mergeSort(int[] arr, int start, int end) {
+        if (start < end) {
+            int mid = (start + end) / 2;
+            mergeSort(arr, start, mid);
+            mergeSort(arr, mid + 1, end);
+            merge(arr, start, mid, end);
+        }
+    }
+
+    public static void main(String[] args) {
+        int[] data = {63, 29, 72, 85, 18, 49, 3, 54};
+        System.out.println("linear 18 -> " + linearSearch(data, 18) + ", linear 31 -> " + linearSearch(data, 31));
+
+        int[] b = data.clone(), ins = data.clone(), sel = data.clone(), mer = data.clone();
+        bubbleSort(b);
+        insertionSort(ins);
+        selectionSort(sel);
+        mergeSort(mer, 0, mer.length - 1);
+        System.out.println("sorted " + Arrays.toString(mer));
+        System.out.println("all four agree: " + (Arrays.equals(b, ins) && Arrays.equals(ins, sel) && Arrays.equals(sel, mer)));
+        System.out.println("binary 54 -> " + binarySearch(mer, 54, 0, mer.length - 1) + ", binary 31 -> " + binarySearch(mer, 31, 0, mer.length - 1));
     }
 }
 ```
 
-## Merge-sort skeleton
-
-```java
-static void mergeSort(int[] a, int start, int end) {
-    if (start >= end) return;
-    int mid = start + (end - start) / 2;
-    mergeSort(a, start, mid);
-    mergeSort(a, mid + 1, end);
-    merge(a, start, mid, end);
-}
+```text
+linear 18 -> 4, linear 31 -> -1
+sorted [3, 18, 29, 49, 54, 63, 72, 85]
+all four agree: true
+binary 54 -> 4, binary 31 -> -1
 ```
 
-The merge helper has four phases: compare while both runs have values, copy left leftovers, copy right leftovers, then copy temporary output back. At most one leftover loop does any work.
+## 4. The labs
 
-```java
-static void merge(int[] a, int start, int mid, int end) {
-    int[] temp = new int[end - start + 1];
-    int left = start, right = mid + 1, out = 0;
-    while (left <= mid && right <= end) {
-        // Left wins ties: preserve the relative order of equal records.
-        if (a[left] <= a[right]) temp[out++] = a[left++];
-        else temp[out++] = a[right++];
-    }
-    while (left <= mid) temp[out++] = a[left++];
-    while (right <= end) temp[out++] = a[right++];
-    // start is essential when this call handles only a subrange.
-    for (int k = 0; k < temp.length; k++) a[start + k] = temp[k];
-}
-```
-
-Call `mergeSort(a, 0, a.length - 1)`. An empty array gives the range `0..-1`, which immediately returns. Splitting changes range boundaries; merging writes values.
-
-## The operation that identifies each algorithm
-
-| Algorithm | What you compare | What you move | Guaranteed after the step |
-|---|---|---|---|
-| Linear | `a[i] == key` | Nothing; advance `i` | Earlier indexes did not match |
-| Binary | Midpoint value against key | Nothing; change bounds | Discarded range cannot contain key |
-| Bubble | Neighbours `a[j]`, `a[j+1]` | Swap an inverted pair | A full pass fixes the largest active value |
-| Selection | Candidate against current minimum | One final swap, or none | Next smallest value is fixed on the left |
-| Insertion | Held key against earlier prefix values | Right shifts, then insert key | Prefix through `i` is sorted |
-| Merge | Front unread values of two sorted runs | Copy to temp, then copy back | The merged range is sorted |
-
-## Count the right thing
-
-| Count | Exact rule in these implementations | Example |
+| Lab | Task | Key points |
 |---|---|---|
-| Selection comparisons | `n(n-1)/2`, regardless of input order | 9 values: 36 comparisons |
-| Selection actual swaps | At most `n-1`; skip self-swaps | Supplied 9-value example: 6 swaps |
-| Optimized bubble best case | `n-1` comparisons, 0 swaps | `[1,2,3,4]`: 3 comparisons, stop |
-| Insertion shifts | One per earlier value greater than held key | Insert 2 into `[3,5,7]`: 3 shifts |
-| Merge of two nonempty runs, total `m` | At most `m-1` key comparisons | `[2,7]` + `[3,5]`: 3 comparisons |
-| Merge writes | `m` temp writes and `m` copy-back writes | Four values: 8 writes in total |
+| Lab 4 | `linearSearch(double[], double)`, `binarySearch(int[], key, start, end)`; array 1: 50 random values from 0 to 80 (`for` and `Math.random`); array 2: the first 50 positive even integers (`while`); a menu on `l`/`L` and `b`/`B` | both return an index or -1; the value at index `i` of array 2 is `2 * (i + 1)`; search array 1 for a value taken from it, since typed decimals rarely match with `==`; any other answer ends the menu |
+| Lab 5 part 1 | `mergeSort` returns a sorted array using `merge`; test with 30 values from 0 to 100 from a `while` loop and `Math.random`; display before and after; repeat until the user ends | the lab's `merge` compiles and sorts as printed; sort a copy so the original can be shown first |
 
-A **probe** means visiting one search position. A key comparison tests values. A loop-bound check tests an index. These are different counting conventions: state the convention before giving an exact total.
+## 5. Common errors
 
-## Boundary and stability reminders
-
-- Binary search uses inclusive bounds here: `low <= high`. Exclude the failed midpoint with `mid + 1` or `mid - 1`; merely assigning `low = mid` can stall.
-- Evaluate `j >= 0` before `a[j] > current` in insertion sort. Java short-circuiting protects `a[-1]`.
-- Stable: equal records keep their original relative order. Bubble needs strict `>`; insertion needs strict `>`; merge chooses LEFT on `<=`.
-- Selection's distant swap can reverse equal records, even when the comparison is strict.
-- Iterative search/simple sorts use constant auxiliary space. Their recursive versions may need a call stack; do not copy the iterative space answer automatically.
-- Standard array merge sort uses `O(n)` temporary storage plus `O(log n)` stack space; total auxiliary space is `O(n)`.
-
-## Descending order: change the decision, not the whole algorithm
-
-| Algorithm | Descending decision |
-|---|---|
-| Binary search | If `a[mid] > key`, keep the right half; if smaller, keep the left |
-| Bubble | Swap when `a[j] < a[j+1]` |
-| Selection | Select the maximum remaining value |
-| Insertion | Shift while `a[j] < current` |
-| Merge | Choose LEFT when `a[left] >= a[right]` |
-
-## Read a bar chart correctly
-
-Height is the value; horizontal position is the index. Searching highlights bars without moving them. Sorting moves values between positions. A sorted ascending chart has non-decreasing heights, not necessarily distinct heights.
-
-For `[7,3,5,2]`, bubble's first pass gives `[3,5,2,7]`; selection's first pass gives `[2,3,5,7]`. The same final sorted order does **not** imply the same intermediate movements.
-
-## Trace formats
-
-**Search:** record `low`, `mid`, `high`, probed value, and next range.
-
-**Simple sorts:** record the array after every complete pass; show intermediate swaps when requested.
-
-**Merge sort:** draw the split tree, then list merges in the order recursive calls return.
-
-Return to the [chapter overview](/docs/sem3/csi247/04-sorting-and-searching).
+| Mistake | What happens | Repair |
+|---|---|---|
+| binary search on an unsorted array | -1 for keys that are present | sort first |
+| `while (low < high)` | a key in the last cell is never compared | `low <= high` |
+| `high = arr.length` | `ArrayIndexOutOfBoundsException` | `arr.length - 1` |
+| `low = mid` or `high = mid` | the search space may not shrink; an endless loop | `mid + 1` and `mid - 1` |
+| bubble sort inner loop `j < arr.length` | `ArrayIndexOutOfBoundsException` on `arr[j + 1]` | `j < arr.length - 1` |
+| insertion sort `while (temp < arr[j - 1])` without `j > 0` | `ArrayIndexOutOfBoundsException` at `arr[-1]` | test `j > 0` first |
+| `arr[j] = arr[j-1] )` on the insertion sort slide | `error: ';' expected` | end the statement with `;` |
+| merging without copying the halves | values are overwritten before they are read | copy into `left` and `right` first |
+| a merge sort split `mergeSort(arr, start, mid - 1)` and `(arr, mid, end)` | an item is skipped or the recursion never ends | `start..mid` and `mid + 1..end` |
+| counting the early stop of ordered linear search for a present key | wrong comparison count | the early stop helps only for an absent key |

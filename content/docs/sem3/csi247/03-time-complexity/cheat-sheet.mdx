@@ -1,9 +1,9 @@
 ---
 title: "Cheat Sheet"
-description: "Fast reference for counting steps, writing T(n), reading Big-O from loop shapes, the growth-rate order and the cost of the operations used across the course."
+description: "Fast reference for Lecture 7 and the complexities the later lectures state: counting steps, writing T(n), reading Big-O from loop shapes, simplifying to the dominant term, the growth-rate order and the three cases."
 ---
 
-Use the [chapter notes](/docs/sem3/csi247/03-time-complexity) for the explanations. This page is for lookup.
+Use the [chapter notes](/docs/sem3/csi247/03-time-complexity) for the explanations. This page is for lookup. Rows marked with a lecture number are used again in a later chapter.
 
 ## 1. Placeholders used on this page
 
@@ -16,14 +16,16 @@ Use the [chapter notes](/docs/sem3/csi247/03-time-complexity) for the explanatio
 
 ## 2. Growth rates, slowest growth first
 
-| Name | Big-O | Typical code | Doubling `n` makes it |
+| Big-O | Name | Lecture's verdict | Doubling `n` makes it |
 |---|---|---|---|
-| Constant | O(1) | `a[i]`, `list.get(i)`, a `push` | the same |
-| Logarithmic | O(log n) | halving: binary search | one more step |
-| Linear | O(n) | one loop over the data | twice as long |
-| Linearithmic | O(n log n) | merge sort, good quick sort | a little more than twice |
-| Quadratic | O(n^2) | two nested loops over the data | four times as long |
-| Exponential | O(2^n) | naive recursive `fib` | squares the work |
+| O(1) | constant | Excellent | the same |
+| O(log n) | logarithmic | Good | one more step |
+| O(n) | linear | Fair | twice as long |
+| O(n log n) | n-log-n | Bad | a little more than twice |
+| O(n^2) | quadratic | Worst | four times as long |
+| O(n^3) | cubic | Worst | eight times as long |
+| O(2^n) | exponential | Worst | squares the work |
+| O(n!) | factorial | Worst | far worse still |
 
 ## 3. Counting steps: the template
 
@@ -32,6 +34,7 @@ Count each line as a constant `c` multiplied by the number of times it runs, the
 | Code shape | Times the line runs |
 |---|---|
 | A statement outside any loop | 1 |
+| Statements in a sequence | add their times |
 | `for (int i = 0; i < n; i++)` header | init 1, test `n + 1`, update `n` |
 | The body of that loop | `n` |
 | The body of a loop nested inside it (also to `n`) | `n * n` |
@@ -65,21 +68,30 @@ public class CountSteps {
 
 ## 4. Reading Big-O straight from the loops
 
-| Loop shape | Cost | Why |
-|---|---|---|
-| One loop to `n` | O(n) | the body runs `n` times |
-| Two loops one after the other | O(n) + O(n) = O(n) | add, then drop the constant |
-| A loop nested in a loop, both to `n` | O(n^2) | `n` times `n` |
-| Inner bound is the outer counter `i` | O(n^2) | `1 + 2 + ... + n` is about `n^2 / 2` |
-| Loop with `i = i * 2` or `i = i / 2` | O(log n) | halving `n` reaches 1 in `log2 n` steps |
-| Loop to `n` with a halving loop inside | O(n log n) | `n` times `log n` |
-| Loop to a fixed number like `10` | O(1) | the bound does not depend on `n` |
+| Loop shape | Cost | Why | Used again in |
+|---|---|---|---|
+| One loop to `n` | O(n) | the body runs `n` times | linear search (Lecture 8) |
+| A loop with a step of 2 or 3 | O(n) | about `n / 2` or `n / 3` passes: only the coefficient changes | |
+| Two loops one after the other | O(n) + O(n) = O(n) | add, then drop the constant | |
+| A loop nested in a loop, both to `n` | O(n^2) | `n` times `n` | bubble sort (Lecture 9) |
+| Inner bound is the outer counter `i` | O(n^2) | `1 + 2 + ... + n` is about `n^2 / 2` | selection and insertion sort (Lecture 9) |
+| Three nested loops, all to `n` | O(n^3) | `n` times `n` times `n` | |
+| A loop to `n` with an inner loop that runs 5 times | O(n) | the inner bound is a constant factor | |
+| A loop, then a nested pair | O(n) + O(n^2) = O(n^2) | add, then keep the dominant term | |
+| Loop to a fixed number like `10` | O(1) | the bound does not depend on `n` | |
+| Loop with `i = i / 2` | O(log n) | halving `n` reaches 1 in `log2 n` steps | binary search (Lecture 8) |
+| Loop to `n` with a halving loop inside | O(n log n) | `n` times `log n` | merge sort halves the problem (Lecture 9) |
 
 ```java title="Shapes.java"
 public class Shapes {
     public static void main(String[] args) {
         int n = 16;
-        int linear = 0, nested = 0, halving = 0;
+        int linear = 0;
+        int nested = 0;
+        int sequence = 0;
+        int constantInner = 0;
+        int dependent = 0;
+        int halving = 0;
 
         for (int i = 0; i < n; i++) {
             linear++;                                 // n times: O(n)
@@ -89,19 +101,35 @@ public class Shapes {
                 nested++;                             // n * n times: O(n^2)
             }
         }
+        for (int i = 0; i < n; i++) {
+            sequence++;                               // two loops one after the other:
+        }
+        for (int i = 0; i < n; i++) {
+            sequence++;                               // n + n = 2n times: O(n)
+        }
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < 5; j++) {
+                constantInner++;                      // 5n times: O(n)
+            }
+        }
+        for (int i = 0; i < n - 1; i++) {
+            for (int j = i + 1; j < n; j++) {
+                dependent++;                          // the selection sort loops: n(n - 1) / 2 times
+            }
+        }
         for (int i = n; i > 1; i = i / 2) {
             halving++;                                // log2 n times: O(log n)
         }
-        System.out.println(linear + " " + nested + " " + halving);
+        System.out.println(linear + " " + nested + " " + sequence + " " + constantInner + " " + dependent + " " + halving);
     }
 }
 ```
 
 ```text
-16 256 4
+16 256 32 80 120 4
 ```
 
-For `n = 16`, the counts are 16, 256 and 4: `n`, `n^2` and `log2 n`.
+For `n = 16`, the counts are 16, 256, 32, 80, 120 and 4: `n`, `n^2`, `2n`, `5n`, `n(n - 1) / 2` and `log2 n`.
 
 ## 5. Simplifying T(n) to Big-O
 
@@ -113,46 +141,47 @@ Two rules, in this order:
 | `T(n)` | Big-O |
 |---|---|
 | `5` | O(1) |
-| `3n + 7` | O(n) |
-| `n^2 + 100n` | O(n^2) |
-| `2n log n + n` | O(n log n) |
-| `n + log n` | O(n) |
-| `2^n + n^3` | O(2^n) |
+| `7n - 3` | O(n) |
+| `7n - 2` | O(n) |
+| `3n^2 + 5n` | O(n^2) |
+| `3n^3 + 20n^2 + 5` | O(n^3) |
+| `3 log n + 5` | O(log n) |
+| `8n^2 log n + 5n^2 + n` | O(n^2 log n) |
+| `2n` against `4 + 3n^2` | linear against quadratic: the second grows faster |
+
+The coefficient 20 in `3n^3 + 20n^2 + 5` does not make `n^2` dominate: the cubic term is the larger one from `n = 7`.
 
 ## 6. Best, worst and average case
 
-| Algorithm | Best | Average | Worst | What decides it |
-|---|---|---|---|---|
-| Linear search | O(1) | O(n) | O(n) | where (or whether) the target is |
-| Binary search | O(1) | O(log n) | O(log n) | the array must be sorted |
-| Bubble sort with early exit | O(n) | O(n^2) | O(n^2) | already sorted data exits after one pass |
-| Insertion sort | O(n) | O(n^2) | O(n^2) | nearly sorted data is fast |
-| Merge sort | O(n log n) | O(n log n) | O(n log n) | always splits in half |
-| Quick sort | O(n log n) | O(n log n) | O(n^2) | a bad pivot gives uneven splits |
+| Case | Meaning |
+|---|---|
+| Best | The shortest possible runtime for size `n`; assumes everything goes well |
+| Average | The expected runtime over inputs of size `n`; difficult to calculate |
+| Worst | The maximum runtime for size `n`; the most commonly used, and the most crucial in domains such as surgery and air traffic control |
 
-Say which case you mean. "Linear search is O(n)" means the **worst** case unless stated otherwise.
+A search through an unsorted array of 8 items shows all three: best 1 comparison, worst 8, average 4.5 when the target is present. That is O(1), O(n) and O(n).
 
-## 7. Cost of the operations used across the course
+Say which case you mean. "A search is O(n)" means the **worst** case unless stated otherwise.
 
-| Structure | Access by position | Search | Insert | Delete |
-|---|---|---|---|---|
-| Array | O(1) | O(n), O(log n) if sorted | O(n) (shift) | O(n) (shift) |
-| `ArrayList` | O(1) | O(n) | O(1) amortised at the end, O(n) elsewhere | O(n) |
-| `LinkedList` | O(n) | O(n) | O(1) at an end or once positioned | O(1) once positioned |
-| Stack / queue | top or front only, O(1) | O(n) | O(1) | O(1) |
-| Hash table | by key | O(1) average, O(n) worst | O(1) average | O(1) average |
-| Balanced BST | by key | O(log n) | O(log n) | O(log n) |
-| Skewed BST | by key | O(n) | O(n) | O(n) |
+### Complexities the later lectures state
 
-**Amortised O(1):** an `ArrayList` doubles its array when full. One `add` occasionally costs O(n) (the copy), but spread over all the `add` calls the cost per call is constant.
+| Algorithm | Lecture | Complexity stated |
+|---|---|---|
+| Linear search | 8 | best O(1) (found at index 0), worst O(n) (last, or not found) |
+| Binary search | 8 | the exercise asks for the best, average and worst case: O(1), O(log n), O(log n) |
+| Bubble, insertion and selection sort | 9 | O(n^2) |
+| Merge sort | 9 | O(n log n) |
+| `Arrays.binarySearch`, `Arrays.sort` | 13 | O(log n), O(n log n) |
+| Linked-list methods | 14 | the lecture sets "prove the time complexity" exercises; see chapter 9 |
 
-## 8. Common errors
+## 7. Common errors
 
 | Mistake | Correction |
 |---|---|
 | Counting only the loop body and ignoring the loop header | The test runs `n + 1` times, one more than the body |
 | Writing `O(3n)` or `O(n + 5)` | Drop constants: `O(n)` |
 | Calling two nested loops O(n) because each is "just a loop" | Multiply nested loops: O(n^2) |
-| Saying binary search is O(log n) on unsorted data | It needs sorted data; sorting first costs O(n log n) |
+| Multiplying two loops that are one after the other | Add them: O(n) + O(n) = O(n) |
+| Calling a loop with an inner loop of 5 passes O(n^2) | The inner bound is constant: O(n) |
 | Mixing up the best case with the cost of the algorithm | State the case; the default is the worst |
 | Treating `n` in `T(n)` and the value in the loop bound as unrelated | `n` is whatever the bound depends on |

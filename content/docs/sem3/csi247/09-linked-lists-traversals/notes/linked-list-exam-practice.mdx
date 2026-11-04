@@ -1,0 +1,660 @@
+---
+title: "Linked List Exam Practice"
+description: "Nine linked list exam questions from Lectures 13 and 14: draw the memory diagram, trace a traversal, write a method, find the errors in the lecture's code, state time complexities, and compare list types."
+---
+
+This lesson has no new teaching. It is nine questions in the forms Lecture 14 and its exercises use, each answered the way a marker wants to see it. Memory diagrams come first because they are a large part of the assessments. Cover the answer, work the question on paper, then open the answer and compare. The ideas are in [Linked Lists, Explained](/docs/sem3/csi247/09-linked-lists-traversals/notes/linked-lists-explained) and [The LinkedList Class by Example](/docs/sem3/csi247/09-linked-lists-traversals/notes/linked-list-methods-by-example).
+
+<LearningObjectives items={[
+  'Draw the memory diagram for code that builds and changes a linked list',
+  'Trace a traversal and a pointer-changing method pointer by pointer',
+  'Write a list method that handles the empty list, one node, the first and the last position',
+  'Find the errors in a list method and state its time complexity',
+  'Compare the three types of linked list and a linked list with an array',
+]} />
+
+## 1. How to earn the marks
+
+| Command word | What the marker wants |
+|---|---|
+| Draw | Stack on the left, heap on the right. A box for each variable holding an address or `null`; a two-part box (data, next) for each node with its address; an arrow for each reference; a crossed-out old value; garbage marked |
+| Trace | A table with one row per step: the value of the variable that moves, the condition tested, and what changed |
+| Write | The signature, the handling of the empty list and of one node, the pointer changes in a safe order, and a test on a small list |
+| Find the error | The input that fails, the exact line, the kind of fault, and the repaired code |
+| State / prove | The complexity in Big-O for the best and the worst case, with the number of pointer moves for a list of `n` nodes |
+
+Four cases decide most list questions: the empty list, one node, the first position and the last position. Check each of them in every answer.
+
+The programs on this page share one small list class.
+
+```java title="MiniList.java"
+public class MiniList {
+    private static class Node {
+        int data;
+        Node next;
+
+        Node(int data) {
+            this.data = data;
+        }
+    }
+
+    private Node head;
+
+    public void addLast(int data) {
+        Node n = new Node(data);
+        if (head == null) {
+            head = n;
+        } else {
+            Node cur = head;
+            while (cur.next != null) {
+                cur = cur.next;
+            }
+            cur.next = n;
+        }
+    }
+
+    public void addFront(int data) {
+        Node n = new Node(data);
+        n.next = head;
+        head = n;
+    }
+
+    public void removeLast() {
+        if (head == null) {
+            return;
+        }
+        if (head.next == null) {
+            head = null;                      // one node: the list becomes empty
+            return;
+        }
+        Node cur = head;
+        while (cur.next.next != null) {       // stop at the second-last node
+            cur = cur.next;
+        }
+        cur.next = null;
+    }
+
+    public void remove(int i) {               // remove the node at index i
+        if (i < 0 || head == null) {
+            throw new IndexOutOfBoundsException("Index: " + i);
+        }
+        if (i == 0) {
+            head = head.next;
+            return;
+        }
+        Node cur = head;
+        for (int k = 1; k < i && cur.next != null; k++) {   // stop at the node before position i
+            cur = cur.next;
+        }
+        if (cur.next == null) {
+            throw new IndexOutOfBoundsException("Index: " + i);
+        }
+        cur.next = cur.next.next;             // bypass the node
+    }
+
+    public int sum() {
+        int total = 0;
+        Node cur = head;
+        while (cur != null) {
+            total += cur.data;
+            cur = cur.next;
+        }
+        return total;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("[");
+        Node cur = head;
+        while (cur != null) {
+            sb.append(cur.data);
+            if (cur.next != null) {
+                sb.append(", ");
+            }
+            cur = cur.next;
+        }
+        return sb.append("]").toString();
+    }
+}
+```
+
+## 2. Drawing memory: two questions
+
+### Exam question 1: Node variables (6 marks)
+
+Draw the memory diagram after each line of this code, and say which node is garbage at the end and what the reachable list is. (6 marks)
+
+```java
+Node a = new Node(4);
+a.next = new Node(8);
+Node b = a.next;
+b.next = new Node(2);
+a = a.next;
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Draw" asks for the stack and the heap after every line. There is no list class here, so the only variables are `a` and `b`, and every `new Node(...)` makes a node with `next` null.
+
+</Step>
+
+<Step title="2. Plan">
+
+Follow the rule "`=` copies what is in the box". `a.next = ...` writes into the `next` field of the node `a` points to; `b = a.next` copies an address; `a = a.next` moves `a` along the chain.
+
+</Step>
+
+<Step title="3. Solution">
+
+Step through the diagram. After the last line `a` and `b` both hold 200, the node 100 (data 4) is crossed out as garbage, and the chain 200 → 300 remains.
+
+<MemoryDiagram scenario="llpractice" />
+
+</Step>
+
+<Step title="4. Check">
+
+At the end `a` holds 200 and `b` holds 200: two variables, one node. Nothing holds the address 100 (the old value of `a` is crossed out) and no `next` field holds it, so the 4 node is garbage. The reachable list is 8 → 2 (data 8 at 200, data 2 at 300).
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: the lecture's tester (8 marks)
+
+Draw the memory diagram of these actions in the given order: create a `LinkedList` object, add the nodes 6, 3 and 9 at the end, remove the first node, then add 12 and 8 in front. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The list is an object with a `head` field; `myList` on the stack holds its address. Each node is a separate object. The order of the actions matters, and a removed node stays on the heap as garbage.
+
+</Step>
+
+<Step title="2. Plan">
+
+`new LinkedList()`: head null. `addLast` on an empty list sets head to the new node; later `addLast` calls walk to the tail and link the new node. `removeFront` moves head along. `addFront` links the new node to the old first node and then moves head.
+
+</Step>
+
+<Step title="3. Solution">
+
+<MemoryDiagram scenario="llexercise" />
+
+</Step>
+
+<Step title="4. Check">
+
+The final list is 8 → 12 → 3 → 9: `head` holds 500, node 500 points at 400, node 400 at 200, node 200 at 300, and node 300 holds null. The 6 node (100) is garbage. Marks: the object and the variable (1), the three adds (3), the removal with garbage (2), the two front adds in the right order (2).
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Tracing a method: one question
+
+### Exam question 3: trace addLast (6 marks)
+
+Trace `addLast(7)` on the list 6 → 3 → 9, showing the value of `currNode` at each step, and state how many times the loop body runs. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The method creates the node, then walks from `head` while `currNode.next != null`. The trace is the value of `currNode` and the test, one row per check.
+
+</Step>
+
+<Step title="2. Plan">
+
+Start with `currNode = head` (the address of the 6 node, 100). Test `currNode.next != null`; if true, move. When the test is false, `currNode` is the tail and its `next` is set to the new node.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Step | `currNode` | `currNode.next` | `currNode.next != null`? | Action |
+|---|---|---|---|---|
+| start | 100 (data 6) | 200 | true | `currNode = currNode.next` |
+| 2 | 200 (data 3) | 300 | true | `currNode = currNode.next` |
+| 3 | 300 (data 9) | null | false | stop |
+| end | 300 | null | | `currNode.next = n` (400) |
+
+The loop body runs **2** times, and the list becomes 6 → 3 → 9 → 7. The same steps are in this diagram:
+
+<MemoryDiagram scenario="lladdlast" />
+
+</Step>
+
+<Step title="4. Check">
+
+For a list of `n` nodes the body runs `n - 1` times, here 3 - 1 = 2. The earlier lesson measured 2 pointer moves for this list. The cost grows with the length, so `addLast` is O(n) when only `head` is kept.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Writing methods: three questions
+
+### Exam question 4: remove the node at a position (7 marks)
+
+Lecture 14 leaves `remove(int i)` as a take-home exercise. Write a method `remove(int i)` that removes the node at index `i` of a singly linked list, state its time complexity, and test it on the list 6, 3, 9, 7 and on the empty list. (7 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Write", "state" and "test". A removal in a singly linked list needs the node **before** the target, because that is the node whose `next` changes. The cases to handle are the empty list, index 0, a middle index, the last index, and an index that does not exist.
+
+</Step>
+
+<Step title="2. Plan">
+
+If the list is empty or `i` is negative, throw `IndexOutOfBoundsException`. Index 0 is `head = head.next`. Otherwise walk `i - 1` times to the node before the position, stopping early if the list ends; if the node after it does not exist, the index is out of range; otherwise bypass the target with `cur.next = cur.next.next`.
+
+</Step>
+
+<Step title="3. Solution">
+
+The method is `remove` in `MiniList` above. A tester:
+
+```java title="RemoveAtExam.java"
+public class RemoveAtExam {
+    // Question: remove nodes of 6, 3, 9, 7 by position, and from an empty list.
+    static MiniList lecture() {
+        MiniList list = new MiniList();
+        int[] values = {6, 3, 9, 7};
+        for (int v : values) {
+            list.addLast(v);
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        MiniList a = lecture();
+        a.remove(0);
+        System.out.println("remove(0): " + a);
+        MiniList b = lecture();
+        b.remove(2);
+        System.out.println("remove(2): " + b);
+        MiniList c = lecture();
+        c.remove(3);
+        System.out.println("remove(3): " + c);
+        MiniList d = lecture();
+        try {
+            d.remove(4);
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("remove(4): " + e.getMessage());
+        }
+        try {
+            new MiniList().remove(0);
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("empty list: " + e.getMessage());
+        }
+    }
+}
+```
+
+```text
+remove(0): [3, 9, 7]
+remove(2): [6, 3, 7]
+remove(3): [6, 3, 9]
+remove(4): Index: 4
+empty list: Index: 0
+```
+
+</Step>
+
+<Step title="4. Check">
+
+Index 0 moves `head`; index 2 bypasses the 9 node; index 3 bypasses the last node, so the list ends at 9; index 4 does not exist in a list of four nodes and the empty list has no node 0, so both throw. The time complexity is O(1) for index 0 and O(n) in the worst case, because the walk to the node before the position follows up to `n - 2` pointers.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 5: removeLast (6 marks)
+
+The lecture gives this `removeLast`. State the compile error it produces as printed, and what happens when it is repaired and called on a list of one node. Give a correct version. (6 marks)
+
+```java
+public void removeLast() {
+    if (!isEmpty())
+        Node cur = head;
+        while (cur.next.next != null) {
+            cur = cur.next;
+        }
+        cur.next = null;
+    }
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two faults are asked for: the syntax of the printed code and the behaviour of the repaired code on one node. Read the braces first.
+
+</Step>
+
+<Step title="2. Plan">
+
+`if (!isEmpty())` has no opening brace, so its body is the single statement `Node cur = head;`, and a declaration is not allowed as the only statement of an `if`. With braces added, `cur.next.next` needs a second node: on one node `cur.next` is `null`.
+
+</Step>
+
+<Step title="3. Solution">
+
+As printed, `javac` reports `error: variable declaration not allowed here` at `Node cur = head;`, followed by `class, interface, or enum expected` for the closing brace that no longer matches. With the braces added, a list of one node throws `NullPointerException` on `cur.next.next`. A correct version handles the one-node case first:
+
+```java title="RemoveLastTest.java"
+public class RemoveLastTest {
+    // Question: removeLast on lists of 3, 2, 1 and 0 nodes.
+    static MiniList build(int... values) {
+        MiniList list = new MiniList();
+        for (int v : values) {
+            list.addLast(v);
+        }
+        return list;
+    }
+
+    public static void main(String[] args) {
+        MiniList a = build(6, 3, 9);
+        a.removeLast();
+        System.out.println("3 nodes: " + a);
+        a.removeLast();
+        System.out.println("then: " + a);
+        a.removeLast();
+        System.out.println("then: " + a);
+        a.removeLast();
+        System.out.println("then, on the empty list: " + a);
+    }
+}
+```
+
+```text
+3 nodes: [6, 3]
+then: [6]
+then: []
+then, on the empty list: []
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The version in `MiniList` returns at once for an empty list, sets `head = null` for one node, and otherwise stops at the second-last node (`cur.next.next == null`) and sets its `next` to `null`. Each step above shortens the list by one node, and the empty list stays empty. The time complexity is O(n), because the walk to the second-last node follows `n - 2` pointers.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 6: a traversal that computes a value (6 marks)
+
+Write a method `int sum()` that returns the sum of the data of all the nodes. Trace it on the list 6 → 3 → 9, and give its time complexity. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+This is a traversal like `size()`: visit every node once, but add the data instead of counting. The empty list must give 0.
+
+</Step>
+
+<Step title="2. Plan">
+
+`total = 0`, `cur = head`; while `cur != null`, add `cur.data` and move on. The loop condition tests `cur`, not `cur.next`, so the last node is included and the empty list adds nothing.
+
+</Step>
+
+<Step title="3. Solution">
+
+The method is `sum` in `MiniList` above.
+
+| Pass | `cur` | `cur != null`? | `total` afterwards |
+|---|---|---|---|
+| start | 100 (data 6) | true | 0 |
+| 1 | 100 | true | 6 |
+| 2 | 200 (data 3) | true | 9 |
+| 3 | 300 (data 9) | true | 18 |
+| end | null | false | 18 |
+
+```java title="SumTest.java"
+public class SumTest {
+    // Question: the sum of the data of 6, 3, 9 and of an empty list.
+    public static void main(String[] args) {
+        MiniList list = new MiniList();
+        list.addLast(6);
+        list.addLast(3);
+        list.addLast(9);
+        System.out.println(list + " sums to " + list.sum());
+        System.out.println(new MiniList() + " sums to " + new MiniList().sum());
+    }
+}
+```
+
+```text
+[6, 3, 9] sums to 18
+[] sums to 0
+```
+
+</Step>
+
+<Step title="4. Check">
+
+6 + 3 + 9 = 18, and the empty list gives 0. Every node is visited once, so the time complexity is O(n), in the best and the worst case.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. Explaining: three questions
+
+### Exam question 7: the types of linked list (5 marks)
+
+Describe a singly linked list, a doubly linked list and a circular linked list, and draw the last two. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three descriptions and two drawings. The difference between the types is the number of links in each node and where the last node points.
+
+</Step>
+
+<Step title="2. Plan">
+
+Singly: one link, `next`. Doubly: two links, `prev` and `next`. Circular: the last node links back to the first node.
+
+</Step>
+
+<Step title="3. Solution">
+
+A **singly linked list** has nodes with one link, to the next node only; the last node's `next` is `null`. A **doubly linked list** has nodes with two links, to the previous and to the next node; the first node's `prev` and the last node's `next` are `null`. A **circular linked list** has a last node whose link points to the first node, so following `next` never reaches `null`.
+
+<MemoryDiagram scenario="dll" static />
+
+<MemoryDiagram scenario="llcircular" static />
+
+</Step>
+
+<Step title="4. Check">
+
+In the doubly linked picture each node box has three parts (`prev`, `data`, `next`) and the arrows run both ways; in the circular picture the arrow leaving the 9 node goes back to the 6 node (100) instead of ending in `null`. The extra link of a doubly linked list costs one reference per node and doubles the arrows that every insertion and removal must update.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 8: linked list against array (6 marks)
+
+State two benefits of a linked list over an array or an `ArrayList`, one drawback, and how an element at a given position is reached. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two benefits, one drawback, one mechanism. The lecture's answers are about size and about shifting.
+
+</Step>
+
+<Step title="2. Plan">
+
+Benefits: the list is dynamic, and an insertion or a removal needs no shifting of items. Drawback: no direct access. Access: start at `head` and follow the `next` references.
+
+</Step>
+
+<Step title="3. Solution">
+
+**Benefit 1:** a linked list is a dynamic structure that grows and shrinks whenever necessary; an array has a fixed size. **Benefit 2:** it is efficient compared with arrays and `ArrayList` because items are not shifted for insertions and removals: only references change. **Drawback:** there is no direct access to elements. `arr[i]` and `get(i)` are direct access; `[]` does not work on a linked list and neither does `get()` on the lecture's class. To reach the element at a position, keep track of `head`, then follow the `next` references one node at a time (sequential access).
+
+</Step>
+
+<Step title="4. Check">
+
+The cost of the drawback is visible in the pointer counts: reaching the middle of a list of 1000 nodes takes about 500 moves, while an array reaches it with one calculation. The cost of the benefit is also visible: `addFront` and `removeFront` made no moves at all.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 9: the time complexity of the methods (6 marks)
+
+For a singly linked list that keeps only a `head` reference, state the best-case and worst-case time complexity of `addFront`, `addLast`, `contains`, `removeFront` and `removeLast`, and prove the worst case of `contains`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Five methods, two cases each, and one proof. A proof here is a count of the pointer moves for `n` nodes, as in the Time Complexity chapter.
+
+</Step>
+
+<Step title="2. Plan">
+
+Methods that only change `head` make no moves: O(1). Methods that walk follow up to `n` or `n - 1` pointers: O(n). For `contains`, the worst case is a key in the last node or no key: the loop moves once for every node.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Method | Best case | Worst case | Reason |
+|---|---|---|---|
+| `addFront` | O(1) | O(1) | two assignments |
+| `addLast` | O(n) | O(n) | `n - 1` moves to reach the tail |
+| `contains` | O(1) | O(n) | key in the first node / key last or absent |
+| `removeFront` | O(1) | O(1) | one assignment |
+| `removeLast` | O(n) | O(n) | `n - 2` moves to reach the second-last node |
+
+**Proof for `contains`.** With the key in the last node, the loop tests `n` nodes and follows a pointer after each of the first `n - 1`: `n - 1` moves, and with the key absent it follows `n` pointers. The loop body is constant work, so T(n) is proportional to `n`: O(n). With the key in the first node the loop returns before any move: O(1).
+
+</Step>
+
+<Step title="4. Check">
+
+The measurements for lists of 10, 100 and 1000 nodes were 9, 99 and 999 moves for a key in the last node, 10, 100 and 1000 for `size`, and 0 for a key in the first node, which agree with the proof.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Errors to check before handing in
+
+- The **empty list**, a list of **one node**, the **first** position and the **last** position are each handled.
+- `while (cur != null)` is used to visit every node, and `while (cur.next != null)` only to stop ON the last node.
+- An insertion links the new node to its right neighbour **first**, then the node before it to the new node.
+- A removal stops at the node **before** the target, then bypasses the target.
+- A reference is copied with `=`; two variables can hold the same address.
+- In a diagram every node has an address, `null` is written in the last `next`, and an unreachable node is marked as garbage.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+For any list question: draw `head` and the nodes first, check the empty list, one node and the two ends, change the pointers in a safe order, and finish with the complexity as a count of pointer moves. Memory diagram questions are about addresses: `a.next = n` writes an address into a field, `b = a.next` copies one into a variable, and a node that nothing points to is garbage.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="After a = a.next in the first question, which node does b still point to, and why is the 4 node garbage?">
+
+`b` still holds 200, the 8 node, and so does `a` now. The 4 node (100) is garbage because `a` no longer holds its address and no `next` field holds it.
+
+</CheckQuestion>
+
+<CheckQuestion question="How many times does the loop of addLast run for a list of 6 nodes?">
+
+Five times, `n - 1`: `currNode` starts on the first node and moves until it is on the sixth, the tail.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does remove(int i) stop at the node before position i, rather than at the node to remove?">
+
+To bypass a node you change the `next` of the node in front of it (`cur.next = cur.next.next`), and a singly linked list cannot go backwards from the target to find that node.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which two methods of the five are O(1) in both the best and the worst case?">
+
+`addFront` and `removeFront`: they only change `head` (and the new node's `next`), so they follow no pointers.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is different about the last node of a circular linked list?">
+
+Its link points to the first node instead of being `null`, so following `next` from any node eventually returns to it and never reaches `null`.
+
+</CheckQuestion>
+
+</CheckQuestions>

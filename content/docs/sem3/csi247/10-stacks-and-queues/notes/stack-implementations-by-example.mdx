@@ -1,0 +1,837 @@
+---
+title: "Stack Implementations by Example"
+description: "Perform stack operations by hand, build the Lecture 15 array stack and linked stack method by method, draw their memory, repair the lecture's code, and write the generic versions."
+---
+
+A stack adds and removes only at one end, the top, so the last element pushed is the first one popped (LIFO). Lecture 15 implements it twice: with an array, where `top` is an index, and with a linked list, where `top` is a reference to the first node. This lesson works through both, one method at a time, with the lecture's Exercise 1, the memory after each operation, the fault in the lecture's `search`, and the generic classes the lecture asks for. It extends [Stacks and Queues, Explained](/docs/sem3/csi247/10-stacks-and-queues/notes/stacks-and-queues-explained) and builds on [The LinkedList Class by Example](/docs/sem3/csi247/09-linked-lists-traversals/notes/linked-list-methods-by-example).
+
+<LearningObjectives items={[
+  'Perform push, pop and peek operations on a stack by hand and state the order of the popped values',
+  'Write an array stack with a top index, and state the value of top when the stack is empty, has one element, is full and overflows',
+  'Write a linked stack that adds and removes nodes at the front of a list',
+  'Draw the memory diagram of an array stack and of a linked stack after a sequence of operations',
+  'Find and repair the errors in the lecture\'s code, and handle overflow and underflow',
+  'Write a generic stack with an ArrayList or with nodes, and use a stack to reverse a string',
+]} />
+
+<Prerequisites items={[
+  'Arrays and the memory diagram of an array, from the Java Fundamentals chapter',
+  'Nodes and the linked list class, from the Linked Lists chapter',
+]} />
+
+## 1. The templates
+
+```text
+Stack rule (LIFO):  push adds at the top; pop removes the top and returns it; peek returns the top without removing it.
+                    Consecutive pops return the elements in the reverse order of the pushes.
+
+Array stack:        top is an INDEX.   empty: top = -1   one element: top = 0   full: top = N - 1   overflow: top = N
+                    push: check isFull, then stack[++top] = value      pop: check isEmpty, then return stack[top--]
+Linked stack:       top is a REFERENCE to the first node (null when empty).
+                    push: the new node points at the old top, then top = new node      pop: save top.data, then top = top.next
+```
+
+To trace a stack by hand, write the stack as a column with the top at the head, and update it after every operation. To draw the memory, draw the array (or the nodes) on the heap, the object that holds `top`, and the variable that refers to the object.
+
+## 2. Performing operations by hand
+
+The lecture's Exercise 1: on an empty stack perform `push(14)`, `push(39)`, `push(26)`, `pop()`, `push(28)`, `push(17)`, `pop()`, `pop()`, `push(87)` and `pop()`. Which values are popped, how many are left, and which item is popped next? The stack class used to check the answer is the array stack of section 4.
+
+```java title="Stack1.java"
+public class Stack1 {
+    private Integer[] stack;                  // an array to hold the elements
+    private int top;                          // keeps track of the index of the top element
+
+    public Stack1(int n) {                    // creates an array to hold n elements
+        stack = new Integer[n];
+        top = -1;                             // -1 indicates an empty stack
+    }
+
+    public boolean isEmpty() {
+        return top == -1;
+    }
+
+    public int size() {
+        return top + 1;                       // the array is indexed from 0 while top starts at -1
+    }
+
+    public boolean isFull() {
+        return top == stack.length - 1;
+    }
+
+    public boolean push(Integer num) {
+        if (isFull()) {
+            System.out.println("Stack Overflow! Can not insert...");
+            return false;
+        }
+        stack[++top] = num;                   // increase top by 1, then add at the new top
+        return true;
+    }
+
+    public Integer peek() {
+        if (!isEmpty()) {
+            return stack[top];
+        }
+        return null;
+    }
+
+    public Integer pop() {
+        if (!isEmpty()) {
+            return stack[top--];              // return the top element, then decrease top by 1
+        }
+        System.out.println("Stack Underflow! Nothing to remove");
+        return null;
+    }
+
+    public int search(Integer key) {          // returns the index of the element when found
+        int ind = -1;
+        if (!isEmpty()) {
+            for (int i = top; i > -1; i--) {  // start from the top
+                if (key.equals(stack[i])) {
+                    ind = i;
+                    break;
+                }
+            }
+        }
+        return ind;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i <= top; i++) {
+            sb.append(stack[i]);
+            if (i < top) {
+                sb.append(", ");
+            }
+        }
+        return sb.append("] (top at the right)").toString();
+    }
+}
+```
+
+```java title="StackExercise1.java"
+public class StackExercise1 {
+    // Question (Lecture 15, Exercise 1): perform the operations; which values are popped, how many are left, what is popped next?
+    public static void main(String[] args) {
+        Stack1 s = new Stack1(10);
+        StringBuilder popped = new StringBuilder();
+        s.push(14);
+        s.push(39);
+        s.push(26);
+        popped.append(s.pop()).append(" ");
+        s.push(28);
+        s.push(17);
+        popped.append(s.pop()).append(" ");
+        popped.append(s.pop()).append(" ");
+        s.push(87);
+        popped.append(s.pop());
+        System.out.println("popped: " + popped);
+        System.out.println("left: " + s.size() + " " + s);
+        System.out.println("next pop: " + s.peek());
+    }
+}
+```
+
+```text
+popped: 26 17 28 87
+left: 2 [14, 39] (top at the right)
+next pop: 39
+```
+
+| Operation | Stack after it (top at the right) | Popped |
+|---|---|---|
+| `push(14)`, `push(39)`, `push(26)` | 14, 39, 26 | |
+| `pop()` | 14, 39 | 26 |
+| `push(28)`, `push(17)` | 14, 39, 28, 17 | |
+| `pop()` | 14, 39, 28 | 17 |
+| `pop()` | 14, 39 | 28 |
+| `push(87)` | 14, 39, 87 | |
+| `pop()` | 14, 39 | 87 |
+
+The popped sequence is 26, 17, 28, 87; two elements are left (14 and 39), and the next `pop()` returns 39. Notice that the popped values are **not** in the order they were pushed: only consecutive pops come out in reverse order.
+
+## 3. Java's Stack class
+
+Lecture 13 introduces `java.util.Stack<E>`, with `push`, `pop`, `peek` and `empty`. The lecture's snippet pushes five book titles and pops two.
+
+```java title="JavaStackDemo.java"
+import java.util.Stack;
+
+public class JavaStackDemo {
+    // Question (Lecture 13): push five titles onto a Stack, display it, pop two and display it again.
+    public static void main(String[] args) {
+        Stack<String> stack = new Stack<String>();
+        stack.push("Data Structures");
+        stack.push("Big Java");
+        stack.push("Java for everyone");
+        stack.push("Marketing Principles");
+        stack.push("Financial Markets");
+        System.out.println(stack.size());
+        System.out.println(stack);
+        System.out.println(stack.pop());
+        System.out.println(stack.pop());
+        System.out.println(stack);
+        System.out.println(stack.size());
+        System.out.println(stack.peek());
+        System.out.println(stack.empty());
+    }
+}
+```
+
+```text
+5
+[Data Structures, Big Java, Java for everyone, Marketing Principles, Financial Markets]
+Financial Markets
+Marketing Principles
+[Data Structures, Big Java, Java for everyone]
+3
+Java for everyone
+false
+```
+
+Printing the stack lists the elements from the bottom to the top, so the most recently pushed title is last. `pop()` returned the last two pushed titles, `peek()` shows the new top without removing it, and `empty()` is the library's name for the check that the lecture's classes call `isEmpty()`.
+
+## 4. The array stack
+
+The array stack keeps an array and the index `top` of the top element. Because the array has a fixed size, its capacity is fixed: a stack that is too small overflows, and one that is too large wastes space. Reallocating a bigger array is possible but expensive.
+
+| Stack status | `top` |
+|---|---|
+| Empty | -1 |
+| Has 1 element | 0 |
+| Full (has N elements) | N - 1 |
+| Overflow | N |
+
+<MemoryDiagram scenario="stackarray" />
+
+### Capacity, overflow and the lecture's tester
+
+```java title="StackCapacity.java"
+public class StackCapacity {
+    // Question (Lecture 15 tester): push five values onto a stack of capacity 5, try a sixth, then pop and search.
+    public static void main(String[] args) {
+        Stack1 st1 = new Stack1(5);
+        System.out.println("empty: " + st1.isEmpty() + ", size " + st1.size());
+        st1.push(27);
+        System.out.println("one element: size " + st1.size() + ", full " + st1.isFull());
+        st1.push(38);
+        st1.push(92);
+        st1.push(46);
+        st1.push(83);
+        System.out.println("full: " + st1.isFull() + ", size " + st1.size());
+        System.out.println("push(90): " + st1.push(90));
+        System.out.println("Top item " + st1.peek());
+        System.out.println("Item :" + st1.pop());
+        System.out.println("Item :" + st1.pop());
+        System.out.println("Size" + st1.size());
+        System.out.println("Found : " + st1.search(6));
+        System.out.println("Top element : " + st1.peek());
+    }
+}
+```
+
+```text
+empty: true, size 0
+one element: size 1, full false
+full: true, size 5
+Stack Overflow! Can not insert...
+push(90): false
+Top item 83
+Item :83
+Item :46
+Size3
+Found : -1
+Top element : 92
+```
+
+`push` checks `isFull()` before it changes `top`, so the sixth push prints the overflow message and returns `false` instead of throwing `ArrayIndexOutOfBoundsException`. Writing `stack[++top] = num` without that check on a full stack would try to store at index 5, outside the array. `peek` shows the top (83 after five pushes) without removing it, and the two pops return 83 and 46. The size is then 3, and `search(6)` is -1: the value 6 is not in the stack.
+
+### Underflow and peek on an empty stack
+
+```java title="StackEmpty.java"
+public class StackEmpty {
+    // Question: what do pop, peek, search and size do on an empty stack?
+    public static void main(String[] args) {
+        Stack1 s = new Stack1(3);
+        System.out.println("peek: " + s.peek());
+        System.out.println("pop: " + s.pop());
+        System.out.println("search(5): " + s.search(5));
+        System.out.println("size: " + s.size() + ", empty: " + s.isEmpty());
+        s.push(8);
+        s.pop();
+        System.out.println("after push and pop: " + s + ", empty: " + s.isEmpty());
+    }
+}
+```
+
+```text
+peek: null
+Stack Underflow! Nothing to remove
+pop: null
+search(5): -1
+size: 0, empty: true
+after push and pop: [] (top at the right), empty: true
+```
+
+Removing from an empty stack is called **underflow**: the lecture's `pop` prints "Stack Underflow! Nothing to remove" and returns `null`, and `peek` returns `null`. After a push and a pop the stack is empty again (`top` is back to -1), even though the array still holds the old value.
+
+### Search
+
+The lecture's `search` starts at the top and walks down the array, and it returns the **array index** of the element that matches, or -1.
+
+```java title="StackSearch.java"
+public class StackSearch {
+    // Question: search the stack 10, 20, 30, 20 (top at the right) for 20, 30, 10 and 99.
+    public static void main(String[] args) {
+        Stack1 s = new Stack1(6);
+        int[] values = {10, 20, 30, 20};
+        for (int v : values) {
+            s.push(v);
+        }
+        System.out.println(s);
+        int[] keys = {20, 30, 10, 99};
+        for (int key : keys) {
+            System.out.println("search(" + key + ") = " + s.search(key));
+        }
+    }
+}
+```
+
+```text
+[10, 20, 30, 20] (top at the right)
+search(20) = 3
+search(30) = 2
+search(10) = 0
+search(99) = -1
+```
+
+Because the search begins at the top, a value that occurs twice (20) is reported at the higher index, the one nearer the top (3). The values 30 and 10 are at indexes 2 and 0, and an absent value gives -1.
+
+### The lecture's search, as printed
+
+The lecture prints the loop body of `search` like this:
+
+```java
+for (int i = top; i > -1; i--) {
+    if ( key.equals(stack[i])           // Found!
+        ind = i; break;
+}
+```
+
+The closing bracket of the condition is missing, and so is the opening brace of the block. `javac` reports `error: ')' expected` at the end of the `if` line. Closing the condition and adding braces around `ind = i; break;` gives the version in `Stack1`. Without the braces `break` would run on every pass, and the loop would test only the top element.
+
+<Callout type="mistake" title="Common error">
+
+Testing `top == stack.length` instead of `top == stack.length - 1` in `isFull`. `top` is an index, so the stack is full when `top` is the last index, N - 1. With the wrong test `push` would let `top` reach N and the next store would throw `ArrayIndexOutOfBoundsException`.
+
+</Callout>
+
+### Exam question 1: perform the operations (6 marks)
+
+On an empty stack perform `push(8)`, `push(15)`, `pop()`, `push(4)`, `push(21)`, `pop()`, `pop()` and `push(9)`. State the sequence of popped values, the number of elements left, and the item that is popped next. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Perform" asks for the stack after each operation, and three results: the popped values in order, the number left, and the next item to be popped. A stack removes only the most recently pushed element.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the stack with the top at the right and update it for each operation. A `pop` removes the right-most element and records it.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Operation | Stack (top at the right) | Popped |
+|---|---|---|
+| `push(8)`, `push(15)` | 8, 15 | |
+| `pop()` | 8 | 15 |
+| `push(4)`, `push(21)` | 8, 4, 21 | |
+| `pop()` | 8, 4 | 21 |
+| `pop()` | 8 | 4 |
+| `push(9)` | 8, 9 | |
+
+The popped sequence is 15, 21, 4.
+
+</Step>
+
+<Step title="4. Check">
+
+Two elements are left (8 and 9) and the next `pop()` returns 9. As a check, three pushes were followed by pops that each took the newest element at that moment: 15 was the newest after two pushes, 21 after four, and 4 after the third pop reached it.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: top and overflow (5 marks)
+
+A stack is implemented with an array of capacity 4. State the value of `top` when the stack is empty, has one element, is full, and when a push overflows. Write `isFull` and the part of `push` that prevents an overflow. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+`top` is the index of the top element, so it follows the array indexes 0 to N - 1, with -1 meaning "no element". Here N is 4.
+
+</Step>
+
+<Step title="2. Plan">
+
+Empty: no element, so -1. One element: index 0. Full: the last index, N - 1 = 3. A push on a full stack would need index N = 4, which does not exist.
+
+</Step>
+
+<Step title="3. Solution">
+
+`top` is -1 when empty, 0 with one element, 3 when full, and the overflow position would be 4. The methods are:
+
+```java
+public boolean isFull() {
+    return top == stack.length - 1;
+}
+
+public boolean push(Integer num) {
+    if (isFull()) {
+        System.out.println("Stack Overflow! Can not insert...");
+        return false;                    // nothing is stored
+    }
+    stack[++top] = num;
+    return true;
+}
+```
+
+</Step>
+
+<Step title="4. Check">
+
+With a capacity of 4 and four pushes, `top` is 3 and `isFull()` is `true`; the fifth push prints the message and leaves the stack unchanged, as the program above did for a capacity of 5. `size()` is `top + 1`: 0 when empty and 4 when full.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. The linked stack
+
+A stack can instead be a linked list of nodes where every change happens at the **front**. There is no capacity, so there is no `isFull()`; the list grows and shrinks, and each pushed element costs an extra node. The class needs the `Node` inner class and one reference, `top`.
+
+<MemoryDiagram scenario="stacklinked" />
+
+```java title="Stack2.java"
+public class Stack2 {
+    private class Node {
+        String data;                          // the node's data part
+        Node next;                            // a pointer to the next node in the stack
+
+        Node(String data) {
+            this.data = data;
+            this.next = null;
+        }
+    }
+
+    public Node top;                          // keeps track of the top node
+
+    public Stack2() {
+        top = null;                           // an empty stack
+    }
+
+    public boolean isEmpty() {
+        return top == null;
+    }
+
+    public void push(String data) {
+        Node newNode = new Node(data);
+        if (isEmpty()) {
+            top = newNode;                    // the first node
+        } else {
+            Node oldTop = top;
+            top = newNode;                    // the new top
+            newNode.next = oldTop;
+        }
+    }
+
+    public String peek() {
+        if (isEmpty()) {
+            System.out.println("Stack is empty");
+            return null;
+        }
+        return top.data;                      // the value of the top node
+    }
+
+    public String pop() {
+        if (isEmpty()) {
+            return null;
+        }
+        String data = top.data;
+        top = top.next;                       // the new top; the old top node is garbage
+        return data;
+    }
+
+    public int size() {                       // the lecture's take-home method
+        int count = 0;
+        for (Node cur = top; cur != null; cur = cur.next) {
+            count++;
+        }
+        return count;
+    }
+
+    public int search(String key) {           // the lecture's take-home method: position from the top, 0 is the top
+        int position = 0;
+        for (Node cur = top; cur != null; cur = cur.next) {
+            if (cur.data.equals(key)) {
+                return position;
+            }
+            position++;
+        }
+        return -1;
+    }
+}
+```
+
+### The lecture's tester
+
+```java title="LinkedStackTester.java"
+public class LinkedStackTester {
+    // Question (Lecture 15 tester): push five course codes, pop two, then look at the top, the size and a search.
+    public static void main(String[] args) {
+        Stack2 st2 = new Stack2();
+        st2.push("CSI247");
+        st2.push("CSI243");
+        st2.push("CSI141");
+        st2.push("CSI142");
+        st2.push("CSI262");
+        System.out.println("popped: " + st2.pop());
+        System.out.println("popped: " + st2.pop());
+        System.out.println("Top: " + st2.peek());
+        System.out.println("size: " + st2.size());
+        System.out.println("search(CSI247): " + st2.search("CSI247"));
+        System.out.println("search(CSI262): " + st2.search("CSI262"));
+    }
+}
+```
+
+```text
+popped: CSI262
+popped: CSI142
+Top: CSI141
+size: 3
+search(CSI247): 2
+search(CSI262): -1
+```
+
+`push` is adding a node in front of a linked list and `pop` is removing the first node, so each is O(1): no walking is needed. The two pops return the last two codes pushed (CSI262, then CSI142), and the top is then CSI141. The take-home `size` counts the nodes from `top`, and `search` returns the position counted from the top (0 is the top node); a popped value is no longer in the stack, so it gives -1.
+
+### An empty linked stack
+
+```java title="EmptyLinkedStack.java"
+public class EmptyLinkedStack {
+    // Question: what do pop, peek and size do on an empty linked stack, and on a stack of one element?
+    public static void main(String[] args) {
+        Stack2 s = new Stack2();
+        System.out.println("pop: " + s.pop());
+        System.out.println("peek: " + s.peek());
+        System.out.println("size: " + s.size());
+        s.push("Kago");
+        System.out.println("one element, top: " + s.peek() + ", size: " + s.size());
+        System.out.println("pop: " + s.pop() + ", empty: " + s.isEmpty());
+    }
+}
+```
+
+```text
+pop: null
+Stack is empty
+peek: null
+size: 0
+one element, top: Kago, size: 1
+pop: Kago, empty: true
+```
+
+An empty stack is `top == null`. Popping the only element sets `top = top.next`, which is `null`, so the stack is empty again without any special case. The lecture's `peek` prints "Stack is empty" before it returns `null`; its `pop` returns `null` quietly (the message is commented out).
+
+### Use a stack to reverse a string
+
+The lecture's Exercise 2(c): read a string, then display it reversed using only `push` and `pop`. Characters come out in the reverse order of the pushes.
+
+```java title="ReverseWithStack.java"
+public class ReverseWithStack {
+    // Question (Lecture 15, Exercise 2c): reverse a string using push and pop. Fixed strings replace the keyboard.
+    static String reverse(String text) {
+        Stack2 stack = new Stack2();
+        for (int i = 0; i < text.length(); i++) {
+            stack.push(String.valueOf(text.charAt(i)));   // push the characters in order
+        }
+        StringBuilder reversed = new StringBuilder();
+        while (!stack.isEmpty()) {
+            reversed.append(stack.pop());                 // they come out last-in, first-out
+        }
+        return reversed.toString();
+    }
+
+    public static void main(String[] args) {
+        String[] words = {"Naledi", "Kago", "a", ""};
+        for (String w : words) {
+            System.out.println("[" + w + "] -> [" + reverse(w) + "]");
+        }
+    }
+}
+```
+
+```text
+[Naledi] -> [idelaN]
+[Kago] -> [ogaK]
+[a] -> [a]
+[] -> []
+```
+
+### Exam question 3: reverse a string with a stack (6 marks)
+
+Write a method that reverses a string using the push and pop operations of a stack, and trace it for the string `abc`. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Using push and pop" fixes the method: no loop that reads the string backwards. A stack returns elements in the reverse order of the pushes, which is exactly what is needed.
+
+</Step>
+
+<Step title="2. Plan">
+
+Push each character in order, then pop all of them and append each popped character to the result. Stop when the stack is empty.
+
+</Step>
+
+<Step title="3. Solution">
+
+The method is `reverse` in `ReverseWithStack` above. For `abc`:
+
+| Step | Operation | Stack (top at the right) | Result so far |
+|---|---|---|---|
+| 1 | `push("a")` | a | |
+| 2 | `push("b")` | a, b | |
+| 3 | `push("c")` | a, b, c | |
+| 4 | `pop()` returns `c` | a, b | c |
+| 5 | `pop()` returns `b` | a | cb |
+| 6 | `pop()` returns `a` | (empty) | cba |
+
+</Step>
+
+<Step title="4. Check">
+
+The result is `cba`. The program printed `Naledi` as `idelaN`, a one-letter string unchanged, and the empty string as the empty string. The loop `while (!stack.isEmpty())` handles the empty string without a special case.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Array stack or linked stack?
+
+| | Array stack (`Stack1`) | Linked stack (`Stack2`) |
+|---|---|---|
+| `top` is | an index | a reference to the top node |
+| Empty when | `top == -1` | `top == null` |
+| Capacity | fixed by the array size | none: it grows and shrinks dynamically |
+| `isFull()` | needed: `top == length - 1` | not applicable |
+| Too small / too large | overflow / wasted space | neither |
+| Per element | the value | the value and a reference (a node) |
+| `push`, `pop`, `peek` | O(1) | O(1) |
+
+The lecture's advantages of a stack are that it is easy to implement and that the top element is quickly accessible. Its disadvantages are that there is no random access (operations are on one side only), that overflow is possible if it is implemented badly, that an array stack has limited capacity, and that its functionality is limited: for example, a middle element cannot be changed unless all the elements before it are popped first.
+
+## 7. Generic stacks
+
+Both implementations can be written for any type. The lecture asks for `GenStack1`, which keeps an `ArrayList` and an `int` for the top (so the `ArrayList` methods replace `[]`), and `GenStack2`, the linked version, tested with `Integer`, `String`, `Double` and a `Student` class.
+
+```java title="Student.java"
+public class Student {
+    private String name;
+    private int mark;
+
+    public Student(String name, int mark) {
+        this.name = name;
+        this.mark = mark;
+    }
+
+    @Override
+    public String toString() {
+        return "Student(" + name + ", " + mark + ")";
+    }
+}
+```
+
+```java title="GenStack1.java"
+import java.util.ArrayList;
+
+public class GenStack1<T> {
+    private ArrayList<T> items = new ArrayList<T>();   // the elements, managed with ArrayList methods
+    private int top = -1;                              // the index of the top element
+
+    public boolean isEmpty() {
+        return top == -1;
+    }
+
+    public int size() {
+        return top + 1;
+    }
+
+    public void push(T item) {
+        items.add(item);
+        top++;
+    }
+
+    public T pop() {
+        if (isEmpty()) {
+            return null;
+        }
+        T item = items.remove(top);                   // remove(int index): the last element
+        top--;
+        return item;
+    }
+
+    public T peek() {
+        return isEmpty() ? null : items.get(top);
+    }
+}
+```
+
+```java title="GenStack2.java"
+public class GenStack2<T> {
+    private class Node {
+        T data;
+        Node next;
+
+        Node(T data) {
+            this.data = data;
+        }
+    }
+
+    private Node top;
+
+    public boolean isEmpty() {
+        return top == null;
+    }
+
+    public void push(T data) {
+        Node n = new Node(data);
+        n.next = top;
+        top = n;
+    }
+
+    public T pop() {
+        if (isEmpty()) {
+            return null;
+        }
+        T data = top.data;
+        top = top.next;
+        return data;
+    }
+
+    public T peek() {
+        return isEmpty() ? null : top.data;
+    }
+}
+```
+
+```java title="GenStackTest.java"
+public class GenStackTest {
+    // Question (Lecture 15, more exercises): test GenStack1 and GenStack2 with Integer, String, Double and Student values.
+    public static void main(String[] args) {
+        GenStack1<Integer> ints = new GenStack1<Integer>();
+        ints.push(1);
+        ints.push(2);
+        ints.push(3);
+        System.out.println("Integer: pop " + ints.pop() + ", peek " + ints.peek() + ", size " + ints.size());
+
+        GenStack1<String> names = new GenStack1<String>();
+        names.push("Kago");
+        names.push("Naledi");
+        System.out.println("String: pop " + names.pop() + ", peek " + names.peek());
+
+        GenStack1<Double> marks = new GenStack1<Double>();
+        marks.push(61.5);
+        marks.push(78.0);
+        System.out.println("Double: pop " + marks.pop() + ", peek " + marks.peek());
+
+        GenStack2<Student> students = new GenStack2<Student>();
+        students.push(new Student("Mpho", 64));
+        students.push(new Student("Thato", 72));
+        System.out.println("Student: pop " + students.pop() + ", peek " + students.peek());
+        students.pop();
+        System.out.println("empty: " + students.isEmpty() + ", pop on empty: " + students.pop());
+    }
+}
+```
+
+```text
+Integer: pop 3, peek 2, size 2
+String: pop Naledi, peek Kago
+Double: pop 78.0, peek 61.5
+Student: pop Student(Thato, 72), peek Student(Mpho, 64)
+empty: true, pop on empty: null
+```
+
+The algorithms are the same as for the `int` and `String` stacks; only the type of the data changes. In `GenStack1`, `items.remove(top)` removes by **index** (the last element) because `top` is an `int`; the stack never uses `[]`.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A stack adds and removes at the top only (LIFO): consecutive pops return the elements in the reverse order of the pushes. In an array stack `top` is an index (-1 empty, 0 one element, N - 1 full, N overflow); check `isFull()` before a push and `isEmpty()` before a pop or a peek; `pop` returns `stack[top--]` and does not clear the slot. In a linked stack `top` is a reference: `push` adds a node at the front, `pop` removes the first node, and there is no `isFull()`. Both are O(1) for `push`, `pop` and `peek`. The lecture's `search` as printed lacks a bracket and braces. A generic stack changes only the data type; compare objects with `equals`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="After push(5), push(9), push(2), pop(), push(7), what is the stack and what is popped next?">
+
+The stack is 5, 9, 7 (top at the right), and the next `pop()` returns 7. The first `pop()` removed 2, the newest element at that moment.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is the value of top for an empty array stack, and why is size() equal to top + 1?">
+
+`top` is -1 when the stack is empty. It is an array index, and indexes start at 0, so with `top` at index k there are k + 1 elements.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does pop() on an array stack not need to erase the slot it returns from?">
+
+Decreasing `top` already removes the element from the stack: everything above `top` is ignored by every method. A later push overwrites the stale value.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does a linked stack need no isFull() method?">
+
+It has no fixed capacity: each push creates a new node, so the stack grows and shrinks dynamically, limited only by the available memory.
+
+</CheckQuestion>
+
+<CheckQuestion question="In which order do the characters of a string leave a stack, and how does that reverse the string?">
+
+Last in, first out: the last character pushed is popped first. Pushing the characters from first to last and popping them all gives them from last to first.
+
+</CheckQuestion>
+
+</CheckQuestions>

@@ -117,7 +117,7 @@ The concept lists below are the starting point for the CSI247 gap audit. They ar
 
 ## 9. Order of work
 
-1. Write the CSI247 gap audit (`docs/plans/csi247-vault-gap-audit.md`) from the vault, and a brief (`docs/plans/csi247-exam-depth-brief.md`) that adapts sections 2 to 7 of the CSI243 brief to Java.
+1. Write the CSI247 gap audit (`docs/plans/csi247-vault-gap-audit.md`) from the vault, and a brief (`docs/plans/csi247-exam-depth-brief.md`) that adapts sections 2 to 7 of the CSI243 brief to Java. *(Done 2026-11-02.)*
 2. Cheat sheets for all 10 chapters (done on 2026-10-26; the hash tables, trees and graphs sheets moved to CSI323 with their lessons).
 3. By-example and exam-practice lessons, chapter by chapter, starting with the thinnest: 02, 03, 09, 10, 07, 08, 06, 01. **Scope (decided 2026-10-26): CSI247 ends at stacks and queues, so this work covers chapters 1 to 10.** Hash tables, trees and graphs are written in CSI323, which is marked work in progress.
 4. Review and practice pages brought up to CSI243's size: flashcards that test distinctions, quiz questions with a reason for every wrong option, practice questions with marks and model answers.

@@ -1,6 +1,6 @@
 ---
 title: "Cheat Sheet"
-description: "Fast reference for writing, tracing and fixing recursive Java methods: the base case and recursive case, the termination checklist, the trace table, branching recursion and converting a loop."
+description: "Fast reference for Lecture 6 and Lab 3: the base case and recursive case, the termination checklist, factorial, power and Fibonacci, the trace table, and converting between recursion and a loop."
 ---
 
 Use the [chapter notes](/docs/sem3/csi247/02-recursion) for the explanations. This page is for lookup: find the shape you need, copy the template, check the one example, move on.
@@ -9,16 +9,16 @@ Use the [chapter notes](/docs/sem3/csi247/02-recursion) for the explanations. Th
 
 | Placeholder | Meaning | Example |
 |---|---|---|
-| `method` | The name of the recursive method | `factorial`, `sum`, `power` |
-| `param` | The value that shrinks on each call | `n`, `index`, `lo`/`hi` |
-| `baseCondition` | The test that is true for the smallest input | `n == 0`, `index == a.length`, `lo > hi` |
-| `baseValue` | What the method returns at the base case, with no further call | `1` for `factorial(0)`, `0` for `sum(0)` |
-| `smaller` | The argument of the recursive call, closer to the base case | `n - 1`, `index + 1`, `n / 2` |
-| `combine` | How the answer of the smaller call becomes the answer for this call | `n * ...`, `... + a[index]` |
+| `method` | The name of the recursive method | `factorial`, `power`, `fibonacci` |
+| `param` | The value that shrinks on each call | `n`, `y` |
+| `baseCondition` | The test that is true for the smallest input | `n == 1`, `y == 0`, `n <= 1` |
+| `baseValue` | What the method returns at the base case, with no further call | `1` for `factorial(1)`, `1` for `power(x, 0)` |
+| `smaller` | The argument of the recursive call, closer to the base case | `n - 1`, `y - 1` |
+| `combine` | How the answer of the smaller call becomes the answer for this call | `n * ...`, `x * ...`, `... + ...` |
 
 ## 2. The anatomy of a recursive method
 
-Every recursive method has exactly two parts: a **base case** that returns directly, and a **recursive case** that calls the method again on something smaller and uses the answer.
+Every recursive method has exactly two cases (Lecture 6): a **base case** that returns directly, without recursion, and a **recursive case** that calls the method again on something smaller and uses the answer.
 
 **Template:**
 
@@ -54,7 +54,7 @@ public class Factorial {
 1
 ```
 
-**Watch for:** the base case is tested **first**. Putting the recursive call before the test means the method never reaches the base case.
+**Watch for:** the base case is tested **first**. Putting the recursive call before the test means the method never reaches the base case. The lecture's version tests `n == 1`, which answers 1 and above but not 0.
 
 ## 3. The termination checklist
 
@@ -63,12 +63,12 @@ Ask three questions of every recursive call before calling the method finished:
 | Check | Question to ask | Fails when |
 |---|---|---|
 | Base case exists | Is there an input that returns a value with no further call? | Every path makes another call |
-| Argument shrinks | Does every recursive call pass a different, smaller argument? | `sum(n)` calls `sum(n)` |
-| Shrinks toward the base case | Does the change move the argument closer to a base case that exists? | `factorial(-3)` counts down by 1, away from `0`, forever |
+| Argument changes | Does every recursive call pass a different argument? | `sum(n)` calls `sum(n)` |
+| Moves toward the base case | Does the change bring the argument closer to a base case that exists? | `factorial(-3)` counts down by 1, away from `0`, forever |
 
-All three must hold together. "The argument changes" is not enough: `n - 1` shrinks `n` whether `n` is `5` or `-3`, but only one of those is heading anywhere.
+All three must hold together. Every chain of recursive calls must progress towards the base case, and only one recursive option executes in a call.
 
-**What happens when it fails:** the calls pile up on the stack until Java throws a `StackOverflowError`.
+**What happens when it fails:** this is infinite recursion. The calls pile up on the stack until Java throws a `StackOverflowError`. The lecture's example is a method with no base case.
 
 ```java title="Overflow.java"
 public class Overflow {
@@ -90,101 +90,122 @@ public class Overflow {
 StackOverflowError: no base case was ever reached
 ```
 
-## 4. Recursion over a counter, a range, an array and a string
+## 4. The three methods of Lab 3
 
-The same two parts fit every shape. Only `param`, `baseCondition` and `smaller` change.
-
-| Recursing over | `baseCondition` | `smaller` | Example |
-|---|---|---|---|
-| A counter `n` | `n == 0` | `n - 1` | `factorial(n)`, `sum(n)` |
-| A halving counter | `n <= 1` | `n / 2` | `digitsOf(n)`, `power(x, n)` by squaring |
-| An index into an array | `index == a.length` | `index + 1` | `sumFrom(a, index)` |
-| A range `lo..hi` | `lo > hi` | `lo + 1` or `hi - 1` or a half | recursive binary search |
-| A string | `s.isEmpty()` | `s.substring(1)` | `reverse(s)` |
-
-```java title="Shapes.java"
-public class Shapes {
-    // over an index: add a[index] to the sum of the rest
-    static int sumFrom(int[] a, int index) {
-        if (index == a.length) {
-            return 0;
-        }
-        return a[index] + sumFrom(a, index + 1);
-    }
-
-    // over a string: the last character goes first
-    static String reverse(String s) {
-        if (s.isEmpty()) {
-            return "";
-        }
-        return reverse(s.substring(1)) + s.charAt(0);
-    }
-
-    // over a halving counter: x^n using fewer multiplications
-    static long power(long x, int n) {
-        if (n == 0) {
-            return 1;
-        }
-        long half = power(x, n / 2);
-        return n % 2 == 0 ? half * half : half * half * x;
-    }
-
-    public static void main(String[] args) {
-        System.out.println(sumFrom(new int[] {4, 8, 15, 16}, 0));
-        System.out.println(reverse("Kago"));
-        System.out.println(power(2, 10));
-    }
-}
-```
-
-```text
-43
-ogaK
-1024
-```
-
-## 5. Tracing a recursive method: the trace table
-
-A recursive trace has two directions: the calls go **down** until the base case, then the answers come **back up**. Fill the first four columns top to bottom, then the last column bottom to top.
-
-| `n` | Call | `n == 1`? | Returned | Result |
+| Method | `baseCondition` | `smaller` | `combine` | Calls per step |
 |---|---|---|---|---|
-| 4 | `mystery(4)` | false | `4 + mystery(3)` | 4 + 6 = **10** |
-| 3 | `mystery(3)` | false | `3 + mystery(2)` | 3 + 3 = 6 |
-| 2 | `mystery(2)` | false | `2 + mystery(1)` | 2 + 1 = 3 |
-| 1 | `mystery(1)` | true | `1` | 1 |
+| `factorial(n)` | `n == 1` | `n - 1` | `n * ...` | one |
+| `power(x, y)` | `y == 0` | `y - 1` | `x * ...` | one |
+| `fibonacci(n)` | `n <= 1` (returns `n`) | `n - 1` and `n - 2` | `... + ...` | two |
 
-```java title="Mystery.java"
-public class Mystery {
-    static int mystery(int n) {
+```java title="Lab3Methods.java"
+public class Lab3Methods {
+    // The three methods of Lab 3, recursive and iterative.
+    static long factorial(int n) {
         if (n == 1) {
             return 1;
         }
-        return n + mystery(n - 1);
+        return n * factorial(n - 1);
+    }
+
+    static long factorialLoop(int n) {
+        long prod = 1;
+        for (int i = 1; i <= n; i++) {
+            prod = prod * i;
+        }
+        return prod;
+    }
+
+    static int fibonacci(int n) {
+        if (n <= 1) {
+            return n;                        // two base cases: fibonacci(0) = 0 and fibonacci(1) = 1
+        }
+        return fibonacci(n - 1) + fibonacci(n - 2);
+    }
+
+    static void series(int n) {
+        for (int i = 0; i < n; i++) {
+            System.out.print(fibonacci(i) + " ");
+        }
+        System.out.println();
+    }
+
+    static int power(int x, int y) {
+        if (y == 0) {
+            return 1;                        // anything to the power 0 is 1
+        }
+        return x * power(x, y - 1);
+    }
+
+    static int powerLoop(int x, int y) {
+        int result = 1;
+        for (int i = 1; i <= y; i++) {
+            result = result * x;
+        }
+        return result;
     }
 
     public static void main(String[] args) {
-        System.out.println(mystery(4));
+        System.out.println(factorial(7) + " " + factorialLoop(7));
+        series(6);
+        System.out.println(power(3, 2) + " " + powerLoop(3, 2));
+        System.out.println(power(2, 8) + " " + powerLoop(2, 8));
     }
 }
 ```
 
 ```text
-10
+5040 5040
+0 1 1 2 3 5
+9 9
+256 256
 ```
 
-**Check an answer quickly:** `mystery(n)` is `1 + 2 + ... + n`, which equals `n(n + 1) / 2`. For `n = 4` that is `4 * 5 / 2 = 10`.
+The recursive and iterative versions print the same values. The base case of a product returns 1, the identity for multiplication.
+
+## 5. Tracing a recursive method: the trace table
+
+A recursive trace has two directions: the calls go **down** until the base case, then the answers come **back up**. Fill the first four columns top to bottom, then the Results column bottom to top. This is the lecture's table for `factR(5)`.
+
+| Level | `n` | `n == 1`? | Returned | Results |
+|---|---|---|---|---|
+| 0 | 5 | false | `5 * factR(4)` | 5 * 24 = **120** |
+| 1 | 4 | false | `4 * factR(3)` | 4 * 6 = 24 |
+| 2 | 3 | false | `3 * factR(2)` | 3 * 2 = 6 |
+| 3 | 2 | false | `2 * factR(1)` | 2 * 1 = 2 |
+| 4 | 1 | true | `1` | 1 |
+
+```java title="FactR5.java"
+public class FactR5 {
+    static long factR(int n) {
+        if (n == 1) {
+            return 1;
+        }
+        return n * factR(n - 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(factR(5));
+    }
+}
+```
+
+```text
+120
+```
+
+`factR(n)` makes `n` calls, one per row of the table.
 
 ## 6. Linear recursion and a branching call tree
 
-`factorial` calls itself **once** per step, so its calls form a chain. `fib(n) = fib(n - 1) + fib(n - 2)` calls itself **twice**, so its calls branch into a tree, and identical sub-calls such as `fib(2)` are recomputed every time they reappear.
+`factorial` calls itself **once** per step, so its calls form a chain. `fibonacci(n) = fibonacci(n - 1) + fibonacci(n - 2)` calls itself **twice**, so its calls branch into a tree, and identical sub-calls such as `fibonacci(2)` are recomputed every time they reappear.
 
-| Property | Naive `fib` (branching) | Loop or accumulator (linear) |
+| Property | `fibonacci` (branching) | Loop (linear) |
 |---|---|---|
-| Recursive calls per step | Two | One, or none |
-| Shape of the calls | A tree | A chain |
-| Repeated sub-calls | Yes, `fib(2)` many times | No |
-| Calls for `fib(30)` | About 2.7 million | 30 |
+| Recursive calls per step | Two | None |
+| Shape of the calls | A tree | A chain of passes |
+| Repeated sub-calls | Yes, `fibonacci(2)` many times | No |
+| Work for `fibonacci(20)` | 21,891 calls | 20 passes |
 
 ```java title="Fib.java"
 public class Fib {
@@ -211,65 +232,114 @@ public class Fib {
 6765 after 21891 calls
 ```
 
-`fib(n)` reaches back **two** steps, so it needs answers for both `0` and `1`. Count how far back the recursive step reaches: that is how many base cases you need.
+`fibonacci(n)` reaches back **two** steps, so it needs answers for both `0` and `1`. Count how far back the recursive step reaches: that is how many base cases you need.
 
-## 7. Converting a loop into recursion (and back)
+## 7. Recursion over a range (used again in Lectures 8 and 9)
 
-| Loop part | Recursive part |
-|---|---|
-| Loop counter starts at `start` | The first call passes `start` |
-| Loop condition `i <= n` | The base case is the opposite: `i > n` |
-| Loop body updates the total | The recursive case combines the total with the rest |
-| `i++` | The recursive call passes `i + 1` |
+The same two cases fit a range of positions `low..high` that is halved on each call. Lecture 8 sets the exercise "convert the iterative binary search into a recursive one", and Lecture 9's merge sort is recursive on a range.
 
-```java title="LoopToRecursion.java"
-public class LoopToRecursion {
-    // loop version
-    static int sumLoop(int n) {
-        int sum = 0;
-        for (int i = 1; i <= n; i++) {
-            sum += i;
+| Where | `baseCondition` | `smaller` |
+|---|---|---|
+| Recursive binary search (Lecture 8) | `low > high` (not found), or `arr[mid] == key` (found) | `mid + 1..high` or `low..mid - 1` |
+| Merge sort (Lecture 9) | `start < end` is false: at most one element | `start..mid` and `mid + 1..end`, then merge |
+
+```java title="RangeSearch.java"
+public class RangeSearch {
+    static int calls;
+
+    static int search(int[] arr, int key, int low, int high) {
+        calls++;
+        if (low > high) {
+            return -1;                       // base case: empty range, not found
         }
-        return sum;
-    }
-
-    // recursive version: the same sum, built from the end
-    static int sumRec(int n) {
-        if (n == 0) {
-            return 0;
+        int mid = low + ((high - low) / 2);
+        if (arr[mid] == key) {
+            return mid;                      // base case: found
         }
-        return n + sumRec(n - 1);
+        if (arr[mid] < key) {
+            return search(arr, key, mid + 1, high);   // both new ranges leave mid out
+        }
+        return search(arr, key, low, mid - 1);
     }
 
     public static void main(String[] args) {
-        System.out.println(sumLoop(10) + " " + sumRec(10));
+        int[] arr = {8, 18, 23, 29, 34};
+        System.out.println(search(arr, 29, 0, arr.length - 1) + " after " + calls + " calls");
+        calls = 0;
+        System.out.println(search(arr, 100, 0, arr.length - 1) + " after " + calls + " calls");
     }
 }
 ```
 
 ```text
-55 55
+3 after 2 calls
+-1 after 4 calls
 ```
 
-## 8. Common errors
+Each call halves the range, so a search takes about log2 `n` calls, plus one more for the empty range when the key is missing. The searching and sorting algorithms themselves are in [Sorting and searching](/docs/sem3/csi247/04-sorting-and-searching).
+
+## 8. Converting between recursion and a loop
+
+Every recursive solution has a corresponding iterative solution, and the reverse (Lecture 6). The base case becomes the starting value, and the recursive case becomes the loop body.
+
+| Recursive part | Loop part |
+|---|---|
+| The base case value (`1` for `power`) | The starting value of the result |
+| The recursive case `x * power(x, y - 1)` | The loop body `result = result * x` |
+| The smaller argument `y - 1` | The loop counter, repeated `y` times |
+
+```java title="LoopToRecursion.java"
+public class LoopToRecursion {
+    // loop version
+    static int powerLoop(int x, int y) {
+        int result = 1;                      // the base case value
+        for (int i = 1; i <= y; i++) {
+            result = result * x;             // the recursive case
+        }
+        return result;
+    }
+
+    // recursive version
+    static int powerRec(int x, int y) {
+        if (y == 0) {
+            return 1;
+        }
+        return x * powerRec(x, y - 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(powerLoop(2, 8) + " " + powerRec(2, 8));
+        System.out.println(powerLoop(6, 3) + " " + powerRec(6, 3));
+    }
+}
+```
+
+```text
+256 256
+216 216
+```
+
+## 9. Common errors
 
 | Mistake | What happens | Repair |
 |---|---|---|
 | No base case | `StackOverflowError` | Add a test for the smallest input before the call |
 | Base case after the recursive call | Same: the call runs first | Put the test first |
-| Argument does not shrink | `StackOverflowError` | Pass `n - 1`, `index + 1` or a smaller range |
-| Shrinks away from the base case | `StackOverflowError` for negative `n` | Guard the input (`if (n < 0) throw ...`) or use `<=` in the test |
+| Argument does not change | `StackOverflowError` | Pass `n - 1` or `y - 1` |
+| Moves away from the base case | `StackOverflowError` | Pass the smaller argument, not `n + 1` |
+| Base case that does not cover every input | `factorial(0)` with the base case `n == 1` never stops | Use `n <= 1` |
 | One base case where two are needed | Wrong answers or an exception | Count how far back the step reaches |
 | Forgetting to use the returned value | The answer is thrown away | `return n * factorial(n - 1);`, not just `factorial(n - 1);` |
-| Naive `fib` for large `n` | Takes minutes | Use a loop, or store computed values |
+| `return = n * factR(n - 1);` | `error: illegal start of expression` | Delete the `=` |
+| Wrong base case value | Every result is wrong, for example 0 from the base case of a product | Return the identity: 1 for a product, 0 for a sum |
 
-## 9. Cost
+## 10. Cost
 
-| Method | Calls | Time | Extra memory (the call stack) |
+| Method | Calls | Boxes on the stack at the deepest point | Loop version |
 |---|---|---|---|
-| `factorial(n)`, `sum(n)` | `n + 1` | O(n) | O(n) |
-| `power(x, n)` by halving | about `log2 n` | O(log n) | O(log n) |
-| Naive `fib(n)` | about `1.6^n` | O(2^n) | O(n) |
-| Recursive binary search | at most `log2 n + 1` | O(log n) | O(log n) |
+| `factorial(n)` | `n` | `n` (and `main`) | `n` passes, no calls |
+| `power(x, y)` | `y + 1` | `y + 1` (and `main`) | `y` passes, no calls |
+| `fibonacci(n)` | 25 for `n = 6`, 109 for `n = 9` | grows with `n` | `n` passes, no calls |
+| Recursive binary search (Lecture 8) | about log2 `n`, one more if the key is missing | about log2 `n` | a loop |
 
-Each pending call keeps its own copy of the parameters on the stack, so depth matters: very deep recursion (tens of thousands of calls) overflows even when it is correct.
+Recursion has the overhead of multiple method calls; for some problems the recursive solution is simpler and more elegant. Each pending call keeps its own box on the stack with its own parameters, and a method that never reaches its base case fills the stack.

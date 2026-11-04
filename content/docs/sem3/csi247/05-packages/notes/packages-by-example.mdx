@@ -1,0 +1,637 @@
+---
+title: "Packages by Example"
+description: "Built-in and user-defined packages from Lecture 10, run for real: importing from java.lang, java.util and java.io, creating a package with the src and classes folders, compiling with -d and -sourcepath, running with -classpath, and the compiler and launcher messages when a step is wrong."
+---
+
+A **package** is a group of related classes organised into a folder, which may have sub-folders. Lecture 10 gives two advantages: it promotes better, more maintainable code, and it prevents name conflicts. There are two categories: **built-in packages**, which come bundled with the language (the Java API), and **user-defined packages**, which programmers create. The lecture shows how to import a built-in package, and the steps to create, compile, use and run a user-defined one. This lesson follows those steps in a real project, with the commands typed and the output shown exactly as they came back, and adds the messages you see when a step is missed. It extends [Built-in Packages and Imports](/docs/sem3/csi247/05-packages/notes/built-in-packages-and-imports) and [Creating a User-defined Package](/docs/sem3/csi247/05-packages/notes/creating-a-package).
+
+<LearningObjectives items={[
+  'Say what a package is, give two advantages, and name the two categories',
+  'Import a class or a whole package with import, and say which package is imported by default',
+  'Create a package: the src and classes folders, a package statement, a package name that follows the convention',
+  'Compile a package with javac -d and -sourcepath, use it from a tester with import, and run the tester with -classpath',
+  'Recognise the message that each missed step produces, and explain how a package prevents name conflicts',
+]} />
+
+<Prerequisites items={[
+  'Classes, objects and methods, from the Object-Oriented Programming chapter',
+  'Compiling and running a Java program from the command line, from the Java Fundamentals chapter',
+  'Visual Studio Code with a terminal, as used in the labs',
+]} />
+
+## 1. The templates
+
+```text
+Import one class:        import packageName.className;           import java.util.Scanner;
+Import a whole package:  import packageName.*;                   import java.io.*;
+Declare a package:       package packageName;                    the first statement of every source file in the package
+Compile a package:       javac -d classes -sourcepath src src/packageName/ClassName.java         from the folder above src and classes
+Use it in a tester:      import packageName.ClassName;           or  import packageName.*;
+Run the tester:          java -classpath classes packagefolder.TesterName                        from the folder above classes
+```
+
+## 2. Built-in packages
+
+Java's API is a huge library of pre-written classes. A class is a blueprint of objects, and each class belongs to a package; the API is divided into packages, and each package holds interfaces and classes with their data and methods. `Scanner` (keyboard input), `PrintWriter` (file output) and `StringTokenizer` (breaking a `String` into tokens) are all in packages. The core packages each serve a different purpose:
+
+| Package | Purpose | Examples |
+|---|---|---|
+| `java.lang` | Java's fundamental classes | `String`, `Math`, `Integer` |
+| `java.util` | the collections framework and utility classes | `Scanner`, `Date`, `Random`, `StringTokenizer`, `ArrayList` |
+| `java.io` | file input and output | `PrintWriter`, `FileReader`, `File` |
+
+To use a class from another package you add the keyword `import` before your class definition: `import packageName.className;`, or `import java.io.*;` for every class in the package. **`java.lang` is imported by default**, which is why `String` and `Math` need no import. `Scanner` is in `java.util`, so you either import everything (`import java.util.*;`) or just that class (`import java.util.Scanner;`).
+
+```java title="BuiltIns.java"
+import java.io.PrintWriter;
+import java.util.Random;
+import java.util.Scanner;
+import java.util.StringTokenizer;
+
+public class BuiltIns {
+    // Question (Lecture 10): which package does each class come from, and which need an import?
+    public static void main(String[] args) {
+        String course = "CSI247";                                // java.lang: no import needed
+        System.out.println(course.length() + " " + Math.max(7, 12) + " " + Integer.parseInt("42"));
+
+        Scanner scan = new Scanner("12 4.75");                   // java.util: imported
+        int pens = scan.nextInt();
+        double price = scan.nextDouble();
+        System.out.println(pens + " pens at " + price);
+
+        StringTokenizer tokens = new StringTokenizer("one two three");   // java.util: imported
+        System.out.println(tokens.countTokens() + " tokens, first " + tokens.nextToken());
+
+        PrintWriter out = new PrintWriter(System.out, true);    // java.io: imported
+        out.println("written with a PrintWriter");
+
+        java.util.Random fixed = new java.util.Random(7);        // a full name needs no import
+        Random same = new Random(7);
+        System.out.println(fixed.nextInt(100) == same.nextInt(100));
+    }
+}
+```
+
+```text
+6 12 42
+12 pens at 4.75
+3 tokens, first one
+written with a PrintWriter
+true
+```
+
+`String`, `Math` and `Integer` (all in `java.lang`) need no import. `Scanner`, `StringTokenizer` and `Random` are in `java.util` and `PrintWriter` is in `java.io`, so they are imported. The last two lines show that the **full name** of a class, `java.util.Random`, works without any import; the import only lets you write the short name.
+
+### Import faults and their messages
+
+Three typical faults, compiled for real. The paths in the messages use a backslash because they were produced on Windows; on Linux and macOS they use a forward slash.
+
+```java title="src/Missing.java" project="builtin"
+public class Missing {
+    public static void main(String[] args) {
+        Scanner scan = new Scanner("12");
+        System.out.println(scan.nextInt());
+    }
+}
+```
+
+```text title="terminal" project="builtin"
+$ javac -d out src/Missing.java
+src\Missing.java:3: error: cannot find symbol
+        Scanner scan = new Scanner("12");
+        ^
+  symbol:   class Scanner
+  location: class Missing
+src\Missing.java:3: error: cannot find symbol
+        Scanner scan = new Scanner("12");
+                           ^
+  symbol:   class Scanner
+  location: class Missing
+2 errors
+```
+
+The class `Scanner` is in `java.util`, and without `import java.util.Scanner;` (or `import java.util.*;`) the compiler cannot find it.
+
+```java title="src/Wildcard.java" project="builtin"
+import java.util.*;
+
+public class Wildcard {
+    public static void main(String[] args) {
+        Pattern p = Pattern.compile("a+");
+        System.out.println(p.matcher("caaat").find());
+    }
+}
+```
+
+```text title="terminal" project="builtin"
+$ javac -d out src/Wildcard.java
+src\Wildcard.java:5: error: cannot find symbol
+        Pattern p = Pattern.compile("a+");
+        ^
+  symbol:   class Pattern
+  location: class Wildcard
+src\Wildcard.java:5: error: cannot find symbol
+        Pattern p = Pattern.compile("a+");
+                    ^
+  symbol:   variable Pattern
+  location: class Wildcard
+2 errors
+```
+
+`import java.util.*;` imports the classes of `java.util` only. `Pattern` is in the sub-package `java.util.regex`, which has to be imported on its own (`import java.util.regex.Pattern;`): a sub-folder of a package is a different package.
+
+```java title="src/Clash.java" project="builtin"
+import java.sql.*;
+import java.util.*;
+
+public class Clash {
+    public static void main(String[] args) {
+        Date today = null;
+        System.out.println(today);
+    }
+}
+```
+
+```text title="terminal" project="builtin"
+$ javac -d out src/Clash.java
+src\Clash.java:6: error: reference to Date is ambiguous
+        Date today = null;
+        ^
+  both class java.util.Date in java.util and class java.sql.Date in java.sql match
+1 error
+```
+
+Two packages can each have a class with the same name; this is the name conflict that packages are meant to prevent. When both packages are imported with `*` and the short name is used, the compiler cannot choose. The repair is to import only the class you need, or to write one of the full names, `java.util.Date`, in the code.
+
+<Callout type="mistake" title="Common error">
+
+Expecting `import java.util.*;` to import sub-packages such as `java.util.regex`. The asterisk covers the classes of that one package only.
+
+</Callout>
+
+## 3. Creating a user-defined package
+
+You can bundle related classes of your own into a package and import them in your programs. The lecture's steps:
+
+1. **Create the directory structure**: a `src` directory for the `.java` files and a `classes` directory where the class files and the packages go.
+2. **Choose a package name**, for example `pkg`. The recommendation: start the package name with a lowercase letter and use a capital at the beginning of each new word (`myUtils`).
+3. **Create the source files** under `src`.
+4. **Insert `package package_name;`** at the top of every source file to include in the package.
+5. **Create the package** by compiling each class to be included.
+6. **Use the package** with `import` in a tester class, and **test it** by running the tester.
+
+The lecture's illustration has two classes, `A` and `B`, each with the statement `package pkg;` at the top, saved as `A.java` and `B.java`, so both are added to the package `pkg`. Because the package is called `pkg`, the files go in `src/pkg`, mirroring the name.
+
+```java title="src/pkg/A.java" project="demo"
+package pkg;
+
+public class A {
+    public String who() {
+        return "class A of package pkg";
+    }
+}
+```
+
+```java title="src/pkg/B.java" project="demo"
+package pkg;
+
+public class B {
+    private final A a = new A();         // B uses A: both are in pkg, so no import is needed
+
+    public String describe() {
+        return "B uses " + a.who();
+    }
+}
+```
+
+The tester is in the default package (it has no `package` statement) and starts with the imports, as the lecture's `pkgTester` does:
+
+```java title="src/pkgTester.java" project="demo"
+import pkg.A;                            // or import pkg.*; for all the classes of the package
+import pkg.B;
+
+public class pkgTester {
+    public static void main(String[] args) {
+        A a = new A();
+        B b = new B();
+        System.out.println(a.who());
+        System.out.println(b.describe());
+    }
+}
+```
+
+Now the commands. They are typed from the **parent directory of `src` and `classes`**. `-d classes` says where to put the output: the compiler creates the folder `pkg` that is named in the source files. `-sourcepath src` tells the compiler where to look for other source files that a class needs.
+
+```text title="terminal" project="demo"
+$ mkdir classes
+$ javac -d classes -sourcepath src src/pkg/A.java
+$ javac -d classes -sourcepath src src/pkg/B.java
+$ ls classes
+pkg
+$ ls classes/pkg
+A.class
+B.class
+```
+
+After the package has been compiled, `classes` has a sub-directory called `pkg`, and `pkg` holds a class file for each compiled `.java` file. Now the tester is compiled and run. The tester needs the package to be found when it is compiled, so `classes` is on the class path; and to run it you work from the folder above `classes` and give the class path again.
+
+```text title="terminal" project="demo"
+$ javac -d classes -classpath classes src/pkgTester.java
+$ ls classes
+pkg
+pkgTester.class
+$ java -classpath classes pkgTester
+class A of package pkg
+B uses class A of package pkg
+```
+
+The package works: the tester reached `A` and `B` through `import pkg.A;` and `import pkg.B;`. The tester itself is a class too, and `-d classes` placed its class file next to the `pkg` folder.
+
+<Callout type="mistake" title="Common error">
+
+Compiling from inside `src`, or running from inside `classes`. The commands use relative paths such as `src/pkg/A.java` and `-classpath classes`, so they work only from the folder above `src` and `classes`.
+
+</Callout>
+
+### A tester that is itself in a package
+
+The lecture runs the tester with `java -classpath classes packagefolder.Tester_name`. That form is for a tester that is also inside a package: its source file starts with a `package` statement, sits in the matching folder, and is run with the package name in front of the class name.
+
+```java title="src/app/Main.java" project="demo"
+package app;
+
+import pkg.A;
+import pkg.B;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println(new A().who() + " / " + new B().describe());
+    }
+}
+```
+
+```text title="terminal" project="demo"
+$ javac -d classes -sourcepath src src/app/Main.java
+$ ls classes
+app
+pkg
+pkgTester.class
+$ java -classpath classes app.Main
+class A of package pkg / B uses class A of package pkg
+```
+
+`-sourcepath src` let the compiler find `pkg/A.java` and `pkg/B.java` by itself. The command to run gives `app.Main`: the package name and the class name separated by a dot.
+
+## 4. When a step is missed
+
+```text title="terminal" project="demo"
+$ java pkgTester
+Error: Could not find or load main class pkgTester
+Caused by: java.lang.ClassNotFoundException: pkgTester
+$ java -classpath classes pkg.pkgTester
+Error: Could not find or load main class pkg.pkgTester
+Caused by: java.lang.ClassNotFoundException: pkg.pkgTester
+```
+
+The first fails because the current folder is the default class path and `pkgTester.class` is in `classes`. The second names a package `pkg` that the tester is not in: `pkgTester` is in the default package. In both cases the launcher says it cannot find or load the main class (newer JDKs add the second line, `Caused by: java.lang.ClassNotFoundException`).
+
+The compiler also checks the class path while compiling. The tester imports `pkg`, and without `-classpath classes` the compiler looks only in the current folder:
+
+```text title="terminal" project="demo"
+$ javac -d out src/pkgTester.java
+src\pkgTester.java:1: error: package pkg does not exist
+import pkg.A;                            // or import pkg.*; for all the classes of the package
+          ^
+src\pkgTester.java:2: error: package pkg does not exist
+import pkg.B;
+          ^
+src\pkgTester.java:6: error: cannot find symbol
+        A a = new A();
+        ^
+  symbol:   class A
+  location: class pkgTester
+src\pkgTester.java:6: error: cannot find symbol
+        A a = new A();
+                  ^
+  symbol:   class A
+  location: class pkgTester
+src\pkgTester.java:7: error: cannot find symbol
+        B b = new B();
+        ^
+  symbol:   class B
+  location: class pkgTester
+src\pkgTester.java:7: error: cannot find symbol
+        B b = new B();
+                  ^
+  symbol:   class B
+  location: class pkgTester
+6 errors
+```
+
+`package pkg does not exist` is the message to expect when the package has not been compiled yet, or when the compile command does not tell the compiler where the compiled package is.
+
+## 5. Public classes and access across packages
+
+A class that is used from another package must be declared `public`. Without a modifier a class is visible only within its own package (the **default** access of Lecture 11), and the same holds for its members.
+
+```java title="src/shop/Item.java" project="access"
+package shop;
+
+class Item {                                    // no public: visible only inside shop
+    String name = "pen";
+}
+```
+
+```java title="src/shop/Till.java" project="access"
+package shop;
+
+public class Till {
+    public String open() {
+        return "till is open";
+    }
+
+    String key() {                              // no public: visible only inside shop
+        return "secret key";
+    }
+}
+```
+
+```java title="src/UseShop.java" project="access"
+import shop.Item;
+import shop.Till;
+
+public class UseShop {
+    public static void main(String[] args) {
+        Till till = new Till();
+        System.out.println(till.open());
+        System.out.println(till.key());
+        Item item = new Item();
+    }
+}
+```
+
+```text title="terminal" project="access"
+$ mkdir classes
+$ javac -d classes -sourcepath src src/UseShop.java
+src\UseShop.java:1: error: Item is not public in shop; cannot be accessed from outside package
+import shop.Item;
+           ^
+src\UseShop.java:8: error: key() is not public in Till; cannot be accessed from outside package
+        System.out.println(till.key());
+                               ^
+src\UseShop.java:9: error: Item is not public in shop; cannot be accessed from outside package
+        Item item = new Item();
+        ^
+src\UseShop.java:9: error: Item is not public in shop; cannot be accessed from outside package
+        Item item = new Item();
+                        ^
+4 errors
+```
+
+The compiler reports both uses of non-public members from outside the package: the class `Item` and the method `key()`. The public method `open()` is fine. The repair is to declare what the other packages need as `public`, and keep the rest hidden; the access modifiers of the previous chapter decide who can see what: `public` everywhere, `protected` in the package and in sub classes, default in the package only, `private` in the class only.
+
+## 6. Packages prevent name conflicts
+
+Two classes can have the same name if they are in different packages, because the full name includes the package. Here the packages `shop` and `store` each have a class `Item`.
+
+```java title="src/shop/Item.java" project="conflict"
+package shop;
+
+public class Item {
+    public String where() {
+        return "an Item from the shop package";
+    }
+}
+```
+
+```java title="src/store/Item.java" project="conflict"
+package store;
+
+public class Item {
+    public String where() {
+        return "an Item from the store package";
+    }
+}
+```
+
+```java title="src/BothFull.java" project="conflict"
+public class BothFull {
+    public static void main(String[] args) {
+        shop.Item a = new shop.Item();             // the full names tell them apart
+        store.Item b = new store.Item();
+        System.out.println(a.where());
+        System.out.println(b.where());
+    }
+}
+```
+
+```java title="src/BothWild.java" project="conflict"
+import shop.*;
+import store.*;
+
+public class BothWild {
+    public static void main(String[] args) {
+        Item a = new Item();
+    }
+}
+```
+
+```text title="terminal" project="conflict"
+$ mkdir classes
+$ javac -d classes -sourcepath src src/BothFull.java
+$ java -classpath classes BothFull
+an Item from the shop package
+an Item from the store package
+$ javac -d classes -sourcepath src src/BothWild.java
+src\BothWild.java:6: error: reference to Item is ambiguous
+        Item a = new Item();
+        ^
+  both class store.Item in store and class shop.Item in shop match
+src\BothWild.java:6: error: reference to Item is ambiguous
+        Item a = new Item();
+                     ^
+  both class store.Item in store and class shop.Item in shop match
+2 errors
+```
+
+With the full names there is no conflict and both classes can be used in one program. With both packages imported by `*`, the short name `Item` is ambiguous and the compiler says so. This is the lecture's second advantage of packages, preventing name conflicts, and its limit: the short name works only when it is unambiguous.
+
+### Exam question 1: which imports? (6 marks)
+
+State the import statements, if any, that this program needs and say why for each class. (6 marks)
+
+```java
+public class Report {
+    public static void main(String[] args) {
+        Scanner in = new Scanner(System.in);
+        ArrayList<String> names = new ArrayList<String>();
+        PrintWriter out = new PrintWriter("names.txt");
+        names.add(String.valueOf(Math.abs(-5)));
+        out.close();
+    }
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Five classes are used: `Scanner`, `ArrayList`, `PrintWriter`, `String` and `Math`. The question is which package each is in.
+
+</Step>
+
+<Step title="2. Plan">
+
+`java.lang` is imported by default. `Scanner` and `ArrayList` are in `java.util`, `PrintWriter` is in `java.io`.
+
+</Step>
+
+<Step title="3. Solution">
+
+The program needs `import java.util.Scanner;` and `import java.util.ArrayList;` (or `import java.util.*;`) and `import java.io.PrintWriter;` (or `import java.io.*;`). `String` and `Math` are in `java.lang`, which is imported by default, so they need nothing. Because `new PrintWriter("names.txt")` can throw `FileNotFoundException`, the method also needs `throws FileNotFoundException`, which is in `java.io`.
+
+</Step>
+
+<Step title="4. Check">
+
+The program compiles with the three imports, and without them the compiler reports `cannot find symbol` for each class in turn. It was compiled with these lines added:
+
+```java title="src/Report.java" project="imports"
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Scanner;
+
+public class Report {
+    public static void main(String[] args) throws FileNotFoundException {
+        Scanner in = new Scanner(System.in);
+        ArrayList<String> names = new ArrayList<String>();
+        PrintWriter out = new PrintWriter("names.txt");
+        names.add(String.valueOf(Math.abs(-5)));
+        out.close();
+    }
+}
+```
+
+```text title="terminal" project="imports"
+$ javac -d out src/Report.java
+```
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: create and use a package (10 marks)
+
+Give the folder layout, the source of a class `Greeting` in a package `greetings` with a method `hello(String name)`, a tester that uses it, and the commands to compile and run them. (10 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A package with one class, a tester, and the compile and run commands. The package name starts with a lowercase letter, as the lecture recommends.
+
+</Step>
+
+<Step title="2. Plan">
+
+Folders: `src/greetings/Greeting.java`, `src/GreetingTester.java` and an empty `classes`. `Greeting.java` starts with `package greetings;` and the class is `public`. The tester imports `greetings.Greeting`. Compile the package, then the tester, then run from the folder above `src` and `classes`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="src/greetings/Greeting.java" project="greet"
+package greetings;
+
+public class Greeting {
+    public String hello(String name) {
+        return "Hello, " + name;
+    }
+}
+```
+
+```java title="src/GreetingTester.java" project="greet"
+import greetings.Greeting;
+
+public class GreetingTester {
+    public static void main(String[] args) {
+        Greeting g = new Greeting();
+        System.out.println(g.hello("Kago"));
+    }
+}
+```
+
+```text title="terminal" project="greet"
+$ mkdir classes
+$ javac -d classes -sourcepath src src/greetings/Greeting.java
+$ ls classes/greetings
+Greeting.class
+$ javac -d classes -classpath classes src/GreetingTester.java
+$ java -classpath classes GreetingTester
+Hello, Kago
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The layout is `src/greetings/Greeting.java` (the folder mirrors the package name), `src/GreetingTester.java`, and after compiling `classes/greetings/Greeting.class` and `classes/GreetingTester.class`. The class is `public`, so the tester in another package can use it; without `public` the compiler would reject the tester.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A package is a group of related classes organised into a folder (it can have sub-folders). It promotes better, maintainable code and prevents name conflicts. Built-in packages come with Java: `java.lang` (imported by default), `java.util` and `java.io`. Use `import packageName.className;` or `import packageName.*;` (which does not include sub-packages); a full name works without an import. To create a package: make the `src` and `classes` folders, choose a name that starts with a lowercase letter, put the files under `src` in a folder named like the package, start each file with `package name;`, compile with `javac -d classes -sourcepath src src/name/Class.java` from the folder above `src` and `classes`, use it with `import name.Class;`, and run with `java -classpath classes TesterName` (or `package.TesterName` if the tester is in a package). Classes and members used from another package must be `public`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="What are the two advantages of packages, and the two categories?">
+
+Packages promote better and more maintainable code, and they prevent name conflicts. The categories are built-in packages (bundled with Java, the Java API) and user-defined packages (created by programmers).
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can String and Math be used without an import, but Scanner cannot?">
+
+`String` and `Math` are in `java.lang`, which is imported by default. `Scanner` is in `java.util`, so it needs `import java.util.Scanner;` or `import java.util.*;`.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does -d classes do in javac -d classes -sourcepath src src/pkg/A.java?">
+
+`-d classes` puts the compiled output in the `classes` folder, creating the folder `pkg` that the source file's package statement names. `-sourcepath src` tells the compiler where to find other source files that the class needs.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does java pkgTester fail, and what is the correct command?">
+
+The current folder is searched by default and `pkgTester.class` is in `classes`. The correct command, from the folder above `classes`, is `java -classpath classes pkgTester`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is the short name Item ambiguous when shop.* and store.* are both imported?">
+
+Both packages have a class `Item`, and the short name matches both. Write the full name (`shop.Item`) or import only the one class you need.
+
+</CheckQuestion>
+
+</CheckQuestions>

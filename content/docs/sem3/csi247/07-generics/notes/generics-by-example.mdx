@@ -1,0 +1,875 @@
+---
+title: "Generics by Example"
+description: "Read and write generic classes, bounded types, generic methods and generic interfaces from Lecture 12, justify each compile error, and build the generic Set and Pair of Lab 7."
+---
+
+Generics let one class, method or interface work with different reference types while the compiler checks the types. Lecture 12 introduces the idea, the syntax for a generic class, a bounded type, a generic method and a generic interface, and asks students to type in the examples, change the type arguments and justify what they see. Lab 7 then asks for a generic `Set`, a generic `Pair`, and tests of `printArray` and `BigAndSmall`. This lesson works through all of it, one change at a time, with the real compiler messages. It extends [Generic Classes: Reading T Visually](/docs/sem3/csi247/07-generics/notes/generic-classes) and [Generic Methods and Generic Interfaces](/docs/sem3/csi247/07-generics/notes/generic-methods-and-interfaces).
+
+<LearningObjectives items={[
+  'Say what generics are and state their advantages: code reuse, type safety, no casting, errors found at compile time',
+  'Write a generic class, create objects of it, and read every occurrence of T by substitution',
+  'Use a bounded type, a generic method and a generic interface, and a class that implements it',
+  'Justify each compile error: a wrong type argument, a primitive, mismatched types, a missing parentheses pair, new T[]',
+  'Write the generic Set and Pair of Lab 7 and explain what they do with Integer, Double, Float and String',
+]} />
+
+<Prerequisites items={[
+  'Classes, objects, constructors and `equals`, from the Object-Oriented Programming chapter',
+  'Interfaces and `Comparable`, from the Object-Oriented Programming chapter',
+  'Arrays of objects and drawing memory diagrams',
+]} />
+
+## 1. The templates
+
+```text
+Generic class:        class Name<T> { ... T ... }                       T is a formal type parameter (a placeholder)
+Create an object:     Name<Integer> obj = new Name<Integer>();          the types on both sides of = must be identical; keep the ()
+Two type parameters:  class Name<T, U> { ... }                          separated by a comma
+Bounded type:         class Name<T extends Number> { ... }              only Number and its subclasses are accepted
+Generic method:       public static <E> void print(E[] elements) { ... }  <E> goes before the return type
+Generic interface:    interface Name<T> { T get(); }                    the implementing class is generic too: class C<T> implements Name<T>
+```
+
+To read a generic class, use the **substitution method**: replace every `T` by the type argument and read the class again. `GenTest<Integer>` is read as "GenTest of Integer": its instance variable is an `Integer`, `modify` accepts an `Integer` and `get` returns an `Integer`.
+
+## 2. Why generics: the Object approach and its cost
+
+All classes are descendants of `Object`, so one class that stores an `Object` can hold anything. The cost is that every value that comes out must be cast back, and a wrong cast is found only when the program runs.
+
+```java title="ObjectBox.java"
+public class ObjectBox {
+    private Object obj;
+
+    void modify(Object obj) {
+        this.obj = obj;
+    }
+
+    Object get() {
+        return obj;
+    }
+}
+```
+
+```java title="ObjectBoxDemo.java"
+public class ObjectBoxDemo {
+    // Question: what is the cost of a class that stores Object?
+    public static void main(String[] args) {
+        ObjectBox box = new ObjectBox();
+        box.modify(17);
+        Integer first = (Integer) box.get();      // a cast is needed
+        System.out.println("first: " + first);
+        box.modify("CSI247");                     // compiles: a String is an Object
+        try {
+            Integer second = (Integer) box.get(); // the mistake is only found now
+            System.out.println("second: " + second);
+        } catch (ClassCastException e) {
+            System.out.println("second: " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+first: 17
+second: java.lang.ClassCastException
+```
+
+The program compiles, and the mistake appears only at run time. Generics move that failure to compile time. The advantages the lecture lists are:
+
+| Advantage | Meaning |
+|---|---|
+| Code reuse | write the code once, then reuse it for any type |
+| Type safety | the object stores only one type, the type argument |
+| No type casting | values come out with the right type; no `(Integer)` is needed |
+| Errors found at compile time | rather than at run time |
+
+## 3. A generic class
+
+This is the lecture's `GenTest`: one instance variable, a setter and a getter, all in terms of `T`.
+
+```java title="GenTest.java"
+public class GenTest<T> {
+    private T obj;                            // instance variable of type T
+
+    void modify(T obj) {                      // the setter accepts a T
+        this.obj = obj;
+    }
+
+    T get() {                                 // the getter returns a T
+        return obj;
+    }
+}
+```
+
+`T` occurs four times: in the class header (`GenTest<T>` accepts one type parameter called `T`), as the type of `obj`, as the type of the parameter of `modify`, and as the return type of `get`. It is a placeholder that is replaced by the actual type argument when an object is created.
+
+```java title="TestingGenTest.java"
+public class TestingGenTest {
+    // Question (Lecture 12): create a GenTest of Integer, store 17 and read it back.
+    public static void main(String[] args) {
+        GenTest<Integer> a = new GenTest<Integer>();
+        a.modify(17);                         // the method accepts an Integer
+        System.out.println(a.get());          // and returns an Integer: no cast
+    }
+}
+```
+
+```text
+17
+```
+
+### The same class with other type arguments
+
+```java title="GenTestVariants.java"
+public class GenTestVariants {
+    // Question: use GenTest with a String, a Double and a Character.
+    public static void main(String[] args) {
+        GenTest<String> s = new GenTest<String>();
+        s.modify("CSI247");
+        String text = s.get();                // no cast
+        System.out.println(text + " has " + text.length() + " characters");
+
+        GenTest<Double> d = new GenTest<Double>();
+        d.modify(5.5);
+        System.out.println(d.get() * 2);
+
+        GenTest<Character> c = new GenTest<Character>();
+        c.modify('K');
+        System.out.println(c.get());
+    }
+}
+```
+
+```text
+CSI247 has 6 characters
+11.0
+K
+```
+
+Because the type argument is known, `s.get()` is a `String` and `text.length()` compiles with no cast. The same class written once serves every type: that is the code reuse.
+
+### What does not compile, and why
+
+The lecture asks "can `a.modify("CSI247")` compile? Justify." These are the answers, each from a real compile of the class above:
+
+| Statement | Compiler message | Why |
+|---|---|---|
+| `a.modify("CSI247");` with `GenTest<Integer> a` | `error: incompatible types: String cannot be converted to Integer` | `a` stores only `Integer`: type safety, found at compile time |
+| `GenTest<int> a = new GenTest<int>();` | `error: unexpected type` (required: reference, found: int) | only reference types are allowed in the angle brackets; use `Integer` |
+| `GenTest<Integer> a = new GenTest<String>();` | `error: incompatible types: GenTest<String> cannot be converted to GenTest<Integer>` | the types on the left and the right of `=` must be identical |
+| `GenTest<Integer> a = new GenTest<Integer>;` | `error: '(' or '[' expected` | do not omit `()` at the end |
+| `T[] arr = new T[20];` inside the class | `error: generic array creation` | `T` cannot be used to allocate memory |
+
+<Callout type="mistake" title="Common error">
+
+Writing `GenTest<int>`. The type argument must be a reference type, so use the wrapper class: `GenTest<Integer>`. Autoboxing then lets you pass `17` where an `Integer` is expected, as `a.modify(17)` does above.
+
+</Callout>
+
+## 4. More than one type parameter
+
+A class can accept several type parameters, separated by commas. The usual letters are `T` (type), `E` (element), `K` (key), `N` (number) and `V` (value).
+
+```java title="Lookup.java"
+public class Lookup<K, V> {
+    private K key;
+    private V value;
+
+    public Lookup(K key, V value) {
+        this.key = key;
+        this.value = value;
+    }
+
+    public K getKey() {
+        return key;
+    }
+
+    public V getValue() {
+        return value;
+    }
+}
+```
+
+```java title="LookupDemo.java"
+public class LookupDemo {
+    // Question: create a Lookup of String and Integer, and a Lookup of Integer and String.
+    public static void main(String[] args) {
+        Lookup<String, Integer> mark = new Lookup<String, Integer>("Naledi", 72);
+        System.out.println(mark.getKey() + " scored " + mark.getValue());
+        Lookup<Integer, String> course = new Lookup<Integer, String>(247, "Data Structures");
+        System.out.println(course.getKey() + " is " + course.getValue());
+    }
+}
+```
+
+```text
+Naledi scored 72
+247 is Data Structures
+```
+
+## 5. Bounded types
+
+A generic class can be restricted to certain types by putting `extends` after the type parameter. `Nums<T extends Number>` accepts only `Number` and its subclasses (`Integer`, `Double`, `Float`, `Long` and so on). The bound also lets the class **use** the methods of `Number` on a value of type `T`.
+
+```java title="Nums.java"
+public class Nums<T extends Number> {
+    private T value;
+
+    public Nums(T value) {
+        this.value = value;
+    }
+
+    public double twice() {
+        return value.doubleValue() * 2;       // allowed: T is known to be a Number
+    }
+}
+```
+
+```java title="NumsDemo.java"
+public class NumsDemo {
+    // Question (Lecture 12): create a Nums of Double and a Nums of Integer, and use each.
+    public static void main(String[] args) {
+        Nums<Double> n1 = new Nums<Double>(new Double(5.5));
+        Nums<Integer> n2 = new Nums<Integer>(new Integer(2));
+        System.out.println(n1.twice());
+        System.out.println(n2.twice());
+        Nums<Float> n3 = new Nums<Float>(1.25f);
+        System.out.println(n3.twice());
+    }
+}
+```
+
+```text
+11.0
+4.0
+2.5
+```
+
+`Nums<Double>`, `Nums<Integer>` and `Nums<Float>` are valid because all three extend `Number`. The lecture's question "how about `Nums<String> n3 = new Nums<String>(new String("Hello"))`?" does not compile: `error: type argument String is not within bounds of type-variable T`, with `T extends Number declared in class Nums`. A `String` is not a `Number`.
+
+## 6. Generic methods
+
+A generic method has its own type parameter, written in angle brackets **before the return type**. The type parameter is a placeholder for the type of the arguments and its scope is that method. It works with static and non-static methods. The lecture's example prints the elements of any array of objects.
+
+```java title="GenericMethod.java"
+public class GenericMethod {
+    public static <E> void printArray(E[] elements) {
+        for (E element : elements) {          // for each element in the array
+            System.out.printf("%s ", element);
+        }
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        Integer[] numbers = {2, 4, 5, 7, 8};
+        Double[] rates = {1.0, 1.5, 2.5, 3.5};
+        System.out.println("Integer Array has : ");
+        printArray(numbers);                  // accepts an Integer array
+        System.out.println("Double array has : ");
+        printArray(rates);                    // accepts a Double array
+    }
+}
+```
+
+```text
+Integer Array has :
+2 4 5 7 8
+Double array has :
+1.0 1.5 2.5 3.5
+```
+
+### The lecture's exercise: Characters, Strings and Floats
+
+```java title="PrintArrayExercise.java"
+public class PrintArrayExercise {
+    // Question (Lecture 12 exercise b): also print an array of Characters, of Strings and of Floats.
+    public static void main(String[] args) {
+        Character[] letters = {'K', 'a', 'g', 'o'};
+        String[] names = {"Kago", "Naledi", "Thato"};
+        Float[] marks = {61.5f, 78.0f, 55.25f};
+        GenericMethod.printArray(letters);
+        GenericMethod.printArray(names);
+        GenericMethod.printArray(marks);
+    }
+}
+```
+
+```text
+K a g o
+Kago Naledi Thato
+61.5 78.0 55.25
+```
+
+One method serves all three arrays. An array of a primitive type is a different matter: `printArray(new int[] {1, 2})` gives `error: method printArray in class H cannot be applied to given types` (required `E[]`, found `int[]`), because `E` must be a reference type, so the array must be an `Integer[]`.
+
+### A method that returns the type parameter, and a class type with a method type
+
+```java title="Holder.java"
+public class Holder<T> {
+    private T value;
+
+    public Holder(T value) {
+        this.value = value;
+    }
+
+    public <U> void show(U extra) {           // U belongs to this method only; T belongs to the class
+        System.out.println(value + " with " + extra);
+    }
+}
+```
+
+```java title="MethodVariants.java"
+public class MethodVariants {
+    // Question: write a generic method that returns the first element, and a method with its own type parameter inside a generic class.
+    static <E> E first(E[] elements) {
+        return elements[0];
+    }
+
+    public static void main(String[] args) {
+        String[] names = {"Kago", "Naledi"};
+        Integer[] marks = {72, 85};
+        String a = first(names);              // E is String: no cast
+        int b = first(marks);                 // E is Integer, unboxed to int
+        System.out.println(a + " " + b);
+        new Holder<String>("Kago").show(42);          // U is Integer
+        new Holder<Integer>(7).show("seven");         // U is String
+    }
+}
+```
+
+```text
+Kago 72
+Kago with 42
+7 with seven
+```
+
+The type parameter `E` of `first` is replaced by the type of the argument: for a `String[]` the method returns a `String`. A method may use the class's type parameter (`T`) and may also introduce additional type parameters of its own (`U`) when it needs them.
+
+## 7. Generic interfaces
+
+A generic interface is like a normal interface except that it takes a type parameter. A class that implements it is generic as well, and passes its own type parameter on.
+
+```java title="GenI.java"
+public interface GenI<T> {
+    void modify(T val);
+    public T get();
+}
+```
+
+```java title="GenC.java"
+public class GenC<T> implements GenI<T> {
+    T val;
+
+    public void modify(T val) {
+        this.val = val;
+    }
+
+    public T get() {
+        return val;
+    }
+}
+```
+
+```java title="GenCTester.java"
+public class GenCTester {
+    // Question (Lecture 12): create a GenC of Integer, store 190 and display it; then a GenC of String.
+    public static void main(String[] args) {
+        GenC<Integer> n = new GenC<Integer>();
+        n.modify(190);
+        System.out.println("Num: " + n.get());
+        GenC<String> s = new GenC<String>();
+        s.modify("CSI247");
+        System.out.println("Course: " + s.get());
+    }
+}
+```
+
+```text
+Num: 190
+Course: CSI247
+```
+
+If the implementing class uses `T` without declaring it, it does not compile: `class G implements GenI<T>` gives `error: cannot find symbol` with `symbol: class T`. The lecture's rule is that the class implementing the interface must be generic. (A class that names the type argument itself, such as `class IntC implements GenI<Integer>`, also compiles; the lecture's example uses the generic form.)
+
+### The BigAndSmall interface
+
+Lecture 12 defines a generic interface whose type parameter is bounded: `T` must be `Comparable<T>`, so that two values of type `T` can be compared with `compareTo`.
+
+```java title="BigAndSmall.java"
+public interface BigAndSmall<T extends Comparable<T>> {
+    T small();
+    T big();
+}
+```
+
+```java title="Range.java"
+public class Range<T extends Comparable<T>> implements BigAndSmall<T> {
+    private T[] values;
+
+    public Range(T[] values) {
+        this.values = values;
+    }
+
+    public T small() {
+        T smallest = values[0];
+        for (T v : values) {
+            if (v.compareTo(smallest) < 0) {
+                smallest = v;
+            }
+        }
+        return smallest;
+    }
+
+    public T big() {
+        T biggest = values[0];
+        for (T v : values) {
+            if (v.compareTo(biggest) > 0) {
+                biggest = v;
+            }
+        }
+        return biggest;
+    }
+}
+```
+
+```java title="RangeDemo.java"
+public class RangeDemo {
+    // Question (Lab 7, task d): implement BigAndSmall and test it with Integer and with String values.
+    public static void main(String[] args) {
+        Integer[] marks = {42, 7, 19, 63};
+        BigAndSmall<Integer> a = new Range<Integer>(marks);
+        System.out.println("smallest " + a.small() + ", biggest " + a.big());
+        String[] names = {"Naledi", "Kago", "Thato"};
+        BigAndSmall<String> b = new Range<String>(names);
+        System.out.println("smallest " + b.small() + ", biggest " + b.big());
+    }
+}
+```
+
+```text
+smallest 7, biggest 63
+smallest Kago, biggest Thato
+```
+
+The bound `T extends Comparable<T>` is what makes `v.compareTo(smallest)` legal inside `Range`. `Integer` and `String` both implement `Comparable`, so both work; a type that does not implement `Comparable` would be rejected by the compiler.
+
+### Exam question 1: which statements compile? (6 marks)
+
+For `GenTest<T>` as in section 3 and `Nums<T extends Number>` as in section 5, state which of these compile and give the reason for each that does not. (6 marks)
+
+```java
+GenTest<String> a = new GenTest<String>();     // (1)
+GenTest<Integer> b = new GenTest<Integer>();   // (2)
+b.modify("CSI247");                             // (3)
+GenTest<double> c = new GenTest<double>();     // (4)
+Nums<Integer> d = new Nums<Integer>(5);        // (5)
+Nums<String> e = new Nums<String>("Hello");    // (6)
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"State which compile" and "give the reason" for each that does not. The two rules are that the type argument must be a reference type and that the type argument must satisfy any bound; and a generic object only accepts its type argument.
+
+</Step>
+
+<Step title="2. Plan">
+
+Check each statement for: a primitive in the angle brackets, a type argument outside the bound, and an argument of the wrong type.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Statement | Compiles? | Reason |
+|---|---|---|
+| (1) | Yes | a `GenTest` of `String` |
+| (2) | Yes | a `GenTest` of `Integer` |
+| (3) | No | `incompatible types: String cannot be converted to Integer`: `b` stores only `Integer` |
+| (4) | No | `unexpected type`: a primitive is not allowed; use `Double` |
+| (5) | Yes | `Integer` extends `Number`; the `5` is boxed to an `Integer` |
+| (6) | No | `type argument String is not within bounds of type-variable T`: `String` does not extend `Number` |
+
+</Step>
+
+<Step title="4. Check">
+
+Statements (3), (4) and (6) were each compiled and gave the messages above. The three that compile fit the rule: a reference type, inside the bound, and an argument of the declared type. Statement (3) is the lecture's own question, and its answer is type safety: the error appears at compile time rather than as a `ClassCastException` at run time.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: print any array (5 marks)
+
+Write a generic method `printArray` that prints the elements of an array of any reference type on one line, and say what happens when it is called with an `int[]`. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Generic method": the type parameter goes before the return type. "Any reference type": the parameter is an array `E[]`, not `int[]`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`public static <E> void printArray(E[] elements)` with a for-each loop over `E`. An `int[]` is not an `E[]` for any reference type `E`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java
+public static <E> void printArray(E[] elements) {
+    for (E element : elements) {
+        System.out.printf("%s ", element);
+    }
+    System.out.println();
+}
+```
+
+Calling `printArray(new int[] {1, 2})` does not compile: `method printArray in class H cannot be applied to given types` (required `E[]`, found `int[]`). The call works if the array is an `Integer[]`.
+
+</Step>
+
+<Step title="4. Check">
+
+The method printed `2 4 5 7 8` for an `Integer[]`, `1.0 1.5 2.5 3.5` for a `Double[]`, and the letters, the names and the floats of the exercise, all from the one method.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 8. Lab 7: the generic Set
+
+Lab 7 asks for a generic class `Set` with a type parameter `T`. It keeps an **array of 10 elements of type `T`**, each initially `null`, and has three operations: `add(T t)` inserts the element in the **first empty cell** (duplicates are allowed), `remove(T t)` deletes an element, using `equals` to decide which, and `search(T t)` returns the first element equal to `t`, as decided by `equals`.
+
+Java does not allow `new T[10]`: the compiler reports `error: generic array creation`. The usual way round is to create an `Object[]` and cast it to `T[]`; the cast is unchecked, which is why the constructor carries `@SuppressWarnings("unchecked")`.
+
+<MemoryDiagram scenario="genset" />
+
+```java title="Set.java"
+public class Set<T> {
+    private T[] items;
+
+    @SuppressWarnings("unchecked")
+    public Set() {
+        items = (T[]) new Object[10];         // an array of 10 cells, all null
+    }
+
+    public void add(T t) {
+        for (int i = 0; i < items.length; i++) {
+            if (items[i] == null) {           // the first empty cell
+                items[i] = t;
+                return;
+            }
+        }
+        System.out.println("Set is full");
+    }
+
+    public boolean remove(T t) {
+        for (int i = 0; i < items.length; i++) {
+            if (items[i] != null && items[i].equals(t)) {
+                items[i] = null;              // leaves a gap that add will reuse
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public T search(T t) {
+        for (int i = 0; i < items.length; i++) {
+            if (items[i] != null && items[i].equals(t)) {
+                return items[i];
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < items.length; i++) {
+            sb.append(items[i] == null ? "_" : items[i].toString());
+            if (i < items.length - 1) {
+                sb.append(", ");
+            }
+        }
+        return sb.append("]").toString();
+    }
+}
+```
+
+```java title="SetTest.java"
+public class SetTest {
+    // Question (Lab 7 task b): create a Set of Integer, of Double and of String; populate each and use the operations.
+    public static void main(String[] args) {
+        Set<Integer> ints = new Set<Integer>();
+        ints.add(7);
+        ints.add(12);
+        ints.add(7);
+        System.out.println(ints);
+        System.out.println("remove(7): " + ints.remove(7) + " " + ints);
+        ints.add(5);
+        System.out.println("add(5): " + ints);
+        System.out.println("search(12): " + ints.search(12) + ", search(99): " + ints.search(99));
+
+        Set<Double> doubles = new Set<Double>();
+        doubles.add(1.5);
+        doubles.add(2.5);
+        System.out.println("search(2.5): " + doubles.search(2.5));
+
+        Set<String> words = new Set<String>();
+        words.add("Kago");
+        words.add("Naledi");
+        words.add("Thato");
+        System.out.println("remove(Naledi): " + words.remove("Naledi") + ", remove(Mpho): " + words.remove("Mpho"));
+        System.out.println(words);
+
+        Set<Integer> full = new Set<Integer>();
+        for (int i = 1; i <= 11; i++) {
+            full.add(i);
+        }
+        System.out.println(full);
+    }
+}
+```
+
+```text
+[7, 12, 7, _, _, _, _, _, _, _]
+remove(7): true [_, 12, 7, _, _, _, _, _, _, _]
+add(5): [5, 12, 7, _, _, _, _, _, _, _]
+search(12): 12, search(99): null
+search(2.5): 2.5
+remove(Naledi): true, remove(Mpho): false
+[Kago, _, Thato, _, _, _, _, _, _, _]
+Set is full
+[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+```
+
+The diagram and the output agree: after `remove(7)` the first 7 (index 0) is gone and the second 7 (index 2) stays; the next `add` fills the gap at index 0. The eleventh `add` finds no empty cell and prints "Set is full", leaving the set unchanged.
+
+The lab also asks what happens when a `String` is inserted into a `Set<Integer>`: it does not compile. `ints.add("CSI247")` gives `error: incompatible types: String cannot be converted to Integer`, the same type safety as for `GenTest`.
+
+### equals, not ==
+
+`remove` and `search` use `equals`, so an element that is equal to the search value is found even though it is a different object.
+
+```java title="SetEquals.java"
+public class SetEquals {
+    // Question: does search find an equal String that is a different object?
+    public static void main(String[] args) {
+        Set<String> names = new Set<String>();
+        names.add(new String("Kago"));
+        String key = new String("Kago");
+        String found = names.search(key);
+        System.out.println("found: " + found);
+        System.out.println("equal to the key: " + found.equals(key));
+        System.out.println("same object as the key: " + (found == key));
+    }
+}
+```
+
+```text
+found: Kago
+equal to the key: true
+same object as the key: false
+```
+
+The search returns the stored element, which is equal to the key but is not the key itself. Comparing with `==` would compare addresses and find nothing.
+
+### Exam question 3: add, remove and search (6 marks)
+
+A `Set<Integer>` of 10 cells is empty. Show the cells after `add(7)`, `add(12)`, `add(7)`, `remove(7)` and `add(5)`, and say what `search(12)` and `search(99)` return. Explain why the constructor needs a cast. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+`add` uses the first empty cell, duplicates are allowed, `remove` takes out the first element equal to the argument and leaves a gap, and `search` returns the matching element or `null`.
+
+</Step>
+
+<Step title="2. Plan">
+
+Write the first four cells after each operation. A gap left by `remove` is the first empty cell again.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Operation | Cells 0 to 3 |
+|---|---|
+| `add(7)` | 7, _, _, _ |
+| `add(12)` | 7, 12, _, _ |
+| `add(7)` | 7, 12, 7, _ |
+| `remove(7)` | _, 12, 7, _ |
+| `add(5)` | 5, 12, 7, _ |
+
+`search(12)` returns 12 and `search(99)` returns `null`. The constructor needs a cast because `new T[10]` is rejected (`generic array creation`): the class creates an `Object[]` and casts it to `T[]`, which the compiler can only treat as unchecked.
+
+</Step>
+
+<Step title="4. Check">
+
+The program printed `[7, 12, 7, _, ...]` after the three adds, `true [_, 12, 7, _, ...]` after the removal, and `[5, 12, 7, _, ...]` after `add(5)`, as in the table.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 9. Lab 7: the generic Pair
+
+Lab 7 asks for a generic class `Pair` that takes **two type parameters that are subclasses of `Number`**, with the usual set and get for each member, and with `add()`, `multiply()`, `subtract()` and `divide()` that return the sum, product, difference and quotient when applied to two `Pair` objects. The lab does not say what the sum of two pairs is. This lesson uses the natural reading: the operations act on the members one by one and return a new `Pair<Double, Double>`. `+` is not defined for `Number`, so each value is converted with `doubleValue()` (allowed because of the bound). The extra type parameters on each method let it accept a `Pair` of any two `Number` types.
+
+```java title="Pair.java"
+public class Pair<T extends Number, U extends Number> {
+    private T first;
+    private U second;
+
+    public Pair(T first, U second) {
+        this.first = first;
+        this.second = second;
+    }
+
+    public T getFirst() {
+        return first;
+    }
+
+    public void setFirst(T first) {
+        this.first = first;
+    }
+
+    public U getSecond() {
+        return second;
+    }
+
+    public void setSecond(U second) {
+        this.second = second;
+    }
+
+    public <A extends Number, B extends Number> Pair<Double, Double> add(Pair<A, B> other) {
+        return new Pair<Double, Double>(first.doubleValue() + other.getFirst().doubleValue(),
+            second.doubleValue() + other.getSecond().doubleValue());
+    }
+
+    public <A extends Number, B extends Number> Pair<Double, Double> subtract(Pair<A, B> other) {
+        return new Pair<Double, Double>(first.doubleValue() - other.getFirst().doubleValue(),
+            second.doubleValue() - other.getSecond().doubleValue());
+    }
+
+    public <A extends Number, B extends Number> Pair<Double, Double> multiply(Pair<A, B> other) {
+        return new Pair<Double, Double>(first.doubleValue() * other.getFirst().doubleValue(),
+            second.doubleValue() * other.getSecond().doubleValue());
+    }
+
+    public <A extends Number, B extends Number> Pair<Double, Double> divide(Pair<A, B> other) {
+        return new Pair<Double, Double>(first.doubleValue() / other.getFirst().doubleValue(),
+            second.doubleValue() / other.getSecond().doubleValue());
+    }
+
+    @Override
+    public String toString() {
+        return "(" + first + ", " + second + ")";
+    }
+}
+```
+
+```java title="PairTest.java"
+public class PairTest {
+    // Question (Lab 7 task e): test Pair with Integer, Double and Float members and observe the behaviour.
+    public static void main(String[] args) {
+        Pair<Integer, Integer> a = new Pair<Integer, Integer>(7, 2);
+        Pair<Integer, Integer> b = new Pair<Integer, Integer>(2, 4);
+        System.out.println("Integer: " + a.add(b) + " " + a.subtract(b) + " " + a.multiply(b) + " " + a.divide(b));
+
+        Pair<Double, Double> c = new Pair<Double, Double>(1.5, 2.5);
+        Pair<Double, Double> d = new Pair<Double, Double>(0.5, 0.25);
+        System.out.println("Double: " + c.add(d) + " " + c.divide(d));
+
+        Pair<Float, Float> e = new Pair<Float, Float>(1.1f, 2.2f);
+        System.out.println("Float: " + e.add(e));
+
+        Pair<Integer, Float> f = new Pair<Integer, Float>(10, 0.5f);
+        System.out.println("mixed: " + f.multiply(c));
+
+        Pair<Integer, Integer> zero = new Pair<Integer, Integer>(0, 0);
+        System.out.println("divide by zero: " + a.divide(zero));
+
+        a.setFirst(100);
+        System.out.println("after setFirst(100): first " + a.getFirst() + ", second " + a.getSecond());
+    }
+}
+```
+
+```text
+Integer: (9.0, 6.0) (5.0, -2.0) (14.0, 8.0) (3.5, 0.5)
+Double: (2.0, 2.75) (3.0, 10.0)
+Float: (2.200000047683716, 4.400000095367432)
+mixed: (15.0, 1.25)
+divide by zero: (Infinity, Infinity)
+after setFirst(100): first 100, second 2
+```
+
+What to observe: every result is a `Pair` of `Double`, whatever the member types were, because each value was converted with `doubleValue()`; `7 / 2` gives 3.5, not the integer division result 3; the `Float` values 1.1 and 2.2 are widened to `double`, so their sum shows the extra digits of the float representation; and dividing by zero does **not** throw an exception, because the division is done on doubles and gives `Infinity`. `Pair<String, Integer>` would not compile: `String` is outside the bound.
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Generics let one class, method or interface work with different reference types, with the type checked at compile time: no casts, and a wrong type is a compile error instead of a `ClassCastException`. `T` is a placeholder replaced by the type argument; the types on both sides of `=` must be identical; the argument must be a reference type; and `T` cannot be used to allocate memory, so `new T[n]` is rejected (create an `Object[]` and cast). `<T extends Number>` restricts the type and lets the class use `Number` methods. A generic method puts `<E>` before its return type. A class that implements a generic interface passes its type parameter on. A generic container compares objects with `equals`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does passing a String to modify not compile when a is a GenTest of Integer?">
+
+`a` stores only `Integer` values, so the compiler rejects a `String` argument: `incompatible types: String cannot be converted to Integer`. This is type safety, and the error is found at compile time.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why can a generic class not be given int as its type argument, and what is used instead?">
+
+The type argument must be a reference type. Use the wrapper class `GenTest<Integer>`; boxing converts `17` to an `Integer` automatically.
+
+</CheckQuestion>
+
+<CheckQuestion question="For a class declared with a type parameter T extends Number, which of Nums of Double, Nums of Integer and Nums of String is rejected, and why?">
+
+`Nums<String>`: `type argument String is not within bounds of type-variable T`. `Double` and `Integer` extend `Number`, `String` does not.
+
+</CheckQuestion>
+
+<CheckQuestion question="Where does the type parameter of a generic method go, and what is its scope?">
+
+In angle brackets before the return type, for example `public static <E> void printArray(E[] elements)`. Its scope is that method only.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does the Lab 7 Set create its array as (T[]) new Object[10]?">
+
+`new T[10]` is not allowed (`generic array creation`) because `T` cannot be used to allocate memory. An `Object[]` can be created and cast to `T[]`; the cast is unchecked, so the constructor suppresses the warning.
+
+</CheckQuestion>
+
+</CheckQuestions>

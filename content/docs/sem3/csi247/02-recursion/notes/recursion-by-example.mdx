@@ -1,0 +1,661 @@
+---
+title: "Recursion by Example"
+description: "Write recursive factorial, power and Fibonacci from a template, trace them, convert between recursion and iteration, and explain infinite recursion, with exam questions on each."
+---
+
+A complete recursion answer states the base case, shows the smaller problem, says how the answers combine, and traces the method on a small input. This lesson extends [Recursion](/docs/sem3/csi247/02-recursion/notes/recursion-in-java) and [Trace tables](/docs/sem3/csi247/02-recursion/notes/trace-tables) with many methods, many traces and the exam questions that go with them. To practise, cover each worked answer, write the method on paper, trace it, then open the answer and compare.
+
+<LearningObjectives items={[
+  'Write a recursive method from a template: a base case, a smaller problem and a way to combine',
+  'Trace a recursive call with a trace table, going down and coming back up',
+  'Write factorial, power and Fibonacci recursively and iteratively, and compare their output',
+  'Explain infinite recursion and repair a missing or unreachable base case',
+  'Write Fibonacci with two base cases and count the calls it makes',
+]} />
+
+<Prerequisites items={[
+  'The base case, the recursive case and the call stack, from the Recursion lesson',
+  'Reading a trace table, from the Trace tables lesson',
+]} />
+
+## 1. The template and the tracing template
+
+A recursive method answers a big problem by answering a smaller copy of the same problem. Three decisions fix the whole method.
+
+```text
+returnType name(parameters) {
+    if (base case) {                      // the smallest input, answered directly: no call
+        return answer;
+    }
+    return combine(name(smaller input));  // the recursive case: a strictly smaller input
+}
+```
+
+| Placeholder | How to read it |
+|---|---|
+| base case | An input so small that the answer is known without another call. At least one is needed; some methods need two. |
+| smaller input | The argument of the recursive call. It must be closer to the base case than the current argument. |
+| combine | What the method does with the answer it gets back: add it, multiply it, take the larger, or nothing. |
+
+Use this procedure to trace any recursive call:
+
+```text
+1. Write the call and the values of its parameters: fact(5).
+2. Is the base case true? If it is, write the value returned and stop going down.
+3. If not, write the expression the method will return, with the recursive call left unevaluated: 5 * fact(4).
+4. Make the recursive call and repeat from step 1 with its parameter values.
+5. When a base case answers, go back up: replace each waiting call with the value it returned and evaluate.
+6. The value at the top row is the answer. The number of rows is the number of calls.
+```
+
+Every worked example below is a complete program. Its question is in a comment, and the output is what a real run prints.
+
+## 2. Factorial and infinite recursion
+
+Lecture 6 introduces recursion with factorial: `n!` is 1 when `n` is 1, and `n` times `(n - 1)!` otherwise. Each variation below changes one thing from the one before. The Lecture 6 exercises (a) and (b) are the second variation, and Lab 3 question 3 is the third.
+
+### Factorial, and where `long` runs out
+
+```java title="FactorialLong.java"
+public class FactorialLong {
+    // Question: write fact(n) and find the first n for which a long overflows.
+    static long fact(int n) {
+        if (n <= 1) {
+            return 1;                         // base case: 0! and 1!
+        }
+        return n * fact(n - 1);               // n! = n * (n - 1)!
+    }
+
+    public static void main(String[] args) {
+        System.out.println(fact(5));
+        System.out.println(fact(0));
+        System.out.println(fact(20));
+        System.out.println(fact(21));
+    }
+}
+```
+
+```text
+120
+1
+2432902008176640000
+-4249290049419214848
+```
+
+`fact(5)` is `5 * 4 * 3 * 2 * 1`. The base case `n <= 1` also answers `fact(0)`. `fact(21)` is larger than the biggest `long`, so the product wraps around to a negative number: Java does not warn. When a recursive result is suspiciously negative, suspect overflow before suspecting the recursion.
+
+### The iterative and the recursive version compared (Lecture 6 exercises a and b)
+
+```java title="FactorialBoth.java"
+public class FactorialBoth {
+    // Question: is the output of the iterative factorial different from the recursive one?
+    static long factL(int n) {
+        long prod = 1;
+        for (int i = 1; i <= n; i++) {
+            prod = prod * i;                  // the loop version
+        }
+        return prod;
+    }
+
+    static long factR(int n) {
+        if (n == 1) {
+            return 1;                         // the lecture's base case
+        }
+        return n * factR(n - 1);
+    }
+
+    public static void main(String[] args) {
+        for (int n = 1; n <= 5; n++) {
+            System.out.println(n + "! = " + factL(n) + " " + factR(n));
+        }
+        System.out.println("factL(0) = " + factL(0));
+        try {
+            factR(0);
+        } catch (StackOverflowError e) {
+            System.out.println("factR(0): " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+1! = 1 1
+2! = 2 2
+3! = 6 6
+4! = 24 24
+5! = 120 120
+factL(0) = 1
+factR(0): java.lang.StackOverflowError
+```
+
+For every `n` from 1 the two versions print the same value. They differ at 0: the loop never runs and returns 1, but `factR(0)` goes to -1, -2 and so on and never meets the base case `n == 1`. So the answer to "is there any difference?" is: not for the inputs the base case covers, yes for the others. A base case must cover every input that can reach the method.
+
+### No base case at all (Lecture 6, infinite recursion; Lab 3 question 3)
+
+```java title="NoBaseCase.java"
+public class NoBaseCase {
+    // Question: what happens when the base case is missing, and how is it repaired?
+    static long factR(int n) {
+        long prod;
+        prod = n * factR(n - 1);              // no base case: every call makes another call
+        return prod;
+    }
+
+    public static void main(String[] args) {
+        try {
+            factR(5);
+        } catch (StackOverflowError e) {
+            System.out.println("factR(5): " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+factR(5): java.lang.StackOverflowError
+```
+
+This is the lecture's own example of infinite recursion, and the cause is the missing base case. Each call waits for the next, the frames pile up on the stack, and Java stops the program with a `StackOverflowError`. The repair is the base case from the previous program: `if (n == 1) return 1;` before the recursive call.
+
+### A base case one step too late
+
+```java title="LateBase.java"
+public class LateBase {
+    // Question: why does sumTo(0) never finish?
+    static int sumTo(int n) {
+        if (n == 1) {
+            return 1;                         // the base case only matches 1
+        }
+        return n + sumTo(n - 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(sumTo(4));
+        try {
+            sumTo(0);
+        } catch (StackOverflowError e) {
+            System.out.println("sumTo(0): " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+10
+sumTo(0): java.lang.StackOverflowError
+```
+
+From 0 the argument goes to -1, -2, -3 and never equals 1. Every call adds a frame, the stack fills, and Java throws `StackOverflowError`. Writing `n <= 1` or `n == 0` as the base case repairs it. Always ask "which inputs can reach this method?" and check that each of them ends at a base case.
+
+<Callout type="mistake" title="Common error">
+
+A base case that the argument can step over, or never reaches. `if (n == 1)` with a call `sumTo(0)`, or `if (n == 0)` with `n` going down by two from an odd number, never stops and ends in a `StackOverflowError`. Write the base case as a range (`n <= 1`, `n < 2`) when the argument might start below the value you expect.
+
+</Callout>
+
+## 3. Power: the lecturer's exercise
+
+Lecture 6 sets this exercise: write recursive `power(x, y)` that returns `x` to the power `y`, convert it to a loop, and test that the two give the same output. A power is repeated multiplication, so `x` to the `y` is `x` times `x` to the `y - 1`.
+
+```text
+power(x, y) = 1                      when y = 0
+power(x, y) = x * power(x, y - 1)    when y > 0
+```
+
+### The recursive version
+
+```java title="PowerRecursive.java"
+public class PowerRecursive {
+    // Question: write recursive power(x, y) that returns x to the power y (y at least 0).
+    static int power(int x, int y) {
+        if (y == 0) {
+            return 1;                         // base case: anything to the power 0 is 1
+        }
+        return x * power(x, y - 1);           // one fewer factor of x
+    }
+
+    public static void main(String[] args) {
+        System.out.println(power(2, 5));
+        System.out.println(power(3, 0));
+        System.out.println(power(5, 1));
+        System.out.println(power(6, 3));
+    }
+}
+```
+
+```text
+32
+1
+5
+216
+```
+
+`x` never changes; only `y` shrinks. The base case returns 1, not 0, because the combination is multiplication: 1 is the value that leaves the product unchanged.
+
+### The loop version, and the test that compares them
+
+```java title="PowerBoth.java"
+public class PowerBoth {
+    // Question: convert power to a loop and show that both give the same output.
+    static int powerRec(int x, int y) {
+        if (y == 0) {
+            return 1;
+        }
+        return x * powerRec(x, y - 1);
+    }
+
+    static int powerLoop(int x, int y) {
+        int result = 1;                       // the base case becomes the starting value
+        for (int i = 1; i <= y; i++) {
+            result = result * x;              // the recursive case becomes the loop body
+        }
+        return result;
+    }
+
+    public static void main(String[] args) {
+        int[][] pairs = {{2, 5}, {3, 0}, {6, 3}, {10, 4}};
+        for (int[] p : pairs) {
+            int a = powerRec(p[0], p[1]);
+            int b = powerLoop(p[0], p[1]);
+            System.out.println(p[0] + "^" + p[1] + ": " + a + " " + b + " " + (a == b));
+        }
+    }
+}
+```
+
+```text
+2^5: 32 32 true
+3^0: 1 1 true
+6^3: 216 216 true
+10^4: 10000 10000 true
+```
+
+The conversion rule: the **base case becomes the starting value** of the accumulator, and the **recursive case becomes the loop body**, repeated as many times as the recursion would call itself.
+
+### A negative exponent
+
+```java title="PowerGuard.java"
+public class PowerGuard {
+    // Question: what should power do when y is negative?
+    static int power(int x, int y) {
+        if (y < 0) {
+            throw new IllegalArgumentException("y must be at least 0");
+        }
+        if (y == 0) {
+            return 1;
+        }
+        return x * power(x, y - 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(power(2, 3));
+        try {
+            power(2, -1);
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
+```
+
+```text
+8
+y must be at least 0
+```
+
+Without the guard, `power(2, -1)` goes to `y = -2`, `-3` and so on, never meets `y == 0`, and ends in a `StackOverflowError`. State the precondition (`y` at least 0) in the answer, and either check it or say that the caller must.
+
+<Callout type="mistake" title="Common error">
+
+Returning 0 from the base case of a product, or 1 from the base case of a sum. The base case value must be the **identity** of the combination: 1 for multiplication, 0 for addition. `power(x, 0)` returning 0 makes every power 0.
+
+</Callout>
+
+### Exam question 1: trace and convert (5 marks)
+
+Trace the call `power(6, 3)` using a trace table, then write a non-recursive method with the same result. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+"Trace" asks for a table with the calls going down and the results coming back up. "Write a non-recursive method" asks for a loop. The given facts: `x = 6`, `y = 3`, the recursive definition above.
+
+</Step>
+
+<Step title="2. Plan">
+
+Make rows for `y = 3, 2, 1, 0`. Fill the Returned column going down, then the Result column from the bottom up. For the loop, the base case value 1 starts the accumulator.
+
+</Step>
+
+<Step title="3. Solution">
+
+| x | y | Call | `y == 0`? | Returned | Result |
+|---|---|---|---|---|---|
+| 6 | 3 | `power(6, 3)` | false | `6 * power(6, 2)` | 6 * 36 = **216** |
+| 6 | 2 | `power(6, 2)` | false | `6 * power(6, 1)` | 6 * 6 = 36 |
+| 6 | 1 | `power(6, 1)` | false | `6 * power(6, 0)` | 6 * 1 = 6 |
+| 6 | 0 | `power(6, 0)` | true | `1` | 1 |
+
+```java
+static int powerLoop(int x, int y) {
+    int result = 1;
+    for (int i = 1; i <= y; i++) {
+        result = result * x;
+    }
+    return result;
+}
+```
+
+</Step>
+
+<Step title="4. Check">
+
+`6 * 6 * 6 = 216`. The loop runs three times for `y = 3`, multiplying 1 by 6 three times, and runs zero times for `y = 0`, returning 1, which agrees with the base case.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Branching recursion: two base cases and a tree of calls
+
+When a method calls itself twice, the calls form a tree rather than a chain. Fibonacci is the standard case: each number is the sum of the two before it, so the method needs **two base cases** (0 and 1) and **two recursive calls**.
+
+```text
+fib(0) = 0
+fib(1) = 1
+fib(n) = fib(n - 1) + fib(n - 2)    when n is at least 2
+```
+
+### The values
+
+```java title="FibValues.java"
+public class FibValues {
+    // Question: write recursive fib(n) and print fib(0) to fib(10).
+    static int fib(int n) {
+        if (n == 0) {
+            return 0;                         // first base case
+        }
+        if (n == 1) {
+            return 1;                         // second base case
+        }
+        return fib(n - 1) + fib(n - 2);       // two smaller problems
+    }
+
+    public static void main(String[] args) {
+        for (int i = 0; i <= 10; i++) {
+            System.out.print(fib(i) + " ");
+        }
+        System.out.println();
+    }
+}
+```
+
+```text
+0 1 1 2 3 5 8 13 21 34 55
+```
+
+### Counting the calls
+
+```java title="FibCalls.java"
+public class FibCalls {
+    // Question: how many calls does fib(n) make?
+    static int calls;
+
+    static int fib(int n) {
+        calls++;
+        if (n <= 1) {
+            return n;                         // fib(0) = 0 and fib(1) = 1: return n itself
+        }
+        return fib(n - 1) + fib(n - 2);
+    }
+
+    public static void main(String[] args) {
+        for (int n = 0; n <= 10; n++) {
+            calls = 0;
+            int value = fib(n);
+            System.out.println("fib(" + n + ") = " + value + ", calls: " + calls);
+        }
+    }
+}
+```
+
+```text
+fib(0) = 0, calls: 1
+fib(1) = 1, calls: 1
+fib(2) = 1, calls: 3
+fib(3) = 2, calls: 5
+fib(4) = 3, calls: 9
+fib(5) = 5, calls: 15
+fib(6) = 8, calls: 25
+fib(7) = 13, calls: 41
+fib(8) = 21, calls: 67
+fib(9) = 34, calls: 109
+fib(10) = 55, calls: 177
+```
+
+The number of calls grows almost as fast as the value: roughly 1.6 times larger for each step in `n`. That is exponential growth, because the same smaller values are computed again and again. `fib(10)` makes 177 calls to produce 55.
+
+### The tree of calls for fib(4)
+
+```java title="FibTree.java"
+public class FibTree {
+    // Question: draw the calls made by fib(4).
+    static int fib(int n, int depth) {
+        String indent = "";
+        for (int i = 0; i < depth; i++) {
+            indent += "  ";
+        }
+        if (n <= 1) {
+            System.out.println(indent + "fib(" + n + ") = " + n);
+            return n;
+        }
+        System.out.println(indent + "fib(" + n + ")");
+        return fib(n - 1, depth + 1) + fib(n - 2, depth + 1);
+    }
+
+    public static void main(String[] args) {
+        System.out.println("result " + fib(4, 0));
+    }
+}
+```
+
+```text
+fib(4)
+  fib(3)
+    fib(2)
+      fib(1) = 1
+      fib(0) = 0
+    fib(1) = 1
+  fib(2)
+    fib(1) = 1
+    fib(0) = 0
+result 3
+```
+
+Each line is one call, indented by its depth. `fib(4)` calls `fib(3)` first and finishes that whole subtree before calling `fib(2)`. Read it top to bottom to see the order in which the calls happen; read it by indent to see the stack depth.
+
+### The series: iterative first, then recursive (Lecture 6 exercises f and g)
+
+```java title="FibSeries.java"
+public class FibSeries {
+    // Question: display the first n Fibonacci numbers with a loop, then with recursion.
+    static void seriesLoop(int n) {
+        int a = 0;
+        int b = 1;
+        for (int i = 0; i < n; i++) {
+            System.out.print(a + " ");
+            int next = a + b;
+            a = b;
+            b = next;
+        }
+        System.out.println();
+    }
+
+    static int fib(int n) {
+        if (n <= 1) {
+            return n;
+        }
+        return fib(n - 1) + fib(n - 2);
+    }
+
+    static void seriesRecursive(int n) {
+        for (int i = 0; i < n; i++) {
+            System.out.print(fib(i) + " ");
+        }
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        seriesLoop(8);
+        seriesRecursive(8);
+    }
+}
+```
+
+```text
+0 1 1 2 3 5 8 13
+0 1 1 2 3 5 8 13
+```
+
+The loop keeps the last two numbers and does `n` steps. The recursive version recomputes every number from scratch for each position. Both print the same series; the loop does far less work.
+
+<Callout type="mistake" title="Common error">
+
+Writing only one base case for a method that calls itself twice. With `if (n == 0) return 0;` alone, `fib(1)` calls `fib(0)` and `fib(-1)`, and `fib(-1)` calls `fib(-2)` and `fib(-3)`: the second call goes below the base case and never comes back. A method that calls itself with `n - 2` needs a base case for the value just above the one it can skip, here `n == 1`.
+
+</Callout>
+
+### Exam question 2: how many times is fib(2) called? (6 marks)
+
+For the recursive `fib` above, state how many times `fib(2)` is called while `fib(5)` is evaluated, and how many calls are made in total. Show your working. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+The command words are "state" and "show your working". Two numbers are asked for: the calls to `fib(2)` and the total calls. The method is the one with two base cases, so each call with `n` of at least 2 makes two further calls.
+
+</Step>
+
+<Step title="2. Plan">
+
+Expand the tree of calls from `fib(5)`: each node `fib(n)` has children `fib(n - 1)` and `fib(n - 2)` until `n` is 0 or 1. Then count the nodes labelled `fib(2)`, and all nodes.
+
+</Step>
+
+<Step title="3. Solution">
+
+```text
+fib(5)
+├─ fib(4)
+│  ├─ fib(3)
+│  │  ├─ fib(2)  [call 1]
+│  │  └─ fib(1)
+│  └─ fib(2)     [call 2]
+└─ fib(3)
+   ├─ fib(2)     [call 3]
+   └─ fib(1)
+```
+
+Below each `fib(2)` are `fib(1)` and `fib(0)`, which are base cases. Counting every node: `fib(5)` once, `fib(4)` once, `fib(3)` twice, `fib(2)` three times, `fib(1)` five times, `fib(0)` three times, so 15 calls.
+
+```java title="FibCount.java"
+public class FibCount {
+    // Question: count how often each argument is called when fib(5) is evaluated.
+    static int[] counts = new int[6];
+
+    static int fib(int n) {
+        counts[n]++;
+        if (n <= 1) {
+            return n;
+        }
+        return fib(n - 1) + fib(n - 2);
+    }
+
+    public static void main(String[] args) {
+        fib(5);
+        int total = 0;
+        for (int n = 5; n >= 0; n--) {
+            System.out.println("fib(" + n + ") called " + counts[n] + " times");
+            total += counts[n];
+        }
+        System.out.println("total " + total);
+    }
+}
+```
+
+```text
+fib(5) called 1 times
+fib(4) called 1 times
+fib(3) called 2 times
+fib(2) called 3 times
+fib(1) called 5 times
+fib(0) called 3 times
+total 15
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The program agrees: `fib(2)` is called 3 times and the total is 15. A second check is the pattern in the calls table above: the number of calls for `fib(5)` is `2 * fib(6) - 1 = 2 * 8 - 1 = 15`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A recursive method has a base case, answered directly with the identity value for the combination, and a recursive case on a smaller input. Each call has its own stack frame. The base case must catch every input that can reach it: `factR` with the base case `n == 1` never stops for 0, and a missing base case is infinite recursion, which Java reports as a `StackOverflowError`. The iterative and recursive versions of factorial, power and Fibonacci print the same values for valid input. Trace with a table: calls down, results up. A method that calls itself twice, like Fibonacci, needs two base cases and makes many more calls than the loop does steps. Convert to a loop by turning the base case into the starting value and the recursive case into the loop body.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does the base case of a product return 1, and the base case of a sum return 0?">
+
+The base case value must leave the combination unchanged: multiplying by 1 changes nothing, and adding 0 changes nothing. Returning 0 from `power` would turn every result into 0.
+
+</CheckQuestion>
+
+<CheckQuestion question="factL(0) returns 1 but factR(0) never finishes. Why, when the two agree for 1 to 5?">
+
+The loop does not run for 0 and returns its starting value 1. The recursive version has the base case `n == 1`, and from 0 the argument goes -1, -2 and so on, never equal to 1, so the calls end in a `StackOverflowError`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Does a base case written as n == 1 stop sumTo(0)? Explain what happens.">
+
+No. The argument goes 0, -1, -2 and so on and never equals 1, so calls pile up until Java throws `StackOverflowError`. A base case `n <= 1` or `n == 0` reaches it.
+
+</CheckQuestion>
+
+<CheckQuestion question="A recursive Fibonacci has only the base case n == 0. What happens for fib(1)?">
+
+`fib(1)` calls `fib(0)` and `fib(-1)`. The call with -1 calls `fib(-2)` and `fib(-3)`, which go further below the base case and never return, so it ends in a `StackOverflowError`. A method that calls itself with `n - 2` needs a base case for 1 as well.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does the recursive fib make so many more calls than the loop version does steps?">
+
+The recursion calls itself twice and recomputes the same smaller values again and again (`fib(2)` three times inside `fib(5)`), so the calls grow exponentially. The loop keeps the last two numbers and does one step per position.
+
+</CheckQuestion>
+
+</CheckQuestions>

@@ -1,0 +1,650 @@
+---
+title: "Searching by Example"
+description: "Linear search and binary search from Lecture 8, one change at a time: comparison counts on unordered and ordered arrays, the implementations, the recursive conversions the lecture sets as exercises, the best, average and worst cases, and Lab 4."
+---
+
+Lecture 8 starts from a class list: to check that student 202401234 is in it, or to change the name of student 202301723, you have to search it. Searching means traversing a collection to look for a specific element, and the collection may be ordered (sorted) or unordered. The lecture teaches two algorithms. **Linear search** compares the search key with each element in turn; **binary search** needs a sorted array and halves the search space at every step. It sets two exercises, to convert each iterative method into a recursive one, asks for the best, average and worst case of binary search, and Lab 4 asks for both algorithms with a menu. This lesson works through all of it, with every output taken from a real run. It extends [Linear Search](/docs/sem3/csi247/04-sorting-and-searching/notes/linear-search) and [Binary Search](/docs/sem3/csi247/04-sorting-and-searching/notes/binary-search).
+
+<LearningObjectives items={[
+  'Say what searching is, why a program searches, and what a search algorithm returns',
+  'Trace linear search on unordered and ordered arrays and count the comparisons, including the early stop on an ordered array',
+  'Write linear search and binary search iteratively and recursively, and trace binary search with low, mid and high',
+  'State the best-case, average-case and worst-case run times of both algorithms and why binary search needs a sorted array',
+  'Answer Lab 4: linearSearch for decimal numbers, binarySearch with a start and an end, and a menu that runs until the user ends it',
+]} />
+
+<Prerequisites items={[
+  'Arrays by Example in the Java Fundamentals chapter, and Recursion by Example in the Recursion chapter',
+  'Big-Oh notation: O(1), O(log n), O(n), from the Time Complexity chapter',
+  'Drawing memory diagrams of arrays and variables',
+]} />
+
+## 1. The templates
+
+```text
+Linear search:   for (int i = 0; i < arr.length; i++) { if (arr[i] == key) return i; }  return -1;
+Binary search:   while (low <= high) { int mid = low + (high - low) / 2;
+                     if (arr[mid] < key) low = mid + 1; else if (arr[mid] > key) high = mid - 1; else return mid; }  return -1;
+Result:          the index of the key when it is found, -1 when it is not
+```
+
+**Searching** is the process of looking for a specific element in a collection. A program searches to determine whether an element is in a collection, or to display or modify information about it (or delete it). Both algorithms in this course return the **index** of the search element when it is found, and **-1** when it is not.
+
+## 2. Linear search
+
+Linear search (also called sequential search) compares the search key with each element of the array, in order, until the key is found or the collection is exhausted. The lecture counts the comparisons on two arrays of ten numbers.
+
+```java title="LinearCounts.java"
+public class LinearCounts {
+    static int comparisons;
+
+    // The lecture's method, with a counter added.
+    public static int linearSearch(int arr[], int key) {
+        comparisons = 0;
+        for (int i = 0; i < arr.length; i++) {
+            comparisons++;
+            if (arr[i] == key)
+                return i;                            // found
+        }
+        return -1;                                   // when key is not found
+    }
+
+    // For an ordered array we can stop once an element is larger than the key.
+    public static int linearSearchOrdered(int arr[], int key) {
+        comparisons = 0;
+        for (int i = 0; i < arr.length; i++) {
+            comparisons++;
+            if (arr[i] == key)
+                return i;
+            if (arr[i] > key)
+                return -1;                           // the key cannot be further on
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+        int[] unordered = {63, 29, 85, 72, 18, 42, 23, 54, 8, 32};
+        int[] ordered = {8, 18, 23, 29, 34, 42, 54, 63, 72, 85};
+
+        int at = linearSearch(unordered, 18);
+        System.out.println("unordered, 18: index " + at + ", " + comparisons + " comparisons");
+        at = linearSearch(unordered, 31);
+        System.out.println("unordered, 31: index " + at + ", " + comparisons + " comparisons");
+
+        at = linearSearchOrdered(ordered, 18);
+        System.out.println("ordered, 18: index " + at + ", " + comparisons + " comparisons");
+        at = linearSearchOrdered(ordered, 31);
+        System.out.println("ordered, 31: index " + at + ", " + comparisons + " comparisons");
+        at = linearSearch(ordered, 31);
+        System.out.println("ordered, 31 without the early stop: index " + at + ", " + comparisons + " comparisons");
+    }
+}
+```
+
+```text
+unordered, 18: index 4, 5 comparisons
+unordered, 31: index -1, 10 comparisons
+ordered, 18: index 1, 2 comparisons
+ordered, 31: index -1, 5 comparisons
+ordered, 31 without the early stop: index -1, 10 comparisons
+```
+
+On the unordered array, 18 is the fifth element (index 4) so it takes 5 comparisons, and 31 is not there so all 10 elements are compared. On the ordered array 18 is found after 2 comparisons. For 31 the ordered version stops at 34, the first element larger than 31, after 5 comparisons, whereas the plain method compares all 10. The lecture's observation: for an ordered collection you do not need to look at all the elements, so the search is faster only when the key is **not** in the list, and in general the efficiency is similar for ordered and unordered collections.
+
+<Callout type="mistake" title="Common error">
+
+Counting the early stop for a key that is in the list. The ordered version saves comparisons only for a key that is absent (or when it stops sooner than the end). For a key that is present, the count is the position of the key plus one, whether the array is ordered or not.
+
+</Callout>
+
+### Linear search variations
+
+```java title="LinearVariants.java"
+public class LinearVariants {
+    // The first occurrence is returned when a key appears more than once.
+    public static int linearSearch(int arr[], int key) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == key)
+                return i;
+        }
+        return -1;
+    }
+
+    // The exercise of Lecture 8: the iterative method converted into a recursive one.
+    public static int linearSearchRec(int arr[], int key, int i) {
+        if (i == arr.length)
+            return -1;                               // base case 1: the end of the array, not found
+        if (arr[i] == key)
+            return i;                                // base case 2: found
+        return linearSearchRec(arr, key, i + 1);     // recursive case: the rest of the array
+    }
+
+    public static void main(String[] args) {
+        int[] data = {63, 29, 85, 72, 18, 29, 8};
+        System.out.println(linearSearch(data, 29) + " " + linearSearch(data, 8) + " " + linearSearch(data, 99));
+        System.out.println(linearSearchRec(data, 29, 0) + " " + linearSearchRec(data, 8, 0) + " " + linearSearchRec(data, 99, 0));
+        System.out.println(linearSearch(new int[0], 5) + " " + linearSearchRec(new int[0], 5, 0));
+    }
+}
+```
+
+```text
+1 6 -1
+1 6 -1
+-1 -1
+```
+
+Both methods give the same answers: the first occurrence (index 1 for the repeated 29), the last element (index 6) and -1 for a missing key. The recursive version has two base cases (the end of the array, and the key found) and one recursive case that searches the rest from `i + 1`. An empty array is handled by the first base case: the answer is -1.
+
+### Linear search's time complexity
+
+The best case is **O(1)**: the search item is at index 0. The worst case is **O(n)**: the item is at index n - 1 or is not in the array.
+
+```java title="LinearCases.java"
+public class LinearCases {
+    static int comparisons;
+
+    public static int linearSearch(int arr[], int key) {
+        comparisons = 0;
+        for (int i = 0; i < arr.length; i++) {
+            comparisons++;
+            if (arr[i] == key)
+                return i;
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+        for (int n : new int[] {10, 100, 1000}) {
+            int[] arr = new int[n];
+            for (int i = 0; i < n; i++) {
+                arr[i] = i + 1;
+            }
+            linearSearch(arr, 1);
+            int best = comparisons;
+            linearSearch(arr, n);
+            int last = comparisons;
+            linearSearch(arr, n + 1);
+            int missing = comparisons;
+            System.out.println("n = " + n + ": first " + best + ", last " + last + ", missing " + missing);
+        }
+    }
+}
+```
+
+```text
+n = 10: first 1, last 10, missing 10
+n = 100: first 1, last 100, missing 100
+n = 1000: first 1, last 1000, missing 1000
+```
+
+The key at the front always takes one comparison, however large the array is, and the last element or a missing key takes n comparisons, so the cost grows in proportion to n. Linear search is used for small collections and for unsorted data; it is easy to implement and it is not a fast algorithm.
+
+### Exam question 1: count the comparisons (8 marks)
+
+For `{63, 29, 85, 72, 18, 42, 23, 54, 8, 32}` (unordered) and `{8, 18, 23, 29, 34, 42, 54, 63, 72, 85}` (ordered), state the outcome and the number of comparisons of linear search for these cases: (a) 18 in the unordered array; (b) 31 in the unordered array; (c) 18 in the ordered array; (d) 31 in the ordered array, stopping as soon as an element larger than the key is seen. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four searches, each needing the outcome (found or not found) and the number of comparisons. Only (d) uses the early stop.
+
+</Step>
+
+<Step title="2. Plan">
+
+Count one comparison for every element that is compared with the key, from the front. Stop when the key is found, when the end is reached, or (for the ordered array) when an element is greater than the key.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Case | Outcome | Comparisons | Reason |
+|---|---|---|---|
+| (a) 18, unordered | found at index 4 | 5 | 63, 29, 85, 72 are compared and rejected, then 18 matches |
+| (b) 31, unordered | not found | 10 | every element is compared |
+| (c) 18, ordered | found at index 1 | 2 | 8 is rejected, then 18 matches |
+| (d) 31, ordered | not found | 5 | 8, 18, 23, 29, then 34 is larger than 31, so the search stops |
+
+</Step>
+
+<Step title="4. Check">
+
+These are the counts printed by `LinearCounts`. Cases (a) and (c) show the same key needing a different number of comparisons because of where it sits; (d) is the only one where the ordering helps.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 2: convert to a recursive method (6 marks)
+
+Convert this iterative method into a recursive one and trace it for the key 18 in `{63, 29, 85, 72, 18}`. (6 marks)
+
+```java
+public static int linearSearch(int arr[], int key) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr[i] == key)
+            return i;
+    }
+    return -1;
+}
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Convert a loop to recursion and trace one call. The loop variable `i` has to become a parameter.
+
+</Step>
+
+<Step title="2. Plan">
+
+The loop condition `i < arr.length` becomes the base case that ends in -1. The body's test becomes the second base case. The loop step `i++` becomes the recursive call with `i + 1`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java
+public static int linearSearchRec(int arr[], int key, int i) {
+    if (i == arr.length) return -1;               // the loop ended: not found
+    if (arr[i] == key) return i;                  // found
+    return linearSearchRec(arr, key, i + 1);      // the next iteration
+}
+```
+
+The trace for key 18 (called as `linearSearchRec(arr, 18, 0)`):
+
+| Call | `i` | `arr[i]` | Result |
+|---|---|---|---|
+| 1 | 0 | 63 | not equal: call with 1 |
+| 2 | 1 | 29 | not equal: call with 2 |
+| 3 | 2 | 85 | not equal: call with 3 |
+| 4 | 3 | 72 | not equal: call with 4 |
+| 5 | 4 | 18 | equal: return 4 |
+
+</Step>
+
+<Step title="4. Check">
+
+The answer 4 comes back unchanged through the four earlier calls, which each return what the next call returned. `LinearVariants` ran the same conversion on a longer array and gave the same answers as the loop.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Binary search
+
+Binary search requires a **sorted** collection and keeps halving the search space until it finds the key or exhausts the collection. Because the data is ordered, it stops when the item is not where it is expected. It suits data structures with random access, such as arrays. Each pass compares the key with the middle element, and there are three cases: the key equals the middle element (found, the search ends); the key is smaller (search the first half); or the key is larger (search the second half).
+
+This is the lecture's method. `low` and `high` keep track of the part of the array being searched.
+
+```java title="BinaryTrace.java"
+public class BinaryTrace {
+    public static int binarySearch(int[] arr, int key, int low, int high) {
+        int index = -1;                                // not yet found the item
+        while (low <= high) {
+            int mid = low + ((high - low) / 2);
+            System.out.println("  low=" + low + " high=" + high + " mid=" + mid + " arr[mid]=" + arr[mid]);
+            if (arr[mid] < key) {
+                low = mid + 1;
+            } else if (arr[mid] > key) {
+                high = mid - 1;
+            } else if (arr[mid] == key) {
+                index = mid;                           // found the item
+                break;
+            }
+        }
+        return index;
+    }
+
+    public static void main(String[] args) {
+        int[] arr = {8, 18, 23, 29, 34, 42, 54, 63, 72, 85};
+        System.out.println("search 18:");
+        System.out.println("index " + binarySearch(arr, 18, 0, arr.length - 1));
+        System.out.println("search 31:");
+        System.out.println("index " + binarySearch(arr, 31, 0, arr.length - 1));
+        System.out.println("search 85:");
+        System.out.println("index " + binarySearch(arr, 85, 0, arr.length - 1));
+    }
+}
+```
+
+```text
+search 18:
+  low=0 high=9 mid=4 arr[mid]=34
+  low=0 high=3 mid=1 arr[mid]=18
+index 1
+search 31:
+  low=0 high=9 mid=4 arr[mid]=34
+  low=0 high=3 mid=1 arr[mid]=18
+  low=2 high=3 mid=2 arr[mid]=23
+  low=3 high=3 mid=3 arr[mid]=29
+index -1
+search 85:
+  low=0 high=9 mid=4 arr[mid]=34
+  low=5 high=9 mid=7 arr[mid]=63
+  low=8 high=9 mid=8 arr[mid]=72
+  low=9 high=9 mid=9 arr[mid]=85
+index 9
+```
+
+Searching for 18: the first mid is index 4 (34); 18 is smaller, so the search focuses on the left side, indexes 0 to 3; the next mid is index 1, which holds 18: found, after two passes. Searching for 31, which is not there, the space shrinks 0-9, 0-3, 2-3, 3-3, and then `low` (4) passes `high` (3), the loop ends and the method returns -1, after four passes. The key 85, the last element, takes four passes too.
+
+The lecture's picture starts at 42 (index 5), but the sample method starts at 34 (index 4). With ten cells there are two middle cells, and the picture takes the upper one while the formula `low + (high - low) / 2` takes the lower one. Both are valid binary searches; when a question gives code, trace with the code's formula.
+
+<MemoryDiagram scenario="binsearch" />
+
+<MemoryDiagram scenario="binmiss" />
+
+### Binary search is faster only on sorted data
+
+```java title="BinaryNeedsSorted.java"
+public class BinaryNeedsSorted {
+    public static int binarySearch(int[] arr, int key, int low, int high) {
+        int index = -1;
+        while (low <= high) {
+            int mid = low + ((high - low) / 2);
+            if (arr[mid] < key) {
+                low = mid + 1;
+            } else if (arr[mid] > key) {
+                high = mid - 1;
+            } else if (arr[mid] == key) {
+                index = mid;
+                break;
+            }
+        }
+        return index;
+    }
+
+    public static void main(String[] args) {
+        int[] unordered = {63, 29, 85, 72, 18, 42, 23, 54, 8, 32};
+        System.out.println("18 is at index 4, binary search says " + binarySearch(unordered, 18, 0, unordered.length - 1));
+        System.out.println("29 is at index 1, binary search says " + binarySearch(unordered, 29, 0, unordered.length - 1));
+        System.out.println("63 is at index 0, binary search says " + binarySearch(unordered, 63, 0, unordered.length - 1));
+    }
+}
+```
+
+```text
+18 is at index 4, binary search says 4
+29 is at index 1, binary search says -1
+63 is at index 0, binary search says -1
+```
+
+On the unordered array the method is wrong: it says "not found" for 29 and 63, which are both present. It finds 18 only by luck, because index 4 happens to be the first midpoint. Binary search discards half of the array on the assumption that the order tells it which half cannot hold the key; that assumption fails for unordered data. The array MUST be sorted.
+
+<Callout type="mistake" title="Common error">
+
+Using binary search on an array that has not been sorted. It does not fail with an error: it returns -1 for keys that are present. Sort first (or use linear search).
+
+</Callout>
+
+### Binary search recursively
+
+The lecture's second exercise: convert the iterative method into a recursive one. The loop becomes a recursive call on the half that can still hold the key, and the end of the loop (`low > high`) becomes the base case.
+
+```java title="BinaryRec.java"
+public class BinaryRec {
+    static int calls;
+
+    public static int binarySearchRec(int[] arr, int key, int low, int high) {
+        calls++;
+        if (low > high)
+            return -1;                                       // the search space is empty
+        int mid = low + ((high - low) / 2);
+        if (arr[mid] == key)
+            return mid;                                      // found
+        else if (arr[mid] < key)
+            return binarySearchRec(arr, key, mid + 1, high); // search the right half
+        else
+            return binarySearchRec(arr, key, low, mid - 1);  // search the left half
+    }
+
+    public static void main(String[] args) {
+        int[] arr = {8, 18, 23, 29, 34, 42, 54, 63, 72, 85};
+        int[] keys = {18, 34, 85, 31, 5, 100};
+        for (int key : keys) {
+            calls = 0;
+            int at = binarySearchRec(arr, key, 0, arr.length - 1);
+            System.out.println("key " + key + ": index " + at + ", " + calls + " calls");
+        }
+    }
+}
+```
+
+```text
+key 18: index 1, 2 calls
+key 34: index 4, 1 calls
+key 85: index 9, 4 calls
+key 31: index -1, 5 calls
+key 5: index -1, 4 calls
+key 100: index -1, 5 calls
+```
+
+The key in the middle (34) is found by the first call and 18 by the second. 85, the last element, takes 4 calls. A missing key takes 4 or 5 calls: the last of them finds the search space empty (`low > high`) and returns -1. The number of calls is small because the problem halves each time.
+
+### The cases of binary search
+
+The lecture asks for the best-case, average-case and worst-case run times of binary search. The best case is **O(1)**: the key is the middle element and the first comparison finds it. The average and the worst cases are **O(log n)**: the search space is halved at every step, so an array of n elements needs about log n halvings (log base 2 of n) before it is empty. The program counts the passes of the loop for a missing key that is larger than every element, the worst case:
+
+```java title="BinaryGrowth.java"
+public class BinaryGrowth {
+    public static void main(String[] args) {
+        int[] sizes = {10, 100, 1000, 1000000};
+        for (int n : sizes) {
+            int[] arr = new int[n];
+            for (int i = 0; i < n; i++) {
+                arr[i] = 2 * i + 2;                     // sorted: 2, 4, 6, ...
+            }
+            int key = 2 * n + 1;                         // larger than every element: not found, the longest path
+            int low = 0, high = n - 1, passes = 0;
+            while (low <= high) {
+                int mid = low + (high - low) / 2;
+                passes++;
+                if (arr[mid] < key) low = mid + 1;
+                else if (arr[mid] > key) high = mid - 1;
+                else break;
+            }
+            System.out.println("n = " + n + ": " + passes + " passes (linear search: " + n + " comparisons)");
+        }
+    }
+}
+```
+
+```text
+n = 10: 4 passes (linear search: 10 comparisons)
+n = 100: 7 passes (linear search: 100 comparisons)
+n = 1000: 10 passes (linear search: 1000 comparisons)
+n = 1000000: 20 passes (linear search: 1000000 comparisons)
+```
+
+For a million elements binary search needs about 20 passes where linear search needs a million comparisons. The price is that the array must be sorted, which is the subject of the next lessons. The key searched for is larger than every element, which sends the search to the right half at every pass: the worst case.
+
+### Exam question 3: trace binary search (6 marks)
+
+Trace binary search (the lecture's method) for the key 54 in `{8, 18, 23, 29, 34, 42, 54, 63, 72, 85}`: give `low`, `high`, `mid` and `arr[mid]` for each pass, and the result. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A table of the values of `low`, `high` and `mid` for each pass, and the returned index. The array is sorted and has 10 elements.
+
+</Step>
+
+<Step title="2. Plan">
+
+Start with `low = 0` and `high = 9`. Calculate `mid = low + (high - low) / 2` with integer division, compare `arr[mid]` with the key, and move `low` up (`mid + 1`) or `high` down (`mid - 1`).
+
+</Step>
+
+<Step title="3. Solution">
+
+| Pass | `low` | `high` | `mid` | `arr[mid]` | Comparison with 54 | Action |
+|---|---|---|---|---|---|---|
+| 1 | 0 | 9 | 4 | 34 | 34 < 54 | `low = 5` |
+| 2 | 5 | 9 | 7 | 63 | 63 > 54 | `high = 6` |
+| 3 | 5 | 6 | 5 | 42 | 42 < 54 | `low = 6` |
+| 4 | 6 | 6 | 6 | 54 | equal | found: return 6 |
+
+</Step>
+
+<Step title="4. Check">
+
+Index 6 holds 54. Four passes is the most that any search of ten elements needs, which agrees with the program output for the missing key and for 85 (four passes each). The most common slip is the mid of pass 2: (5 + 9) / 2 = 7.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Lab 4: both searches with a menu
+
+Lab 4 asks for an application class with `linearSearch()`, which accepts an array of floating-point numbers and a floating-point number and returns the index or -1, and `binarySearch()`, which accepts an array of integers, a search key, a start position and an end position and returns the index or -1. The test: two arrays of 50 values each; a `for` loop with `Math.random` for 50 floating-point values between 0 and 80 in the first array; a `while` loop for the first 50 positive even integers in the second; a menu that repeatedly asks which algorithm to search with, runs it, and displays the outcome with an explanatory message, and ends when the user selects neither `l`/`L` nor `b`/`B`. Array 1 tests linear search and array 2 tests binary search.
+
+```java title="Lab4.java"
+import java.util.Locale;
+import java.util.Scanner;
+
+public class Lab4 {
+    public static int linearSearch(double[] arr, double key) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i] == key)
+                return i;
+        }
+        return -1;
+    }
+
+    public static int binarySearch(int[] arr, int key, int start, int end) {
+        int low = start, high = end;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (arr[mid] == key)
+                return mid;
+            else if (arr[mid] < key)
+                low = mid + 1;
+            else
+                high = mid - 1;
+        }
+        return -1;
+    }
+
+    public static void main(String[] args) {
+        double[] decimals = new double[50];
+        for (int i = 0; i < decimals.length; i++) {
+            decimals[i] = Math.random() * 80;               // 50 values between 0 and 80
+        }
+        int[] evens = new int[50];
+        int count = 0, next = 2;
+        while (count < evens.length) {
+            evens[count++] = next;                           // the first 50 positive even integers
+            next += 2;
+        }
+
+        // The typed answers stand in for the keyboard: linear for a value that is in array 1, binary for 36,
+        // linear for a value that is not in array 1, binary for 37, then q ends the program.
+        Scanner in = new Scanner("l " + decimals[17] + " b 36 L 80.5 B 37 q");
+        in.useLocale(Locale.US);
+        boolean running = true;
+        while (running) {
+            System.out.print("Search with (L)inear or (B)inary? ");
+            String choice = in.next();
+            System.out.println(choice);
+            if (choice.equalsIgnoreCase("l")) {
+                double key = in.nextDouble();
+                int at = linearSearch(decimals, key);
+                System.out.println(at >= 0 ? "Linear search: the number is at index " + at : "Linear search: the number is not in the array");
+            } else if (choice.equalsIgnoreCase("b")) {
+                int key = in.nextInt();
+                int at = binarySearch(evens, key, 0, evens.length - 1);
+                System.out.println(at >= 0 ? "Binary search: " + key + " is at index " + at : "Binary search: " + key + " is not in the array");
+            } else {
+                running = false;                            // neither l/L nor b/B: terminate
+            }
+        }
+        System.out.println("Goodbye");
+    }
+}
+```
+
+```text
+Search with (L)inear or (B)inary? l
+Linear search: the number is at index 17
+Search with (L)inear or (B)inary? b
+Binary search: 36 is at index 17
+Search with (L)inear or (B)inary? L
+Linear search: the number is not in the array
+Search with (L)inear or (B)inary? B
+Binary search: 37 is not in the array
+Search with (L)inear or (B)inary? q
+Goodbye
+```
+
+The random numbers differ from run to run, so the program searches for a number it knows is in array 1 (the one at index 17) and for 80.5, which is above the range 0 to 80. The linear search compares decimal numbers with `==`, which is safe here only because the key is a value taken from the array itself. In array 2 the value at index `i` is `2 * (i + 1)`, so 36 is at index 17, and the odd number 37 is not there. Any answer other than `l`, `L`, `b` or `B` ends the loop.
+
+<Callout type="mistake" title="Common error">
+
+Searching an array of decimal numbers for a number the user types, such as 23.5, with `==`. A computed or random decimal number will almost never equal a typed value exactly. For testing, search for a value taken from the array.
+
+</Callout>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Searching looks for an element in a collection and returns its index, or -1. Linear search compares the key with each element in turn: best case O(1) (index 0), worst case O(n) (the last element or not found); on an ordered array it can stop once an element is larger than the key, which helps only when the key is absent. Binary search needs a sorted array: compare the key with the middle element, then search the left half (key smaller) or the right half (key larger), keeping `low` and `high`; the loop ends when the key is found or `low > high`. Its best case is O(1) and its average and worst cases are O(log n). Both can be written recursively: linear search with the index as a parameter, binary search with `low` and `high`. On unsorted data binary search silently gives wrong answers.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="How many comparisons does linear search need for 18 in 63 29 85 72 18 42 23 54 8 32, and for 31?">
+
+18 is the fifth element, so 5 comparisons. 31 is not in the array, so all 10 elements are compared and the result is -1.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does linear search on an ordered array save comparisons only for a missing key?">
+
+For a key that is present, the search still has to reach the key. For a missing key it can stop at the first element larger than the key instead of reading to the end.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why must the array be sorted for binary search?">
+
+Each comparison discards half of the array on the assumption that the order tells which half cannot hold the key. If the array is unordered the discarded half may hold the key, and the method returns -1 for a key that is present.
+
+</CheckQuestion>
+
+<CheckQuestion question="What are the best, average and worst cases of binary search?">
+
+The best case is O(1): the key is the middle element. The average and worst cases are O(log n), because the search space is halved at every step.
+
+</CheckQuestion>
+
+<CheckQuestion question="What are the base cases of the recursive binary search?">
+
+`low > high` (the search space is empty: return -1) and `arr[mid] == key` (found: return `mid`). Otherwise the method calls itself on the left half (`high = mid - 1`) or the right half (`low = mid + 1`).
+
+</CheckQuestion>
+
+</CheckQuestions>

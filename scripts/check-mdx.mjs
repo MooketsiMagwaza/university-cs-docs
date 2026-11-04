@@ -9,6 +9,7 @@
  *   node scripts/check-mdx.mjs content/docs/sem3/csi243/10-reasoning-revision/notes/proofs-of-programs-i.mdx
  *   node scripts/check-mdx.mjs content/docs/sem3/csi243/07-higher-order        (every .mdx under a folder)
  *
+ * It also parses the frontmatter as YAML (an unquoted description that contains a colon and a space breaks the whole site build).
  * It does not render anything and does not check that components exist. Exit code 1 when a page does not compile.
  */
 import { execFileSync } from 'node:child_process';
@@ -16,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compile } from '@mdx-js/mdx';
+import yaml from 'js-yaml';
 import remarkMath from 'remark-math';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,6 +74,15 @@ for (const file of files.sort()) {
   const raw = fs.readFileSync(file, 'utf8');
   const frontMatter = /^---[\s\S]*?---\r?\n/.exec(raw);
   const offset = frontMatter ? frontMatter[0].split('\n').length - 1 : 0;
+  if (frontMatter) {
+    try {
+      yaml.load(frontMatter[0].replace(/^---\r?\n/, '').replace(/\r?\n---\r?\n$/, ''));
+    } catch (error) {
+      failed += 1;
+      console.log(`FAILED  ${path.relative(root, file).replace(/\\/g, '/')}:2\n        frontmatter is not valid YAML: ${String(error.message).split('\n')[0]}`);
+      continue;
+    }
+  }
   try {
     await compile(frontMatter ? raw.slice(frontMatter[0].length) : raw, { remarkPlugins: [remarkMath], outputFormat: 'program' });
   } catch (error) {

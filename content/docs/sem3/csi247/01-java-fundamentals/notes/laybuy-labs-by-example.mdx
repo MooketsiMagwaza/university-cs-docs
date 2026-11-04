@@ -1,0 +1,531 @@
+---
+title: "Lay-buy Labs by Example"
+description: "Lab 1 (a lay-buy class, records read from a file into an array, outstanding amounts, two output files) and Lab 2 (a UML diagram, pre-processing, validation and a linear search with a question loop), solved in full."
+---
+
+Labs 1 and 2 use one scenario: ABC Apparel sells clothes on lay-buy, where a customer pays in instalments until the balance is cleared. Lab 1 asks for a program that reads lay-buy records from a file into an array of objects, calculates what is still owed on each, and writes two output files. Lab 2 reuses the class and the data file: a UML diagram of the class, a method that filters erroneous lines, a method that checks the payments, and a linear search with a question-and-answer loop. This lesson solves both labs in full, with every output taken from a real run, and points out where the lab sheets disagree with each other. It uses the ideas of [Arrays by Example](/docs/sem3/csi247/01-java-fundamentals/notes/arrays-by-example), [Methods by Example](/docs/sem3/csi247/01-java-fundamentals/notes/methods-by-example) and [Java Basics by Example](/docs/sem3/csi247/01-java-fundamentals/notes/java-basics-by-example). Linear search comes back in the sorting and searching chapter.
+
+<LearningObjectives items={[
+  'Model a scenario with a class, and read records from a file into an array of objects',
+  'Calculate a derived value for each record and write selected records to output files, with formatted output',
+  'Draw a UML class diagram for a class',
+  'Write methods that filter an array, write to a file and return a smaller array',
+  'Write a linear search that returns an index or -1, and a loop that validates the answers of the user',
+]} />
+
+<Prerequisites items={[
+  'Arrays by Example, Methods by Example and Java Basics by Example in this chapter',
+  'Classes by Example in the Object-Oriented Programming chapter',
+]} />
+
+## 1. How to answer a lab question
+
+1. **Read.** List what the program must read, what it must calculate and what it must write, and to which files.
+2. **Model.** The sheet asks for a flow chart: input file name, read each record, create an object, store it in the array; then for each object calculate and write.
+3. **Write the class, then the methods.** One class for a record, and methods for the steps that are repeated or separate.
+4. **Test with a small file** you can check by hand, with a record on each side of every boundary.
+
+## 2. Lab 1: the lay-buy program
+
+Each record holds the lay-bye number, the customer ID, the total lay-bye and the amount paid so far, in that order: `M25341;98762634;4000;1700`. The program reads the name of the input file from the keyboard, reads each record, creates a `Laybye` object and stores it in an array. It then calculates the outstanding amount of each lay-bye and sends the number, customer ID, total, amount paid and outstanding amount to `latest.txt`; the lay-byes whose outstanding amount **exceeds 50% of the total** also go to `concern.txt`.
+
+```java title="Laybye.java"
+public class Laybye {
+    private String number;
+    private String customerId;
+    private double total;
+    private double paid;
+
+    public Laybye(String number, String customerId, double total, double paid) {
+        this.number = number;
+        this.customerId = customerId;
+        this.total = total;
+        this.paid = paid;
+    }
+
+    public String getNumber() {
+        return number;
+    }
+
+    public String getCustomerId() {
+        return customerId;
+    }
+
+    public double getTotal() {
+        return total;
+    }
+
+    public double getPaid() {
+        return paid;
+    }
+
+    public double outstanding() {
+        return total - paid;
+    }
+
+    public boolean isConcern() {                  // the outstanding amount exceeds 50% of the total
+        return outstanding() > total * 0.5;
+    }
+
+    public String line() {
+        return String.format("%-8s %-10s %9.2f %9.2f %9.2f", number, customerId, total, paid, outstanding());
+    }
+}
+```
+
+The keyboard part of the lab reads the file name: `Scanner keyboard = new Scanner(System.in); String filename = keyboard.nextLine();` and then `new Scanner(new File(filename))`. The program below writes the sample file first, into a temporary folder, so that it can run on its own. The size of the array is not known before the file is read, so it is created with room for 100 records and a counter records how many are used.
+
+```java title="LaybyeProgram.java"
+import java.io.File;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.util.Scanner;
+
+public class LaybyeProgram {
+    // Reads every record of the file into an array of Laybye objects; returns the number of records read.
+    static int readRecords(File file, Laybye[] items) throws Exception {
+        Scanner in = new Scanner(file);
+        int count = 0;
+        while (in.hasNextLine() && count < items.length) {
+            String[] f = in.nextLine().split(";");
+            items[count++] = new Laybye(f[0], f[1], Double.parseDouble(f[2]), Double.parseDouble(f[3]));
+        }
+        in.close();
+        return count;
+    }
+
+    static void show(String title, File file) throws Exception {
+        System.out.println(title + ":");
+        Scanner in = new Scanner(file);
+        while (in.hasNextLine()) {
+            System.out.println("  " + in.nextLine());
+        }
+        in.close();
+    }
+
+    public static void main(String[] args) throws Exception {
+        File dir = Files.createTempDirectory("laybye").toFile();
+        dir.deleteOnExit();
+        File input = new File(dir, "laybye.txt");
+        input.deleteOnExit();
+        PrintWriter out = new PrintWriter(input);
+        out.println("M25341;98762634;4000;1700");
+        out.println("M25342;91234567;2500;2500");
+        out.println("M25343;90000111;1200;100");
+        out.println("M25344;98700001;5000;3100");
+        out.println("M25345;93456789;800;0");
+        out.println("M25346;97654321;3000;1500");
+        out.close();
+
+        Laybye[] items = new Laybye[100];
+        int count = readRecords(input, items);
+
+        File latest = new File(dir, "latest.txt");
+        File concern = new File(dir, "concern.txt");
+        latest.deleteOnExit();
+        concern.deleteOnExit();
+        PrintWriter latestOut = new PrintWriter(latest);
+        PrintWriter concernOut = new PrintWriter(concern);
+        for (int i = 0; i < count; i++) {
+            latestOut.println(items[i].line());
+            if (items[i].isConcern()) {
+                concernOut.println(items[i].line());
+            }
+        }
+        latestOut.close();
+        concernOut.close();
+
+        System.out.println(count + " records read");
+        show("latest.txt", latest);
+        show("concern.txt", concern);
+    }
+}
+```
+
+```text
+6 records read
+latest.txt:
+  M25341   98762634     4000.00   1700.00   2300.00
+  M25342   91234567     2500.00   2500.00      0.00
+  M25343   90000111     1200.00    100.00   1100.00
+  M25344   98700001     5000.00   3100.00   1900.00
+  M25345   93456789      800.00      0.00    800.00
+  M25346   97654321     3000.00   1500.00   1500.00
+concern.txt:
+  M25341   98762634     4000.00   1700.00   2300.00
+  M25343   90000111     1200.00    100.00   1100.00
+  M25345   93456789      800.00      0.00    800.00
+```
+
+The outstanding amounts are 4000 - 1700 = 2300, 0, 1100, 1900, 800 and 1500. The concern file has the lay-byes whose outstanding amount **exceeds** half of the total: M25341 (2300 against 2000), M25343 (1100 against 600) and M25345 (800 against 400). M25346 owes exactly 50% (1500 of 3000), which is not more than half, so it is correctly left out; this is the boundary record to test. M25342 is paid up, and M25344 owes 1900 of 5000.
+
+<Callout type="mistake" title="Common error">
+
+Writing `outstanding() >= total * 0.5` for "exceeds 50%". "Exceeds" means strictly more, so the record with exactly half outstanding must not be in `concern.txt`. Test a record on the boundary.
+
+</Callout>
+
+### Exam question 1: outstanding and concern (6 marks)
+
+Give the outstanding amount of each lay-bye and say which are sent to the concern file: total 1000 paid 400; total 800 paid 400; total 2000 paid 0; total 500 paid 500. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Four lay-byes; for each, total minus paid, and a test against half of the total. The test is "exceeds".
+
+</Step>
+
+<Step title="2. Plan">
+
+Outstanding = total - paid. A record is a concern when outstanding > 0.5 x total.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Total | Paid | Outstanding | Half of the total | Concern? |
+|---|---|---|---|---|
+| 1000 | 400 | 600 | 500 | yes: 600 > 500 |
+| 800 | 400 | 400 | 400 | no: 400 is not more than 400 |
+| 2000 | 0 | 2000 | 1000 | yes |
+| 500 | 500 | 0 | 250 | no |
+
+</Step>
+
+<Step title="4. Check">
+
+The second row is the boundary, as M25346 was in the program: exactly half outstanding is not "exceeds". The fourth row is a paid-up lay-bye, which never needs attention.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. Lab 2: UML, filtering and searching
+
+Lab 2 uses the same class and the same data file with three changes: the lay-buy ID must be an `int` (kept at 6 digits) because the linear search compares IDs, the data file must use commas, and the class is now called `LayBuy`. The sheet tells you to replace all colons in the data file with commas, but the Lab 1 sample record uses **semicolons**, so replace the semicolons. The fields are the six-digit ID, the customer ID, the total and the amount paid.
+
+### Question 1: the UML class diagram
+
+```text
++-------------------------------------------------------+
+|                        LayBuy                         |
++-------------------------------------------------------+
+| - id: int                                             |
+| - customerId: String                                  |
+| - total: double                                       |
+| - paid: double                                        |
++-------------------------------------------------------+
+| + LayBuy(id: int, customerId: String,                 |
+|          total: double, paid: double)                 |
+| + getId(): int                                        |
+| + getCustomerId(): String                             |
+| + getTotal(): double                                  |
+| + getPaid(): double                                   |
+| + outstanding(): double                               |
+| + toString(): String                                  |
++-------------------------------------------------------+
+```
+
+A minus marks a private member and a plus a public one. The class box is also the specification: each line is a member to write.
+
+```java title="LayBuy.java"
+public class LayBuy {
+    private int id;
+    private String customerId;
+    private double total;
+    private double paid;
+
+    public LayBuy(int id, String customerId, double total, double paid) {
+        this.id = id;
+        this.customerId = customerId;
+        this.total = total;
+        this.paid = paid;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public String getCustomerId() {
+        return customerId;
+    }
+
+    public double getTotal() {
+        return total;
+    }
+
+    public double getPaid() {
+        return paid;
+    }
+
+    public double outstanding() {
+        return total - paid;
+    }
+
+    @Override
+    public String toString() {
+        return id + "," + customerId + "," + String.format("%.2f", total) + "," + String.format("%.2f", paid);
+    }
+}
+```
+
+### Question 2: the methods
+
+The sheet asks for four methods. **preProcessing** accepts an input file name and an output file name, in that order; it sends every lay-buy with a total that is negative or exceeds P5000 to the output file and returns an array of the others. **validate** accepts an array and an output file, sends the items whose paid amount exceeds the total to the file and returns an array of the rest. **linearSearch** accepts an array of valid items and an ID and returns the index of the item, or -1. **main** tests them in that order, with a loop that asks whether to search.
+
+```java title="LayBuyTool.java"
+import java.io.File;
+import java.io.PrintWriter;
+import java.util.Scanner;
+
+public class LayBuyTool {
+    // a) Pre-process: totals that are negative or above P5000 go to the output file; the rest are returned.
+    public static LayBuy[] preProcessing(String inName, String outName) throws Exception {
+        Scanner in = new Scanner(new File(inName));
+        PrintWriter out = new PrintWriter(outName);
+        LayBuy[] kept = new LayBuy[100];
+        int count = 0;
+        while (in.hasNextLine()) {
+            String line = in.nextLine();
+            String[] f = line.split(",");
+            LayBuy item = new LayBuy(Integer.parseInt(f[0]), f[1], Double.parseDouble(f[2]), Double.parseDouble(f[3]));
+            if (item.getTotal() < 0 || item.getTotal() > 5000) {
+                out.println(line);                        // erroneous: send it to the output file
+            } else {
+                kept[count++] = item;
+            }
+        }
+        in.close();
+        out.close();
+        return trim(kept, count);
+    }
+
+    // b) Validate: items whose paid amount exceeds the total go to the output file; the rest are returned.
+    public static LayBuy[] validate(LayBuy[] items, String outName) throws Exception {
+        PrintWriter out = new PrintWriter(outName);
+        LayBuy[] kept = new LayBuy[items.length];
+        int count = 0;
+        for (int i = 0; i < items.length; i++) {
+            if (items[i].getPaid() > items[i].getTotal()) {
+                out.println(items[i]);
+            } else {
+                kept[count++] = items[i];
+            }
+        }
+        out.close();
+        return trim(kept, count);
+    }
+
+    // c) Sequential search: the index of the item with this ID, or -1.
+    public static int linearSearch(LayBuy[] items, int id) {
+        for (int i = 0; i < items.length; i++) {
+            if (items[i].getId() == id) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // copies the first count cells into an array of exactly that size
+    private static LayBuy[] trim(LayBuy[] big, int count) {
+        LayBuy[] exact = new LayBuy[count];
+        for (int i = 0; i < count; i++) {
+            exact[i] = big[i];
+        }
+        return exact;
+    }
+}
+```
+
+The loop in `main` asks continuously whether to search. On Y or y it prompts for an ID and displays its details when it is found in the array of valid items, or "No such item" when it is not; on N or n it terminates; for any other answer it says the answer is incorrect and asks for Y/y or N/n. The program below takes the typed answers from a string (`y 253414 x Y 111111 n`: yes and an ID that exists, a wrong answer, yes and an ID that does not exist, no); the keyboard form is `new Scanner(System.in)`.
+
+```java title="LayBuyApp.java"
+import java.io.File;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.util.Scanner;
+
+public class LayBuyApp {
+    static void show(String title, File file) throws Exception {
+        System.out.println(title + ":");
+        Scanner in = new Scanner(file);
+        while (in.hasNextLine()) {
+            System.out.println("  " + in.nextLine());
+        }
+        in.close();
+    }
+
+    public static void main(String[] args) throws Exception {
+        File dir = Files.createTempDirectory("laybuy").toFile();
+        dir.deleteOnExit();
+        File data = new File(dir, "laybuy.txt");
+        data.deleteOnExit();
+        PrintWriter w = new PrintWriter(data);
+        w.println("253410,98762634,4000,1700");
+        w.println("253411,91234567,6500,100");
+        w.println("253412,90000111,-1200,100");
+        w.println("253413,98700001,3000,3500");
+        w.println("253414,93456789,800,0");
+        w.println("253415,97654321,5000,1500");
+        w.close();
+
+        File errors = new File(dir, "errors.txt");
+        File overpaid = new File(dir, "overpaid.txt");
+        errors.deleteOnExit();
+        overpaid.deleteOnExit();
+
+        LayBuy[] pre = LayBuyTool.preProcessing(data.getPath(), errors.getPath());
+        LayBuy[] valid = LayBuyTool.validate(pre, overpaid.getPath());
+        System.out.println(pre.length + " after pre-processing, " + valid.length + " valid");
+        show("errors.txt", errors);
+        show("overpaid.txt", overpaid);
+
+        Scanner answers = new Scanner("y 253414 x Y 111111 n");     // stands in for the keyboard
+        boolean running = true;
+        while (running) {
+            System.out.print("Search for a laybuy item (Y/N)? ");
+            String answer = answers.next();
+            System.out.println(answer);
+            if (answer.equals("Y") || answer.equals("y")) {
+                System.out.print("Laybuy ID: ");
+                int id = answers.nextInt();
+                System.out.println(id);
+                int index = LayBuyTool.linearSearch(valid, id);
+                if (index >= 0) {
+                    System.out.println("Found at index " + index + ": " + valid[index]);
+                } else {
+                    System.out.println("No such item");
+                }
+            } else if (answer.equals("N") || answer.equals("n")) {
+                running = false;
+            } else {
+                System.out.println("Your answer is incorrect. Please select Y/y or N/n.");
+            }
+        }
+        System.out.println("Goodbye");
+    }
+}
+```
+
+```text
+4 after pre-processing, 3 valid
+errors.txt:
+  253411,91234567,6500,100
+  253412,90000111,-1200,100
+overpaid.txt:
+  253413,98700001,3000.00,3500.00
+Search for a laybuy item (Y/N)? y
+Laybuy ID: 253414
+Found at index 1: 253414,93456789,800.00,0.00
+Search for a laybuy item (Y/N)? x
+Your answer is incorrect. Please select Y/y or N/n.
+Search for a laybuy item (Y/N)? Y
+Laybuy ID: 111111
+No such item
+Search for a laybuy item (Y/N)? n
+Goodbye
+```
+
+What happens to each record. 253411 has a total of 6500, above P5000, so `preProcessing` sends it to the error file; 253412 has a negative total, so it goes there too. 253413 passes `preProcessing` (total 3000) but has paid 3500, more than the total, so `validate` sends it to the second file. The three records that remain are valid: 253410, 253414 and 253415 (a total of exactly 5000 is not above P5000, so it stays). The search for 253414 finds it at index 1 of the valid array, not at its position in the file; 111111 is not there. The answer `x` gets the message, and the loop asks again.
+
+<Callout type="mistake" title="Common error">
+
+Returning the index from the original file's order, or searching the array before filtering it. The index returned by `linearSearch` is a position in the array it was given, here the array of valid items, which is smaller than the file.
+
+</Callout>
+
+### Exam question 2: where does each record go? (8 marks)
+
+For the records `101,A,4000,1000`, `102,B,5000,5000`, `103,C,5001,0`, `104,D,-50,0` and `105,E,2000,2500`, state what `preProcessing` and `validate` do with each, and what `linearSearch` returns for the IDs 102 and 103 in the final array. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Five records, two filters applied in order, then two searches in the array that is left.
+
+</Step>
+
+<Step title="2. Plan">
+
+`preProcessing` removes a total that is negative or above 5000. `validate` then removes a paid amount above the total. A total of exactly 5000, and a paid amount equal to the total, are both allowed.
+
+</Step>
+
+<Step title="3. Solution">
+
+| ID | Total | Paid | Result |
+|---|---|---|---|
+| 101 | 4000 | 1000 | passes both: kept |
+| 102 | 5000 | 5000 | passes both (5000 is not above 5000; paid equals total): kept |
+| 103 | 5001 | 0 | total above 5000: sent to the output file by `preProcessing` |
+| 104 | -50 | 0 | negative total: sent to the output file by `preProcessing` |
+| 105 | 2000 | 2500 | passes `preProcessing`; paid above total: sent to the file by `validate` |
+
+The final array holds 101 and 102. `linearSearch` for 102 returns 1; for 103 it returns -1, because 103 was removed.
+
+</Step>
+
+<Step title="4. Check">
+
+The boundary rules are the same as the ones in the program output: a total of 5000 stayed (253415) and an unpaid or equal amount is not an error. The search returns a position in the filtered array, so 102 is at index 1.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+Model a record with a class (private fields, a constructor, getters, a method that computes the outstanding amount), read the file one line at a time with `split` and `parse` into an array of objects with a counter, and write the selected records to output files, closing every file. "Exceeds" is strictly greater. Filtering methods write the rejected items to a file and return the rest as a smaller array; `linearSearch` compares each element in turn and returns its index or -1, and the index refers to the array it was given. A question loop must handle Y/y, N/n and every other answer. The lab sheets disagree on the separator (semicolons in Lab 1, "colons" in Lab 2), so use what the data file contains and say which you chose.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is the lay-bye with exactly half the total outstanding not sent to concern.txt?">
+
+The rule is that the outstanding amount **exceeds** 50% of the total. Exactly 50% is not more than half, so the test is `outstanding() > total * 0.5`, not `>=`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why is the array created with room for 100 records and a counter?">
+
+The number of records in the file is not known before it is read, and an array has a fixed size. The counter says how many cells are in use; the filtering methods then copy the used cells into an array of exactly that size.
+
+</CheckQuestion>
+
+<CheckQuestion question="What does linearSearch return when the ID is not in the array, and when it is?">
+
+It returns -1 when the ID is not found, and otherwise the index of the first item with that ID in the array it was given.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does a record with total 5000 stay after preProcessing, but 5001 does not?">
+
+The rule is that a total which is negative or **exceeds** P5000 is erroneous. 5000 does not exceed 5000; 5001 does.
+
+</CheckQuestion>
+
+<CheckQuestion question="What must the main loop do when the user types x instead of Y or N?">
+
+Tell the user that the answer is incorrect and ask them to select Y/y or N/n, then ask again; it terminates only on N or n.
+
+</CheckQuestion>
+
+</CheckQuestions>

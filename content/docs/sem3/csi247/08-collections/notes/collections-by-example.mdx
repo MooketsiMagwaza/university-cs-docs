@@ -1,0 +1,1266 @@
+---
+title: "Collections by Example"
+description: "Sort arrays with Arrays.sort, move between arrays and lists, traverse with for-each and an Iterator, use List and ArrayList, and sort objects with Comparable and Collections.sort, from Lecture 13, one change at a time."
+---
+
+Lecture 13 starts from a problem: the sorting algorithms of Lecture 9 sort primitives, so how do you sort an array of 100 `Integer` objects without writing the algorithm again? The answer is the `Arrays` and `Collections` utility classes, and behind them the Java Collection Framework. The lecture then reviews arrays, introduces `Iterable`, three ways to iterate, the `Collection` and `List` interfaces, `ArrayList`, `Collections.sort`, `Comparable`, and how a list can be implemented. This lesson works through those slides and their exercises one change at a time, with every output taken from a real run. It extends [Collections and Iterators](/docs/sem3/csi247/08-collections/notes/collections-and-iterators) and [Lists and ArrayList](/docs/sem3/csi247/08-collections/notes/lists-and-arraylist). Java's `LinkedList` and Lab 8 are in [List Implementations by Example](/docs/sem3/csi247/08-collections/notes/list-implementations-by-example); Java's `Stack` and `Queue` are in the [stacks and queues](/docs/sem3/csi247/10-stacks-and-queues) chapter.
+
+<LearningObjectives items={[
+  'Sort and print an array with Arrays.sort and Arrays.toString, and say how the sorting algorithms differ for primitives and objects',
+  'Copy an array into an ArrayList and back, and repair the lecture\'s array-to-list code',
+  'Traverse a collection with a standard loop, a for-each loop and an Iterator, and remove safely through the Iterator',
+  'Use List and ArrayList operations, say what each costs, and justify each exception',
+  'Make a class Comparable and sort a list of its objects with Collections.sort',
+]} />
+
+<Prerequisites items={[
+  'Generic classes and type arguments, from the Generics chapter',
+  'Interfaces and `equals`, from the Object-Oriented Programming chapter',
+  'Arrays of objects and drawing memory diagrams',
+  'Sorting and the Big-Oh notation of `n log n`, from the earlier chapters',
+]} />
+
+## 1. The templates
+
+```text
+Sort an array:         Arrays.sort(array);                       print it with Arrays.toString(array)
+Array to list:         new ArrayList<Integer>(Arrays.asList(array))
+List to array:         array = list.toArray(array);
+Standard loop:         for (int i = 0; i < b.length; i++) { ... b[i] ... }
+For-each loop:         for (Type item : collection) { ... item ... }
+Iterator:              Iterator<E> it = list.iterator();
+                       while (it.hasNext()) { E x = it.next(); ... it.remove(); }
+A list:                List<E> list = new ArrayList<E>();        add(e)  add(i, e)  get(i)  set(i, e)  remove(i)  size()  isEmpty()
+Sort a list:           Collections.sort(list);                   the elements must be Comparable
+Make a class sortable: class T implements Comparable<T> { public int compareTo(T other) { ... } }
+```
+
+A **collection** is an object that groups many related items into one unit. The only collection met so far is the array. The framework (in `java.util`) is made of interfaces and classes: `Iterable` is the root interface (it permits traversal), `Collection` extends it and is implemented through its sub-interfaces `List`, `Set` and `Queue`, and the classes are `ArrayList` and `LinkedList` (a `List`), `LinkedList` and `ArrayDeque` (a `Queue`) and `HashSet` and `TreeSet` (a `Set`). Interfaces such as these are called **abstract data types**: a type's logical form, the data and the operations on it.
+
+## 2. The Arrays class
+
+`Arrays` is a utility class in `java.util` whose static methods support array operations: creating, searching, sorting, comparing and converting to a `String`. The syntax is `Arrays.methodName(...)`. This is the lecture's program:
+
+```java title="ArraysSort.java"
+import java.util.Arrays;
+
+public class ArraysSort {
+    // Question (Lecture 13): sort an array of Integer objects.
+    public static void main(String[] args) {
+        Integer[] arr = {73, 64, 59, 15, 91, 27, 82};
+
+        Arrays.sort(arr);
+        System.out.println("Integer Array is: " + Arrays.toString(arr));
+    }
+}
+```
+
+```text
+Integer Array is: [15, 27, 59, 64, 73, 82, 91]
+```
+
+`Arrays.sort(arr)` sorts in ascending order by default and needs no loop. `Arrays.toString(arr)` returns the array's `String` representation, like the `toString` of `Object`, `Shape` and `Account`. The lecture lists what the methods save you from writing: `sort` works for primitives (an adaptation of quick sort) and for arrays of objects (an adaptation of merge sort, called Timsort), in time `O(n log n)`; `binarySearch` runs in `O(log n)`.
+
+### The same methods with other arrays
+
+```java title="ArraysVariants.java"
+import java.util.Arrays;
+
+public class ArraysVariants {
+    // Question: sort an int array and a String array, and search a sorted array.
+    public static void main(String[] args) {
+        int[] scores = {82, 47, 91, 15};
+        Arrays.sort(scores);
+        System.out.println(Arrays.toString(scores));
+
+        String[] words = {"pear", "Apple", "banana", "apple"};
+        Arrays.sort(words);
+        System.out.println(Arrays.toString(words));
+
+        int[] sorted = {15, 27, 59, 64, 73, 82, 91};
+        System.out.println(Arrays.binarySearch(sorted, 64));    // found
+        System.out.println(Arrays.binarySearch(sorted, 60));    // not found, would go at index 3
+        System.out.println(Arrays.binarySearch(sorted, 5));     // would go at index 0
+        System.out.println(Arrays.binarySearch(sorted, 100));   // would go at index 7
+
+        Integer[] arr = {3, 1, 2};
+        System.out.println(arr.toString().startsWith("[Ljava.lang.Integer;@"));
+    }
+}
+```
+
+```text
+[15, 47, 82, 91]
+[Apple, apple, banana, pear]
+3
+-4
+-1
+-8
+true
+```
+
+Three things to observe. The `String` array sorts by the Unicode values of the characters, so every uppercase letter comes before every lowercase letter: `Apple` is before `apple`, and `apple` before `banana`. `binarySearch` needs a sorted array: it returns the index when it finds the value (64 is at index 3), and otherwise `-(insertion point) - 1`, a negative number: 60 would go at index 3, giving -4. And printing an array directly does not show its elements: `arr.toString()` is the type and an address, which is why `Arrays.toString` is used.
+
+<Callout type="mistake" title="Common error">
+
+Printing an array with `System.out.println(arr)`. The output is the type code and a hash such as `[Ljava.lang.Integer;@...`, not the elements. Use `Arrays.toString(arr)`.
+
+</Callout>
+
+### Exam question 1: sorting an array of objects (5 marks)
+
+State what this code prints and why the `String` array is in that order. Then say what is better about using `Arrays.sort` than writing a sorting method. (5 marks)
+
+```java
+String[] words = {"pear", "Apple", "banana", "apple"};
+Arrays.sort(words);
+System.out.println(Arrays.toString(words));
+```
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two parts: the printed text with a reason, and a comparison between a library method and your own sort.
+
+</Step>
+
+<Step title="2. Plan">
+
+`Arrays.sort` on an array of objects uses the natural ordering of the type (`String` is `Comparable`), ascending. `Arrays.toString` formats the result. Compare the characters by Unicode value.
+
+</Step>
+
+<Step title="3. Solution">
+
+It prints `[Apple, apple, banana, pear]`. Strings are ordered by the Unicode values of their characters: `A` (65) is less than `a` (97) and `b` and `p`, so `Apple` comes first, and `apple` is before `banana` because `a` is before `b`. Using `Arrays.sort` means no sorting algorithm has to be coded, no loop is needed, it works for primitives and objects, and it runs in `O(n log n)`.
+
+</Step>
+
+<Step title="4. Check">
+
+The array and the output were run in `ArraysVariants` above: `[Apple, apple, banana, pear]`. The order is the same as the order of the Unicode values, not the dictionary order of the words.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 3. From an array to an ArrayList and back
+
+An array has a fixed size. The lecture's example is `Integer[] marks = new Integer[4]` with 73, 81, 69 and 60: if a fifth mark, 70, arrives, the array is full. The two options are a bigger second array (copy everything across, then add the new element: is it efficient, and is it wasteful?) or an `ArrayList`. Draw the first one yourself before stepping through the diagram.
+
+<MemoryDiagram scenario="marks" />
+
+### The code on the slide
+
+The slide's code reads:
+
+```java
+Integer marks[] = {73, 81, 69, 60};
+ArrayList <Integer> myList = new ArrayList <Integer>();
+(Arrays.asList(marks));           // check Arrays in API documentation
+myList.add(70);                   // add new mark to ArrayList
+marks = aList.toArray(marks);     // convert an ArrayList into an array
+```
+
+It does not compile as printed. The lecture's exercise is to complete it, compile and run it, so here are the two real messages:
+
+| Fault | Compiler message | Repair |
+|---|---|---|
+| `(Arrays.asList(marks));` on its own line | `error: not a statement` | the list must be given the array elements: pass `Arrays.asList(marks)` to the `ArrayList` constructor |
+| `aList` is used but the list is called `myList` | `error: cannot find symbol` (symbol: variable aList) | use the name that was declared: `myList` |
+
+The repaired program, with the output printed before and after:
+
+```java title="MarksToList.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+
+public class MarksToList {
+    // Question (Lecture 13): add a fifth mark to a full array of four marks by way of an ArrayList.
+    public static void main(String[] args) {
+        Integer marks[] = {73, 81, 69, 60};                       // array of Integer objects
+        System.out.println("Marks : " + Arrays.toString(marks));
+
+        ArrayList<Integer> myList = new ArrayList<Integer>(Arrays.asList(marks));
+        myList.add(70);                                            // add the new mark to the ArrayList
+        marks = myList.toArray(marks);                             // convert the ArrayList into an array
+
+        System.out.println("Marks : " + Arrays.toString(marks));
+    }
+}
+```
+
+```text
+Marks : [73, 81, 69, 60]
+Marks : [73, 81, 69, 60, 70]
+```
+
+`marks = myList.toArray(marks)` has to assign the result back: the array `marks` has 4 cells but the list now has 5 elements, so `toArray` allocates a new array of the right size and returns it. The next program shows the details that explain the code.
+
+```java title="ListArrayLinks.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+public class ListArrayLinks {
+    // Question: why does the slide copy the array into a new ArrayList instead of using Arrays.asList directly?
+    public static void main(String[] args) {
+        Integer[] arr = {73, 81, 69, 60};
+        List<Integer> view = Arrays.asList(arr);
+
+        try {
+            view.add(70);
+        } catch (UnsupportedOperationException e) {
+            System.out.println("add on Arrays.asList: " + e.getClass().getName());
+        }
+        view.set(0, 1);
+        System.out.println("array after view.set(0, 1): " + Arrays.toString(arr));
+
+        ArrayList<Integer> copy = new ArrayList<Integer>(view);
+        copy.add(70);
+        Integer[] small = copy.toArray(arr);          // arr has 4 cells, the list has 5 elements
+        System.out.println("into the 4-cell array: same array? " + (small == arr) + " " + Arrays.toString(small));
+        Integer[] exact = new Integer[5];
+        System.out.println("into a 5-cell array: same array? " + (copy.toArray(exact) == exact));
+    }
+}
+```
+
+```text
+add on Arrays.asList: java.lang.UnsupportedOperationException
+array after view.set(0, 1): [1, 81, 69, 60]
+into the 4-cell array: same array? false [1, 81, 69, 60, 70]
+into a 5-cell array: same array? true
+```
+
+`Arrays.asList(arr)` is a fixed-size list that is a view of the array: `set` writes through to the array and `add` is not allowed (`UnsupportedOperationException`). Copying it into `new ArrayList<Integer>(...)` gives a list that can grow. `toArray(a)` fills `a` itself only when `a` is large enough; otherwise it returns a new array, which is why the result must be assigned.
+
+<Callout type="mistake" title="Common error">
+
+Calling `myList.toArray(marks)` and ignoring the result. When the array is too small the returned array is a different object, and `marks` still holds the old four cells.
+
+</Callout>
+
+## 4. Iterating through a collection
+
+The lecture gives three ways to move through a collection. The standard loop and the `while` loop both state **how to move** from one element to the next. The for-each loop does not: it uses an `Iterator` privately. The third way, the `Iterator` itself, is needed because the collections are not indexed: you cannot write `list[0]`.
+
+```java title="IterationWays.java"
+import java.util.ArrayList;
+import java.util.Iterator;
+
+public class IterationWays {
+    // Question (Lecture 13): visit each element of an array and of an ArrayList in the three ways.
+    public static void main(String[] args) {
+        int[] grades = {85, 12, 69, 74, 48, 52};
+
+        for (int i = 0; i < grades.length; i++) {      // a) the standard way
+            System.out.print(grades[i] + " ");
+        }
+        System.out.println();
+
+        int count = 0;                                  // a) with a while loop
+        while (count < grades.length) {
+            System.out.print(grades[count] + " ");
+            count += 1;
+        }
+        System.out.println();
+
+        for (int mark : grades) {                       // b) for-each
+            System.out.print("[ " + mark + " ]");
+        }
+        System.out.println();
+
+        ArrayList<Integer> nums = new ArrayList<Integer>();
+        nums.add(73);
+        nums.add(92);
+        nums.add(58);
+        nums.add(60);
+        Iterator<Integer> iterate = nums.iterator();    // c) an Iterator
+        while (iterate.hasNext()) {
+            System.out.print(iterate.next() + ", ");
+        }
+        System.out.println();
+    }
+}
+```
+
+```text
+85 12 69 74 48 52
+85 12 69 74 48 52
+[ 85 ][ 12 ][ 69 ][ 74 ][ 48 ][ 52 ]
+73, 92, 58, 60,
+```
+
+The `Iterator` interface (in `java.util`) offers `hasNext()` (is there a next element?), `next()` (return it and move on), `remove()` (remove the last element returned by `next`) and `forEachRemaining(action)`. An iterator **points between elements** and moves forward only. The lecture's picture is a list of 51, 35, 12, 81, 54, 16; read the first three elements, then call `remove()`.
+
+<MemoryDiagram scenario="iterator" />
+
+```java title="IteratorMoves.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+
+public class IteratorMoves {
+    // Question (Lecture 13): read three elements through an iterator, then remove the last one seen.
+    public static void main(String[] args) {
+        ArrayList<Integer> nums = new ArrayList<Integer>(Arrays.asList(51, 35, 12, 81, 54, 16));
+        Iterator<Integer> it = nums.iterator();
+
+        System.out.println(it.next());
+        System.out.println(it.next());
+        System.out.println(it.next());
+        it.remove();                          // removes 12, the last element seen
+        System.out.println(nums);
+        System.out.println(it.next());        // carries on after the removed element
+    }
+}
+```
+
+```text
+51
+35
+12
+[51, 35, 81, 54, 16]
+81
+```
+
+The slide lists the values returned by the three calls as 81, 54 and 16, but the picture on the next slide removes 12, the third element. The three calls return 51, 35 and 12, as the run shows, and `remove()` then removes 12. The next call to `next()` returns 81.
+
+### Iterator rules and mistakes
+
+```java title="IteratorRules.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+
+public class IteratorRules {
+    // Question: what goes wrong when an iterator is misused, or when a list is changed inside a for-each loop?
+    public static void main(String[] args) {
+        ArrayList<Integer> nums = new ArrayList<Integer>(Arrays.asList(73, 92, 58, 60));
+
+        Iterator<Integer> it = nums.iterator();
+        while (it.hasNext()) {                // remove every even number through the iterator
+            if (it.next() % 2 == 0) {
+                it.remove();
+            }
+        }
+        System.out.println("odd numbers left: " + nums);
+
+        try {
+            nums.iterator().remove();         // remove() before any next()
+        } catch (IllegalStateException e) {
+            System.out.println("remove before next: " + e.getClass().getName());
+        }
+
+        Iterator<Integer> two = new ArrayList<Integer>(Arrays.asList(1, 2, 3)).iterator();
+        try {
+            while (two.hasNext()) {
+                two.next();
+                two.next();                    // two next() calls for one hasNext()
+            }
+        } catch (java.util.NoSuchElementException e) {
+            System.out.println("next past the end: " + e.getClass().getName());
+        }
+
+        ArrayList<Integer> four = new ArrayList<Integer>(Arrays.asList(73, 92, 58, 60));
+        try {
+            for (Integer n : four) {
+                if (n == 92) {
+                    four.remove(n);            // changes the list inside a for-each loop
+                }
+            }
+        } catch (java.util.ConcurrentModificationException e) {
+            System.out.println("remove inside for-each: " + e.getClass().getName() + ", list now " + four);
+        }
+    }
+}
+```
+
+```text
+odd numbers left: [73]
+remove before next: java.lang.IllegalStateException
+next past the end: java.util.NoSuchElementException
+remove inside for-each: java.util.ConcurrentModificationException, list now [73, 58, 60]
+```
+
+`remove()` removes the last element returned by `next()`, so calling it before any `next()` throws `IllegalStateException`. Calling `next()` when there is no next element throws `NoSuchElementException`, so each `hasNext()` test should be followed by one `next()`. A for-each loop uses an iterator privately, so removing from the list directly inside the loop makes the iterator fail with `ConcurrentModificationException`; to remove while traversing, use `Iterator.remove()` as in the first loop.
+
+<Callout type="mistake" title="Common error">
+
+Removing from a list inside a for-each loop. It fails with `ConcurrentModificationException` (the list above shows 92 already gone), though a list of three elements with the second one removed would end quietly, because the loop's `hasNext()` is then false and `next()` is never asked. Do not rely on that: remove through the iterator.
+
+</Callout>
+
+### The lecture's exercise: names, characters and palindromes
+
+The exercise reads 10 full names into `ArrayList<String> names`, then uses an `Iterator` to display each name, the number of characters in it and its first character, one per line; then it is changed to show only the palindromes with a method `palindrome()`. The names come from the keyboard in the exercise (`Scanner` with `nextLine()`); the program below stores the same ten names in an array so that it runs unattended.
+
+```java title="NamesIterator.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+
+public class NamesIterator {
+    // Question (Lecture 13, exercise b): show each name with its length and first character, then only the palindromes.
+    static boolean palindrome(String name) {
+        String lower = name.toLowerCase();
+        int i = 0;
+        int j = lower.length() - 1;
+        while (i < j) {
+            if (lower.charAt(i) != lower.charAt(j)) {
+                return false;
+            }
+            i++;
+            j--;
+        }
+        return true;
+    }
+
+    public static void main(String[] args) {
+        ArrayList<String> names = new ArrayList<String>(Arrays.asList(
+                "Kago", "Anna", "Thato", "Otto", "Mpho", "Hannah", "Neo", "Bob", "Tebogo", "Lerato"));
+
+        Iterator<String> it = names.iterator();
+        while (it.hasNext()) {
+            String name = it.next();
+            System.out.println(name + ": " + name.length() + " characters, first " + name.charAt(0));
+        }
+
+        System.out.println("Palindromes:");
+        Iterator<String> again = names.iterator();
+        while (again.hasNext()) {
+            String name = again.next();
+            if (palindrome(name)) {
+                System.out.println(name);
+            }
+        }
+    }
+}
+```
+
+```text
+Kago: 4 characters, first K
+Anna: 4 characters, first A
+Thato: 5 characters, first T
+Otto: 4 characters, first O
+Mpho: 4 characters, first M
+Hannah: 6 characters, first H
+Neo: 3 characters, first N
+Bob: 3 characters, first B
+Tebogo: 6 characters, first T
+Lerato: 6 characters, first L
+Palindromes:
+Anna
+Otto
+Hannah
+Bob
+```
+
+The iterator is created again for the second pass because an iterator moves forward only and cannot be rewound. `palindrome` compares the first and last characters and works inwards, ignoring case.
+
+### Exam question 2: remove through an iterator (6 marks)
+
+A list holds `[51, 35, 12, 81, 54, 16]` and an iterator `it = list.iterator()`. Write the value returned by each call, and the list after each `remove`: `it.next(); it.next(); it.next(); it.remove(); it.next(); it.remove();` and say which call would throw `IllegalStateException` if it came first. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Six calls, and two things to record for each: what `next()` returns, and what the list looks like after a `remove()`. Then the rule for `remove()`.
+
+</Step>
+
+<Step title="2. Plan">
+
+An iterator points between elements and moves forward only. `next()` returns the element after the pointer and moves past it. `remove()` deletes the element that the last `next()` returned.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Call | Returns | List afterwards |
+|---|---|---|
+| `it.next()` | 51 | `[51, 35, 12, 81, 54, 16]` |
+| `it.next()` | 35 | unchanged |
+| `it.next()` | 12 | unchanged |
+| `it.remove()` | nothing | `[51, 35, 81, 54, 16]` |
+| `it.next()` | 81 | unchanged |
+| `it.remove()` | nothing | `[51, 35, 54, 16]` |
+
+A `remove()` placed before any `next()` would throw `IllegalStateException`, because there is no last element seen.
+
+</Step>
+
+<Step title="4. Check">
+
+The first four rows are the run of `IteratorMoves` above, and `IteratorRules` shows the exception. In the last row the element removed is 81 because that is the last one returned; the list has lost two of its six elements, 12 and 81.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 5. The List interface and ArrayList
+
+A **list** is a linear sequence that stores an ordered collection, normally adds at the end, can store duplicates and can add and remove elements at random locations. `List<E>` extends `Collection<E>`, and as an interface you cannot create a `List` object: a class must implement it, either an array implementation (`ArrayList`) or a linked implementation made of nodes. The lecture's abstract operations are `add(e)`, `add(i, e)` (others move right; careful with `IndexOutOfBoundsException`), `set(i, e)` (replaces and returns the old value), `get(i)`, `remove(i)` (removes and returns the element), `size()` and `isEmpty()`. This is the lecture's list code, in the order it is printed:
+
+```java title="ListDemo.java"
+import java.util.ArrayList;
+import java.util.List;
+
+public class ListDemo {
+    // Question (Lecture 13): what do the List operations on the slide do?
+    public static void main(String[] args) {
+        List<Integer> marks = new ArrayList<Integer>();    // list created as an ArrayList
+        marks.add(84);                                      // adds 84
+        marks.add(62);                                      // adds 62
+        System.out.println(marks);                          // print the contents
+
+        marks.add(2, 73);                                   // the slide: error! Why?
+        marks.add(73);                                      // the slide: allowed. Why?
+
+        System.out.println(marks.size());                   // number of elements
+        System.out.println(marks.isEmpty());                // is it empty?
+        System.out.println(marks);
+    }
+}
+```
+
+```text
+[84, 62]
+4
+false
+[84, 62, 73, 73]
+```
+
+The slide marks `marks.add(2, 73)` as an error and `marks.add(73)` as allowed. Run in the order the slide shows, with two elements already in the list, both lines work: `add(i, e)` accepts any index from 0 up to and including `size()`, and index 2 is the position just after the last element, so `73` is added at the end. The exception appears when the index is beyond `size()`. The next program shows that, and the slide's other "error! Why?" line, `marks.remove(84)`.
+
+```java title="ListErrors.java"
+import java.util.ArrayList;
+import java.util.List;
+
+public class ListErrors {
+    // Question (Lecture 13): when does add(i, e) fail, and why does marks.remove(84) fail?
+    public static void main(String[] args) {
+        List<Integer> marks = new ArrayList<Integer>();
+        marks.add(84);
+        marks.add(62);
+        marks.add(73);
+        marks.add(73);
+
+        try {
+            marks.add(9, 1);                               // index 9 is beyond size() = 4
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("add(9, 1): " + e.getClass().getName());
+        }
+        try {
+            marks.remove(84);                              // 84 is an int, so this is remove(int index)
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("remove(84): " + e.getClass().getName());
+        }
+        marks.remove(Integer.valueOf(84));                 // remove the OBJECT 84
+        System.out.println("after remove(Integer.valueOf(84)): " + marks);
+    }
+}
+```
+
+```text
+add(9, 1): java.lang.IndexOutOfBoundsException
+remove(84): java.lang.IndexOutOfBoundsException
+after remove(Integer.valueOf(84)): [62, 73, 73]
+```
+
+`remove` is overloaded: `remove(int i)` removes the element at index `i` and `remove(E e)` removes the first occurrence of an object. The literal `84` is an `int`, so Java chooses the index version, and there is no index 84 in a list of four elements. `Integer.valueOf(84)` is an object, so it chooses the other version and removes the element 84.
+
+<Callout type="mistake" title="Common error">
+
+Writing `marks.remove(84)` to remove the value 84 from a list of `Integer`. It is read as an index and throws `IndexOutOfBoundsException`. Pass an object: `marks.remove(Integer.valueOf(84))`.
+
+</Callout>
+
+### ArrayList operations, one at a time
+
+`ArrayList<E>` is the most widely used implementation of `List`: a generic class (`ArrayList<Dog>`, `ArrayList<String>`) that stores its elements in a dynamic array. Java adjusts the size, it grows when you add and shrinks when you remove, and the capacity need not be given (`new ArrayList<String>()`), though it may be (`new ArrayList<String>(20)`).
+
+```java title="ArrayListOps.java"
+import java.util.ArrayList;
+
+public class ArrayListOps {
+    // Question (Lecture 13): apply each ArrayList operation and say what it returns and what it does to the list.
+    public static void main(String[] args) {
+        ArrayList<String> names = new ArrayList<String>();
+        names.add("Kago");
+        names.add("Neo");
+        names.add("Thato");
+        System.out.println(names + " size " + names.size());
+
+        names.add(1, "Lesego");                          // insert at index 1: the others move right
+        System.out.println("add(1, Lesego): " + names);
+
+        String old = names.set(2, "Mpho");               // replace index 2, return the old value
+        System.out.println("set(2, Mpho) returned " + old + ": " + names);
+
+        String gone = names.remove(0);                    // remove index 0, the others move left
+        System.out.println("remove(0) returned " + gone + ": " + names);
+
+        boolean removed = names.remove("Thato");          // remove the first occurrence of an object
+        System.out.println("remove(Thato) returned " + removed + ": " + names);
+
+        System.out.println("indexOf(Mpho) " + names.indexOf("Mpho") + ", indexOf(Zed) " + names.indexOf("Zed"));
+        System.out.println("get(1) " + names.get(1));
+
+        ArrayList<String> sized = new ArrayList<String>(20);
+        System.out.println("capacity 20, size " + sized.size() + ", isEmpty " + sized.isEmpty());
+
+        names.add("Mpho");                                // duplicates are allowed
+        names.remove("Mpho");                             // only the first occurrence goes
+        System.out.println(names);
+    }
+}
+```
+
+```text
+[Kago, Neo, Thato] size 3
+add(1, Lesego): [Kago, Lesego, Neo, Thato]
+set(2, Mpho) returned Neo: [Kago, Lesego, Mpho, Thato]
+remove(0) returned Kago: [Lesego, Mpho, Thato]
+remove(Thato) returned true: [Lesego, Mpho]
+indexOf(Mpho) 1, indexOf(Zed) -1
+get(1) Mpho
+capacity 20, size 0, isEmpty true
+[Lesego, Mpho]
+```
+
+What to notice: `set` and `remove(i)` return the old element; `remove(E)` returns a `boolean` and removes only the first occurrence; `indexOf` returns -1 when the object is absent; and the capacity given in the constructor is not the size: a list created with capacity 20 has size 0 and is empty. The diagram of the same operations on integers, including the growing array, is below.
+
+<MemoryDiagram scenario="alist" />
+
+### Implementing a list with an array
+
+The lecture's design for an array-based list: the array starts with some default capacity; to insert, check whether there is room; if there is, insert; if not, **create a new array twice as large as the current one, copy the elements across, and insert in the new array**. Some operations need no extra work (`get`, `set` and `add` at the end); `add(i, e)` and `remove(i)` involve **shifting** a potentially large number of elements. The class below counts both kinds of work.
+
+```java title="DynamicArray.java"
+public class DynamicArray {
+    private int[] data = new int[2];     // default capacity 2, to keep the example short
+    private int size = 0;
+    int copies = 0;                      // elements copied when the array grows
+    int shifts = 0;                      // elements moved by add(i, e) and remove(i)
+
+    void add(int e) {                    // add at the end
+        if (size == data.length) {
+            grow();
+        }
+        data[size++] = e;
+    }
+
+    void add(int i, int e) {             // insert at index i
+        if (size == data.length) {
+            grow();
+        }
+        for (int k = size; k > i; k--) { // shift right, starting from the end
+            data[k] = data[k - 1];
+            shifts++;
+        }
+        data[i] = e;
+        size++;
+    }
+
+    int remove(int i) {                  // remove index i
+        int old = data[i];
+        for (int k = i; k < size - 1; k++) { // shift left, starting from the front
+            data[k] = data[k + 1];
+            shifts++;
+        }
+        size--;
+        return old;
+    }
+
+    private void grow() {                // twice as large, then copy
+        int[] bigger = new int[data.length * 2];
+        for (int k = 0; k < size; k++) {
+            bigger[k] = data[k];
+            copies++;
+        }
+        data = bigger;
+    }
+
+    int capacity() {
+        return data.length;
+    }
+
+    int size() {
+        return size;
+    }
+}
+```
+
+```java title="DynamicArrayDemo.java"
+public class DynamicArrayDemo {
+    // Question (Lecture 13): which operations are cheap and which need shifting or copying?
+    public static void main(String[] args) {
+        DynamicArray list = new DynamicArray();
+        for (int i = 1; i <= 5; i++) {
+            list.add(i * 10);
+            System.out.println("add(" + (i * 10) + "): size " + list.size() + ", capacity " + list.capacity() + ", copies so far " + list.copies);
+        }
+
+        list.add(0, 5);
+        System.out.println("add(0, 5): shifts " + list.shifts);
+
+        list.shifts = 0;
+        list.add(list.size(), 99);
+        System.out.println("add at the end: shifts " + list.shifts);
+
+        list.shifts = 0;
+        list.remove(0);
+        System.out.println("remove(0): shifts " + list.shifts);
+
+        list.shifts = 0;
+        list.remove(list.size() - 1);
+        System.out.println("remove the last: shifts " + list.shifts);
+    }
+}
+```
+
+```text
+add(10): size 1, capacity 2, copies so far 0
+add(20): size 2, capacity 2, copies so far 0
+add(30): size 3, capacity 4, copies so far 2
+add(40): size 4, capacity 4, copies so far 2
+add(50): size 5, capacity 8, copies so far 6
+add(0, 5): shifts 5
+add at the end: shifts 0
+remove(0): shifts 6
+remove the last: shifts 0
+```
+
+The array grows from 2 to 4 (2 elements copied) and from 4 to 8 (4 more copied), so a growth is `O(n)` but happens rarely. Inserting at the front of a list of 5 elements moved all 5; adding or removing at the end moved none; removing the first element of a list of 7 moved 6. That is the lecture's classification: `get`, `set` and `add(e)` are efficient, `add(i, e)` and `remove(i)` are not, and the lecture's answer to the inefficient methods is a linked structure (next lesson).
+
+<Callout type="mistake" title="Common error">
+
+Writing that the elements of an `ArrayList` are "linked". They are stored in a hidden array, which is why `get(i)` is direct and why inserting or removing at the front shifts everything.
+
+</Callout>
+
+### Exam question 3: apply the list operations (6 marks)
+
+Start with an empty `ArrayList<Integer> list`. Give the contents of the list after each statement, and the exceptions: `list.add(84); list.add(62); list.add(1, 73); list.set(0, 90); list.remove(2); list.add(5, 1);` (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Six statements; the contents after each, and say which one throws.
+
+</Step>
+
+<Step title="2. Plan">
+
+`add(e)` appends. `add(i, e)` inserts at `i` and moves the rest right, valid for `i` from 0 to `size()`. `set(i, e)` replaces. `remove(i)` removes and moves the rest left.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Statement | List afterwards |
+|---|---|
+| `list.add(84)` | `[84]` |
+| `list.add(62)` | `[84, 62]` |
+| `list.add(1, 73)` | `[84, 73, 62]` |
+| `list.set(0, 90)` | `[90, 73, 62]` |
+| `list.remove(2)` | `[90, 73]` |
+| `list.add(5, 1)` | throws `IndexOutOfBoundsException`: the list has 2 elements, so the index 5 is beyond `size()` |
+
+</Step>
+
+<Step title="4. Check">
+
+The same operations were run in `ListDemo`, `ListErrors` and `ArrayListOps`: an insert at an index up to and including `size()` works, an index beyond it throws, and `remove(2)` removed the element at index 2, 62, not the value 2.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 6. Comparable and Collections.sort
+
+`Collections` is another utility class in `java.util`, and its `sort(list)` sorts any collection that implements the `List` interface, such as an `ArrayList`. It uses merge sort, in time `O(n log n)`. The list elements must be of a `Comparable` type.
+
+```java title="CollectionsSort.java"
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+public class CollectionsSort {
+    // Question (Lecture 13): sort a list of Integer.
+    public static void main(String[] args) {
+        List<Integer> nums = new ArrayList<Integer>(Arrays.asList(4, 7, 1, 5));
+
+        System.out.println("List before sorting: " + nums);
+        Collections.sort(nums);
+        System.out.println("List after sorting: " + nums);
+    }
+}
+```
+
+```text
+List before sorting: [4, 7, 1, 5]
+List after sorting: [1, 4, 5, 7]
+```
+
+`Comparable<T>` is a generic interface in `java.lang` with one method, `public int compareTo(T obj)`. It gives a class a **natural ordering**. The returned value says how the two objects compare:
+
+| `s1.compareTo(s2)` returns | Meaning |
+|---|---|
+| a positive integer | `s1 > s2` |
+| a negative integer | `s1 < s2` |
+| 0 | `s1 == s2` |
+
+The natural ordering is consistent when `e1.equals(e2)` and `e1.compareTo(e2) == 0` give the same outcome for every pair of objects of the class. `String` implements `Comparable`: its `compareTo` compares lexicographically, by the Unicode values of the characters.
+
+```java title="CompareToDemo.java"
+public class CompareToDemo {
+    // Question (Lecture 13): what does String compareTo return?
+    public static void main(String[] args) {
+        String str1 = "CSI247";
+        String str2 = "CSI247";
+        int outcome = str1.compareTo(str2);
+        System.out.println(outcome == 0);                      // the slide's question
+        System.out.println(str1.equals(str2));
+
+        System.out.println("apple".compareTo("banana"));       // a before b
+        System.out.println("b".compareTo("a"));                // b after a
+        System.out.println("Kago".compareTo("Kagome"));        // a prefix is smaller
+    }
+}
+```
+
+```text
+true
+true
+-1
+1
+-2
+```
+
+`compareTo` returns 0 for equal strings, as `equals` returns `true`. For the others only the sign matters: it is negative when the first string comes first, positive when it comes later, and for a prefix the shorter string is smaller. Do not test `compareTo` against -1 or 1.
+
+### Making your own class Comparable
+
+The lecture's `Book` has a `title` and a `year`, and it is ordered by year. `compareTo` must handle the negative, positive and zero cases.
+
+```java title="Book.java"
+public class Book implements Comparable<Book> {
+    private String title;
+    private int year;
+
+    Book(String n, int a) {
+        title = n;
+        year = a;
+    }
+
+    String getTitle() {
+        return title;
+    }
+
+    int getYear() {
+        return year;
+    }
+
+    public int compareTo(Book bk) {
+        if (year == bk.year)
+            return 0;               // must match the logic in equals()
+        else if (year > bk.year)
+            return 1;
+        else
+            return -1;
+    }
+}
+```
+
+```java title="BookTester.java"
+import java.util.ArrayList;
+import java.util.Collections;
+
+public class BookTester {
+    // Question (Lecture 13): sort a list of books by year.
+    public static void main(String[] args) {
+        ArrayList<Book> myBooks = new ArrayList<Book>();
+        myBooks.add(new Book("Java Programming", 2003));
+        myBooks.add(new Book("Learn Java", 2014));
+        myBooks.add(new Book("Java is Fun", 2000));
+
+        Collections.sort(myBooks);               // possible because Book implements Comparable
+        for (Book bk : myBooks) {                 // enhanced for-loop
+            System.out.println(bk.getTitle() + " " + bk.getYear());
+        }
+    }
+}
+```
+
+```text
+Java is Fun 2000
+Java Programming 2003
+Learn Java 2014
+```
+
+The books come out in ascending order of year. The sort calls `compareTo` on pairs of books, so the order is whatever `compareTo` says.
+
+### The same idea with other orderings
+
+One change to `compareTo` changes the order. The two classes below are `Book` with the title as the key, and `Book` with the signs reversed.
+
+```java title="BookByTitle.java"
+public class BookByTitle implements Comparable<BookByTitle> {
+    String title;
+    int year;
+
+    BookByTitle(String title, int year) {
+        this.title = title;
+        this.year = year;
+    }
+
+    public int compareTo(BookByTitle other) {
+        return title.compareTo(other.title);       // String already knows how to compare itself
+    }
+}
+```
+
+```java title="NewestFirstBook.java"
+public class NewestFirstBook implements Comparable<NewestFirstBook> {
+    String title;
+    int year;
+
+    NewestFirstBook(String title, int year) {
+        this.title = title;
+        this.year = year;
+    }
+
+    public int compareTo(NewestFirstBook other) {
+        if (year == other.year)
+            return 0;
+        else if (year > other.year)
+            return -1;                              // the larger year comes first
+        else
+            return 1;
+    }
+}
+```
+
+```java title="BookOrders.java"
+import java.util.ArrayList;
+import java.util.Collections;
+
+public class BookOrders {
+    // Question: sort the same three books by title, then newest first.
+    public static void main(String[] args) {
+        ArrayList<BookByTitle> byTitle = new ArrayList<BookByTitle>();
+        byTitle.add(new BookByTitle("Java Programming", 2003));
+        byTitle.add(new BookByTitle("Learn Java", 2014));
+        byTitle.add(new BookByTitle("Java is Fun", 2000));
+        Collections.sort(byTitle);
+        for (BookByTitle b : byTitle) {
+            System.out.println(b.title + " " + b.year);
+        }
+
+        System.out.println("--");
+        ArrayList<NewestFirstBook> newest = new ArrayList<NewestFirstBook>();
+        newest.add(new NewestFirstBook("Java Programming", 2003));
+        newest.add(new NewestFirstBook("Learn Java", 2014));
+        newest.add(new NewestFirstBook("Java is Fun", 2000));
+        Collections.sort(newest);
+        for (NewestFirstBook b : newest) {
+            System.out.println(b.title + " " + b.year);
+        }
+    }
+}
+```
+
+```text
+Java Programming 2003
+Java is Fun 2000
+Learn Java 2014
+--
+Learn Java 2014
+Java Programming 2003
+Java is Fun 2000
+```
+
+Sorting by title uses the `compareTo` of `String`. "Java Programming" comes before "Java is Fun" because the first difference is the letter after "Java ": `P` (80) is below `i` (105) in Unicode, so the capital letter sorts first. Swapping the signs of `1` and `-1` reverses the order without changing the sort.
+
+### Consistency with equals
+
+The lecture warns that `compareTo` must match the logic in `equals`. A class that compares only the year in `compareTo`, but both title and year in `equals`, is inconsistent.
+
+```java title="LooseBook.java"
+public class LooseBook implements Comparable<LooseBook> {
+    String title;
+    int year;
+
+    LooseBook(String title, int year) {
+        this.title = title;
+        this.year = year;
+    }
+
+    public boolean equals(Object obj) {
+        if (!(obj instanceof LooseBook)) {
+            return false;
+        }
+        LooseBook other = (LooseBook) obj;
+        return title.equals(other.title) && year == other.year;
+    }
+
+    public int compareTo(LooseBook other) {
+        if (year == other.year)
+            return 0;                                // ignores the title
+        else if (year > other.year)
+            return 1;
+        else
+            return -1;
+    }
+}
+```
+
+```java title="ConsistencyCheck.java"
+public class ConsistencyCheck {
+    // Question (Lecture 13): is e1.equals(e2) always the same as e1.compareTo(e2) == 0?
+    public static void main(String[] args) {
+        LooseBook a = new LooseBook("Java is Fun", 2000);
+        LooseBook b = new LooseBook("Learn Java", 2000);
+        System.out.println("compareTo == 0: " + (a.compareTo(b) == 0));
+        System.out.println("equals: " + a.equals(b));
+    }
+}
+```
+
+```text
+compareTo == 0: true
+equals: false
+```
+
+The two books have the same year and different titles: `compareTo` says they are equal and `equals` says they are not, so the ordering is not consistent with `equals`. The repair is to break ties in `compareTo` by the title (`return title.compareTo(other.title)` when the years are equal) so that both methods agree.
+
+### A class that is not Comparable
+
+| Statement | Result |
+|---|---|
+| `Collections.sort(list)` where the list holds objects of a class that does not implement `Comparable` | `error: no suitable method found for sort(List<Plain>)`, with `inference variable T has incompatible bounds` among the reasons: found at compile time |
+| `Arrays.sort(array)` on an array of objects of such a class | compiles, and throws `ClassCastException` at run time (when the array has two or more elements) |
+
+The compile-time message is from a real compile of a `Plain` class; the run-time exception is shown here:
+
+```java title="NotComparable.java"
+import java.util.Arrays;
+
+public class NotComparable {
+    static class Plain { }
+
+    // Question (Lecture 13): what happens when the elements are not Comparable?
+    public static void main(String[] args) {
+        Plain[] items = {new Plain(), new Plain()};
+        try {
+            Arrays.sort(items);
+        } catch (ClassCastException e) {
+            System.out.println("Arrays.sort: " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+Arrays.sort: java.lang.ClassCastException
+```
+
+<Callout type="mistake" title="Common error">
+
+Calling `Collections.sort` on a list of a class that does not implement `Comparable`, or whose `compareTo` returns the wrong sign. The first is a compile error; the second sorts quietly in the wrong order. The lecture's rule: any class that needs to compare MUST implement `Comparable`, and only then can `Collections.sort()` be used.
+
+</Callout>
+
+### Exam question 4: write a Comparable class (8 marks)
+
+Write a class `Student` with a `name` (String) and a `mark` (int) that implements `Comparable<Student>` so that a list of students is sorted by mark, highest mark first. A list holds, in this order, Kago 73, Neo 91 and Thato 58: show it after `Collections.sort`. Say what changes if the order must be alphabetical by name. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+A class that implements `Comparable<Student>`, a descending order by mark, the sorted list, and the change for an alphabetical order.
+
+</Step>
+
+<Step title="2. Plan">
+
+`class Student implements Comparable<Student>`, and a `compareTo(Student other)` that returns a negative number when `this` must come first. For highest first, the larger mark comes first, so return -1 when `mark > other.mark`.
+
+</Step>
+
+<Step title="3. Solution">
+
+```java title="Student.java"
+public class Student implements Comparable<Student> {
+    private String name;
+    private int mark;
+
+    Student(String name, int mark) {
+        this.name = name;
+        this.mark = mark;
+    }
+
+    String getName() {
+        return name;
+    }
+
+    public int compareTo(Student other) {
+        if (mark == other.mark)
+            return 0;
+        else if (mark > other.mark)
+            return -1;          // the higher mark comes first
+        else
+            return 1;
+    }
+
+    public String toString() {
+        return name + " " + mark;
+    }
+}
+```
+
+```java title="StudentSort.java"
+import java.util.ArrayList;
+import java.util.Collections;
+
+public class StudentSort {
+    // Question: sort students by mark, highest first.
+    public static void main(String[] args) {
+        ArrayList<Student> list = new ArrayList<Student>();
+        list.add(new Student("Kago", 73));
+        list.add(new Student("Neo", 91));
+        list.add(new Student("Thato", 58));
+        Collections.sort(list);
+        System.out.println(list);
+    }
+}
+```
+
+```text
+[Neo 91, Kago 73, Thato 58]
+```
+
+For an alphabetical order only `compareTo` changes, to the `compareTo` of the name:
+
+```java title="NamedStudent.java"
+public class NamedStudent implements Comparable<NamedStudent> {
+    private String name;
+    private int mark;
+
+    NamedStudent(String name, int mark) {
+        this.name = name;
+        this.mark = mark;
+    }
+
+    public int compareTo(NamedStudent other) {
+        return name.compareTo(other.name);
+    }
+
+    public String toString() {
+        return name + " " + mark;
+    }
+}
+```
+
+```java title="NamedStudentSort.java"
+import java.util.ArrayList;
+import java.util.Collections;
+
+public class NamedStudentSort {
+    // Question: the same students, alphabetical by name.
+    public static void main(String[] args) {
+        ArrayList<NamedStudent> list = new ArrayList<NamedStudent>();
+        list.add(new NamedStudent("Thato", 58));
+        list.add(new NamedStudent("Neo", 91));
+        list.add(new NamedStudent("Kago", 73));
+        Collections.sort(list);
+        System.out.println(list);
+    }
+}
+```
+
+```text
+[Kago 73, Neo 91, Thato 58]
+```
+
+</Step>
+
+<Step title="4. Check">
+
+The pattern is the same as `NewestFirstBook` above, with the sign of the comparison reversed for a descending order. If the marks are equal the method returns 0, so `compareTo` and `equals` should agree about what makes two students the same.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+`Arrays.sort` and `Arrays.toString` handle arrays (ascending, no loop; `O(n log n)`), `binarySearch` needs a sorted array, and printing an array directly shows an address. An `ArrayList` is built with `new ArrayList<E>(Arrays.asList(array))` and gives an array back with `toArray(array)` (assign the result). A collection is traversed with a standard loop, a for-each loop (which uses an iterator privately) or an `Iterator` (`hasNext`, `next`, `remove` of the last element seen); change a list while traversing it only through the iterator. A `List` allows duplicates and positions: `add(i, e)` accepts indexes 0 to `size()`, `remove(int)` removes by index and `remove(Object)` by value. An array-based list is fast to read and append and slow to insert or remove at the front, because of shifting. `Collections.sort` needs `Comparable` elements, and `compareTo` returns negative, zero or positive and should agree with `equals`.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why does Arrays.sort on a String array put Apple before apple, and apple before banana?">
+
+`String` ordering compares the Unicode values of the characters. The uppercase `A` (65) is below the lowercase `a` (97), so `Apple` comes first; `apple` is before `banana` because `a` is before `b`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why must the result of myList.toArray(marks) be assigned back to marks?">
+
+If the array passed in is too small for the list's elements, `toArray` allocates a new array and returns it, so `marks` would still be the old four-cell array. With a large enough array the same array is filled and returned.
+
+</CheckQuestion>
+
+<CheckQuestion question="What is the difference between marks.remove(84) and marks.remove(Integer.valueOf(84)) for a List of Integer?">
+
+`remove(84)` is `remove(int index)`: it removes the element at index 84 and throws `IndexOutOfBoundsException` in a short list. `remove(Integer.valueOf(84))` is `remove(Object)`: it removes the first element equal to 84.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does removing from an ArrayList inside a for-each loop usually throw ConcurrentModificationException, and how do you remove safely?">
+
+The for-each loop uses an iterator privately, and the iterator detects that the list was changed behind its back. Remove through the iterator instead: `it.remove()` after `it.next()`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which ArrayList operations involve shifting elements, and which do not?">
+
+`add(i, e)` shifts the elements from index `i` to the right and `remove(i)` shifts those after `i` to the left, so both are inefficient near the front. `get`, `set` and `add(e)` at the end need no shifting (a growing array copies its elements, but rarely).
+
+</CheckQuestion>
+
+</CheckQuestions>

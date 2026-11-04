@@ -1,0 +1,542 @@
+---
+title: "List Implementations by Example"
+description: "Compare the array and the linked implementations of a List, use Java's LinkedList method by method with its exceptions, choose between ArrayList and LinkedList, and answer Lab 8 question 2 in full."
+---
+
+A `List` is an interface, so a class has to implement it. Lecture 13 gives two ways: an **array** (the `ArrayList` of the previous lesson) and a **linked list** made of nodes (Java's `LinkedList`). The lecture lists which `ArrayList` methods are efficient and which are not, offers the linked structure as the answer to the inefficient ones, then lists the operations of `LinkedList`, runs a fruit-list snippet and asks you to try the other methods. Lab 8 question 2 then asks for a `LinkedList` of course names with every kind of add and remove, a memory diagram, a sort and an array conversion. This lesson works through all of it, with every output taken from a real run. It extends [Collections by Example](/docs/sem3/csi247/08-collections/notes/collections-by-example); building a linked list yourself is in the [linked lists](/docs/sem3/csi247/09-linked-lists-traversals) chapter.
+
+<LearningObjectives items={[
+  'Compare the array and the linked implementations of a list: how each stores elements, which operations are efficient, and why',
+  'Use LinkedList methods (add, addFirst, addLast, get, getFirst, getLast, contains, set, remove, removeFirst, removeLast, toArray) and trace their effect',
+  'Say which exception each wrong call throws: an index outside the list, or an empty list',
+  'Choose between an ArrayList and a LinkedList for a described use',
+  'Answer Lab 8 question 2: the course LinkedList, its memory diagram, Collections.sort and toArray',
+]} />
+
+<Prerequisites items={[
+  'Collections by Example in this chapter: List, ArrayList, Collections.sort and iterating',
+  'Nodes and links, and drawing memory diagrams',
+  'Generic classes and type arguments, from the Generics chapter',
+]} />
+
+## 1. The templates
+
+```text
+Create a LinkedList:    LinkedList<String> list = new LinkedList<String>();
+Add:                    add(e)  addLast(e)  addFirst(e)  add(i, e)
+Read:                   get(i)  getFirst()  getLast()  contains(o)  size()
+Change:                 set(i, e)
+Remove:                 remove()  removeFirst()  removeLast()  remove(i)  remove(o)
+Convert / print:        toArray()  toString()
+Sort:                   Collections.sort(list);        the elements must be Comparable
+```
+
+`LinkedList<E>` is a generic class in `java.util` that implements `List<E>` (and `Deque<E>`), and stores its elements as a list of nodes. A `LinkedList` is a **dynamic data structure**: the number of nodes is not fixed, and they are created and discarded as the list grows and shrinks.
+
+## 2. Two ways to implement a List
+
+| | Array implementation (`ArrayList`) | Linked implementation (`LinkedList`) |
+|---|---|---|
+| Storage | one array, in contiguous memory; created with a default capacity | nodes, **not** stored contiguously; each node keeps its data and a link to the next node (the last link is `null`) |
+| When it is full | create a new array twice as large, copy the elements across, insert in the new array | never full: add a node |
+| Reach element `i` | directly: `get(i)` and `set(i, e)` need no extra work | start at the head and follow the links until the element is found |
+| `add(e)` at the end | efficient | efficient with a link to the end |
+| `add(i, e)` and `remove(i)` | inefficient: a potentially large number of elements shift | no shifting: only links change, once the position is reached |
+
+The head of a linked list is not a node but a reference to the first node; an empty list has a `null` head. A linked list is a **recursive structure**: it is either empty (`null`) or a node holding a data item and a reference to the rest of the list. In a **singly linked list** each node has one link (next). In a **doubly linked list** each node has two (previous and next), and Java's `LinkedList` is a doubly linked list.
+
+<Callout type="mistake" title="Common error">
+
+Writing that a linked list is "faster" than an array list. It is only better for adding and removing in the middle or at the front. Reaching element `i` is worse, because there is no direct access: every node before it has to be visited.
+
+</Callout>
+
+## 3. Java's LinkedList, method by method
+
+This is the lecture's snippet, in the order the two columns of the slide are read:
+
+```java title="FruitsList.java"
+import java.util.LinkedList;
+
+public class FruitsList {
+    // Question (Lecture 13): trace the fruit list.
+    public static void main(String[] args) {
+        LinkedList<String> fruits = new LinkedList<String>();
+        System.out.println(fruits.size());
+        fruits.add("Mango");
+        fruits.add("Orange");
+        fruits.add("Grapes");
+        fruits.add("Guava");
+        System.out.println(fruits);
+        fruits.add(0, "Lemon");
+
+        System.out.println(fruits);
+        fruits.set(1, "Lime");
+        System.out.println(fruits);
+        System.out.println("There are " + fruits.size() + " fruits");
+        System.out.println(fruits);
+        fruits.removeFirst();
+        System.out.println(fruits);
+        fruits.removeLast();
+        System.out.println(fruits);
+        System.out.println(fruits.toString());
+    }
+}
+```
+
+```text
+0
+[Mango, Orange, Grapes, Guava]
+[Lemon, Mango, Orange, Grapes, Guava]
+[Lemon, Lime, Orange, Grapes, Guava]
+There are 5 fruits
+[Lemon, Lime, Orange, Grapes, Guava]
+[Lime, Orange, Grapes, Guava]
+[Lime, Orange, Grapes]
+[Lime, Orange, Grapes]
+```
+
+`add` appends, `add(0, "Lemon")` inserts at the front and the others stay in order, `set(1, "Lime")` replaces the element at index 1 (Mango), and `removeFirst` and `removeLast` remove the ends. `System.out.println(fruits)` calls `toString`, which lists the elements from first to last.
+
+### Every method on the lecture's list
+
+```java title="LinkedListOps.java"
+import java.util.LinkedList;
+
+public class LinkedListOps {
+    // Question (Lecture 13): use each LinkedList method and say what it returns.
+    public static void main(String[] args) {
+        LinkedList<String> list = new LinkedList<String>();
+        list.add("Kago");
+        list.addFirst("Neo");
+        list.addLast("Thato");
+        list.add(1, "Lesego");
+        System.out.println(list + " size " + list.size());
+
+        System.out.println("getFirst " + list.getFirst() + ", getLast " + list.getLast() + ", get(2) " + list.get(2));
+        System.out.println("contains Kago " + list.contains("Kago") + ", contains Zed " + list.contains("Zed"));
+        System.out.println("indexOf Thato " + list.indexOf("Thato"));
+
+        String first = list.remove();                 // no argument: removes and returns the first element
+        System.out.println("remove() returned " + first + ": " + list);
+        String atOne = list.remove(1);                // an index: removes and returns that element
+        System.out.println("remove(1) returned " + atOne + ": " + list);
+        boolean found = list.remove("Thato");         // an object: removes the first match
+        System.out.println("remove(Thato) returned " + found + ": " + list);
+
+        String old = list.set(0, "Mpho");              // replaces and returns the old element
+        System.out.println("set(0, Mpho) returned " + old + ": " + list);
+    }
+}
+```
+
+```text
+[Neo, Lesego, Kago, Thato] size 4
+getFirst Neo, getLast Thato, get(2) Kago
+contains Kago true, contains Zed false
+indexOf Thato 3
+remove() returned Neo: [Lesego, Kago, Thato]
+remove(1) returned Kago: [Lesego, Thato]
+remove(Thato) returned true: [Lesego]
+set(0, Mpho) returned Lesego: [Mpho]
+```
+
+Three `remove` forms do three jobs: `remove()` takes the first element, `remove(int i)` takes the element at an index and returns it, and `remove(Object o)` takes the first element equal to `o` and returns `true`. The version with an `int` argument is chosen whenever the argument is an `int`, as in the previous lesson:
+
+```java title="LinkedIntegers.java"
+import java.util.LinkedList;
+
+public class LinkedIntegers {
+    // Question: for a LinkedList of Integer, what do remove(1) and remove(Integer.valueOf(12)) do?
+    public static void main(String[] args) {
+        LinkedList<Integer> nums = new LinkedList<Integer>();
+        nums.add(5);
+        nums.add(12);
+        nums.add(7);
+        nums.add(12);
+
+        nums.remove(1);                                // an int: the INDEX 1
+        System.out.println(nums);
+        nums.remove(Integer.valueOf(12));              // an object: the VALUE 12
+        System.out.println(nums);
+    }
+}
+```
+
+```text
+[5, 7, 12]
+[5, 7]
+```
+
+### Exceptions
+
+The lecture warns: careful with `IndexOutOfBoundsException` for the methods that take an index. The methods that work on the ends fail differently when the list is empty.
+
+```java title="LinkedListErrors.java"
+import java.util.LinkedList;
+import java.util.NoSuchElementException;
+
+public class LinkedListErrors {
+    // Question: which exception does each wrong call throw?
+    public static void main(String[] args) {
+        LinkedList<String> fruits = new LinkedList<String>();
+        fruits.add("Mango");
+        fruits.add("Orange");
+
+        try {
+            fruits.get(10);
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("get(10): " + e.getClass().getName());
+        }
+        try {
+            fruits.add(7, "Lime");
+        } catch (IndexOutOfBoundsException e) {
+            System.out.println("add(7, Lime): " + e.getClass().getName());
+        }
+        fruits.add(2, "Lemon");                        // index 2 equals size(): the position after the last element
+        System.out.println("add(2, Lemon): " + fruits);
+
+        LinkedList<String> empty = new LinkedList<String>();
+        try {
+            empty.getFirst();
+        } catch (NoSuchElementException e) {
+            System.out.println("getFirst on an empty list: " + e.getClass().getName());
+        }
+        try {
+            empty.removeFirst();
+        } catch (NoSuchElementException e) {
+            System.out.println("removeFirst on an empty list: " + e.getClass().getName());
+        }
+        try {
+            empty.remove();
+        } catch (NoSuchElementException e) {
+            System.out.println("remove() on an empty list: " + e.getClass().getName());
+        }
+    }
+}
+```
+
+```text
+get(10): java.lang.IndexOutOfBoundsException
+add(7, Lime): java.lang.IndexOutOfBoundsException
+add(2, Lemon): [Mango, Orange, Lemon]
+getFirst on an empty list: java.util.NoSuchElementException
+removeFirst on an empty list: java.util.NoSuchElementException
+remove() on an empty list: java.util.NoSuchElementException
+```
+
+An index outside the list throws `IndexOutOfBoundsException`: for `get` the valid indexes are 0 up to `size() - 1`, and for `add(i, e)` they are 0 up to and including `size()`. `getFirst`, `removeFirst` and `remove()` on an empty list throw `NoSuchElementException`.
+
+<Callout type="mistake" title="Common error">
+
+Calling `getFirst()` or `removeFirst()` without checking that the list has an element. An empty list throws `NoSuchElementException`, so test `isEmpty()` or `size()` first.
+
+</Callout>
+
+### A LinkedList as an array and as a sorted list
+
+Two more conversions are needed by the lab. `toArray()` returns an `Object[]`; `toArray(new String[0])` returns a `String[]`. `Collections.sort` sorts a `LinkedList` just as it sorts an `ArrayList`, because it is a `List`.
+
+```java title="ListConversions.java"
+import java.util.Collections;
+import java.util.LinkedList;
+
+public class ListConversions {
+    // Question: convert a LinkedList to an array, and sort it.
+    public static void main(String[] args) {
+        LinkedList<String> names = new LinkedList<String>();
+        names.add("Thato");
+        names.add("Kago");
+        names.add("Neo");
+
+        Object[] plain = names.toArray();
+        String[] typed = names.toArray(new String[0]);
+        System.out.println(plain.length + " " + typed.length + " " + plain.getClass().getSimpleName() + " " + typed.getClass().getSimpleName());
+
+        Collections.sort(names);
+        for (String name : names) {                  // enhanced for-loop
+            System.out.print(name + " ");
+        }
+        System.out.println();
+        for (String name : typed) {                  // the array is a copy, in the old order
+            System.out.print(name + " ");
+        }
+        System.out.println();
+    }
+}
+```
+
+```text
+3 3 Object[] String[]
+Kago Neo Thato
+Thato Kago Neo
+```
+
+The array made before the sort keeps the old order, so it is a copy: sorting the list does not change it.
+
+### Exam question 1: trace a LinkedList (6 marks)
+
+For `LinkedList<String> list = new LinkedList<String>();` give the contents of `list` after each statement: `list.add("B"); list.addFirst("A"); list.addLast("D"); list.add(2, "C"); list.removeFirst(); list.set(1, "X"); list.remove("D");` and the value returned by the last two. (6 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Seven statements, a list after each, and the values returned by `set` and `remove`.
+
+</Step>
+
+<Step title="2. Plan">
+
+`add` appends, `addFirst` and `addLast` add at the ends, `add(i, e)` inserts at `i`, `removeFirst` drops the first element, `set(i, e)` replaces and returns the old value, and `remove(Object)` returns `true` when it removed something.
+
+</Step>
+
+<Step title="3. Solution">
+
+| Statement | List afterwards | Returns |
+|---|---|---|
+| `list.add("B")` | `[B]` | |
+| `list.addFirst("A")` | `[A, B]` | |
+| `list.addLast("D")` | `[A, B, D]` | |
+| `list.add(2, "C")` | `[A, B, C, D]` | |
+| `list.removeFirst()` | `[B, C, D]` | `"A"` |
+| `list.set(1, "X")` | `[B, X, D]` | `"C"` (the old element) |
+| `list.remove("D")` | `[B, X]` | `true` |
+
+</Step>
+
+<Step title="4. Check">
+
+Each form of these operations was run in `FruitsList` and `LinkedListOps`: `add(2, "C")` on a list of three goes between B and D, `set` returns the element it replaced, and `remove(Object)` returns a `boolean`. The final list has the two elements B and X.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## 4. Lab 8, question 2: courses in a LinkedList
+
+The lab asks for a class `UsingLinkedList` with a method `displayList` that shows a `LinkedList` one element per line, and a `main` that: (i) creates a `LinkedList` of `String` courses using the various add methods; (ii) tries other methods (remove the first course, remove the last, add two courses from the previous semester, add another course at index 5, check whether a course exists); (iii) draws the memory diagram for (i) and (ii); (iv) displays the list; (v) sorts it with `Collections.sort()`; (vi) displays the sorted list; (vii) returns an array of all the elements and displays the array with an enhanced for-loop.
+
+```java title="UsingLinkedList.java"
+import java.util.Collections;
+import java.util.LinkedList;
+
+public class UsingLinkedList {
+    static void displayList(LinkedList<String> list) {
+        for (String course : list) {
+            System.out.println(course);              // one per line
+        }
+    }
+
+    public static void main(String[] args) {
+        // (i) the courses of this semester, with the different add methods
+        LinkedList<String> courses = new LinkedList<String>();
+        courses.add("Data Structures");
+        courses.add("Probability");
+        courses.addLast("Networks");
+        courses.add("Operating Systems");
+        courses.addFirst("Databases");
+        System.out.println("(i) " + courses);
+
+        // (ii) other methods
+        String first = courses.removeFirst();
+        String last = courses.removeLast();
+        System.out.println("(ii) removed " + first + " and " + last + ": " + courses);
+        courses.add("Programming");                   // a course of the previous semester
+        courses.add("Calculus");                       // another one
+        courses.add(5, "Statistics");                  // size is 5, so index 5 is the end
+        System.out.println("Probability exists: " + courses.contains("Probability"));
+        System.out.println("Physics exists: " + courses.contains("Physics"));
+        System.out.println("size " + courses.size());
+
+        // (iv) display
+        System.out.println("(iv) the list:");
+        displayList(courses);
+
+        // (v) and (vi) sort and display
+        Collections.sort(courses);
+        System.out.println("(vi) sorted:");
+        displayList(courses);
+
+        // (vii) an array of the elements, shown with an enhanced for-loop
+        Object[] array = courses.toArray();
+        System.out.println("(vii) the array:");
+        for (Object course : array) {
+            System.out.println(course);
+        }
+    }
+}
+```
+
+```text
+(i) [Databases, Data Structures, Probability, Networks, Operating Systems]
+(ii) removed Databases and Operating Systems: [Data Structures, Probability, Networks]
+Probability exists: true
+Physics exists: false
+size 6
+(iv) the list:
+Data Structures
+Probability
+Networks
+Programming
+Calculus
+Statistics
+(vi) sorted:
+Calculus
+Data Structures
+Networks
+Probability
+Programming
+Statistics
+(vii) the array:
+Calculus
+Data Structures
+Networks
+Probability
+Programming
+Statistics
+```
+
+Step (ii) needs the list to have at least five elements before `add(5, ...)`: that is why two earlier courses are added first. With fewer elements the call throws `IndexOutOfBoundsException`, as `add(7, "Lime")` did above. The diagram below follows the first part of the lab, where the Java `LinkedList` is a **doubly** linked list: the list object keeps `first`, `last` and `size`, and each node keeps `prev`, `data` and `next`. Every add or remove is a handful of link changes; no element is shifted.
+
+<MemoryDiagram scenario="llcourses" />
+
+<Callout type="mistake" title="Common error">
+
+Drawing the `LinkedList` as an array of strings, or shifting nodes along when one is inserted. A node is created, its links are set, and the links of its neighbours are changed. The names are String objects; the picture above writes them inside the nodes to keep it small, but the exam diagram should show each as its own object.
+
+</Callout>
+
+## 5. Choosing between ArrayList and LinkedList
+
+| The use | Better choice | Why (from the lecture) |
+|---|---|---|
+| read or replace elements by index many times (`get`, `set`) | `ArrayList` | direct access; no extra work to reach an element |
+| add elements at the end of a list | `ArrayList` (or `LinkedList`) | `add(e)` is efficient in both |
+| add and remove at the front or in the middle often | `LinkedList` | no shifting of a potentially large number of elements |
+| the number of items is unknown and changes a lot | `LinkedList` | a dynamic structure that grows and shrinks node by node |
+| the data must stay in a sorted `List` | either | `Collections.sort` works on any `List` |
+
+### Exam question 2: choose and justify (5 marks)
+
+A program keeps a list of customers waiting at a counter. New customers join at the end. The first customer is served and removed. Occasionally a customer in the middle leaves. Choose between an `ArrayList` and a `LinkedList`, and justify the choice with the operations used. (5 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Three operations: add at the end, remove the first, remove from the middle. A choice and a justification in terms of those operations.
+
+</Step>
+
+<Step title="2. Plan">
+
+For each operation say what the `ArrayList` does and what the `LinkedList` does, then conclude.
+
+</Step>
+
+<Step title="3. Solution">
+
+Choose a `LinkedList`. Adding at the end is efficient in both. Removing the first customer is `removeFirst()`, which in an `ArrayList` (`remove(0)`) shifts all the remaining elements one place left, but in a `LinkedList` only changes the head link. Removing a customer in the middle also shifts elements in an `ArrayList`, whereas a `LinkedList` only changes the links around the node once it has been found. The only cost of the `LinkedList` is that finding the middle customer means following links from the start, which is not a cost the `ArrayList` avoids when it must shift anyway.
+
+</Step>
+
+<Step title="4. Check">
+
+The shifting counts are the ones seen in `DynamicArrayDemo`: removing the first element of a 7-element array list moved 6 elements, and removing the last moved none. A queue whose front is removed constantly is the case the array list is worst at.
+
+</Step>
+
+</Steps>
+
+</details>
+
+### Exam question 3: Lab 8 question 2 in your own words (8 marks)
+
+Describe what each part of Lab 8 question 2 does in memory, for the list `[Databases, Data Structures, Probability, Networks]` when `removeFirst()` and then `add(1, "Calculus")` are applied. (8 marks)
+
+<details>
+<summary>Worked answer, with the reasoning</summary>
+
+<Steps title="Answering the question">
+
+<Step title="1. Read the question">
+
+Two operations on a doubly linked list of four nodes, and what happens to the nodes and links in each.
+
+</Step>
+
+<Step title="2. Plan">
+
+For `removeFirst`: move `first`, clear the new first node's `prev`, reduce `size`. For `add(1, ...)`: walk to index 1, create a node, set its `prev` and `next`, then change the neighbours' links.
+
+</Step>
+
+<Step title="3. Solution">
+
+`removeFirst()` returns `"Databases"`: `first` now points at the Data Structures node, whose `prev` becomes `null`, `size` goes from 4 to 3, and the Databases node is garbage because nothing points at it. The list is `[Data Structures, Probability, Networks]`. `add(1, "Calculus")` creates a node whose `prev` is the Data Structures node and whose `next` is the Probability node; the Data Structures node's `next` and the Probability node's `prev` are changed to the new node, and `size` becomes 4. The list is `[Data Structures, Calculus, Probability, Networks]`. No element moves.
+
+</Step>
+
+<Step title="4. Check">
+
+The same pattern of changes is in the `llcourses` diagram: `removeLast()` changed one `next` link and `last`, and `add(1, "Net")` changed two links and added one node. Both links in each direction must agree: a node's `next` is the following node's `prev`.
+
+</Step>
+
+</Steps>
+
+</details>
+
+## Summary
+
+<Callout type="key" title="Remember">
+
+A `List` can be implemented with an array or with linked nodes. The array version reaches element `i` directly but shifts elements for `add(i, e)` and `remove(i)`, and when full it creates an array twice as large and copies. The linked version has no direct access, since you start at the head and follow links, but adding and removing only changes links. Java's `LinkedList` is a doubly linked generic class that implements `List` and `Deque`: use `add`, `addFirst`, `addLast`, `get`, `getFirst`, `getLast`, `contains`, `set`, `remove` (no argument, an index, or an object), `removeFirst`, `removeLast`, `toArray` and `toString`. An index outside the list throws `IndexOutOfBoundsException`; the end methods on an empty list throw `NoSuchElementException`. `Collections.sort` sorts any `List` of `Comparable` elements.
+
+</Callout>
+
+## Check your understanding
+
+<CheckQuestions>
+
+<CheckQuestion question="Why is get(i) efficient in an ArrayList but not in a LinkedList?">
+
+An `ArrayList` keeps its elements in one array, so index `i` is reached directly. A `LinkedList` has no direct access: it starts at the head and follows the links until it reaches the element.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which operations of an array-based list involve shifting elements, and what does a linked list do instead?">
+
+`add(i, e)` and `remove(i)` shift a potentially large number of elements. A linked list changes the links around the position, so nothing is shifted once the node is found.
+
+</CheckQuestion>
+
+<CheckQuestion question="What do remove(), remove(1) and remove(Integer.valueOf(12)) do on a LinkedList of Integer?">
+
+`remove()` removes and returns the first element. `remove(1)` is an index: it removes the element at index 1. `remove(Integer.valueOf(12))` is an object: it removes the first element equal to 12 and returns `true`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Which exception does getFirst throw on an empty LinkedList, and which does get(10) throw on a list of two elements?">
+
+`getFirst()` on an empty list throws `NoSuchElementException`. `get(10)` on a list of two elements throws `IndexOutOfBoundsException`.
+
+</CheckQuestion>
+
+<CheckQuestion question="Why does Lab 8 add two courses before it adds one at index 5?">
+
+`add(i, e)` accepts indexes from 0 up to and including `size()`. The list has three elements after the two removals, so index 5 would throw `IndexOutOfBoundsException`; after two more courses it has five, and index 5 is the end of the list.
+
+</CheckQuestion>
+
+</CheckQuestions>
