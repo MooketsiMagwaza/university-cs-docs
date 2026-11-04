@@ -76,14 +76,14 @@ Removed (all recoverable from git history):
 | `_archive_csi247/` (115 files) | 603,563 bytes | referenced only by `pivot_to_canvases.sh`, which created it, and by the exclude list of `scan_uni_docs.py` |
 | `pivot_to_canvases.sh` | 2,923 bytes | the one-off script that moved the old CSI247 folders into the archive; nothing calls it |
 | `components/visuals/mermaid.tsx` and its entry in `components/mdx.tsx` | 3,597 bytes | no MDX page uses `<Mermaid>` (`git grep`: the word appears only in prose); it loaded the `mermaid` library at run time |
-| `@codesandbox/sandpack-react` in `package.json` | 76.8 MB of `node_modules` together with the next row | no file imports it (`git grep -i sandpack` finds only the stale `llms.txt`) |
+| `@codesandbox/sandpack-react` in `package.json` | 76.8 MB of `node_modules` together with the next row | no file imports it |
 | `mermaid` in `package.json` | (in the row above) | no file imports it. It stays in `node_modules` because `@excalidraw/excalidraw` depends on it |
 
 Sizes: tracked files 3,700 files and 450,368,618 bytes before, 3,584 files and 449,741,442 bytes after (`public/` is 435,864,977 bytes before and after, `content/` 7,703,190); `package-lock.json` 364,468 bytes before, 342,748 after; `node_modules` 780,757,107 bytes before, 703,927,490 after.
 
 Looked at and kept:
 
-- `llms.txt`, `apply-files.py`, `payload.json`: the owner's JSON payload workflow; the owner decides.
+- `llms.txt`, `apply-files.py`, `payload.json` (the JSON payload workflow): removed on 2026-11-04, the owner asked for it. The `/llms.txt` route of the site is unaffected.
 - `public/files/**` (321 MB) and `public/diagrams/**` (81 MB): the PDFs, slides and canvases are linked from `public/files/<course>/meta.json` (read by `ResourceHub`) or from topic Overview pages. Of the 2,054 files in `public/`, a search of every tracked text file for the path or the file name finds no mention of 121, all small (0.9 MB). Of these, `public/files/sem3/csi247/pdfcoffee.com_csi-247-exam-2018-pdf-free.pdf` (683 KB), `public/files/sem1/mat111/lectures/Week 7.pdf` (193 KB) and `public/og-image.png` (6.7 KB) are single files that look forgotten rather than dead; the rest are parts of the CSI243 archive and download sets that the Legacy pages list. Duplicates by content: 104 groups, 2.8 MB, mostly PDFs shared between two courses' resource lists.
 - The twelve Excalidraw canvases (about 81 MB) are 99 per cent embedded PNG images (the 11.6 MB `stacks-and-queues` canvas holds 11.4 MB of base64 images in 18 files); redrawing them with smaller images is the largest saving left in `public/`. A canvas of 3 MB or more already waits for a click.
 - `scan_uni_docs.py`, `scripts/build-downloads-readme.mjs`, `scripts/sync-mat221-source-content.mjs`, `scripts/scaffold-semester-study-pages.ps1`, `scripts/audit-csi247-pdf-layout.py`: nothing calls them by name, but each is a stand-alone tool the owner may run by hand.
