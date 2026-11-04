@@ -29,9 +29,16 @@ try {
   const teachingSources = new Map();
   let teachingSnippetCount = 0;
   for (const file of contentRoots.flatMap(walk)) {
+    // The by-example and exam-practice lessons show programs that are meant not to compile (an exam question that leaves out
+    // its imports, the compile errors javac reports), so each listing there is checked by scripts/verify-csi247-listings.mjs
+    // (and scripts/verify-package-examples.mjs for the packages), which understand that. This audit covers the older lessons.
+    if (/-(?:by-example|exam-practice)\.mdx$/.test(file)) continue;
     const source = readFileSync(file, 'utf8');
-    for (const match of source.matchAll(/(?:```|~~~)java[^\r\n]*\r?\n([\s\S]*?)(?:```|~~~)/g)) {
-      const code = match[1];
+    for (const match of source.matchAll(/(?:```|~~~)java([^\r\n]*)\r?\n([\s\S]*?)(?:```|~~~)/g)) {
+      // A fence with `project="..."` belongs to one small project of a lesson (the packages lessons define several versions
+      // of the same class); scripts/verify-package-examples.mjs builds and runs those, so this audit leaves them out.
+      if (/\bproject=/.test(match[1])) continue;
+      const code = match[2];
       const className = code.match(/public class\s+([A-Za-z_$][\w$]*)/)?.[1];
       if (!className) {
         // Standalone complete methods in the four assigned lessons get a class wrapper.
