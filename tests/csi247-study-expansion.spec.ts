@@ -79,7 +79,10 @@ for(const [chapter,folder] of [['sorting-and-searching','04-sorting-and-searchin
     // Quiz and practice questions load when they come near the screen (PERF-04), so scroll down the whole page to let them
     // arrive, then wait for the text to be long enough.
     await page.evaluate(async()=>{ for(let y=0;y<document.body.scrollHeight;y+=500) { window.scrollTo(0,y); await new Promise(resolve=>setTimeout(resolve,40)); } window.scrollTo(0,0); });
-    await expect.poll(async()=>(await article.innerText()).length,{timeout:15_000}).toBeGreaterThan(2200);
+    // A review page is now a short shell around the flashcard deck and the quiz, which show one card or one question at a
+    // time, so it has less text than the other support pages.
+    const minimum=support==='review'?1200:2200;
+    await expect.poll(async()=>(await article.innerText()).length,{timeout:15_000}).toBeGreaterThan(minimum);
     await expect(article.locator('h2')).not.toHaveCount(0);
     await page.setViewportSize({width:390,height:844});
     await expectNoSideScroll(page);
