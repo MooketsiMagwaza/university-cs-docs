@@ -76,7 +76,10 @@ for(const [chapter,folder] of [['sorting-and-searching','04-sorting-and-searchin
   test(`${chapter}/${support} has substantive support material`,async({page})=>{
     await page.goto(`/docs/sem3/csi247/${folder}/${support}`);
     const article=page.locator('article').first();
-    expect((await article.innerText()).length).toBeGreaterThan(2200);
+    // Quiz and practice questions load when they come near the screen (PERF-04), so scroll down the whole page to let them
+    // arrive, then wait for the text to be long enough.
+    await page.evaluate(async()=>{ for(let y=0;y<document.body.scrollHeight;y+=500) { window.scrollTo(0,y); await new Promise(resolve=>setTimeout(resolve,40)); } window.scrollTo(0,0); });
+    await expect.poll(async()=>(await article.innerText()).length,{timeout:15_000}).toBeGreaterThan(2200);
     await expect(article.locator('h2')).not.toHaveCount(0);
     await page.setViewportSize({width:390,height:844});
     await expectNoSideScroll(page);
