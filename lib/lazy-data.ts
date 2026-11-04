@@ -28,7 +28,10 @@ export const isLazyDataKind = (value: string): value is LazyDataKind => value ==
 
 /** Every JSON data file of a kind, as the path under its folder without `.json` (for example `sem3/csi243/01-x/review`). */
 export function listLazyDataFiles(kind: LazyDataKind): string[] {
-  const root = path.join(process.cwd(), ROOTS[kind]);
+  // `turbopackIgnore`: the folder depends on `kind`, which makes the bundler trace the whole project (public/ included, 436 MB)
+  // into every function that imports this file, and the data route then exceeds Vercel's 250 MB limit. This runs only at build
+  // time (generateStaticParams), so nothing has to be traced.
+  const root = path.join(/*turbopackIgnore: true*/ process.cwd(), ROOTS[kind]);
   const found: string[] = [];
   const walk = (directory: string) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
