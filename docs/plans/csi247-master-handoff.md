@@ -292,7 +292,7 @@ MDX pitfalls: blank lines around every tag, fence and `Step`; never put program 
 - **`next.config.mjs`:** renamed or moved pages need a permanent redirect there and an alias in `content/progress/aliases.json`; quiz, flashcard and figure data paths mirror the page path, so move them in the same commit. Loading the config in node (`await import('./next.config.mjs')`) runs fumadocs-mdx and is a quick way to check redirects.
 - **Generated Haskell and Java study guides** under `public/files/**/study-guides` are built by `scripts/build-csi247-study-guides.mjs`; edit the sources in `features/courses/csi247/study-guides`, not the output.
 - **CodeQL** flags a regexp that matches `-->`, a tag-stripping replace that runs once, and escaping that skips backslashes. Prefer a small parser to a dense regexp in scripts.
-- The owner's `payload.json` at the repository root is a stray tracked file; ignore it.
+- The owner's `payload.json`, `apply-files.py` and `llms.txt` at the repository root were removed on 2026-11-04 at the owner's request.
 
 ## 10. Decisions waiting on the owner
 
@@ -325,3 +325,7 @@ MDX pitfalls: blank lines around every tag, fence and `Step`; never put program 
 ### 2026-11-03: memory diagram rebuild (CSI247-18)
 
 The owner called the memory diagrams "half assed" and gave a reference (the `Student[]` picture: grey Stack and Heap, names above boxes, addresses above heap items, elbow arrows, struck-through old values). The vault excalidraw PNG is wrong and is not the reference. The engine was rebuilt (commit `15409d5`): layout from every step, relative placement, routed arrows, a geometry checker run by `npm run test:memory-diagram`. 50 scenarios in `lib/csi247/scenarios/`. To look at the pictures without the dev server, render a gallery of `drawStep` output to HTML and screenshot it with the Playwright Chromium (the scripts used are in the session scratchpad: `gallery.mjs`, `shot.mjs`, `check.mjs`). Next: check the real lesson pages (1280px, 375px, dark), re-read the lesson text and `drawing-memory-diagrams` against the new look, then the older-lesson clean-up (CSI247-17).
+
+### 2026-11-04: both branches merged into the local main
+
+`feat/performance-pass` and `feat/csi247-depth` were merged into the local `main` (not pushed), in a temporary worktree so the owner's checkout was untouched. Checked on the merged tree: 730 of 730 pages compile, 285 unit tests, `audit:content` 7 of 7, 262 Java listings and 43 package commands with no mismatch, `types:check` clean. The merge exposed two problems in earlier work, fixed on main: `check-mdx` imported `js-yaml`, which is not a dependency (it now uses `yaml`, which the site's pipeline uses), and the old Java audit compiled the new lessons' deliberately incomplete or project-scoped programs (it now covers only the older lessons). Continue from `main`.
