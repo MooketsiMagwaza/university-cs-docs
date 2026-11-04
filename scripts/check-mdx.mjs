@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compile } from '@mdx-js/mdx';
-import yaml from 'js-yaml';
+import { parse as parseYaml } from 'yaml';
 import remarkMath from 'remark-math';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,7 +76,7 @@ for (const file of files.sort()) {
   const offset = frontMatter ? frontMatter[0].split('\n').length - 1 : 0;
   if (frontMatter) {
     try {
-      yaml.load(frontMatter[0].replace(/^---\r?\n/, '').replace(/\r?\n---\r?\n$/, ''));
+      parseYaml(frontMatter[0].replace(/^---\r?\n/, '').replace(/\r?\n---\r?\n$/, ''));
     } catch (error) {
       failed += 1;
       console.log(`FAILED  ${path.relative(root, file).replace(/\\/g, '/')}:2\n        frontmatter is not valid YAML: ${String(error.message).split('\n')[0]}`);
