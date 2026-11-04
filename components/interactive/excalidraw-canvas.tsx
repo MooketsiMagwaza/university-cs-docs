@@ -6,8 +6,11 @@ import { useTheme } from 'next-themes';
 import { Loader2, AlertCircle, Maximize2, Minimize2, X, Map, RefreshCw, Download, Sun, Moon } from 'lucide-react';
 
 const Excalidraw = dynamic(
-  async () => (await import('@excalidraw/excalidraw')).Excalidraw,
-  { 
+  async () => {
+    await import('./excalidraw-styles');
+    return (await import('@excalidraw/excalidraw')).Excalidraw;
+  },
+  {
     ssr: false,
     loading: () => (
       <div className="absolute inset-0 flex items-center justify-center bg-fd-background z-20">
@@ -19,8 +22,6 @@ const Excalidraw = dynamic(
     )
   }
 );
-
-import '@excalidraw/excalidraw/index.css';
 
 type Status = 'idle' | 'downloading' | 'parsing' | 'error' | 'ready';
 
@@ -94,7 +95,9 @@ export function ExcalidrawCanvas({ src, title, expectedMB }: { src: string; titl
 
     const downloadAndParse = async () => {
       try {
-        const response = await fetch(src, { signal: controller.signal, cache: 'no-store' });
+        // 'no-cache' asks the server whether the file changed (a 304 answer costs a few bytes) and reuses the copy the
+        // browser already holds when it did not, so opening the same 20 MB canvas twice downloads it once.
+        const response = await fetch(src, { signal: controller.signal, cache: 'no-cache' });
         if (!response.ok) throw new Error(`HTTP ${response.status}: File not found`);
 
         const contentLength = response.headers.get('Content-Length');

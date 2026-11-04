@@ -8,6 +8,8 @@
  * with $...$ and rendered in the browser, so a page with hundreds of formulas does not compile to megabytes of markup.
  */
 
+import { SAFE_DATA_PATH, dataVersion, lazyDataUrl } from './lazy-data';
+
 export type PracticeStep = {
   title: string;
   /** Text with $maths$ and **bold**. */
@@ -32,10 +34,22 @@ export type PracticeFile = {
   groups: Record<string, PracticeGroupData>;
 };
 
-const SAFE_PATH = /^[A-Za-z0-9][A-Za-z0-9/_.-]*$/;
+/**
+ * What the page needs to know about a group of practice questions without carrying them: how many there are and the
+ * address of the data file (see lib/lazy-data.ts). Throws at build time, as before, when the file or the group is missing.
+ */
+export async function describePracticeGroup(src: string, group: string) {
+  const found = await loadPracticeGroup(src, group);
+  const module_ = await import(`@/content/practice-data/${src}.json`);
+  return {
+    title: found.title,
+    count: found.questions.length,
+    url: lazyDataUrl('practice', src, dataVersion(`practice:${src}`, module_.default ?? module_)),
+  };
+}
 
-export async function loadPracticeGroup(src: string, group: string): Promise<PracticeGroupData> {
-  if (!SAFE_PATH.test(src) || src.includes('..')) {
+async function loadPracticeGroup(src: string, group: string): Promise<PracticeGroupData> {
+  if (!SAFE_DATA_PATH.test(src) || src.includes('..')) {
     throw new Error(`PracticeRef: invalid src "${src}".`);
   }
 

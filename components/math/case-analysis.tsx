@@ -1,36 +1,7 @@
 'use client';
 
 import React from 'react';
-import katex from 'katex';
-
-// Helper to parse inline math in strings
-const MathText = ({ text }: { text: any }) => {
-  if (!text) return null;
-  // If it's already a React node (JSX), just render it
-  if (typeof text !== 'string') return <>{text}</>; 
-
-  const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g);
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.startsWith('$$') && part.endsWith('$$')) {
-          const math = part.slice(2, -2);
-          try {
-            const html = katex.renderToString(math, { displayMode: true, throwOnError: false });
-            return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
-          } catch { return <span key={index}>{part}</span>; }
-        } else if (part.startsWith('$') && part.endsWith('$')) {
-          const math = part.slice(1, -1);
-          try {
-            const html = katex.renderToString(math, { displayMode: false, throwOnError: false });
-            return <span key={index} dangerouslySetInnerHTML={{ __html: html }} />;
-          } catch { return <span key={index}>{part}</span>; }
-        }
-        return <span key={index}>{part}</span>;
-      })}
-    </>
-  );
-};
+import { MathText } from '@/components/interactive/math-text';
 
 export function CaseAnalysis({ title, children }: { title?: string; children: React.ReactNode }) {
   return (

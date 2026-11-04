@@ -126,6 +126,12 @@ A sentence or a table that belongs to the whole group stays here, in the MDX.
 
 Each question is an `ExamQuestion` with a Show solution button, the steps as `Steps`, and the answer under them. Keep the `##` heading in the MDX so the page contents list still has the group. The loader is `lib/practice-data.ts`; the file path and group id are checked and a wrong one stops the build with a message.
 
+## How `QuizRef` and `PracticeRef` deliver their data (PERF-04)
+
+The questions are not part of the page. At build time `QuizRef` and `PracticeRef` only read the data file to check the path and the id, and put the title, the number of questions and an address such as `/data/quiz/sem3/csi243/01-functional-thinking/review.json?v=3fa09c1d2b` in the page, with a low-priority preload hint so the browser starts the download early. Every file under `content/quiz-data` and `content/practice-data` is also built as a static JSON file by `app/data/[kind]/[...path]/route.ts`; the `?v=` hash of the content makes the address change when the data does, so the file is cached for a year with `immutable`. In the browser, `QuizLoader` and `PracticeLoader` (`components/interactive/`) show a stand-in with the title and the question count, fetch the file once the quiz is within 800 px of the screen (all the quizzes and groups on a page that read the same file share one request), and then render the same `Quiz` or `PracticeQuestions` as before in the same place. The data files keep their format, and a quiz written directly in the MDX with `<Quiz questions={...} />` or a deck with `<FlashcardDeck cards={...} />` still carries its questions in the page; move them to JSON and use `QuizRef` to get the saving.
+
+Formulas: `MathText` (used by the quiz, the flashcards and the practice questions) renders a text that has no `$` as plain text and loads KaTeX in its own chunk only when a text contains a formula, so a quiz without formulas never downloads the library.
+
 ## Code window
 
 Every fenced code block in the notes is rendered by `components/interactive/code-window.tsx` (the MDX `pre` in `components/mdx.tsx`), styled in `app/styles/code-window.css`. It has three window buttons, the language name (or the fence `title="File.java"`), a copy button, and line numbers from six lines (or with `lineNumbers` on the fence). The language comes from the `language-xxx` class that `rehypeCodeOptions: { addLanguageClass: true }` in `source.config.ts` adds.

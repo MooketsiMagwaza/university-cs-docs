@@ -22,32 +22,17 @@ import { CommandWords, DecodeQuestion } from './learning/decoding';
 import { InteractiveStepper, StepperStep } from './interactive/interactive-stepper';
 import { Flashcard } from './interactive/flashcard';
 import { GraphViewer } from './visuals/graph-viewer';
-import { Mermaid } from './visuals/mermaid';
 import { SiteDiagram } from './visuals/site-diagram';
 import { Card } from './callouts/card';
-import { ResourceHub } from './interactive/resource-hub';
-import { HaskellPlayground } from './interactive/haskell-playground';
-import { HaskellTryIt } from './interactive/haskell-try-it';
 import { MdxPre } from './interactive/code-window';
-import { CodePlayground } from './interactive/code-playground';
-import { CodeTryIt } from './interactive/code-try-it';
-import { JavaPlayground } from './interactive/java-playground';
-import { JavaTryIt } from './interactive/java-try-it';
-import { InsertionSortStory } from './interactive/insertion-sort-story';
-import { BinarySearchStory, LinearSearchStory } from './interactive/search-stories';
-import { BubbleSortStory, SelectionSortStory } from './interactive/simple-sort-stories';
-import { MergeSortStory } from './interactive/merge-sort-story';
-import { MergeComplexityFigure, MergeFrontWorkbench, MergeRecursionExplorer } from './interactive/merge-sort-deep-dive';
-import { PackageBuildStory, PackageFolderStory, PackageImportStory } from './interactive/package-stories';
-import { DistributionExplorer } from './interactive/distribution-explorer';
-import { Simulation } from './interactive/simulation';
-import { VennDiagram } from './interactive/venn-diagram';
-import { ProbabilityTree } from './interactive/probability-tree';
-import { CountingCalculator } from './interactive/counting-calculator';
-import { Visualise } from './interactive/function-visual';
+// The large interactive components are loaded by the pages that use them (components/interactive/lazy.tsx).
+import {
+  BinarySearchStory, BubbleSortStory, CodePlayground, CodeTryIt, CountingCalculator, DistributionExplorer, HaskellPlayground,
+  HaskellTryIt, InsertionSortStory, JavaPlayground, JavaTryIt, LinearSearchStory, MemoryDiagram, MergeComplexityFigure,
+  MergeFrontWorkbench, MergeRecursionExplorer, MergeSortStory, PackageBuildStory, PackageFolderStory, PackageImportStory,
+  ProbabilityTree, RegressionPlot, ResourceHub, SelectionSortStory, Simulation, VennDiagram, Visualise,
+} from './interactive/lazy';
 import { PredictReveal } from './interactive/predict-reveal';
-import { RegressionPlot } from './interactive/regression-plot';
-import { MemoryDiagram } from './interactive/memory-diagram';
 import { ConceptFrame, FrameBox } from './learning/concept-frame';
 import { TraceTable } from './learning/trace-table';
 import { SvgFigure } from './visuals/svg-figure';
@@ -118,7 +103,6 @@ export function getMDXComponents(components?: MDXComponents) {
     StepperStep,
     Flashcard,
     GraphViewer,
-    Mermaid,
     SiteDiagram,
     Callout,
     Tabs,
