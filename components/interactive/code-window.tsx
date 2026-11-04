@@ -64,7 +64,11 @@ export function nodeText(raw: ReactNode): string {
   if (node === null || node === undefined || typeof node === 'boolean') return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(nodeText).join('');
-  if (isValidElement<{ children?: ReactNode }>(node)) return nodeText(node.props.children);
+  if (isValidElement<{ children?: ReactNode; text?: unknown; html?: unknown }>(node)) {
+    // A code block made from a string (CodeWindow with `html`) carries its text as a prop, not as children.
+    if (typeof node.props.html === 'string' && typeof node.props.text === 'string') return node.props.text;
+    return nodeText(node.props.children);
+  }
   return '';
 }
 
@@ -102,7 +106,11 @@ type CodeWindowProps = {
   copyText?: () => string;
   /** Announce changes in the body to screen readers. */
   live?: boolean;
-  children: ReactNode;
+  /** The highlighted code as one HTML string (see lib/code-as-string.ts); used instead of the children when it is given. */
+  html?: string;
+  /** The class of the `code` element, which names the language. */
+  codeClass?: string;
+  children?: ReactNode;
 };
 
 /**
@@ -110,7 +118,7 @@ type CodeWindowProps = {
  * button), the code with line numbers when it is long enough, and, for a `text` fence that follows code, an Output
  * panel that joins the window above it. Colours come from the --ui-* tokens in code-window.css.
  */
-export function CodeWindow({ language, title, text, numbered, className, style, name, kind: forcedKind, tag, actions, bare, editor, copyText, live, children }: CodeWindowProps) {
+export function CodeWindow({ language, title, text, numbered, className, style, name, kind: forcedKind, tag, actions, bare, editor, copyText, live, html, codeClass, children }: CodeWindowProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -187,7 +195,7 @@ export function CodeWindow({ language, title, text, numbered, className, style, 
           children
         ) : (
           <pre className="cw-pre" data-numbered={showNumbers || undefined}>
-            {children}
+            {html !== undefined ? <code className={codeClass || undefined} dangerouslySetInnerHTML={{ __html: html }} /> : children}
           </pre>
         )}
       </div>
@@ -195,8 +203,8 @@ export function CodeWindow({ language, title, text, numbered, className, style, 
   );
 }
 
-/** The MDX `pre`: reads the language, title and text from what rehype-code produced and renders a CodeWindow. */
-export function MdxPre({ children, title, style, ...rest }: ComponentProps<'pre'> & { title?: string; 'data-line-numbers'?: boolean }) {
+/** The MDX `pre` for a block that was not turned into a string: reads the language, title and text from the children. */
+export function ChildrenPre({ children, title, style, ...rest }: ComponentProps<'pre'> & { title?: string; 'data-line-numbers'?: boolean }) {
   return (
     <CodeWindow
       language={languageOf(children)}

@@ -1,5 +1,6 @@
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { rehypeCodeAsString } from './lib/code-as-string';
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 
@@ -28,6 +29,7 @@ export default defineConfig({
     // browser again as a property of every block (8,371 blocks on the site, PERF-01).
     rehypeCodeOptions: { addLanguageClass: true, icon: false, themes: { light: 'github-light', dark: 'github-dark' } },
     // CRITICAL: Place it at first, it must be executed BEFORE the syntax highlighter
-    rehypePlugins: (v) => [rehypeKatex, ...v],
+    // Last, so that it sees the tree rehype-code made: each highlighted block becomes one string (PERF-06). `CODE_AS_STRING=0` leaves it out.
+    rehypePlugins: (v) => [rehypeKatex, ...v, ...(process.env.CODE_AS_STRING === '0' ? [] : [rehypeCodeAsString])],
   },
 });

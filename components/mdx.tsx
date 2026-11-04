@@ -24,7 +24,7 @@ import { Flashcard } from './interactive/flashcard';
 import { GraphViewer } from './visuals/graph-viewer';
 import { SiteDiagram } from './visuals/site-diagram';
 import { Card } from './callouts/card';
-import { MdxPre } from './interactive/code-window';
+import { MdxPre } from './interactive/mdx-pre';
 // The large interactive components are loaded by the pages that use them (components/interactive/lazy.tsx).
 import {
   BinarySearchStory, BubbleSortStory, CodePlayground, CodeTryIt, CountingCalculator, DistributionExplorer, HaskellPlayground,
