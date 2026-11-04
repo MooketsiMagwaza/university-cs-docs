@@ -10,6 +10,11 @@ const config = {
     // Turbopack keeps every compiled page in memory by default. 'full' drops what it has already saved to its disk
     // cache after each save, so the dev server stays small (DEV-01).
     turbopackMemoryEviction: 'full',
+    // On Vercel (a build container of about 8 GB) use two build workers instead of one per CPU: the workers that collect page
+    // data and generate the static pages each load the compiled pages, so fewer of them use less memory, at the cost of time.
+    // This does not change the compile step, which Turbopack does itself; it is one of the levers for the out-of-memory build
+    // of 2026-11-04 (PERF-06 to PERF-13). Elsewhere the default stays.
+    ...(process.env.VERCEL ? { cpus: 2 } : {}),
   },
   // Allow cross-origin dev requests from your network IP
   allowedDevOrigins: ['100.124.114.119'],
